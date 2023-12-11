@@ -1,0 +1,16 @@
+# Include the README
+include *.md
+
+# Include the license file
+include LICENSE
+
+# Include information about third party licensors
+include THIRD-PARTY-NOTICES
+
+include requirements.txt
+
+recursive-include solaredge2mqtt *.py
+
+# Include information about version
+include versioneer.py
+include solaredge2mqtt/_version.py
