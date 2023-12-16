@@ -7,7 +7,7 @@ from gmqtt import Client as MQTTClient
 from gmqtt import Message as MQTTMessage
 from solaredge_modbus import Inverter
 
-from solaredge2mqtt.core.logging import initialize_logging, logger
+from solaredge2mqtt.core.logging import LOGGING_DEVICE_INFO, initialize_logging, logger
 from solaredge2mqtt.core.settings import service_settings
 from solaredge2mqtt.models import PowerFlow
 from solaredge2mqtt.models.sunspec import SunSpecBattery, SunSpecInverter, SunSpecMeter
@@ -51,7 +51,11 @@ async def main():
     )
 
     will_message = MQTTMessage(
-        f"{settings.mqtt_topic_prefix}/status", b"offline", qos=1, retain=True
+        f"{settings.mqtt_topic_prefix}/status",
+        b"offline",
+        qos=1,
+        retain=True,
+        will_delay_interval=10,
     )
     client = MQTTClient(settings.mqtt_client_id, will_message=will_message)
     client.set_auth_credentials(settings.mqtt_username, settings.mqtt_password)
@@ -106,11 +110,13 @@ async def main():
 
 
 def on_connect(client, flags, rc, properties):
+    # pylint: disable=unused-argument
     logger.info("Connected to MQTT broker")
     client.publish(f"{settings.mqtt_topic_prefix}/status", "online", qos=1, retain=True)
 
 
 def on_disconnect(client, packet, exc=None):
+    # pylint: disable=unused-argument
     logger.info("Disconnected from MQTT broker")
 
 
@@ -139,7 +145,9 @@ def read_inverter(inverter_raw: RawData) -> SunSpecInverter:
     inverter_data = SunSpecInverter(inverter_raw)
     logger.debug(inverter_data)
     logger.info(
-        "Inverter ({info.manufacturer} {info.model} {info.serialnumber}): {status}, AC {power_ac} W, DC {power_dc} W, {energy_total} kWh",
+        LOGGING_DEVICE_INFO
+        + ": {status}, AC {power_ac} W, DC {power_dc} W, {energy_total} kWh",
+        device="Inverter",
         info=inverter_data.info,
         status=inverter_data.status,
         power_ac=inverter_data.ac.power.power,
@@ -162,8 +170,8 @@ def read_inverter_meters(meters_raw: Dict[str, RawData]) -> Dict[str, SunSpecMet
         meter_data = SunSpecMeter(meter_raw)
         logger.debug(meter_data)
         logger.info(
-            "{meter_key} ({info.manufacturer} {info.model} {info.serialnumber}): {power} W",
-            meter_key=meter_key,
+            LOGGING_DEVICE_INFO + ": {power} W",
+            device=meter_key,
             info=meter_data.info,
             power=meter_data.power.power,
         )
@@ -188,8 +196,8 @@ def read_inverter_batteries(
         battery_data = SunSpecBattery(battery_raw)
         logger.debug(battery_data)
         logger.info(
-            "{battery_key} ({info.manufacturer} {info.model} {info.serialnumber}): {status}, {power} W, {state_of_charge} %",
-            battery_key=battery,
+            LOGGING_DEVICE_INFO + ": {status}, {power} W, {state_of_charge} %",
+            device=battery,
             info=battery_data.info,
             status=battery_data.status,
             power=battery_data.power,

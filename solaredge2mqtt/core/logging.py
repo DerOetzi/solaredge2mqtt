@@ -5,6 +5,8 @@ from loguru import logger
 
 from solaredge2mqtt.models.base import EnumModel
 
+LOGGING_DEVICE_INFO = "{device} ({info.manufacturer} {info.model} {info.serialnumber})"
+
 
 class LoggingLevelEnum(EnumModel):
     DEBUG = "DEBUG", logging.DEBUG
