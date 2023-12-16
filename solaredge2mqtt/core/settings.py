@@ -15,7 +15,14 @@ class ServiceSettings(BaseSettings):
     modbus_timeout: int = Field(1)
     modbus_unit: int = Field(1)
 
-    interval: int = Field(10)
+    mqtt_client_id: str = Field("solaredge2mqtt")
+    mqtt_broker: str = Field("127.0.0.1")
+    mqtt_port: int = Field(1883)
+    mqtt_username: str = Field(None)
+    mqtt_password: str = Field(None)
+    mqtt_topic_prefix: str = Field("solaredge")
+
+    interval: int = Field(15)
 
     logging_level: LoggingLevelEnum = LoggingLevelEnum.INFO
 

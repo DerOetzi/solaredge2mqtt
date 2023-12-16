@@ -12,6 +12,7 @@ from solaredge_modbus import (
 class SunSpecInfo(BaseModel):
     manufacturer: str
     model: str
+    option: Optional[str] = None
     sunspec_type: str
     version: str
     serialnumber: str
@@ -29,6 +30,9 @@ class SunSpecInfo(BaseModel):
             values["sunspec_type"] = C_SUNSPEC_DID_MAP[str(data["c_sunspec_did"])]
         else:
             values["sunspec_type"] = "Unknown"
+
+        if "c_option" in data:
+            values["option"] = data["c_option"]
 
         return values
 
