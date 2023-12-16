@@ -139,6 +139,22 @@ class SunSpecAC(SunSpecBaseValue):
         }
 
 
+class SunSpecEnergy(SunSpecBaseValue):
+    total_export: float
+    total_import: float
+
+    @classmethod
+    def map(cls, data: Dict[str, str | int]) -> Dict[str, float]:
+        return {
+            "total_export": cls.scale_value(
+                data, "export_energy_active", "energy_active_scale"
+            ),
+            "total_import": cls.scale_value(
+                data, "import_energy_active", "energy_active_scale"
+            ),
+        }
+
+
 class SunSpecDC(SunSpecBaseValue):
     current: float
     voltage: float
@@ -177,6 +193,7 @@ class SunSpecMeter(SunSpecBaseValue):
     current: SunSpecACCurrent
     voltage: SunSpecACVoltage
     power: SunSpecACPower
+    energy: SunSpecEnergy
     frequency: float
 
     def __init__(self, data: Dict[str, str | int]):
@@ -184,6 +201,7 @@ class SunSpecMeter(SunSpecBaseValue):
         current = SunSpecACCurrent.map(data)
         voltage = SunSpecACVoltage.map(data)
         power = SunSpecACPower.map(data, "power")
+        energy = SunSpecEnergy.map(data)
         frequency = self.scale_value(data, "frequency")
 
         super().__init__(
@@ -191,6 +209,7 @@ class SunSpecMeter(SunSpecBaseValue):
             current=current,
             voltage=voltage,
             power=power,
+            energy=energy,
             frequency=frequency,
         )
 
