@@ -11,7 +11,7 @@ Components:
 -----------
 
 Component: Python3
-Licensor: Python Software Foundatio
+Licensor: Python Software Foundation
 Website: https://www.python.org
 License: PSF License
 
@@ -23,5 +23,15 @@ License: MIT License
 Component: Loguru
 Licensor: Loguru Contributors
 Website: https://github.com/Delgan/loguru
+License: MIT License
+
+Component: solaredge_modbus
+Licensor: nmakel
+Website: https://github.com/nmakel/solaredge_modbus
+License: MIT License
+
+Component: GMQTT
+Licensor: Mikhail Turchunovich
+Website: https://github.com/wialon/gmqtt
 License: MIT License
 

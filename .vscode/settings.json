@@ -1,0 +1,17 @@
+{
+    "search.exclude": {
+        "openhab_creator/content/automation/helper*": true,
+        "versioneer.py": true,
+        "**/_version.py": true,
+        "**/*.po": true
+    },
+    "files.exclude": {
+        "**/.git": true,
+        "**/.svn": true,
+        "**/.hg": true,
+        "**/CVS": true,
+        "**/.DS_Store": true,
+        "**/__pycache__": true
+    },
+    "git.alwaysSignOff": true,
+}
