@@ -1,3 +1,9 @@
+"""
+    This module, service.py, is part of the SolarEdge2MQTT service, which reads data 
+    from a SolarEdge inverter and publishes it to an MQTT broker. It uses the asyncio 
+    library for asynchronous I/O and the gmqtt library for MQTT communication. 
+    The module also includes a run function to initialize and start the service.
+"""
 import asyncio
 import json
 import signal
@@ -20,6 +26,7 @@ settings = service_settings()
 
 
 def run():
+    """Initializes and starts the SolarEdge2MQTT service."""
     initialize_logging(settings.logging_level)
 
     logger.info("Starting SolarEdge2MQTT service...")
@@ -32,11 +39,17 @@ def run():
 
 
 def ask_stop():
+    """Stops the SolarEdge2MQTT service by setting the STOP event."""
     logger.info("Stopping SolarEdge2MQTT service...")
     STOP.set()
 
 
 async def main():
+    """
+    Initializes the SolarEdge inverter and logs the connection details.
+    This function is the main entry point for the SolarEdge2MQTT service.
+    """
+
     inverter = Inverter(
         host=settings.modbus_host,
         port=settings.modbus_port,
@@ -51,54 +64,61 @@ async def main():
     )
 
     will_message = MQTTMessage(
-        f"{settings.mqtt_topic_prefix}/status",
+        f"{settings.topic_prefix}/status",
         b"offline",
         qos=1,
         retain=True,
         will_delay_interval=10,
     )
-    client = MQTTClient(settings.mqtt_client_id, will_message=will_message)
-    client.set_auth_credentials(settings.mqtt_username, settings.mqtt_password)
+    client = MQTTClient(settings.client_id, will_message=will_message)
+    client.set_auth_credentials(settings.username, settings.password)
     client.on_connect = on_connect
     client.on_disconnect = on_disconnect
 
-    await client.connect(settings.mqtt_broker, settings.mqtt_port)
+    await client.connect(settings.broker, settings.port)
 
     while not STOP.is_set():
         inverter_raw, meters_raw, batteries_raw = read_from_modbus(inverter)
 
-        inverter_data = read_inverter(inverter_raw)
-        meters_data = read_inverter_meters(meters_raw)
-        batteries_data = read_inverter_batteries(batteries_raw)
+        inverter_data = map_inverter(inverter_raw)
+        meters_data = map_inverter_meters(meters_raw)
+        batteries_data = map_inverter_batteries(batteries_raw)
 
         powerflow = calc_powerflow(inverter_data, meters_data, batteries_data)
 
+        logger.debug(powerflow)
         logger.info(
-            "Powerflow:\n{powerflow}", powerflow=powerflow.model_dump_json(indent=4)
+            "Powerflow: PV {pv_production} W, Inverter {inverter} W, House {house_consumption} W, "
+            + "Grid {grid} W, Battery {battery} W",
+            pv_production=powerflow.pv_production,
+            inverter=powerflow.inverter,
+            house_consumption=powerflow.house_consumption,
+            grid=powerflow.grid,
+            battery=powerflow.battery,
         )
 
         client.publish(
-            f"{settings.mqtt_topic_prefix}/inverter",
+            f"{settings.topic_prefix}/inverter",
             inverter_data.model_dump_json(),
             qos=1,
         )
 
         for meter_key, meter_data in meters_data.items():
             client.publish(
-                f"{settings.mqtt_topic_prefix}/meter/{meter_key.lower()}",
+                f"{settings.topic_prefix}/meter/{meter_key.lower()}",
                 meter_data.model_dump_json(),
                 qos=1,
             )
 
         for battery_key, battery_data in batteries_data.items():
             client.publish(
-                f"{settings.mqtt_topic_prefix}/battery/{battery_key.lower()}",
+                f"{settings.topic_prefix}/battery/{battery_key.lower()}",
                 battery_data.model_dump_json(),
                 qos=1,
             )
 
         client.publish(
-            f"{settings.mqtt_topic_prefix}/powerflow",
+            f"{settings.topic_prefix}/powerflow",
             powerflow.model_dump_json(),
             qos=1,
         )
@@ -111,18 +131,21 @@ async def main():
 
 def on_connect(client, flags, rc, properties):
     # pylint: disable=unused-argument
+    """Publishes the online status to the MQTT broker on connect."""
     logger.info("Connected to MQTT broker")
-    client.publish(f"{settings.mqtt_topic_prefix}/status", "online", qos=1, retain=True)
+    client.publish(f"{settings.topic_prefix}/status", "online", qos=1, retain=True)
 
 
 def on_disconnect(client, packet, exc=None):
     # pylint: disable=unused-argument
+    """Log the disconnection from the MQTT broker."""
     logger.info("Disconnected from MQTT broker")
 
 
 def read_from_modbus(
     inverter: SunSpecInverter,
 ) -> Tuple[RawData, Dict[str, RawData], Dict[str, RawData]]:
+    """Reads data from the SolarEdge inverter via modbus."""
     inverter_raw = inverter.read_all()
     meters_raw = {
         meter_key: meter_obj.read_all()
@@ -136,7 +159,8 @@ def read_from_modbus(
     return inverter_raw, meters_raw, batteries_raw
 
 
-def read_inverter(inverter_raw: RawData) -> SunSpecInverter:
+def map_inverter(inverter_raw: RawData) -> SunSpecInverter:
+    """Map the modbus data to a SunSpecInverter object."""
     logger.debug(
         "Inverter raw:\n{raw}",
         raw=json.dumps(inverter_raw, indent=4),
@@ -158,7 +182,8 @@ def read_inverter(inverter_raw: RawData) -> SunSpecInverter:
     return inverter_data
 
 
-def read_inverter_meters(meters_raw: Dict[str, RawData]) -> Dict[str, SunSpecMeter]:
+def map_inverter_meters(meters_raw: Dict[str, RawData]) -> Dict[str, SunSpecMeter]:
+    """Map the modbus data to SunSpecMeter objects."""
     meters = {}
     for meter_key, meter_raw in meters_raw.items():
         logger.debug(
@@ -181,9 +206,10 @@ def read_inverter_meters(meters_raw: Dict[str, RawData]) -> Dict[str, SunSpecMet
     return meters
 
 
-def read_inverter_batteries(
+def map_inverter_batteries(
     batteries_raw: Dict[str, RawData]
 ) -> Dict[str, SunSpecBattery]:
+    """Map the modbus data to SunSpecBattery objects.""" ""
     batteries = {}
 
     for battery, battery_raw in batteries_raw.items():
@@ -210,6 +236,11 @@ def read_inverter_batteries(
 
 
 def calc_powerflow(inverter, meters, batteries) -> PowerFlow:
+    """
+    Calculates the power flow in the system by summing the power of all meters and batteries.
+    It considers both import and export options for each meter in the calculation.
+    Returns a PowerFlow object representing the total power flow in the system.
+    """
     grid = 0
     for meter in meters.values():
         if "Import" in meter.info.option and "Export" in meter.info.option:
