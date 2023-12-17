@@ -221,6 +221,8 @@ def calc_powerflow(inverter, meters, batteries) -> PowerFlow:
 
     if inverter.dc.power > 0:
         pv_production = inverter.dc.power + batteries_power
+        if pv_production < 0:
+            pv_production = 0
         inverter_consumption = inverter.dc.power - inverter.ac.power.power
         inverter_delivery = inverter.ac.power.power
     else:
