@@ -78,7 +78,7 @@ jobs:
 
   build-docker:
     runs-on: ubuntu-latest
-    needs: [variables, build-core]
+    needs: [variables, build-service]
     env:
       REF_NAME: ${{ needs.variables.outputs.ref_name }}
     steps:
