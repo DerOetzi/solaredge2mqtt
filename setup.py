@@ -24,7 +24,7 @@ setuptools.setup(
     author="Johannes Ott",
     author_email="info@johannes-ott.net",
     classifiers=[
-        "Development Status :: 2 - Pre-Alpha",
+        "Development Status :: 4 - Beta",
         "Topic :: Home Automation",
         "License :: OSI Approved :: MIT License",
         "Natural Language :: English",
