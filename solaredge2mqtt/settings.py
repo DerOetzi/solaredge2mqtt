@@ -1,8 +1,8 @@
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from solaredge2mqtt.core.logging import LoggingLevelEnum
-from solaredge2mqtt.models.base import EnumModel
+from solaredge2mqtt.logging import LoggingLevelEnum
+from solaredge2mqtt.models import EnumModel
 
 
 class ServiceSettings(BaseSettings):
