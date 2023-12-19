@@ -8,6 +8,7 @@ import asyncio
 import signal
 from typing import Dict
 
+from solaredge2mqtt.api import MonitoringSite
 from solaredge2mqtt.logging import initialize_logging, logger
 from solaredge2mqtt.modbus import Modbus
 from solaredge2mqtt.mqtt import MQTT
@@ -50,6 +51,11 @@ async def main():
     mqtt = MQTT(settings)
 
     await mqtt.connect()
+
+    if settings.is_api_configured:
+        monitoring = MonitoringSite(settings)
+        monitoring.login()
+        monitoring.get_energies()
 
     while not STOP.is_set():
         inverter_data, meters_data, batteries_data = modbus.loop()

@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -12,6 +13,11 @@ class ServiceSettings(BaseSettings):
     modbus_port: int = Field(1502)
     modbus_timeout: int = Field(1)
     modbus_unit: int = Field(1)
+
+    api_site_id: Optional[str]
+    api_username: Optional[str]
+    api_password: Optional[str]
+
 
     client_id: str = Field("solaredge2mqtt")
     broker: str
@@ -28,6 +34,16 @@ class ServiceSettings(BaseSettings):
         env_file=".env",
         env_prefix="se2mqtt_",
     )
+
+    @property
+    def is_api_configured(self) -> bool:
+        return all(
+            [
+                self.api_site_id is not None,
+                self.api_username is not None,
+                self.api_password is not None,
+            ]
+        )
 
 
 class DevelopmentSettings(ServiceSettings):
