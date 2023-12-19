@@ -8,6 +8,7 @@ from solaredge2mqtt.models import (
     SunSpecMeter,
     SunSpecBattery,
     PowerFlow,
+    LogicalModule,
 )
 
 
@@ -58,7 +59,7 @@ class MQTT:
 
     def publish_inverter(self, inverter: SunSpecInverter) -> None:
         self.client.publish(
-            f"{self.topic_prefix}/inverter",
+            f"{self.topic_prefix}/modbus/inverter",
             inverter.model_dump_json(),
             qos=1,
         )
@@ -66,7 +67,7 @@ class MQTT:
     def publish_meters(self, meters: Dict[str, SunSpecMeter]) -> None:
         for meter_key, meter in meters.items():
             self.client.publish(
-                f"{self.topic_prefix}/meter/{meter_key.lower()}",
+                f"{self.topic_prefix}/modbus/meter/{meter_key.lower()}",
                 meter.model_dump_json(),
                 qos=1,
             )
@@ -74,14 +75,22 @@ class MQTT:
     def publish_batteries(self, batteries: Dict[str, SunSpecBattery]) -> None:
         for battery_key, battery in batteries.items():
             self.client.publish(
-                f"{self.topic_prefix}/battery/{battery_key.lower()}",
+                f"{self.topic_prefix}/modbus/battery/{battery_key.lower()}",
                 battery.model_dump_json(),
                 qos=1,
             )
 
     def publish_powerflow(self, powerflow: PowerFlow) -> None:
         self.client.publish(
-            f"{self.topic_prefix}/powerflow",
+            f"{self.topic_prefix}/modbus/powerflow",
             powerflow.model_dump_json(),
             qos=1,
         )
+
+    def publish_module_energy(self, modules: list[LogicalModule]) -> None:
+        for module in modules:
+            self.client.publish(
+                f"{self.topic_prefix}/monitoring/module/{module.info.serialnumber}",
+                module.model_dump_json(),
+                qos=1,
+            )

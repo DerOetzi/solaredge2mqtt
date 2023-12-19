@@ -39,7 +39,7 @@ class MonitoringSite:
                 f"Cannot login to monitoring site (status code: {result.status_code})"
             )
 
-    def get_energies(self) -> list[LogicalInverter]:
+    def get_module_energies(self) -> list[LogicalInverter]:
         logical = self._get_logical()
 
         logger.debug("Logical: {logical}", logical=json.dumps(logical, indent=4))
@@ -48,12 +48,17 @@ class MonitoringSite:
             logical["logicalTree"]["children"], logical["reportersData"]
         )
 
+        modules = []
+
         for inverter in inverters:
             logger.debug(
                 "Inverter: {inverter}", inverter=inverter.model_dump_json(indent=4)
             )
+            for string in inverter.strings:
+                for module in string.modules:
+                    modules.append(module)
 
-        return inverters
+        return modules
 
     def _get_logical(self, run: Optional[int] = 0) -> dict:
         result = self.session.get(

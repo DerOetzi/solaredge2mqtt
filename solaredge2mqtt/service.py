@@ -7,6 +7,9 @@
 import asyncio
 import signal
 from typing import Dict
+import datetime as dt
+
+from scheduler.asyncio import Scheduler
 
 from solaredge2mqtt.api import MonitoringSite
 from solaredge2mqtt.logging import initialize_logging, logger
@@ -15,8 +18,6 @@ from solaredge2mqtt.mqtt import MQTT
 from solaredge2mqtt.settings import service_settings
 
 STOP = asyncio.Event()
-
-RawData = Dict[str, Dict[str, int | float]]
 
 settings = service_settings()
 
@@ -52,35 +53,55 @@ async def main():
 
     await mqtt.connect()
 
+    loop = asyncio.get_running_loop()
+    scheduler = Scheduler(loop=loop)
+    scheduler.cyclic(
+        dt.timedelta(seconds=settings.interval), modbus_loop, args=[modbus, mqtt]
+    )
+
     if settings.is_api_configured:
         monitoring = MonitoringSite(settings)
         monitoring.login()
-        monitoring.get_energies()
+        await energy_loop(monitoring, mqtt)
+        scheduler.cyclic(
+            dt.timedelta(seconds=300), energy_loop, args=[monitoring, mqtt]
+        )
+
+    logger.debug(scheduler)
 
     while not STOP.is_set():
-        inverter_data, meters_data, batteries_data = modbus.loop()
+        await asyncio.sleep(1)
 
-        powerflow = Modbus.calc_powerflow(inverter_data, meters_data, batteries_data)
-
-        mqtt.publish_inverter(inverter_data)
-        mqtt.publish_meters(meters_data)
-        mqtt.publish_batteries(batteries_data)
-        mqtt.publish_powerflow(powerflow)
-
-        await asyncio.sleep(settings.interval)
-
-    logger.info("SolarEdge2MQTT service stopped")
+    scheduler.delete_jobs()
     await mqtt.disconnect()
 
 
-def on_connect(client, flags, rc, properties):
-    # pylint: disable=unused-argument
-    """Publishes the online status to the MQTT broker on connect."""
-    logger.info("Connected to MQTT broker")
-    client.publish(f"{settings.topic_prefix}/status", "online", qos=1, retain=True)
+async def modbus_loop(modbus: Modbus, mqtt: MQTT):
+    """Publishes the modbus data to the MQTT broker."""
+    inverter_data, meters_data, batteries_data = modbus.loop()
+
+    powerflow = Modbus.calc_powerflow(inverter_data, meters_data, batteries_data)
+
+    mqtt.publish_inverter(inverter_data)
+    mqtt.publish_meters(meters_data)
+    mqtt.publish_batteries(batteries_data)
+    mqtt.publish_powerflow(powerflow)
 
 
-def on_disconnect(client, packet, exc=None):
-    # pylint: disable=unused-argument
-    """Log the disconnection from the MQTT broker."""
-    logger.info("Disconnected from MQTT broker")
+async def energy_loop(monitoring: MonitoringSite, mqtt: MQTT):
+    """Publishes the energy data from monitoring site to the MQTT broker."""
+    modules = monitoring.get_module_energies()
+    energy_total = 0
+    count_modules = 0
+    for module in modules:
+        if module.energy is not None:
+            count_modules += 1
+            energy_total += module.energy
+
+    logger.info(
+        "Read from monitoring total energy: {energy_total} kWh from {count_modules} modules",
+        energy_total=energy_total / 1000,
+        count_modules=count_modules,
+    )
+
+    mqtt.publish_module_energy(modules)
