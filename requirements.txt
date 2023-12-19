@@ -4,3 +4,4 @@ pydantic-settings==2.0.3
 loguru==0.7.2
 gmqtt==0.6.13
 scheduler==0.8.5
+requests==2.31.0
