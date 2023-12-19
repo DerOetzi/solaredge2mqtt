@@ -14,10 +14,9 @@ class ServiceSettings(BaseSettings):
     modbus_timeout: int = Field(1)
     modbus_unit: int = Field(1)
 
-    api_site_id: Optional[str]
-    api_username: Optional[str]
-    api_password: Optional[str]
-
+    api_site_id: Optional[str] = Field(None)
+    api_username: Optional[str] = Field(None)
+    api_password: Optional[str] = Field(None)
 
     client_id: str = Field("solaredge2mqtt")
     broker: str
