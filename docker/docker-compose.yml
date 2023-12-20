@@ -1,0 +1,31 @@
+version: "3"
+services:
+  solaredge2mqtt:
+    container_name: solaredge2mqtt
+    image: ghcr.io/deroetzi/solaredge2mqtt:latest
+    secrets:
+      - se2mqtt_password
+    #      - se2mqtt_api_password
+    environment:
+      - SE2MQTT_ENVIRONMENT=production
+      - SE2MQTT_MODBUS_HOST
+      - SE2MQTT_MODBUS_PORT
+      - SE2MQTT_MODBUS_TIMEOUT
+      - SE2MQTT_MODBUS_UNIT_ID
+      - SE2MQTT_BROKER
+      - SE2MQTT_PORT
+      - SE2MQTT_USERNAME
+      - SE2MQTT_TOPIC_PREFIX
+      - SE2MQTT_INTERVAL
+      - SE2MQTT_LOGGING_LEVEL
+      - SE2MQTT_API_SITE_ID
+      - SE2MQTT_API_USERNAME
+      - TZ
+    restart: unless-stopped
+
+secrets:
+  se2mqtt_password:
+    file: .secrets/mqtt_password
+
+#  se2mqtt_api_password:
+#    file: .secrets/api_password
