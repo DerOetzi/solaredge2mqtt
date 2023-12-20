@@ -32,6 +32,7 @@ class ServiceSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_prefix="se2mqtt_",
+        secrets_dir="/run/secrets",
     )
 
     @property
