@@ -104,4 +104,5 @@ async def energy_loop(monitoring: MonitoringSite, mqtt: MQTT):
         count_modules=count_modules,
     )
 
+    mqtt.publish_pv_energy_today(energy_total)
     mqtt.publish_module_energy(modules)

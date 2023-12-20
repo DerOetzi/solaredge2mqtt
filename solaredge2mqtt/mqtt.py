@@ -87,6 +87,11 @@ class MQTT:
             qos=1,
         )
 
+    def publish_pv_energy_today(self, energy: int) -> None:
+        self.client.publish(
+            f"{self.topic_prefix}/monitoring/pv_energy_today", energy, qos=1
+        )
+
     def publish_module_energy(self, modules: list[LogicalModule]) -> None:
         for module in modules:
             self.client.publish(
