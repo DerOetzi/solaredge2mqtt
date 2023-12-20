@@ -50,13 +50,13 @@ SE2MQTT_API_PASSWORD             | Your password for your account on the SolarEd
 
 #### Example configuration
 
-You can download [.env.example](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/core/.env.example) and rename it to `.env`. Inside, you can modify the default configuration values to meet your needs in this file.
+You can download [.env.example](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/.env.example) and rename it to `.env`. Inside, you can modify the default configuration values to meet your needs in this file.
 
 ## Run the service 
 
 ### In the console
 
-Copy the [.env.example](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/core/.env.example) file to .env and modify it according to your needs.
+Copy the [.env.example](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/.env.example) file to .env and modify it according to your needs.
 
 Then, simply run `solaredge2mqtt` to start the service.
 
@@ -76,9 +76,9 @@ Add optional environment arguments from above to fit to your setup.
 
 ### With docker-compose
 
-Copy the [.env.example](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/core/.env.example) file to `.env` and modify it according to your needs.
+Copy the [.env.example](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/.env.example) file to `.env` and modify it according to your needs.
 
-Get the [docker-compose.yml](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/core/docker/docker-compose.yml) file.
+Get the [docker-compose.yml](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/docker/docker-compose.yml) file.
 
 Generate a `.secrets` directory and put at least a file called `mqtt_password` inside with your MQTT broker password.
 
