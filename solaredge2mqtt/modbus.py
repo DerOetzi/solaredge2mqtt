@@ -93,10 +93,12 @@ class Modbus:
             meter_data = SunSpecMeter(meter_raw)
             logger.debug(meter_data)
             logger.info(
-                LOGGING_DEVICE_INFO + ": {power} W",
+                LOGGING_DEVICE_INFO + ": {power} W, {consumption} kWh, {delivery} kWh",
                 device=meter_key,
                 info=meter_data.info,
                 power=meter_data.power.power,
+                consumption=round(meter_data.energy.total_import / 1000, 3),
+                delivery=round(meter_data.energy.total_export / 1000, 3),
             )
 
             meters[meter_key] = meter_data
@@ -154,11 +156,11 @@ class Modbus:
             if pv_production < 0:
                 pv_production = 0
             inverter_consumption = inverter.dc.power - inverter.ac.power.power
-            inverter_delivery = inverter.ac.power.power
+            inverter_production = inverter.ac.power.power
         else:
             pv_production = 0
             inverter_consumption = abs(inverter.ac.power.power)
-            inverter_delivery = 0
+            inverter_production = 0
 
         inverter = inverter.ac.power.power
 
@@ -183,7 +185,7 @@ class Modbus:
             pv_production=int(pv_production),
             inverter=int(inverter),
             inverter_consumption=int(inverter_consumption),
-            inverter_delivery=int(inverter_delivery),
+            inverter_production=int(inverter_production),
             house_consumption=int(house_consumption),
             grid=int(grid),
             grid_consumption=int(grid_consumption),
