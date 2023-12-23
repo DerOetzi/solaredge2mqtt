@@ -280,7 +280,7 @@ class PowerFlow(BaseModel):
     pv_production: int
     inverter: int
     inverter_consumption: int
-    inverter_delivery: int
+    inverter_production: int
     house_consumption: int
     grid: int
     grid_consumption: int
