@@ -151,11 +151,11 @@ class Modbus:
         for battery in batteries.values():
             batteries_power += battery.power
 
-        if inverter.dc.power > 0:
+        if inverter.ac.power.power > 0:
             pv_production = inverter.dc.power + batteries_power
             if pv_production < 0:
                 pv_production = 0
-            inverter_consumption = inverter.dc.power - inverter.ac.power.power
+            inverter_consumption = 0
             inverter_production = inverter.ac.power.power
         else:
             pv_production = 0
