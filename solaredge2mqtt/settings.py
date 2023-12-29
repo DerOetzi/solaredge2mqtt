@@ -27,6 +27,10 @@ class ServiceSettings(BaseSettings):
 
     interval: int = Field(5)
 
+    wallbox_host: Optional[str] = Field(None)
+    wallbox_password: Optional[str] = Field(None)
+    wallbox_serial: Optional[str] = Field(None)
+
     logging_level: LoggingLevelEnum = LoggingLevelEnum.INFO
 
     model_config = SettingsConfigDict(
@@ -42,6 +46,16 @@ class ServiceSettings(BaseSettings):
                 self.api_site_id is not None,
                 self.api_username is not None,
                 self.api_password is not None,
+            ]
+        )
+
+    @property
+    def is_wallbox_configured(self) -> bool:
+        return all(
+            [
+                self.wallbox_host is not None,
+                self.wallbox_password is not None,
+                self.wallbox_serial is not None,
             ]
         )
 

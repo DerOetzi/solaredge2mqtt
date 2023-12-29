@@ -2,8 +2,10 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from enum import Enum
+from typing_extensions import Unpack
 
 from pydantic import BaseModel, model_serializer
+from pydantic.config import ConfigDict
 from solaredge_modbus import (
     BATTERY_STATUS_MAP,
     C_SUNSPEC_DID_MAP,
@@ -276,18 +278,159 @@ class SunSpecBattery(BaseModel):
         )
 
 
+class WallboxAPI(BaseModel):
+    power: int
+    state: str
+    vehicle_plugged: bool
+    max_current: int
+
+    def __init__(self, data: Dict[str, str | int]):
+        power = int(data["meter"]["totalActivePower"])
+        state = data["state"]
+        vehicle_connected = bool(data["vehiclePlugged"])
+        max_current = int(data["maxCurrent"])
+
+        super().__init__(
+            power=power,
+            state=state,
+            vehicle_plugged=vehicle_connected,
+            max_current=max_current,
+        )
+
+
+class InverterPowerflow(BaseModel):
+    power: int
+    consumption: int
+    production: int
+    pv_production: int
+    battery_production: int
+
+    @staticmethod
+    def calc(
+        inverter_data: SunSpecInverter,
+        battery: BatteryPowerflow,
+    ) -> InverterPowerflow:
+        power = int(inverter_data.ac.power.power)
+
+        if power >= 0:
+            consumption = 0
+            production = power
+            if battery.discharge > 0:
+                battery_factor = battery.discharge / inverter_data.dc.power
+                battery_production = int(round(production * battery_factor))
+                pv_production = production - battery_production
+            else:
+                battery_production = 0
+                pv_production = production
+
+        else:
+            consumption = int(abs(power))
+            production = 0
+            pv_production = 0
+            battery_production = 0
+
+        return InverterPowerflow(
+            power=power,
+            consumption=consumption,
+            production=production,
+            pv_production=pv_production,
+            battery_production=battery_production,
+        )
+
+
+class GridPowerflow(BaseModel):
+    power: int
+    consumption: int
+    delivery: int
+
+    @staticmethod
+    def calc(meters_data: Dict[str, SunSpecMeter]) -> GridPowerflow:
+        grid = 0
+        for meter in meters_data.values():
+            if "Import" in meter.info.option and "Export" in meter.info.option:
+                grid += meter.power.power
+
+        if grid >= 0:
+            consumption = 0
+            delivery = grid
+        else:
+            consumption = abs(grid)
+            delivery = 0
+
+        return GridPowerflow(power=grid, consumption=consumption, delivery=delivery)
+
+
+class BatteryPowerflow(BaseModel):
+    power: int
+    charge: int
+    discharge: int
+
+    @staticmethod
+    def calc(batteries_data: Dict[str, SunSpecBattery]) -> BatteryPowerflow:
+        batteries_power = 0
+        for battery in batteries_data.values():
+            batteries_power += battery.power
+
+        if batteries_power >= 0:
+            charge = batteries_power
+            discharge = 0
+        else:
+            charge = 0
+            discharge = abs(batteries_power)
+
+        return BatteryPowerflow(
+            power=batteries_power, charge=charge, discharge=discharge
+        )
+
+
+class ConsumerPowerflow(BaseModel):
+    house: int
+    evcharger: int = 0
+
+    @staticmethod
+    def calc(
+        inverter: InverterPowerflow, grid: GridPowerflow, evcharger: int
+    ) -> ConsumerPowerflow:
+        house = int(abs(grid.power - inverter.power)) - evcharger
+
+        return ConsumerPowerflow(house=house, evcharger=evcharger)
+
+
 class PowerFlow(BaseModel):
     pv_production: int
-    inverter: int
-    inverter_consumption: int
-    inverter_production: int
-    house_consumption: int
-    grid: int
-    grid_consumption: int
-    grid_delivery: int
-    battery: int
-    battery_charge: int
-    battery_discharge: int
+    inverter: InverterPowerflow
+    grid: GridPowerflow
+    battery: BatteryPowerflow
+    consumer: ConsumerPowerflow
+
+    @staticmethod
+    def calc(
+        inverter_data: SunSpecInverter,
+        meters_data: Dict[str, SunSpecMeter],
+        batteries_data: Dict[str, SunSpecBattery],
+        evcharger: Optional[int] = 0,
+    ) -> PowerFlow:
+        grid = GridPowerflow.calc(meters_data)
+        battery = BatteryPowerflow.calc(batteries_data)
+
+        if inverter_data.ac.power.power > 0:
+            pv_production = inverter_data.dc.power + battery.power
+            if pv_production < 0:
+                pv_production = 0
+        else:
+            pv_production = 0
+
+        inverter = InverterPowerflow.calc(inverter_data, battery)
+
+        consumer = ConsumerPowerflow.calc(inverter, grid, evcharger)
+
+        return PowerFlow(
+            pv_production=pv_production,
+            inverter=inverter,
+            grid=grid,
+            battery=battery,
+            consumer=consumer,
+        )
 
 
 class LogicalInfo(BaseModel):
@@ -321,4 +464,3 @@ class LogicalString(BaseModel):
 class LogicalModule(BaseModel):
     info: LogicalInfo
     energy: Optional[float]
-

@@ -9,6 +9,7 @@ from solaredge2mqtt.models import (
     SunSpecBattery,
     PowerFlow,
     LogicalModule,
+    WallboxAPI,
 )
 
 
@@ -79,6 +80,13 @@ class MQTT:
                 battery.model_dump_json(),
                 qos=1,
             )
+
+    def publish_wallbox(self, wallbox: WallboxAPI) -> None:
+        self.client.publish(
+            f"{self.topic_prefix}/wallbox",
+            wallbox.model_dump_json(),
+            qos=1,
+        )
 
     def publish_powerflow(self, powerflow: PowerFlow) -> None:
         self.client.publish(

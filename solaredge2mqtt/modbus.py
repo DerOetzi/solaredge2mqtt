@@ -142,63 +142,12 @@ class Modbus:
         Returns a PowerFlow object representing the total power flow in the system.
         """
 
-        grid = 0
-        for meter in meters.values():
-            if "Import" in meter.info.option and "Export" in meter.info.option:
-                grid += meter.power.power
-
-        batteries_power = 0
-        for battery in batteries.values():
-            batteries_power += battery.power
-
-        if inverter.ac.power.power > 0:
-            pv_production = inverter.dc.power + batteries_power
-            if pv_production < 0:
-                pv_production = 0
-            inverter_consumption = 0
-            inverter_production = inverter.ac.power.power
-        else:
-            pv_production = 0
-            inverter_consumption = abs(inverter.ac.power.power)
-            inverter_production = 0
-
-        inverter = inverter.ac.power.power
-
-        if grid >= 0:
-            grid_consumption = 0
-            grid_delivery = grid
-        else:
-            grid_consumption = abs(grid)
-            grid_delivery = 0
-
-        battery = batteries_power
-        if battery >= 0:
-            battery_charge = battery
-            battery_discharge = 0
-        else:
-            battery_charge = 0
-            battery_discharge = abs(battery)
-
-        house_consumption = int(abs(grid - inverter))
-
-        powerflow = PowerFlow(
-            pv_production=int(pv_production),
-            inverter=int(inverter),
-            inverter_consumption=int(inverter_consumption),
-            inverter_production=int(inverter_production),
-            house_consumption=int(house_consumption),
-            grid=int(grid),
-            grid_consumption=int(grid_consumption),
-            grid_delivery=int(grid_delivery),
-            battery=int(battery),
-            battery_charge=int(battery_charge),
-            battery_discharge=int(battery_discharge),
-        )
+        powerflow = PowerFlow.calc(inverter, meters, batteries)
 
         logger.debug(powerflow)
         logger.info(
-            "Powerflow: PV {pv_production} W, Inverter {inverter} W, House {house_consumption} W, "
-            + "Grid {grid} W, Battery {battery} W",
+            "Powerflow: PV {pv_production} W, Inverter {inverter.power} W, House {house_consumption} W, "
+            + "Grid {grid.power} W, Battery {battery.power} W",
             pv_production=powerflow.pv_production,
             inverter=powerflow.inverter,
             house_consumption=powerflow.house_consumption,

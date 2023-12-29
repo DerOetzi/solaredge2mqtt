@@ -6,15 +6,18 @@
 """
 import asyncio
 import signal
-from typing import Dict
 import datetime as dt
+
+from typing import Optional
 
 from scheduler.asyncio import Scheduler
 
 from solaredge2mqtt.api import MonitoringSite
 from solaredge2mqtt.logging import initialize_logging, logger
 from solaredge2mqtt.modbus import Modbus
+from solaredge2mqtt.models import PowerFlow
 from solaredge2mqtt.mqtt import MQTT
+from solaredge2mqtt.wallbox import WallboxClient
 from solaredge2mqtt.settings import service_settings
 
 STOP = asyncio.Event()
@@ -49,6 +52,11 @@ async def main():
 
     modbus = Modbus(settings)
 
+    if settings.is_wallbox_configured:
+        wallbox = WallboxClient(settings)
+    else:
+        wallbox = None
+
     mqtt = MQTT(settings)
 
     await mqtt.connect()
@@ -56,7 +64,9 @@ async def main():
     loop = asyncio.get_running_loop()
     scheduler = Scheduler(loop=loop)
     scheduler.cyclic(
-        dt.timedelta(seconds=settings.interval), modbus_loop, args=[modbus, mqtt]
+        dt.timedelta(seconds=settings.interval),
+        modbus_and_wallbox_loop,
+        args=[modbus, mqtt, wallbox],
     )
 
     if settings.is_api_configured:
@@ -76,16 +86,39 @@ async def main():
     await mqtt.disconnect()
 
 
-async def modbus_loop(modbus: Modbus, mqtt: MQTT):
+async def modbus_and_wallbox_loop(
+    modbus: Modbus, mqtt: MQTT, wallbox: Optional[WallboxClient] = None
+):
     """Publishes the modbus data to the MQTT broker."""
     inverter_data, meters_data, batteries_data = modbus.loop()
 
-    powerflow = Modbus.calc_powerflow(inverter_data, meters_data, batteries_data)
+    if wallbox is not None:
+        wallbox_data = wallbox.loop()
+        evcharger = wallbox_data.power
+    else:
+        wallbox_data = None
+        evcharger = 0
+
+    powerflow = PowerFlow.calc(inverter_data, meters_data, batteries_data, evcharger)
+
+    logger.debug(powerflow)
+    logger.info(
+        "Powerflow: PV {pv_production} W, Inverter {inverter.power} W, House {consumer.house} W, "
+        + "Grid {grid.power} W, Battery {battery.power} W, Wallbox {consumer.evcharger} W",
+        pv_production=powerflow.pv_production,
+        inverter=powerflow.inverter,
+        consumer=powerflow.consumer,
+        grid=powerflow.grid,
+        battery=powerflow.battery,
+    )
 
     mqtt.publish_inverter(inverter_data)
     mqtt.publish_meters(meters_data)
     mqtt.publish_batteries(batteries_data)
     mqtt.publish_powerflow(powerflow)
+
+    if wallbox_data is not None:
+        mqtt.publish_wallbox(wallbox_data)
 
 
 async def energy_loop(monitoring: MonitoringSite, mqtt: MQTT):
