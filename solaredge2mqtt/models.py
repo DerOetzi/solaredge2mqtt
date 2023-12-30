@@ -391,7 +391,11 @@ class ConsumerPowerflow(BaseModel):
     def calc(
         inverter: InverterPowerflow, grid: GridPowerflow, evcharger: int
     ) -> ConsumerPowerflow:
-        house = int(abs(grid.power - inverter.power)) - evcharger
+        house = int(abs(grid.power - inverter.power))
+        if evcharger < house:
+            house -= evcharger
+        else:
+            evcharger = 0
 
         return ConsumerPowerflow(house=house, evcharger=evcharger)
 
