@@ -414,7 +414,7 @@ class PowerFlow(BaseModel):
         battery = BatteryPowerflow.calc(batteries_data)
 
         if inverter_data.ac.power.power > 0:
-            pv_production = inverter_data.dc.power + battery.power
+            pv_production = int(inverter_data.dc.power + battery.power)
             if pv_production < 0:
                 pv_production = 0
         else:
