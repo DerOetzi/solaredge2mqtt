@@ -395,6 +395,7 @@ class ConsumerPowerflow(BaseModel):
         if evcharger < house:
             house -= evcharger
         else:
+            # Happens when EV Charger starts up and meters are not yet updated
             evcharger = 0
 
         return ConsumerPowerflow(house=house, evcharger=evcharger)
