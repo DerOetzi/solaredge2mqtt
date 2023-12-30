@@ -285,7 +285,7 @@ class WallboxAPI(BaseModel):
     max_current: int
 
     def __init__(self, data: Dict[str, str | int]):
-        power = int(data["meter"]["totalActivePower"])
+        power = int(round(data["meter"]["totalActivePower"] / 1000))
         state = data["state"]
         vehicle_connected = bool(data["vehiclePlugged"])
         max_current = int(data["maxCurrent"])
