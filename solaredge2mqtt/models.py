@@ -318,6 +318,7 @@ class InverterPowerflow(BaseModel):
             if battery.discharge > 0:
                 battery_factor = battery.discharge / inverter_data.dc.power
                 battery_production = int(round(production * battery_factor))
+                battery_production = min(battery_production, production)
                 pv_production = production - battery_production
             else:
                 battery_production = 0
