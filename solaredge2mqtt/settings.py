@@ -31,6 +31,12 @@ class ServiceSettings(BaseSettings):
     wallbox_password: Optional[str] = Field(None)
     wallbox_serial: Optional[str] = Field(None)
 
+    influxdb_host: Optional[str] = Field(None)
+    influxdb_port: Optional[int] = Field(None)
+    influxdb_token: Optional[str] = Field(None)
+    influxdb_org: Optional[str] = Field(None)
+    influxdb_bucket: Optional[str] = Field(None)
+
     logging_level: LoggingLevelEnum = LoggingLevelEnum.INFO
 
     model_config = SettingsConfigDict(
@@ -59,6 +65,17 @@ class ServiceSettings(BaseSettings):
             ]
         )
 
+    @property
+    def is_influxdb_configured(self) -> bool:
+        return all(
+            [
+                self.influxdb_host is not None,
+                self.influxdb_port is not None,
+                self.influxdb_token is not None,
+                self.influxdb_org is not None,
+                self.influxdb_bucket is not None,
+            ]
+        )
 
 class DevelopmentSettings(ServiceSettings):
     debug: bool = Field(True)

@@ -1,11 +1,9 @@
 from __future__ import annotations
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, ClassVar
 
 from enum import Enum
-from typing_extensions import Unpack
 
 from pydantic import BaseModel, model_serializer
-from pydantic.config import ConfigDict
 from solaredge_modbus import (
     BATTERY_STATUS_MAP,
     C_SUNSPEC_DID_MAP,
@@ -72,7 +70,25 @@ class SunSpecInfo(BaseModel):
         return values
 
 
-class SunSpecBaseValue(BaseModel):
+class InfluxDBModel(BaseModel):
+    def influxdb_fields(self, prefix: Optional[str] = None) -> Dict[str, Any]:
+        fields = {}
+        for attr, value in self.__dict__.items():
+            if attr == "info":
+                continue
+            if isinstance(value, InfluxDBModel):
+                attr_name = attr
+                if prefix is not None:
+                    attr_name = f"{prefix}_{attr_name}"
+                fields = {**fields, **value.influxdb_fields(attr_name)}
+            else:
+                if prefix is not None:
+                    attr = f"{prefix}_{attr}"
+                fields[attr] = float(value) if isinstance(value, int) else value
+        return fields
+
+
+class ComponentValueGroup(InfluxDBModel):
     @staticmethod
     def scale_value(
         data: Dict[str, str | int],
@@ -97,68 +113,101 @@ class SunSpecBaseValue(BaseModel):
         ]
 
 
-class SunSpecACCurrent(SunSpecBaseValue):
-    current: float
-    l1_current: float
-    l2_current: Optional[float] = None
-    l3_current: Optional[float] = None
+class Component(ComponentValueGroup):
+    COMPONENT: ClassVar[str] = "unknown"
+    SOURCE: ClassVar[str] = "unknown"
+
+    @property
+    def influxdb_tags(self) -> Dict[str, str]:
+        return {
+            "component": self.COMPONENT,
+            "source": self.SOURCE,
+        }
+
+
+class SunSpecComponent(Component):
+    SOURCE = "modbus"
+
+    info: SunSpecInfo
+
+    def __init__(self, data: Dict[str, str | int], **kwargs):
+        info = SunSpecInfo.map(data)
+        super().__init__(info=info, **kwargs)
+
+    @property
+    def influxdb_tags(self) -> Dict[str, str]:
+        return {
+            **super().influxdb_tags,
+            "manufacturer": self.info.manufacturer,
+            "model": self.info.model,
+            "option": self.info.option,
+            "sunspec_type": self.info.sunspec_type,
+            "serialnumber": self.info.serialnumber,
+        }
+
+
+class SunSpecACCurrent(ComponentValueGroup):
+    actual: float
+    l1: float
+    l2: Optional[float] = None
+    l3: Optional[float] = None
 
     @classmethod
     def map(cls, data: Dict[str, str | int]) -> Dict[str, float]:
         values = {
-            "current": cls.scale_value(data, "current"),
-            "l1_current": cls.scale_value(data, "l1_current", "current_scale"),
+            "actual": cls.scale_value(data, "current"),
+            "l1": cls.scale_value(data, "l1_current", "current_scale"),
         }
 
         if cls.is_three_phase(data):
-            values["l2_current"] = cls.scale_value(data, "l2_current", "current_scale")
-            values["l3_current"] = cls.scale_value(data, "l1_current", "current_scale")
+            values["l2"] = cls.scale_value(data, "l2_current", "current_scale")
+            values["l3"] = cls.scale_value(data, "l3_current", "current_scale")
 
         return values
 
 
-class SunSpecACVoltage(SunSpecBaseValue):
-    l1_voltage: Optional[float] = None
-    l2_voltage: Optional[float] = None
-    l3_voltage: Optional[float] = None
-    l1n_voltage: Optional[float] = None
-    l2n_voltage: Optional[float] = None
-    l3n_voltage: Optional[float] = None
+class SunSpecACVoltage(ComponentValueGroup):
+    l1: Optional[float] = None
+    l2: Optional[float] = None
+    l3: Optional[float] = None
+    l1n: Optional[float] = None
+    l2n: Optional[float] = None
+    l3n: Optional[float] = None
 
     @classmethod
     def map(cls, data: Dict[str, str | int]) -> Dict[str, float]:
         values = {}
         for phase in ["l1", "l2", "l3"]:
             if f"{phase}_voltage" in data:
-                values[f"{phase}_voltage"] = cls.scale_value(
+                values[phase] = cls.scale_value(
                     data, f"{phase}_voltage", "voltage_scale"
                 )
 
             if f"{phase}n_voltage" in data:
-                values[f"{phase}n_voltage"] = cls.scale_value(
+                values[f"{phase}n"] = cls.scale_value(
                     data, f"{phase}n_voltage", "voltage_scale"
                 )
 
         return values
 
 
-class SunSpecACPower(SunSpecBaseValue):
-    power: float
-    power_reactive: float
-    power_apparent: float
-    power_factor: float
+class SunSpecACPower(ComponentValueGroup):
+    actual: float
+    reactive: float
+    apparent: float
+    factor: float
 
     @classmethod
     def map(cls, data: Dict[str, str | int], power_key: str) -> Dict[str, Any]:
         return {
-            "power": cls.scale_value(data, power_key),
-            "power_reactive": cls.scale_value(data, "power_reactive"),
-            "power_apparent": cls.scale_value(data, "power_apparent"),
-            "power_factor": cls.scale_value(data, "power_factor"),
+            "actual": cls.scale_value(data, power_key),
+            "reactive": cls.scale_value(data, "power_reactive"),
+            "apparent": cls.scale_value(data, "power_apparent"),
+            "factor": cls.scale_value(data, "power_factor"),
         }
 
 
-class SunSpecAC(SunSpecBaseValue):
+class SunSpecAC(ComponentValueGroup):
     current: SunSpecACCurrent
     voltage: SunSpecACVoltage
     power: SunSpecACPower
@@ -174,23 +223,23 @@ class SunSpecAC(SunSpecBaseValue):
         }
 
 
-class SunSpecEnergy(SunSpecBaseValue):
-    total_export: float
-    total_import: float
+class SunSpecEnergy(ComponentValueGroup):
+    totalexport: float
+    totalimport: float
 
     @classmethod
     def map(cls, data: Dict[str, str | int]) -> Dict[str, float]:
         return {
-            "total_export": cls.scale_value(
+            "totalexport": cls.scale_value(
                 data, "export_energy_active", "energy_active_scale"
             ),
-            "total_import": cls.scale_value(
+            "totalimport": cls.scale_value(
                 data, "import_energy_active", "energy_active_scale"
             ),
         }
 
 
-class SunSpecDC(SunSpecBaseValue):
+class SunSpecDC(ComponentValueGroup):
     current: float
     voltage: float
     power: float
@@ -204,27 +253,26 @@ class SunSpecDC(SunSpecBaseValue):
         }
 
 
-class SunSpecInverter(SunSpecBaseValue):
-    info: SunSpecInfo
+class SunSpecInverter(SunSpecComponent):
+    COMPONENT = "inverter"
+
     ac: SunSpecAC
     dc: SunSpecDC
-    energy_total: float
+    energytotal: float
     status: str
 
     def __init__(self, data: Dict[str, str | int]):
-        info = SunSpecInfo.map(data)
         ac = SunSpecAC.map(data)
         dc = SunSpecDC.map(data)
-        energy_total = self.scale_value(data, "energy_total")
+        energytotal = self.scale_value(data, "energy_total")
         status = INVERTER_STATUS_MAP[data["status"]]
 
-        super().__init__(
-            info=info, ac=ac, dc=dc, energy_total=energy_total, status=status
-        )
+        super().__init__(data, ac=ac, dc=dc, energytotal=energytotal, status=status)
 
 
-class SunSpecMeter(SunSpecBaseValue):
-    info: SunSpecInfo
+class SunSpecMeter(SunSpecComponent):
+    COMPONENT = "meter"
+
     current: SunSpecACCurrent
     voltage: SunSpecACVoltage
     power: SunSpecACPower
@@ -232,7 +280,6 @@ class SunSpecMeter(SunSpecBaseValue):
     frequency: float
 
     def __init__(self, data: Dict[str, str | int]):
-        info = SunSpecInfo.map(data)
         current = SunSpecACCurrent.map(data)
         voltage = SunSpecACVoltage.map(data)
         power = SunSpecACPower.map(data, "power")
@@ -240,7 +287,7 @@ class SunSpecMeter(SunSpecBaseValue):
         frequency = self.scale_value(data, "frequency")
 
         super().__init__(
-            info=info,
+            data,
             current=current,
             voltage=voltage,
             power=power,
@@ -249,8 +296,9 @@ class SunSpecMeter(SunSpecBaseValue):
         )
 
 
-class SunSpecBattery(BaseModel):
-    info: SunSpecInfo
+class SunSpecBattery(SunSpecComponent):
+    COMPONENT = "battery"
+
     status: str
     current: float
     voltage: float
@@ -259,7 +307,6 @@ class SunSpecBattery(BaseModel):
     state_of_health: float
 
     def __init__(self, data: Dict[str, str | int]):
-        info = SunSpecInfo.map(data)
         status = BATTERY_STATUS_MAP[data["status"]]
         current = round(data["instantaneous_current"], 2)
         voltage = round(data["instantaneous_voltage"], 2)
@@ -268,7 +315,7 @@ class SunSpecBattery(BaseModel):
         state_of_health = round(data["soh"], 2)
 
         super().__init__(
-            info=info,
+            data,
             status=status,
             current=current,
             voltage=voltage,
@@ -278,17 +325,20 @@ class SunSpecBattery(BaseModel):
         )
 
 
-class WallboxAPI(BaseModel):
-    power: int
+class WallboxAPI(Component):
+    COMPONENT = "wallbox"
+    SOURCE = "api"
+
+    power: float
     state: str
     vehicle_plugged: bool
-    max_current: int
+    max_current: float
 
     def __init__(self, data: Dict[str, str | int]):
-        power = int(round(data["meter"]["totalActivePower"] / 1000))
+        power = round(data["meter"]["totalActivePower"] / 1000)
         state = data["state"]
         vehicle_connected = bool(data["vehiclePlugged"])
-        max_current = int(data["maxCurrent"])
+        max_current = float(data["maxCurrent"])
 
         super().__init__(
             power=power,
@@ -298,7 +348,7 @@ class WallboxAPI(BaseModel):
         )
 
 
-class InverterPowerflow(BaseModel):
+class InverterPowerflow(InfluxDBModel):
     power: int
     consumption: int
     production: int
@@ -310,7 +360,7 @@ class InverterPowerflow(BaseModel):
         inverter_data: SunSpecInverter,
         battery: BatteryPowerflow,
     ) -> InverterPowerflow:
-        power = int(inverter_data.ac.power.power)
+        power = int(inverter_data.ac.power.actual)
 
         if power >= 0:
             consumption = 0
@@ -339,7 +389,7 @@ class InverterPowerflow(BaseModel):
         )
 
 
-class GridPowerflow(BaseModel):
+class GridPowerflow(InfluxDBModel):
     power: int
     consumption: int
     delivery: int
@@ -349,7 +399,7 @@ class GridPowerflow(BaseModel):
         grid = 0
         for meter in meters_data.values():
             if "Import" in meter.info.option and "Export" in meter.info.option:
-                grid += meter.power.power
+                grid += meter.power.actual
 
         if grid >= 0:
             consumption = 0
@@ -361,7 +411,7 @@ class GridPowerflow(BaseModel):
         return GridPowerflow(power=grid, consumption=consumption, delivery=delivery)
 
 
-class BatteryPowerflow(BaseModel):
+class BatteryPowerflow(InfluxDBModel):
     power: int
     charge: int
     discharge: int
@@ -384,7 +434,7 @@ class BatteryPowerflow(BaseModel):
         )
 
 
-class ConsumerPowerflow(BaseModel):
+class ConsumerPowerflow(InfluxDBModel):
     house: int
     evcharger: int = 0
 
@@ -402,7 +452,7 @@ class ConsumerPowerflow(BaseModel):
         return ConsumerPowerflow(house=house, evcharger=evcharger)
 
 
-class PowerFlow(BaseModel):
+class PowerFlow(InfluxDBModel):
     pv_production: int
     inverter: InverterPowerflow
     grid: GridPowerflow
@@ -419,7 +469,7 @@ class PowerFlow(BaseModel):
         grid = GridPowerflow.calc(meters_data)
         battery = BatteryPowerflow.calc(batteries_data)
 
-        if inverter_data.ac.power.power > 0:
+        if inverter_data.ac.power.actual > 0:
             pv_production = int(inverter_data.dc.power + battery.power)
             if pv_production < 0:
                 pv_production = 0

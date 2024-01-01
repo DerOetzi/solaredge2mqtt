@@ -68,13 +68,13 @@ class Modbus:
         logger.debug(inverter_data)
         logger.info(
             LOGGING_DEVICE_INFO
-            + ": {status}, AC {power_ac} W, DC {power_dc} W, {energy_total} kWh",
+            + ": {status}, AC {power_ac} W, DC {power_dc} W, {energytotal} kWh",
             device="Inverter",
             info=inverter_data.info,
             status=inverter_data.status,
-            power_ac=inverter_data.ac.power.power,
+            power_ac=inverter_data.ac.power.actual,
             power_dc=inverter_data.dc.power,
-            energy_total=round(inverter_data.energy_total / 1000, 2),
+            energytotal=round(inverter_data.energytotal / 1000, 2),
         )
 
         return inverter_data
@@ -96,9 +96,9 @@ class Modbus:
                 LOGGING_DEVICE_INFO + ": {power} W, {consumption} kWh, {delivery} kWh",
                 device=meter_key,
                 info=meter_data.info,
-                power=meter_data.power.power,
-                consumption=round(meter_data.energy.total_import / 1000, 3),
-                delivery=round(meter_data.energy.total_export / 1000, 3),
+                power=meter_data.power.actual,
+                consumption=round(meter_data.energy.totalimport / 1000, 3),
+                delivery=round(meter_data.energy.totalexport / 1000, 3),
             )
 
             meters[meter_key] = meter_data

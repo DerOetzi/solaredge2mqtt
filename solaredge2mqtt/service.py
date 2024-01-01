@@ -14,6 +14,7 @@ from scheduler.asyncio import Scheduler
 
 from solaredge2mqtt.api import MonitoringSite
 from solaredge2mqtt.logging import initialize_logging, logger
+from solaredge2mqtt.influxdb import InfluxDB
 from solaredge2mqtt.modbus import Modbus
 from solaredge2mqtt.models import PowerFlow
 from solaredge2mqtt.mqtt import MQTT
@@ -57,6 +58,11 @@ async def main():
     else:
         wallbox = None
 
+    if settings.is_influxdb_configured:
+        influxdb = InfluxDB(settings)
+    else:
+        influxdb = None
+
     mqtt = MQTT(settings)
 
     await mqtt.connect()
@@ -66,7 +72,7 @@ async def main():
     scheduler.cyclic(
         dt.timedelta(seconds=settings.interval),
         modbus_and_wallbox_loop,
-        args=[modbus, mqtt, wallbox],
+        args=[modbus, mqtt, wallbox, influxdb],
     )
 
     if settings.is_api_configured:
@@ -87,7 +93,10 @@ async def main():
 
 
 async def modbus_and_wallbox_loop(
-    modbus: Modbus, mqtt: MQTT, wallbox: Optional[WallboxClient] = None
+    modbus: Modbus,
+    mqtt: MQTT,
+    wallbox: Optional[WallboxClient] = None,
+    influxdb: Optional[InfluxDB] = None,
 ):
     """Publishes the modbus data to the MQTT broker."""
     inverter_data, meters_data, batteries_data = modbus.loop()
@@ -119,6 +128,13 @@ async def modbus_and_wallbox_loop(
 
     if wallbox_data is not None:
         mqtt.publish_wallbox(wallbox_data)
+
+    if influxdb is not None:
+        influxdb.write_components(
+            inverter_data, meters_data, batteries_data, wallbox_data
+        )
+
+        influxdb.write_powerflow(powerflow)
 
 
 async def energy_loop(monitoring: MonitoringSite, mqtt: MQTT):
