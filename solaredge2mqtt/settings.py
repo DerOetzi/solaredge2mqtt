@@ -1,9 +1,31 @@
+from os import path
+
 from typing import Optional
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from solaredge2mqtt.logging import LoggingLevelEnum
 from solaredge2mqtt.models import EnumModel
+
+DOCKER_SECRETS_DIR = "/run/secrets"
+
+MODEL_CONFIG_WITHOUT_SECRETS = {"env_file": ".env", "env_prefix": "se2mqtt_"}
+
+MODEL_CONFIG_WITH_SECRETS = {
+    **MODEL_CONFIG_WITHOUT_SECRETS,
+    "secrets_dir": DOCKER_SECRETS_DIR,
+}
+
+MODEL_CONFIG = (
+    SettingsConfigDict(**MODEL_CONFIG_WITH_SECRETS)
+    if path.exists(DOCKER_SECRETS_DIR)
+    else SettingsConfigDict(**MODEL_CONFIG_WITHOUT_SECRETS)
+)
+
+
+SECONDS_PER_DAY = 86400
+SECONDS_PER_YEAR = SECONDS_PER_DAY * 365
+SECONDS_PER_3_YEARS = SECONDS_PER_YEAR * 3
 
 
 class ServiceSettings(BaseSettings):
@@ -35,15 +57,13 @@ class ServiceSettings(BaseSettings):
     influxdb_port: Optional[int] = Field(None)
     influxdb_token: Optional[str] = Field(None)
     influxdb_org: Optional[str] = Field(None)
-    influxdb_bucket: Optional[str] = Field(None)
+    influxdb_prefix: Optional[str] = Field("solaredge")
+    influxdb_retention_raw: Optional[int] = Field(SECONDS_PER_DAY)
+    influxdb_retention_aggregated: Optional[int] = Field(SECONDS_PER_3_YEARS)
 
     logging_level: LoggingLevelEnum = LoggingLevelEnum.INFO
 
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_prefix="se2mqtt_",
-        secrets_dir="/run/secrets",
-    )
+    model_config = MODEL_CONFIG
 
     @property
     def is_api_configured(self) -> bool:
@@ -73,19 +93,18 @@ class ServiceSettings(BaseSettings):
                 self.influxdb_port is not None,
                 self.influxdb_token is not None,
                 self.influxdb_org is not None,
-                self.influxdb_bucket is not None,
             ]
         )
+
 
 class DevelopmentSettings(ServiceSettings):
     debug: bool = Field(True)
 
     environment: str = "development"
 
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_prefix="se2mqtt_",
-    )
+    influxdb_prefix: Optional[str] = Field("solaredgedev")
+
+    model_config = MODEL_CONFIG
 
 
 class ServiceEnvironment(EnumModel):
@@ -109,9 +128,7 @@ class ServiceEnvironment(EnumModel):
 class ServiceBaseSettings(BaseSettings):
     environment: ServiceEnvironment = ServiceEnvironment.PROD
 
-    model_config = SettingsConfigDict(
-        env_file=".env", env_prefix="se2mqtt_", extra="ignore"
-    )
+    model_config = SettingsConfigDict(**MODEL_CONFIG_WITHOUT_SECRETS, extra="ignore")
 
 
 def service_settings() -> ServiceSettings:

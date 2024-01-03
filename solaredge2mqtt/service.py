@@ -60,6 +60,8 @@ async def main():
 
     if settings.is_influxdb_configured:
         influxdb = InfluxDB(settings)
+        influxdb.initialize_buckets()
+        influxdb.initialize_task()
     else:
         influxdb = None
 
