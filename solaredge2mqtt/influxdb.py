@@ -52,7 +52,7 @@ class InfluxDB:
                 logger.info(
                     f"Updating retention rules for bucket '{bucket_name}' to {retention} seconds."
                 )
-                bucket.retention_rules = retention_rules
+                bucket.retention_rules[0] = retention_rules
                 self.buckets_api.update_bucket(bucket=bucket)
 
     @property
