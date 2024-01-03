@@ -20,6 +20,16 @@ services:
       - SE2MQTT_LOGGING_LEVEL
       - SE2MQTT_API_SITE_ID
       - SE2MQTT_API_USERNAME
+      - SE2MQTT_WALLBOX_HOST
+      - SE2MQTT_WALLBOX_PASSWORD
+      - SE2MQTT_WALLBOX_SERIAL
+      - SE2MQTT_INFLUXDB_HOST
+      - SE2MQTT_INFLUXDB_PORT
+      - SE2MQTT_INFLUXDB_TOKEN
+      - SE2MQTT_INFLUXDB_ORG
+      - SE2MQTT_INFLUXDB_PREFIX
+      - SE2MQTT_INFLUXDB_RETENTION_RAW
+      - SE2MQTT_INFLUXDB_RETENTION_AGGREGATED
       - TZ
     restart: unless-stopped
 
@@ -29,3 +39,9 @@ secrets:
 
 #  se2mqtt_api_password:
 #    file: .secrets/api_password
+
+#  se2mqtt_wallbox_password:
+#    file: .secrets/wallbox_password
+
+#  se2mqtt_influxdb_token:
+#    file: .secrets/influxdb_token
