@@ -2,6 +2,7 @@ from influxdb_client import (
     InfluxDBClient,
     Point,
     BucketRetentionRules,
+    BucketsApi,
     TaskCreateRequest,
 )
 
@@ -27,23 +28,26 @@ class InfluxDB:
             org=settings.influxdb_org,
         )
 
-        self.buckets_api = self.client.buckets_api()
-        self.tasks_api = self.client.tasks_api()
-        self.write_api = self.client.write_api()
+        self.loop_points: list[Point] = []
 
-        self.points = []
+        self.flux_cache: dict[str, str] = {}
 
     def initialize_buckets(self) -> None:
-        self._create_or_update_bucket(self.bucket_raw, self.retention_raw)
-        self._create_or_update_bucket(self.bucket_aggregated, self.retention_aggregated)
+        buckets_api = self.client.buckets_api()
+        self._create_or_update_bucket(buckets_api, self.bucket_raw, self.retention_raw)
+        self._create_or_update_bucket(
+            buckets_api, self.bucket_aggregated, self.retention_aggregated
+        )
 
-    def _create_or_update_bucket(self, bucket_name: str, retention: int) -> None:
-        bucket = self.buckets_api.find_bucket_by_name(bucket_name)
+    def _create_or_update_bucket(
+        self, buckets_api: BucketsApi, bucket_name: str, retention: int
+    ) -> None:
+        bucket = buckets_api.find_bucket_by_name(bucket_name)
         retention_rules = BucketRetentionRules(type="expire", every_seconds=retention)
 
         if bucket is None:
             logger.info(f"Creating bucket '{bucket_name}'")
-            self.buckets_api.create_bucket(
+            buckets_api.create_bucket(
                 bucket_name=bucket_name, retention_rules=retention_rules
             )
         else:
@@ -53,7 +57,7 @@ class InfluxDB:
                     f"Updating retention rules for bucket '{bucket_name}' to {retention} seconds."
                 )
                 bucket.retention_rules[0] = retention_rules
-                self.buckets_api.update_bucket(bucket=bucket)
+                buckets_api.update_bucket(bucket=bucket)
 
     @property
     def bucket_raw(self) -> str:
@@ -64,15 +68,11 @@ class InfluxDB:
         return f"{self.prefix}"
 
     def initialize_task(self) -> None:
-        tasks = self.tasks_api.find_tasks(name=self.task_name)
+        tasks_api = self.client.tasks_api()
+        tasks = tasks_api.find_tasks(name=self.task_name)
         if not tasks:
-            flux = pkg_resources.resource_string(
-                __name__, "resources/aggregation.flux"
-            ).decode("utf-8")
-            flux = (
-                flux.replace("TASK_NAME", self.task_name)
-                .replace("BUCKET_RAW", self.bucket_raw)
-                .replace("BUCKET_AGGREGATED", self.bucket_aggregated)
+            flux = self._get_flux_query("aggregation").replace(
+                "TASK_NAME", self.task_name
             )
 
             logger.info(f"Creating task '{self.task_name}'")
@@ -80,9 +80,21 @@ class InfluxDB:
             task_request = TaskCreateRequest(
                 flux=flux, org_id=self.org, status="active"
             )
-            self.tasks_api.create_task(task_create_request=task_request)
+            tasks_api.create_task(task_create_request=task_request)
         else:
             logger.info(f"Task '{self.task_name}' already exists.")
+
+    def _get_flux_query(self, query_name: str) -> str:
+        if query_name not in self.flux_cache:
+            flux = pkg_resources.resource_string(
+                __name__, f"resources/{query_name}.flux"
+            ).decode("utf-8")
+            flux = flux.replace("BUCKET_RAW", self.bucket_raw).replace(
+                "BUCKET_AGGREGATED", self.bucket_aggregated
+            )
+            self.flux_cache[query_name] = flux
+
+        return self.flux_cache[query_name]
 
     @property
     def task_name(self) -> str:
@@ -93,15 +105,15 @@ class InfluxDB:
     ) -> None:
         for component in args:
             if isinstance(component, Component):
-                self.points.append(self._create_component_point(component))
+                self.loop_points.append(self._create_component_point(component))
             elif isinstance(component, dict):
                 for name, component in component.items():
-                    self.points.append(
+                    self.loop_points.append(
                         self._create_component_point(component, {"name": name})
                     )
 
     def write_component(self, component: Component) -> None:
-        self.points.append(self._create_component_point(component))
+        self.loop_points.append(self._create_component_point(component))
 
     def _create_component_point(
         self, component: Component, additional_tags: dict[str, str] = None
@@ -124,8 +136,12 @@ class InfluxDB:
         point = Point("powerflow")
         for key, value in powerflow.influxdb_fields().items():
             point.field(key, value)
-        self.points.append(point)
+        self.loop_points.append(point)
 
     def flush_loop(self) -> None:
-        self.write_api.write(bucket=self.bucket_raw, record=self.points)
-        self.points = []
+        write_api = self.client.write_api()
+        write_api.write(bucket=self.bucket_raw, record=self.loop_points)
+        self.loop_points = []
+
+    def energy_loop(self) -> None:
+        pass
