@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional, ClassVar
 
 from enum import Enum
 
-from pydantic import BaseModel, model_serializer
+from pydantic import BaseModel, model_serializer, computed_field
 from solaredge_modbus import (
     BATTERY_STATUS_MAP,
     C_SUNSPEC_DID_MAP,
@@ -391,8 +391,6 @@ class InverterPowerflow(InfluxDBModel):
 
 class GridPowerflow(InfluxDBModel):
     power: int
-    consumption: int
-    delivery: int
 
     @staticmethod
     def calc(meters_data: Dict[str, SunSpecMeter]) -> GridPowerflow:
@@ -401,20 +399,21 @@ class GridPowerflow(InfluxDBModel):
             if "Import" in meter.info.option and "Export" in meter.info.option:
                 grid += meter.power.actual
 
-        if grid >= 0:
-            consumption = 0
-            delivery = grid
-        else:
-            consumption = abs(grid)
-            delivery = 0
+        return GridPowerflow(power=grid)
 
-        return GridPowerflow(power=grid, consumption=consumption, delivery=delivery)
+    @computed_field
+    @property
+    def consumption(self) -> int:
+        return abs(self.power) if self.power < 0 else 0
+
+    @computed_field
+    @property
+    def delivery(self) -> int:
+        return self.power if self.power >= 0 else 0
 
 
 class BatteryPowerflow(InfluxDBModel):
     power: int
-    charge: int
-    discharge: int
 
     @staticmethod
     def calc(batteries_data: Dict[str, SunSpecBattery]) -> BatteryPowerflow:
@@ -422,21 +421,27 @@ class BatteryPowerflow(InfluxDBModel):
         for battery in batteries_data.values():
             batteries_power += battery.power
 
-        if batteries_power >= 0:
-            charge = batteries_power
-            discharge = 0
-        else:
-            charge = 0
-            discharge = abs(batteries_power)
+        return BatteryPowerflow(power=batteries_power)
 
-        return BatteryPowerflow(
-            power=batteries_power, charge=charge, discharge=discharge
-        )
+    @computed_field
+    @property
+    def charge(self) -> int:
+        return self.power if self.power >= 0 else 0
+
+    @computed_field
+    @property
+    def discharge(self) -> int:
+        return abs(self.power) if self.power < 0 else 0
 
 
 class ConsumerPowerflow(InfluxDBModel):
     house: int
     evcharger: int = 0
+
+    @computed_field
+    @property
+    def total(self) -> int:
+        return self.house + self.evcharger
 
     @staticmethod
     def calc(
