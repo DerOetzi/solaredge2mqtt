@@ -31,6 +31,8 @@ class InfluxDB:
         self.tasks_api = self.client.tasks_api()
         self.write_api = self.client.write_api()
 
+        self.points = []
+
     def initialize_buckets(self) -> None:
         self._create_or_update_bucket(self.bucket_raw, self.retention_raw)
         self._create_or_update_bucket(self.bucket_aggregated, self.retention_aggregated)
@@ -89,21 +91,17 @@ class InfluxDB:
     def write_components(
         self, *args: list[Component | dict[str, Component] | None]
     ) -> None:
-        points = []
         for component in args:
             if isinstance(component, Component):
-                points.append(self._create_component_point(component))
+                self.points.append(self._create_component_point(component))
             elif isinstance(component, dict):
                 for name, component in component.items():
-                    points.append(
+                    self.points.append(
                         self._create_component_point(component, {"name": name})
                     )
 
-        self.write_api.write(self.bucket_raw, record=points)
-
     def write_component(self, component: Component) -> None:
-        point = self._create_component_point(component)
-        self.write_api.write(self.bucket_raw, record=[point])
+        self.points.append(self._create_component_point(component))
 
     def _create_component_point(
         self, component: Component, additional_tags: dict[str, str] = None
@@ -126,4 +124,8 @@ class InfluxDB:
         point = Point("powerflow")
         for key, value in powerflow.influxdb_fields().items():
             point.field(key, value)
-        self.write_api.write(self.bucket_raw, record=[point])
+        self.points.append(point)
+
+    def flush_loop(self) -> None:
+        self.write_api.write(bucket=self.bucket_raw, record=self.points)
+        self.points = []

@@ -137,6 +137,7 @@ async def modbus_and_wallbox_loop(
         )
 
         influxdb.write_powerflow(powerflow)
+        influxdb.flush_loop()
 
 
 async def energy_loop(monitoring: MonitoringSite, mqtt: MQTT):
