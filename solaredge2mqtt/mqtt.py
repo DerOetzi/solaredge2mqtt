@@ -83,27 +83,27 @@ class MQTT:
 
     def publish_wallbox(self, wallbox: WallboxAPI) -> None:
         self.client.publish(
-            f"{self.topic_prefix}/wallbox",
+            f"{self.topic_prefix}/rest/wallbox",
             wallbox.model_dump_json(),
             qos=1,
         )
 
     def publish_powerflow(self, powerflow: PowerFlow) -> None:
         self.client.publish(
-            f"{self.topic_prefix}/modbus/powerflow",
+            f"{self.topic_prefix}/powerflow",
             powerflow.model_dump_json(),
             qos=1,
         )
 
     def publish_pv_energy_today(self, energy: int) -> None:
         self.client.publish(
-            f"{self.topic_prefix}/monitoring/pv_energy_today", energy, qos=1
+            f"{self.topic_prefix}/api/monitoring/pv_energy_today", energy, qos=1
         )
 
     def publish_module_energy(self, modules: list[LogicalModule]) -> None:
         for module in modules:
             self.client.publish(
-                f"{self.topic_prefix}/monitoring/module/{module.info.serialnumber}",
+                f"{self.topic_prefix}/api/monitoring/module/{module.info.serialnumber}",
                 module.model_dump_json(),
                 qos=1,
             )
