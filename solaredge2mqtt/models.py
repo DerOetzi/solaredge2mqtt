@@ -437,11 +437,15 @@ class BatteryPowerflow(InfluxDBModel):
 class ConsumerPowerflow(InfluxDBModel):
     house: int
     evcharger: int = 0
+    inverter: int
+
+    used_pv_production: int
+    used_battery_production: int
 
     @computed_field
     @property
     def total(self) -> int:
-        return self.house + self.evcharger
+        return self.house + self.evcharger + self.inverter
 
     @staticmethod
     def calc(
@@ -454,7 +458,26 @@ class ConsumerPowerflow(InfluxDBModel):
             # Happens when EV Charger starts up and meters are not yet updated
             evcharger = 0
 
-        return ConsumerPowerflow(house=house, evcharger=evcharger)
+        if inverter.pv_production > inverter.production - grid.delivery:
+            pv_production = inverter.pv_production - grid.delivery
+        else:
+            pv_production = inverter.pv_production
+
+        if inverter.battery_production > inverter.production - grid.delivery:
+            battery_production = inverter.battery_production - grid.delivery
+        else:
+            battery_production = inverter.battery_production
+
+        return ConsumerPowerflow(
+            house=house,
+            evcharger=evcharger,
+            used_pv_production=pv_production,
+            used_battery_production=battery_production,
+            inverter=inverter.consumption,
+        )
+
+    def is_valid(self) -> bool:
+        return self.total >= self.used_battery_production + self.used_pv_production
 
 
 class PowerFlow(InfluxDBModel):
