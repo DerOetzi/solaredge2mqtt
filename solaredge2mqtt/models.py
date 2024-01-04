@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional, ClassVar
 
 from enum import Enum
 
-from pydantic import BaseModel, model_serializer, computed_field
+from pydantic import BaseModel, model_serializer
 from solaredge_modbus import (
     BATTERY_STATUS_MAP,
     C_SUNSPEC_DID_MAP,
@@ -73,7 +73,7 @@ class SunSpecInfo(BaseModel):
 class InfluxDBModel(BaseModel):
     def influxdb_fields(self, prefix: Optional[str] = None) -> Dict[str, Any]:
         fields = {}
-        for attr, value in self.model_dump().items():
+        for attr, value in self.__dict__.items():
             if attr == "info":
                 continue
             if isinstance(value, InfluxDBModel):
@@ -391,6 +391,8 @@ class InverterPowerflow(InfluxDBModel):
 
 class GridPowerflow(InfluxDBModel):
     power: int
+    consumption: int
+    delivery: int
 
     @staticmethod
     def calc(meters_data: Dict[str, SunSpecMeter]) -> GridPowerflow:
@@ -399,21 +401,20 @@ class GridPowerflow(InfluxDBModel):
             if "Import" in meter.info.option and "Export" in meter.info.option:
                 grid += meter.power.actual
 
-        return GridPowerflow(power=grid)
+        if grid >= 0:
+            consumption = 0
+            delivery = grid
+        else:
+            consumption = int(abs(grid))
+            delivery = 0
 
-    @computed_field
-    @property
-    def consumption(self) -> int:
-        return abs(self.power) if self.power < 0 else 0
-
-    @computed_field
-    @property
-    def delivery(self) -> int:
-        return self.power if self.power >= 0 else 0
+        return GridPowerflow(power=grid, consumption=consumption, delivery=delivery)
 
 
 class BatteryPowerflow(InfluxDBModel):
     power: int
+    charge: int
+    discharge: int
 
     @staticmethod
     def calc(batteries_data: Dict[str, SunSpecBattery]) -> BatteryPowerflow:
@@ -421,17 +422,16 @@ class BatteryPowerflow(InfluxDBModel):
         for battery in batteries_data.values():
             batteries_power += battery.power
 
-        return BatteryPowerflow(power=batteries_power)
+        if batteries_power >= 0:
+            charge = batteries_power
+            discharge = 0
+        else:
+            charge = 0
+            discharge = abs(batteries_power)
 
-    @computed_field
-    @property
-    def charge(self) -> int:
-        return self.power if self.power >= 0 else 0
-
-    @computed_field
-    @property
-    def discharge(self) -> int:
-        return abs(self.power) if self.power < 0 else 0
+        return BatteryPowerflow(
+            power=batteries_power, charge=charge, discharge=discharge
+        )
 
 
 class ConsumerPowerflow(InfluxDBModel):
@@ -439,13 +439,10 @@ class ConsumerPowerflow(InfluxDBModel):
     evcharger: int = 0
     inverter: int
 
+    total: int
+
     used_pv_production: int
     used_battery_production: int
-
-    @computed_field
-    @property
-    def total(self) -> int:
-        return self.house + self.evcharger + self.inverter
 
     @staticmethod
     def calc(
@@ -457,6 +454,8 @@ class ConsumerPowerflow(InfluxDBModel):
         else:
             # Happens when EV Charger starts up and meters are not yet updated
             evcharger = 0
+
+        total = house + evcharger + inverter.consumption
 
         if inverter.pv_production > inverter.production - grid.delivery:
             pv_production = inverter.pv_production - grid.delivery
@@ -474,6 +473,7 @@ class ConsumerPowerflow(InfluxDBModel):
             used_pv_production=pv_production,
             used_battery_production=battery_production,
             inverter=inverter.consumption,
+            total=total,
         )
 
     def is_valid(self) -> bool:
