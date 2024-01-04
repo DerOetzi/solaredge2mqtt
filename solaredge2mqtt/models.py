@@ -73,7 +73,7 @@ class SunSpecInfo(BaseModel):
 class InfluxDBModel(BaseModel):
     def influxdb_fields(self, prefix: Optional[str] = None) -> Dict[str, Any]:
         fields = {}
-        for attr, value in self.__dict__.items():
+        for attr, value in self.model_dump().items():
             if attr == "info":
                 continue
             if isinstance(value, InfluxDBModel):
