@@ -17,7 +17,7 @@ from solaredge2mqtt.logging import initialize_logging, logger
 from solaredge2mqtt.influxdb import InfluxDB
 from solaredge2mqtt.modbus import Modbus
 from solaredge2mqtt.models import Powerflow
-from solaredge2mqtt.mqtt import MQTT
+from solaredge2mqtt.mqtt import MQTTClient
 from solaredge2mqtt.wallbox import WallboxClient
 from solaredge2mqtt.settings import service_settings
 
@@ -65,7 +65,7 @@ async def main():
     else:
         influxdb = None
 
-    mqtt = MQTT(settings)
+    mqtt = MQTTClient(settings)
 
     await mqtt.connect()
 
@@ -96,7 +96,7 @@ async def main():
 
 async def modbus_and_wallbox_loop(
     modbus: Modbus,
-    mqtt: MQTT,
+    mqtt: MQTTClient,
     wallbox: Optional[WallboxClient] = None,
     influxdb: Optional[InfluxDB] = None,
 ):
@@ -144,7 +144,7 @@ async def modbus_and_wallbox_loop(
         influxdb.flush_loop()
 
 
-async def energy_loop(monitoring: MonitoringSite, mqtt: MQTT):
+async def energy_loop(monitoring: MonitoringSite, mqtt: MQTTClient):
     """Publishes the energy data from monitoring site to the MQTT broker."""
     modules = monitoring.get_module_energies()
     energy_total = 0
