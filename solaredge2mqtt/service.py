@@ -100,14 +100,13 @@ async def modbus_and_wallbox_loop(
     wallbox: Optional[WallboxClient] = None,
     influxdb: Optional[InfluxDB] = None,
 ):
-    modbus_task = asyncio.create_task(modbus.loop())
-    wallbox_task = asyncio.create_task(
-        wallbox.loop() if settings.is_wallbox_configured else asyncio.sleep(0)
+    results = await asyncio.gather(
+        modbus.loop(),
+        wallbox.loop() if settings.is_wallbox_configured else asyncio.sleep(0),
     )
+    inverter_data, meters_data, batteries_data = results[0]
 
-    inverter_data, meters_data, batteries_data = await modbus_task
-
-    wallbox_data = await wallbox_task
+    wallbox_data = results[1]
     evcharger = 0
 
     if wallbox_data is not None:
