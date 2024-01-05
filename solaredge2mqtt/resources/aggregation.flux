@@ -7,7 +7,7 @@ from(bucket: "BUCKET_RAW")
     |> range(start: -task.every)
     |> filter(fn: (r) => r._measurement == "powerflow")
     |> aggregateWindow(
-        every: 1h,
+        every: 1m,
         fn: (tables=<-, column) =>
             tables
                 |> integral(unit: 1h)
