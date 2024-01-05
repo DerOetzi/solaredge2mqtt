@@ -16,7 +16,7 @@ from solaredge2mqtt.api import MonitoringSite
 from solaredge2mqtt.logging import initialize_logging, logger
 from solaredge2mqtt.influxdb import InfluxDB
 from solaredge2mqtt.modbus import Modbus
-from solaredge2mqtt.models import PowerFlow
+from solaredge2mqtt.models import Powerflow
 from solaredge2mqtt.mqtt import MQTT
 from solaredge2mqtt.wallbox import WallboxClient
 from solaredge2mqtt.settings import service_settings
@@ -100,17 +100,20 @@ async def modbus_and_wallbox_loop(
     wallbox: Optional[WallboxClient] = None,
     influxdb: Optional[InfluxDB] = None,
 ):
-    """Publishes the modbus data to the MQTT broker."""
-    inverter_data, meters_data, batteries_data = modbus.loop()
+    modbus_task = asyncio.create_task(modbus.loop())
+    wallbox_task = asyncio.create_task(
+        wallbox.loop() if settings.is_wallbox_configured else asyncio.sleep(0)
+    )
 
-    if wallbox is not None:
-        wallbox_data = wallbox.loop()
+    inverter_data, meters_data, batteries_data = await modbus_task
+
+    wallbox_data = await wallbox_task
+    evcharger = 0
+
+    if wallbox_data is not None:
         evcharger = wallbox_data.power
-    else:
-        wallbox_data = None
-        evcharger = 0
 
-    powerflow = PowerFlow.calc(inverter_data, meters_data, batteries_data, evcharger)
+    powerflow = Powerflow.calc(inverter_data, meters_data, batteries_data, evcharger)
     if not powerflow.consumer.is_valid:
         logger.warning("Invalid powerflow data: {powerflow}", powerflow=powerflow)
 

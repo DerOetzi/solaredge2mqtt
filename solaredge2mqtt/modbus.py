@@ -5,7 +5,7 @@ from solaredge_modbus import Inverter
 
 from solaredge2mqtt.logging import LOGGING_DEVICE_INFO, logger
 from solaredge2mqtt.models import (
-    PowerFlow,
+    Powerflow,
     SunSpecBattery,
     SunSpecInverter,
     SunSpecMeter,
@@ -32,7 +32,7 @@ class Modbus:
             port=settings.modbus_port,
         )
 
-    def loop(
+    async def loop(
         self,
     ) -> Tuple[SunSpecInverter, Dict[str, SunSpecMeter], Dict[str, SunSpecBattery]]:
         inverter_raw, meters_raw, batteries_raw = self._get_raw_data()
@@ -135,18 +135,19 @@ class Modbus:
         inverter: SunSpecInverter,
         meters: Dict[str, SunSpecMeter],
         batteries: Dict[str, SunSpecBattery],
-    ) -> PowerFlow:
+    ) -> Powerflow:
         """
         Calculates the power flow in the system by summing the power of all meters and batteries.
         It considers both import and export options for each meter in the calculation.
         Returns a PowerFlow object representing the total power flow in the system.
         """
 
-        powerflow = PowerFlow.calc(inverter, meters, batteries)
+        powerflow = Powerflow.calc(inverter, meters, batteries)
 
         logger.debug(powerflow)
         logger.info(
-            "Powerflow: PV {pv_production} W, Inverter {inverter.power} W, House {house_consumption} W, "
+            "Powerflow: PV {pv_production} W, Inverter {inverter.power} W, "
+            + "House {house_consumption} W, "
             + "Grid {grid.power} W, Battery {battery.power} W",
             pv_production=powerflow.pv_production,
             inverter=powerflow.inverter,

@@ -7,7 +7,7 @@ from solaredge2mqtt.models import (
     SunSpecInverter,
     SunSpecMeter,
     SunSpecBattery,
-    PowerFlow,
+    Powerflow,
     LogicalModule,
     WallboxAPI,
 )
@@ -88,7 +88,7 @@ class MQTT:
             qos=1,
         )
 
-    def publish_powerflow(self, powerflow: PowerFlow) -> None:
+    def publish_powerflow(self, powerflow: Powerflow) -> None:
         self.client.publish(
             f"{self.topic_prefix}/powerflow",
             powerflow.model_dump_json(),

@@ -9,7 +9,7 @@ from influxdb_client import (
 import pkg_resources
 
 from solaredge2mqtt.logging import logger
-from solaredge2mqtt.models import Component, PowerFlow
+from solaredge2mqtt.models import Component, Powerflow
 from solaredge2mqtt.settings import ServiceSettings
 
 
@@ -132,7 +132,7 @@ class InfluxDB:
 
         return point
 
-    def write_powerflow(self, powerflow: PowerFlow) -> None:
+    def write_powerflow(self, powerflow: Powerflow) -> None:
         point = Point("powerflow")
         for key, value in powerflow.influxdb_fields().items():
             point.field(key, value)
