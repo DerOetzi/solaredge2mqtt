@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, Optional, ClassVar
 
+from solaredge2mqtt.logging import logger
 from solaredge2mqtt.models.base import InfluxDBModel
 from solaredge2mqtt.models.modbus import SunSpecBattery, SunSpecInverter, SunSpecMeter
 
@@ -214,7 +215,7 @@ class Powerflow(InfluxDBModel):
         )
 
     @classmethod
-    def check_debounce(cls, powerflow: Powerflow) -> bool:
+    def is_not_valid_with_last(cls, powerflow: Powerflow) -> bool:
         check = False
 
         if cls.last_powerflow is not None:
