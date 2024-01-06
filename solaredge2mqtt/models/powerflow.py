@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Dict, Optional, ClassVar
 
 from solaredge2mqtt.models.base import InfluxDBModel
 from solaredge2mqtt.models.modbus import SunSpecBattery, SunSpecInverter, SunSpecMeter
@@ -13,11 +13,11 @@ class InverterPowerflow(InfluxDBModel):
     pv_production: int
     battery_production: int
 
-    @staticmethod
-    def calc(
+    def __init__(
+        self,
         inverter_data: SunSpecInverter,
         battery: BatteryPowerflow,
-    ) -> InverterPowerflow:
+    ):
         power = int(inverter_data.ac.power.actual)
 
         if power >= 0:
@@ -38,12 +38,23 @@ class InverterPowerflow(InfluxDBModel):
             pv_production = 0
             battery_production = 0
 
-        return InverterPowerflow(
+        super().__init__(
             power=power,
             consumption=consumption,
             production=production,
             pv_production=pv_production,
             battery_production=battery_production,
+        )
+
+    @property
+    def is_valid(self) -> bool:
+        return all(
+            [
+                self.consumption >= 0.0,
+                self.production >= 0.0,
+                self.pv_production >= 0.0,
+                self.battery_production >= 0.0,
+            ]
         )
 
 
@@ -52,8 +63,7 @@ class GridPowerflow(InfluxDBModel):
     consumption: int
     delivery: int
 
-    @staticmethod
-    def calc(meters_data: Dict[str, SunSpecMeter]) -> GridPowerflow:
+    def __init__(self, meters_data: Dict[str, SunSpecMeter]):
         grid = 0
         for meter in meters_data.values():
             if "Import" in meter.info.option and "Export" in meter.info.option:
@@ -66,7 +76,11 @@ class GridPowerflow(InfluxDBModel):
             consumption = int(abs(grid))
             delivery = 0
 
-        return GridPowerflow(power=grid, consumption=consumption, delivery=delivery)
+        super().__init__(power=grid, consumption=consumption, delivery=delivery)
+
+    @property
+    def is_valid(self) -> bool:
+        return all([self.consumption >= 0.0, self.delivery >= 0.0])
 
 
 class BatteryPowerflow(InfluxDBModel):
@@ -74,8 +88,7 @@ class BatteryPowerflow(InfluxDBModel):
     charge: int
     discharge: int
 
-    @staticmethod
-    def calc(batteries_data: Dict[str, SunSpecBattery]) -> BatteryPowerflow:
+    def __init__(self, batteries_data: Dict[str, SunSpecBattery]):
         batteries_power = 0
         for battery in batteries_data.values():
             batteries_power += battery.power
@@ -87,9 +100,11 @@ class BatteryPowerflow(InfluxDBModel):
             charge = 0
             discharge = abs(batteries_power)
 
-        return BatteryPowerflow(
-            power=batteries_power, charge=charge, discharge=discharge
-        )
+        super().__init__(power=batteries_power, charge=charge, discharge=discharge)
+
+    @property
+    def is_valid(self) -> bool:
+        return all([self.charge >= 0.0, self.discharge >= 0.0])
 
 
 class ConsumerPowerflow(InfluxDBModel):
@@ -102,10 +117,9 @@ class ConsumerPowerflow(InfluxDBModel):
     used_pv_production: int
     used_battery_production: int
 
-    @staticmethod
-    def calc(
-        inverter: InverterPowerflow, grid: GridPowerflow, evcharger: int
-    ) -> ConsumerPowerflow:
+    def __init__(
+        self, inverter: InverterPowerflow, grid: GridPowerflow, evcharger: int
+    ):
         house = int(abs(grid.power - inverter.power))
         if evcharger < house:
             house -= evcharger
@@ -125,7 +139,7 @@ class ConsumerPowerflow(InfluxDBModel):
         else:
             battery_production = inverter.battery_production
 
-        return ConsumerPowerflow(
+        super().__init__(
             house=house,
             evcharger=evcharger,
             used_pv_production=pv_production,
@@ -134,8 +148,19 @@ class ConsumerPowerflow(InfluxDBModel):
             total=total,
         )
 
+    @property
     def is_valid(self) -> bool:
-        return self.total >= self.used_battery_production + self.used_pv_production
+        return all(
+            [
+                self.house >= 0.0,
+                self.evcharger >= 0.0,
+                self.inverter >= 0.0,
+                self.user_pv_production >= 0.0,
+                self.used_battery_production >= 0.0,
+                self.total >= 0.0,
+                self.total >= self.used_battery_production + self.used_pv_production,
+            ]
+        )
 
 
 class Powerflow(InfluxDBModel):
@@ -145,15 +170,17 @@ class Powerflow(InfluxDBModel):
     battery: BatteryPowerflow
     consumer: ConsumerPowerflow
 
-    @staticmethod
-    def calc(
+    last_powerflow: ClassVar[Powerflow] = None
+
+    def __init__(
+        self,
         inverter_data: SunSpecInverter,
         meters_data: Dict[str, SunSpecMeter],
         batteries_data: Dict[str, SunSpecBattery],
         evcharger: Optional[int] = 0,
-    ) -> Powerflow:
-        grid = GridPowerflow.calc(meters_data)
-        battery = BatteryPowerflow.calc(batteries_data)
+    ):
+        grid = GridPowerflow(meters_data)
+        battery = BatteryPowerflow(batteries_data)
 
         if inverter_data.ac.power.actual > 0:
             pv_production = int(inverter_data.dc.power + battery.power)
@@ -162,14 +189,42 @@ class Powerflow(InfluxDBModel):
         else:
             pv_production = 0
 
-        inverter = InverterPowerflow.calc(inverter_data, battery)
+        inverter = InverterPowerflow(inverter_data, battery)
 
-        consumer = ConsumerPowerflow.calc(inverter, grid, evcharger)
+        consumer = ConsumerPowerflow(inverter, grid, evcharger)
 
-        return Powerflow(
+        super().__init__(
             pv_production=pv_production,
             inverter=inverter,
             grid=grid,
             battery=battery,
             consumer=consumer,
         )
+
+    def is_valid(self) -> bool:
+        return all(
+            [
+                self.inverter.is_valid,
+                self.grid.is_valid,
+                self.battery.is_valid,
+                self.consumer.is_valid,
+                self.pv_production >= 0,
+                self.grid.delivery <= self.inverter.power,
+            ]
+        )
+
+    @classmethod
+    def check_debounce(cls, powerflow: Powerflow) -> bool:
+        check = False
+
+        if cls.last_powerflow is not None:
+            check = all(
+                [
+                    cls.last_powerflow.pv_production == 0
+                    and powerflow.pv_production > 4000,
+                ]
+            )
+
+        cls.last_powerflow = powerflow
+
+        return check

@@ -125,11 +125,14 @@ async def modbus_and_wallbox_loop(
         if wallbox_data is not None:
             evcharger = wallbox_data.power
 
-        powerflow = Powerflow.calc(
-            inverter_data, meters_data, batteries_data, evcharger
-        )
-        if not powerflow.consumer.is_valid:
+        powerflow = Powerflow(inverter_data, meters_data, batteries_data, evcharger)
+        if not powerflow.is_valid:
             logger.warning("Invalid powerflow data: {powerflow}", powerflow=powerflow)
+            return
+
+        if Powerflow.check_debounce(powerflow):
+            logger.warning("Powerflow debounce: {powerflow}", powerflow=powerflow)
+            return
 
         logger.debug(powerflow)
         logger.info(
