@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Dict, Optional, ClassVar
 
-from solaredge2mqtt.logging import logger
 from solaredge2mqtt.models.base import InfluxDBModel
 from solaredge2mqtt.models.modbus import SunSpecBattery, SunSpecInverter, SunSpecMeter
 
@@ -156,7 +155,7 @@ class ConsumerPowerflow(InfluxDBModel):
                 self.house >= 0.0,
                 self.evcharger >= 0.0,
                 self.inverter >= 0.0,
-                self.user_pv_production >= 0.0,
+                self.used_pv_production >= 0.0,
                 self.used_battery_production >= 0.0,
                 self.total >= 0.0,
                 self.total >= self.used_battery_production + self.used_pv_production,
