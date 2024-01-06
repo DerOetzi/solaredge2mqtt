@@ -159,26 +159,34 @@ async def modbus_and_wallbox_loop(
             influxdb.flush_loop()
 
 
+energy_lock = asyncio.Lock()
+
+
 async def energy_loop(monitoring: MonitoringSite, mqtt: MQTTClient):
     """Publishes the energy data from monitoring site to the MQTT broker."""
-    modules = monitoring.get_module_energies()
-
-    if modules is None:
-        logger.warning("Invalid monitoring data, skipping this loop")
+    if energy_lock.locked():
+        logger.warning("Energy is still locked, skipping this loop")
         return
 
-    energy_total = 0
-    count_modules = 0
-    for module in modules:
-        if module.energy is not None:
-            count_modules += 1
-            energy_total += module.energy
+    async with energy_lock:
+        modules = monitoring.get_module_energies()
 
-    logger.info(
-        "Read from monitoring total energy: {energy_total} kWh from {count_modules} modules",
-        energy_total=energy_total / 1000,
-        count_modules=count_modules,
-    )
+        if modules is None:
+            logger.warning("Invalid monitoring data, skipping this loop")
+            return
 
-    mqtt.publish_pv_energy_today(energy_total)
-    mqtt.publish_module_energy(modules)
+        energy_total = 0
+        count_modules = 0
+        for module in modules:
+            if module.energy is not None:
+                count_modules += 1
+                energy_total += module.energy
+
+        logger.info(
+            "Read from monitoring total energy: {energy_total} kWh from {count_modules} modules",
+            energy_total=energy_total / 1000,
+            count_modules=count_modules,
+        )
+
+        mqtt.publish_pv_energy_today(energy_total)
+        mqtt.publish_module_energy(modules)
