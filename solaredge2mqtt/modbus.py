@@ -36,7 +36,15 @@ class Modbus:
 
     async def loop(
         self,
-    ) -> Tuple[SunSpecInverter, Dict[str, SunSpecMeter], Dict[str, SunSpecBattery]]:
+    ) -> Tuple[
+        SunSpecInverter | None,
+        Dict[str, SunSpecMeter] | None,
+        Dict[str, SunSpecBattery | None],
+    ] | None:
+        inverter_data = None
+        meters_data = None
+        batteries_data = None
+
         try:
             inverter_raw, meters_raw, batteries_raw = self._get_raw_data()
 

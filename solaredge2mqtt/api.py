@@ -2,7 +2,7 @@ import json
 from typing import Optional
 
 import requests
-from requests.exceptions import HTTPError
+from requests.exceptions import HTTPError, RequestException
 
 from solaredge2mqtt.logging import logger
 from solaredge2mqtt.models import (
@@ -39,24 +39,31 @@ class MonitoringSite:
                 f"Cannot login to monitoring site (status code: {result.status_code})"
             )
 
-    def get_module_energies(self) -> list[LogicalInverter]:
-        logical = self._get_logical()
+    def get_module_energies(self) -> list[LogicalInverter] | None:
+        modules = None
+        try:
+            logical = self._get_logical()
 
-        logger.debug("Logical: {logical}", logical=json.dumps(logical, indent=4))
+            logger.debug("Logical: {logical}", logical=json.dumps(logical, indent=4))
 
-        inverters = self._parse_inverters(
-            logical["logicalTree"]["children"], logical["reportersData"]
-        )
-
-        modules = []
-
-        for inverter in inverters:
-            logger.debug(
-                "Inverter: {inverter}", inverter=inverter.model_dump_json(indent=4)
+            inverters = self._parse_inverters(
+                logical["logicalTree"]["children"], logical["reportersData"]
             )
-            for string in inverter.strings:
-                for module in string.modules:
-                    modules.append(module)
+
+            modules = []
+
+            for inverter in inverters:
+                logger.debug(
+                    "Inverter: {inverter}", inverter=inverter.model_dump_json(indent=4)
+                )
+                for string in inverter.strings:
+                    for module in string.modules:
+                        modules.append(module)
+        except RequestException as error:
+            logger.error(
+                "Exception while reading data from monitoring site: {exception}",
+                exception=error,
+            )
 
         return modules
 

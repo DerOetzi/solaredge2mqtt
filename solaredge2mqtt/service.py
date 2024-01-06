@@ -162,6 +162,11 @@ async def modbus_and_wallbox_loop(
 async def energy_loop(monitoring: MonitoringSite, mqtt: MQTTClient):
     """Publishes the energy data from monitoring site to the MQTT broker."""
     modules = monitoring.get_module_energies()
+
+    if modules is None:
+        logger.warning("Invalid monitoring data, skipping this loop")
+        return
+
     energy_total = 0
     count_modules = 0
     for module in modules:
