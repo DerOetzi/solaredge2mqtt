@@ -1,6 +1,8 @@
 import json
 from typing import Dict, Tuple
 
+from pymodbus.exceptions import ModbusException
+
 from solaredge_modbus import Inverter
 
 from solaredge2mqtt.logging import LOGGING_DEVICE_INFO, logger
@@ -35,11 +37,17 @@ class Modbus:
     async def loop(
         self,
     ) -> Tuple[SunSpecInverter, Dict[str, SunSpecMeter], Dict[str, SunSpecBattery]]:
-        inverter_raw, meters_raw, batteries_raw = self._get_raw_data()
+        try:
+            inverter_raw, meters_raw, batteries_raw = self._get_raw_data()
 
-        inverter_data = self._map_inverter(inverter_raw)
-        meters_data = self._map_meters(meters_raw)
-        batteries_data = self._map_batteries(batteries_raw)
+            inverter_data = self._map_inverter(inverter_raw)
+            meters_data = self._map_meters(meters_raw)
+            batteries_data = self._map_batteries(batteries_raw)
+        except ModbusException as error:
+            logger.error(
+                "Exception while reading data from modbus: {exception}",
+                exception=error,
+            )
 
         return inverter_data, meters_data, batteries_data
 

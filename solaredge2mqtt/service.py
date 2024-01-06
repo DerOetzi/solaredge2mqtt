@@ -94,54 +94,69 @@ async def main():
     await mqtt.disconnect()
 
 
+modbus_lock = asyncio.Lock()
+
+
 async def modbus_and_wallbox_loop(
     modbus: Modbus,
     mqtt: MQTTClient,
     wallbox: Optional[WallboxClient] = None,
     influxdb: Optional[InfluxDB] = None,
 ):
-    results = await asyncio.gather(
-        modbus.loop(),
-        wallbox.loop() if settings.is_wallbox_configured else asyncio.sleep(0),
-    )
-    inverter_data, meters_data, batteries_data = results[0]
+    if modbus_lock.locked():
+        logger.warning("Modbus is still locked, skipping this loop")
+        return
 
-    wallbox_data = results[1]
-    evcharger = 0
-
-    if wallbox_data is not None:
-        evcharger = wallbox_data.power
-
-    powerflow = Powerflow.calc(inverter_data, meters_data, batteries_data, evcharger)
-    if not powerflow.consumer.is_valid:
-        logger.warning("Invalid powerflow data: {powerflow}", powerflow=powerflow)
-
-    logger.debug(powerflow)
-    logger.info(
-        "Powerflow: PV {pv_production} W, Inverter {inverter.power} W, House {consumer.house} W, "
-        + "Grid {grid.power} W, Battery {battery.power} W, Wallbox {consumer.evcharger} W",
-        pv_production=powerflow.pv_production,
-        inverter=powerflow.inverter,
-        consumer=powerflow.consumer,
-        grid=powerflow.grid,
-        battery=powerflow.battery,
-    )
-
-    mqtt.publish_inverter(inverter_data)
-    mqtt.publish_meters(meters_data)
-    mqtt.publish_batteries(batteries_data)
-    mqtt.publish_powerflow(powerflow)
-
-    if wallbox_data is not None:
-        mqtt.publish_wallbox(wallbox_data)
-
-    if influxdb is not None:
-        influxdb.write_components(
-            inverter_data, meters_data, batteries_data, wallbox_data
+    async with modbus_lock:
+        results = await asyncio.gather(
+            modbus.loop(),
+            wallbox.loop() if settings.is_wallbox_configured else asyncio.sleep(0),
         )
 
-        influxdb.write_powerflow(powerflow)
-        influxdb.flush_loop()
+        inverter_data, meters_data, batteries_data = results[0]
+
+        if any(data is None for data in [inverter_data, meters_data, batteries_data]):
+            logger.warning("Invalid modbus data, skipping this loop")
+            return
+
+        wallbox_data = results[1]
+        evcharger = 0
+
+        if wallbox_data is not None:
+            evcharger = wallbox_data.power
+
+        powerflow = Powerflow.calc(
+            inverter_data, meters_data, batteries_data, evcharger
+        )
+        if not powerflow.consumer.is_valid:
+            logger.warning("Invalid powerflow data: {powerflow}", powerflow=powerflow)
+
+        logger.debug(powerflow)
+        logger.info(
+            "Powerflow: PV {pv_production} W, Inverter {inverter.power} W, House {consumer.house} W, "
+            + "Grid {grid.power} W, Battery {battery.power} W, Wallbox {consumer.evcharger} W",
+            pv_production=powerflow.pv_production,
+            inverter=powerflow.inverter,
+            consumer=powerflow.consumer,
+            grid=powerflow.grid,
+            battery=powerflow.battery,
+        )
+
+        mqtt.publish_inverter(inverter_data)
+        mqtt.publish_meters(meters_data)
+        mqtt.publish_batteries(batteries_data)
+        mqtt.publish_powerflow(powerflow)
+
+        if wallbox_data is not None:
+            mqtt.publish_wallbox(wallbox_data)
+
+        if influxdb is not None:
+            influxdb.write_components(
+                inverter_data, meters_data, batteries_data, wallbox_data
+            )
+
+            influxdb.write_powerflow(powerflow)
+            influxdb.flush_loop()
 
 
 async def energy_loop(monitoring: MonitoringSite, mqtt: MQTTClient):
