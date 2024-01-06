@@ -209,7 +209,7 @@ class Powerflow(InfluxDBModel):
                 self.battery.is_valid,
                 self.consumer.is_valid,
                 self.pv_production >= 0,
-                self.grid.delivery <= self.inverter.power,
+                self.grid.delivery <= self.inverter.production,
             ]
         )
 
