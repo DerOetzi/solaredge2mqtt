@@ -55,9 +55,6 @@ data =
                     "battery_discharge": if r.battery_power < 0 then (-1.0) * r.battery_power else 0.0,
                     "battery_charge": if r.battery_power > 0 then r.battery_power else 0.0,
                     "grid_power": r.meter_power_actual,
-                    "grid_consumption":
-                        if r.meter_power_actual < 0 then math.round(x: (-1.0) * r.meter_power_actual) else 0.0,
-                    "grid_delivery": if r.meter_power_actual > 0 then r.meter_power_actual else 0.0,
                     "inverter_consumption":
                         if r.inverter_ac_power_actual < 0 then
                             math.round(x: (-1.0) * r.inverter_ac_power_actual)
@@ -67,6 +64,9 @@ data =
                     "consumer_evcharger": r.wallbox_power,
                 }),
         )
+        |> map(fn: (r) => ({r with grid_power: if r.grid_power > 0 and r.grid_power > r.inverter_power then 0.0 else r.grid_power}))
+        |> map(fn: (r) => ({r with grid_consumption: if r.grid_power < 0 then math.round(x: (-1.0) * r.grid_power) else 0.0}))
+        |> map(fn: (r) => ({r with grid_delivery: if r.grid_power > 0 then r.grid_power else 0.0}))
         |> map(
             fn: (r) =>
                 ({r with inverter_battery_production:
