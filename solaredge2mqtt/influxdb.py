@@ -144,17 +144,13 @@ class InfluxDB:
         write_api = self.client.write_api(
             success_callback=self.write_success_callback,
             error_callback=self.write_error_callback,
-            retry_callback=self.write_retry_callback,
+            retry_callback=self.write_error_callback,
         )
         write_api.write(bucket=self.bucket_raw, record=self.loop_points)
         self.loop_points = []
 
     def write_success_callback(self, conf: (str, str, str), data: str) -> None:
-        logger.debug(f"Write success: {conf} {data}")
+        logger.debug(f"InfluxDB batch written: {conf} {data}")
 
     def write_error_callback(self, conf: (str, str, str), error: InfluxDBError) -> None:
-        logger.error(f"Write error: {conf} {error}")
-
-    def write_retry_callback(self, conf: (str, str, str), error: InfluxDBError) -> None:
-        logger.warning(f"Write retry error: {conf} {error}")
-
+        logger.error(f"InfluxDB error while writting: {conf} {error}")
