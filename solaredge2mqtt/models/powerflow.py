@@ -221,7 +221,7 @@ class Powerflow(InfluxDBModel):
             check = all(
                 [
                     cls.last_powerflow.pv_production == 0
-                    and powerflow.pv_production > 4000,
+                    and powerflow.pv_production > 100,
                 ]
             )
 
