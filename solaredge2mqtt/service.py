@@ -1,7 +1,7 @@
 """
     This module, service.py, is part of the SolarEdge2MQTT service, which reads data 
     from a SolarEdge inverter and publishes it to an MQTT broker. It uses the asyncio 
-    library for asynchronous I/O and the gmqtt library for MQTT communication. 
+    library for asynchronous I/O and the aiomqtt library for MQTT communication. 
     The module also includes a run function to initialize and start the service.
 """
 import asyncio
@@ -65,33 +65,33 @@ async def main():
     else:
         influxdb = None
 
-    mqtt = MQTTClient(settings)
+    async with MQTTClient(settings) as mqtt:
+        await mqtt.publish_status_online()
 
-    await mqtt.connect()
-
-    loop = asyncio.get_running_loop()
-    scheduler = Scheduler(loop=loop)
-    scheduler.cyclic(
-        dt.timedelta(seconds=settings.interval),
-        modbus_and_wallbox_loop,
-        args=[modbus, mqtt, wallbox, influxdb],
-    )
-
-    if settings.is_api_configured:
-        monitoring = MonitoringSite(settings)
-        monitoring.login()
-        await energy_loop(monitoring, mqtt)
+        loop = asyncio.get_running_loop()
+        scheduler = Scheduler(loop=loop)
         scheduler.cyclic(
-            dt.timedelta(seconds=300), energy_loop, args=[monitoring, mqtt]
+            dt.timedelta(seconds=settings.interval),
+            modbus_and_wallbox_loop,
+            args=[modbus, mqtt, wallbox, influxdb],
         )
 
-    logger.debug(scheduler)
+        if settings.is_api_configured:
+            monitoring = MonitoringSite(settings)
+            monitoring.login()
+            await energy_loop(monitoring, mqtt)
+            scheduler.cyclic(
+                dt.timedelta(seconds=300), energy_loop, args=[monitoring, mqtt]
+            )
 
-    while not STOP.is_set():
-        await asyncio.sleep(1)
+        logger.debug(scheduler)
 
-    scheduler.delete_jobs()
-    await mqtt.disconnect()
+        while not STOP.is_set():
+            await asyncio.sleep(1)
+
+        scheduler.delete_jobs()
+
+        await mqtt.publish_status_offline()
 
 
 modbus_lock = asyncio.Lock()
@@ -149,13 +149,13 @@ async def modbus_and_wallbox_loop(
             battery=powerflow.battery,
         )
 
-        mqtt.publish_inverter(inverter_data)
-        mqtt.publish_meters(meters_data)
-        mqtt.publish_batteries(batteries_data)
-        mqtt.publish_powerflow(powerflow)
+        await mqtt.publish_inverter(inverter_data)
+        await mqtt.publish_meters(meters_data)
+        await mqtt.publish_batteries(batteries_data)
+        await mqtt.publish_powerflow(powerflow)
 
         if wallbox_data is not None:
-            mqtt.publish_wallbox(wallbox_data)
+            await mqtt.publish_wallbox(wallbox_data)
 
         if influxdb is not None:
             influxdb.write_components(
@@ -195,5 +195,5 @@ async def energy_loop(monitoring: MonitoringSite, mqtt: MQTTClient):
             count_modules=count_modules,
         )
 
-        mqtt.publish_pv_energy_today(energy_total)
-        mqtt.publish_module_energy(modules)
+        await mqtt.publish_pv_energy_today(energy_total)
+        await mqtt.publish_module_energy(modules)

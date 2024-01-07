@@ -30,8 +30,3 @@ Licensor: nmakel
 Website: https://github.com/nmakel/solaredge_modbus
 License: MIT License
 
-Component: GMQTT
-Licensor: Mikhail Turchunovich
-Website: https://github.com/wialon/gmqtt
-License: MIT License
-

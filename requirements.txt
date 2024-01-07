@@ -2,8 +2,8 @@ solaredge_modbus==0.8.0
 pydantic==2.5.3
 pydantic-settings==2.1.0
 loguru==0.7.2
-gmqtt==0.6.13
 scheduler==0.8.5
 requests==2.31.0
 influxdb-client==1.39.0
 pyjwt==2.8.0
+aiomqtt==1.2.1
