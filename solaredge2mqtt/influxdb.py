@@ -158,5 +158,3 @@ class InfluxDB:
     def write_retry_callback(self, conf: (str, str, str), error: InfluxDBError) -> None:
         logger.warning(f"Write retry error: {conf} {error}")
 
-    def energy_loop(self) -> None:
-        pass
