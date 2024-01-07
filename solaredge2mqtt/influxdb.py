@@ -152,5 +152,7 @@ class InfluxDB:
     def write_success_callback(self, conf: (str, str, str), data: str) -> None:
         logger.debug(f"InfluxDB batch written: {conf} {data}")
 
-    def write_error_callback(self, conf: (str, str, str), error: InfluxDBError) -> None:
+    def write_error_callback(
+        self, conf: (str, str, str), data: str, error: InfluxDBError
+    ) -> None:
         logger.error(f"InfluxDB error while writting: {conf} {error}")
