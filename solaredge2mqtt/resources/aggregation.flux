@@ -82,12 +82,7 @@ data
     |> set(key: "_measurement", value: "energy")
     |> to(bucket: "BUCKET_AGGREGATED")
 
-batteryfields = [
-    "current",
-    "state_of_charge",
-    "state_of_health",
-    "voltage",
-]
+batteryfields = ["current", "state_of_charge", "state_of_health", "voltage"]
 
 //battery data
 dataBattery =

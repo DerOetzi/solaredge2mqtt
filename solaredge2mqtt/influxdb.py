@@ -89,11 +89,19 @@ class InfluxDB:
             tasks_api.create_task(task_create_request=task_request)
         else:
             logger.info(f"Task '{self.task_name}' already exists.")
-            if tasks[0].flux != flux:
+
+            new_flux = self._strip_flux(flux)
+            stored_flux = self._strip_flux(tasks[0].flux)
+
+            if new_flux != stored_flux:
                 logger.info(f"Updating task '{self.task_name}'")
                 logger.debug(flux)
                 tasks[0].flux = flux
                 tasks_api.update_task(tasks[0])
+
+    @staticmethod
+    def _strip_flux(flux: str) -> str:
+        return "".join(flux.split())
 
     def _get_flux_query(self, query_name: str) -> str:
         if query_name not in self.flux_cache:
