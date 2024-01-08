@@ -8,6 +8,7 @@ from solaredge2mqtt.models.modbus import SunSpecBattery, SunSpecInverter, SunSpe
 
 class InverterPowerflow(InfluxDBModel):
     power: int
+    dc_power: int
     consumption: int
     production: int
     pv_production: int
@@ -19,6 +20,7 @@ class InverterPowerflow(InfluxDBModel):
         battery: BatteryPowerflow,
     ):
         power = int(inverter_data.ac.power.actual)
+        dc_power = int(inverter_data.dc.power)
 
         if power >= 0:
             consumption = 0
@@ -40,6 +42,7 @@ class InverterPowerflow(InfluxDBModel):
 
         super().__init__(
             power=power,
+            dc_power=dc_power,
             consumption=consumption,
             production=production,
             pv_production=pv_production,
@@ -201,6 +204,7 @@ class Powerflow(InfluxDBModel):
             consumer=consumer,
         )
 
+    @property
     def is_valid(self) -> bool:
         return all(
             [
@@ -209,7 +213,7 @@ class Powerflow(InfluxDBModel):
                 self.battery.is_valid,
                 self.consumer.is_valid,
                 self.pv_production >= 0,
-                self.grid.delivery <= self.inverter.production,
+                self.grid.delivery <= self.inverter.pv_production,
             ]
         )
 

@@ -39,7 +39,7 @@ startTime = date.truncate(t: now(), unit: 1d)
 
 data =
     from(bucket: "solaredge_raw")
-        |> range(start: startTime)
+        |> range(start: -23h)
         |> filter(fn: (r) => r["_measurement"] == "component")
         |> filter(fn: (r) => contains(value: r._field, set: items))
         |> group()
@@ -64,8 +64,15 @@ data =
                     "consumer_evcharger": r.wallbox_power,
                 }),
         )
-        |> map(fn: (r) => ({r with grid_power: if r.grid_power > 0 and r.grid_power > r.inverter_power then 0.0 else r.grid_power}))
-        |> map(fn: (r) => ({r with grid_consumption: if r.grid_power < 0 then math.round(x: (-1.0) * r.grid_power) else 0.0}))
+        |> map(
+            fn: (r) =>
+                ({r with grid_power: if r.grid_power > 0 and r.grid_power > r.inverter_power then 0.0 else r.grid_power,
+                }),
+        )
+        |> map(
+            fn: (r) =>
+                ({r with grid_consumption: if r.grid_power < 0 then math.round(x: (-1.0) * r.grid_power) else 0.0}),
+        )
         |> map(fn: (r) => ({r with grid_delivery: if r.grid_power > 0 then r.grid_power else 0.0}))
         |> map(
             fn: (r) =>
@@ -86,6 +93,7 @@ data =
                             r.inverter_production,
                 }),
         )
+        |> filter(fn: (r) => r.grid_delivery <= r.inverter_pv_production)
         |> map(
             fn: (r) =>
                 ({r with pv_production:
@@ -233,3 +241,58 @@ data
     |> map(fn: (r) => ({r with _value: r.consumer_used_battery_production}))
     |> keep(columns: ["_time", "_measurement", "_field", "_value"])
     |> to(bucket: "solaredge_raw")
+
+// Historical data
+startTimeHistorical = date.sub(from: now(), d: 1d)
+stopTimeHistorical = date.sub(from: date.truncate(t: now(), unit: 1h), d: 1s)
+
+dataHistorical =
+    from(bucket: "solaredge_raw")
+        |> range(start: startTimeHistorical, stop: stopTimeHistorical)
+        |> filter(fn: (r) => r._measurement == "powerflow")
+        |> keep(
+            columns: [
+                "_measurement",
+                "_field",
+                "_value",
+                "_start",
+                "_stop",
+                "_time",
+            ],
+        )
+
+dataHistorical
+    |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
+    |> set(key: "agg_type", value: "mean")
+    |> to(bucket: "solaredge")
+
+dataHistorical
+    |> aggregateWindow(every: 1h, fn: max, createEmpty: false)
+    |> set(key: "agg_type", value: "max")
+    |> to(bucket: "solaredge")
+
+dataHistorical
+    |> aggregateWindow(every: 1h, fn: min, createEmpty: false)
+    |> set(key: "agg_type", value: "min")
+    |> to(bucket: "solaredge")
+
+dataHistorical
+    |> aggregateWindow(
+        every: 1h,
+        fn: (tables=<-, column) =>
+            tables
+                |> integral(unit: 1h)
+                |> map(fn: (r) => ({r with _value: r._value / 1000.0})),
+    )
+    |> keep(
+        columns: [
+            "_measurement",
+            "_field",
+            "_value",
+            "_start",
+            "_stop",
+            "_time",
+        ],
+    )
+    |> set(key: "_measurement", value: "energy")
+    |> to(bucket: "solaredge")

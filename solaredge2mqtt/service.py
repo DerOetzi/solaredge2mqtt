@@ -127,15 +127,11 @@ async def modbus_and_wallbox_loop(
 
         powerflow = Powerflow(inverter_data, meters_data, batteries_data, evcharger)
         if not powerflow.is_valid:
-            logger.warning("Invalid powerflow data: {powerflow}", powerflow=powerflow)
+            logger.warning("Invalid powerflow data")
             return
 
         if Powerflow.is_not_valid_with_last(powerflow):
-            logger.warning(
-                "Value change not valid: {last_powerflow} {powerflow}",
-                last_powerflow=Powerflow.last_powerflow,
-                powerflow=powerflow,
-            )
+            logger.warning("Value change not valid")
             return
 
         logger.debug(powerflow)
