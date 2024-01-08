@@ -81,3 +81,44 @@ data
     )
     |> set(key: "_measurement", value: "energy")
     |> to(bucket: "BUCKET_AGGREGATED")
+
+batteryfields = [
+    "current",
+    "state_of_charge",
+    "state_of_health",
+    "voltage",
+]
+
+//battery data
+dataBattery =
+    from(bucket: "BUCKET_RAW")
+        |> range(start: startTime, stop: stopTime)
+        |> filter(fn: (r) => r._measurement == "component")
+        |> filter(fn: (r) => r.component == "battery")
+        |> filter(fn: (r) => contains(value: r._field, set: batteryfields))
+        |> set(key: "_measurement", value: "battery")
+        |> keep(
+            columns: [
+                "_measurement",
+                "_field",
+                "_value",
+                "_start",
+                "_stop",
+                "_time",
+            ],
+        )
+
+dataBattery
+    |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
+    |> set(key: "agg_type", value: "mean")
+    |> to(bucket: "BUCKET_AGGREGATED")
+
+dataBattery
+    |> aggregateWindow(every: 1h, fn: max, createEmpty: false)
+    |> set(key: "agg_type", value: "max")
+    |> to(bucket: "BUCKET_AGGREGATED")
+
+dataBattery
+    |> aggregateWindow(every: 1h, fn: min, createEmpty: false)
+    |> set(key: "agg_type", value: "min")
+    |> to(bucket: "BUCKET_AGGREGATED")

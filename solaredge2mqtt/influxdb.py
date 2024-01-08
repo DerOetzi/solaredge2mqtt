@@ -78,19 +78,22 @@ class InfluxDB:
     def initialize_task(self) -> None:
         tasks_api = self.client.tasks_api()
         tasks = tasks_api.find_tasks(name=self.task_name)
-        if not tasks:
-            flux = self._get_flux_query("aggregation").replace(
-                "TASK_NAME", self.task_name
-            )
+        flux = self._get_flux_query("aggregation").replace("TASK_NAME", self.task_name)
 
-            logger.info(f"Creating task '{self.task_name}'")
-            logger.debug(flux)
+        if not tasks:
             task_request = TaskCreateRequest(
                 flux=flux, org_id=self.org, status="active"
             )
+            logger.info(f"Creating task '{self.task_name}'")
+            logger.debug(flux)
             tasks_api.create_task(task_create_request=task_request)
         else:
             logger.info(f"Task '{self.task_name}' already exists.")
+            if tasks[0].flux != flux:
+                logger.info(f"Updating task '{self.task_name}'")
+                logger.debug(flux)
+                tasks[0].flux = flux
+                tasks_api.update_task(tasks[0])
 
     def _get_flux_query(self, query_name: str) -> str:
         if query_name not in self.flux_cache:
