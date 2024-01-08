@@ -14,7 +14,7 @@ from scheduler.asyncio import Scheduler
 
 from solaredge2mqtt.api import MonitoringSite
 from solaredge2mqtt.logging import initialize_logging, logger
-from solaredge2mqtt.influxdb import InfluxDB
+from solaredge2mqtt.persistence.influxdb import InfluxDB
 from solaredge2mqtt.modbus import Modbus
 from solaredge2mqtt.models import Powerflow
 from solaredge2mqtt.mqtt import MQTTClient
