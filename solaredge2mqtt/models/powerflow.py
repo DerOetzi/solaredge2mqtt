@@ -117,6 +117,7 @@ class ConsumerPowerflow(InfluxDBModel):
 
     total: int
 
+    used_production: int
     used_pv_production: int
     used_battery_production: int
 
@@ -132,21 +133,23 @@ class ConsumerPowerflow(InfluxDBModel):
 
         total = house + evcharger + inverter.consumption
 
-        if inverter.pv_production > inverter.production - grid.delivery:
-            pv_production = inverter.pv_production - grid.delivery
+        if inverter.production > 0 and inverter.production > grid.delivery:
+            used_production = inverter.production - grid.delivery
+            battery_factor = inverter.battery_production / inverter.production
+            used_battery_production = int(round(used_production * battery_factor))
+            used_battery_production = min(used_battery_production, used_production)
+            used_pv_production = used_production - used_battery_production
         else:
-            pv_production = inverter.pv_production
-
-        if inverter.battery_production > inverter.production - grid.delivery:
-            battery_production = inverter.battery_production - grid.delivery
-        else:
-            battery_production = inverter.battery_production
+            used_production = 0
+            used_pv_production = 0
+            used_battery_production = 0
 
         super().__init__(
             house=house,
             evcharger=evcharger,
-            used_pv_production=pv_production,
-            used_battery_production=battery_production,
+            used_production=used_production,
+            used_pv_production=used_pv_production,
+            used_battery_production=used_battery_production,
             inverter=inverter.consumption,
             total=total,
         )
@@ -161,7 +164,7 @@ class ConsumerPowerflow(InfluxDBModel):
                 self.used_pv_production >= 0.0,
                 self.used_battery_production >= 0.0,
                 self.total >= 0.0,
-                self.total >= self.used_battery_production + self.used_pv_production,
+                self.total >= self.used_production,
             ]
         )
 
@@ -213,7 +216,8 @@ class Powerflow(InfluxDBModel):
                 self.battery.is_valid,
                 self.consumer.is_valid,
                 self.pv_production >= 0,
-                self.grid.delivery <= self.inverter.pv_production,
+                self.consumer.used_production + self.grid.delivery
+                == self.inverter.production,
             ]
         )
 
