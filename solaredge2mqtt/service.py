@@ -31,6 +31,9 @@ def run():
 
 
 class Service:
+    BASIC_VALUES_LOCK = "basic_values"
+    MONITORING_LOCK = "monitoring"
+
     def __init__(self):
         self.settings = service_settings()
 
@@ -42,9 +45,19 @@ class Service:
         self.cancel_request = asyncio.Event()
         self.locks: dict[str, asyncio.Lock] = {}
 
-        self.wallbox: WallboxClient | None = None
-        self.influxdb: InfluxDB | None = None
-        self.monitoring: MonitoringSite | None = None
+        self.wallbox: WallboxClient | None = (
+            WallboxClient(self.settings)
+            if self.settings.is_wallbox_configured
+            else None
+        )
+
+        self.influxdb: InfluxDB | None = (
+            InfluxDB(self.settings) if self.settings.is_influxdb_configured else None
+        )
+
+        self.monitoring: MonitoringSite | None = (
+            MonitoringSite(self.settings) if self.settings.is_api_configured else None
+        )
 
     def cancel(self):
         logger.info("Stopping SolarEdge2MQTT service...")
@@ -53,12 +66,9 @@ class Service:
     async def main_loop(self):
         initialize_logging(self.settings.logging_level)
         logger.info("Starting SolarEdge2MQTT service...")
-
-        if self.settings.is_wallbox_configured:
-            self.wallbox = WallboxClient(self.settings)
+        logger.debug(self.settings)
 
         if self.settings.is_influxdb_configured:
-            self.influxdb = InfluxDB(self.settings)
             self.influxdb.initialize_buckets()
             self.influxdb.initialize_task()
 
@@ -72,7 +82,6 @@ class Service:
             )
 
             if self.settings.is_api_configured:
-                self.monitoring = MonitoringSite(self.settings)
                 self.monitoring.login()
                 await self.monitoring_loop()
                 self.scheduler.cyclic(dt.timedelta(seconds=300), self.monitoring_loop)
@@ -89,14 +98,14 @@ class Service:
                 await self.mqtt.publish_status_offline()
 
     async def basic_values_loop(self):
-        if self.locks.get("modbus") is None:
-            self.locks["modbus"] = asyncio.Lock()
+        if self.locks.get(self.BASIC_VALUES_LOCK) is None:
+            self.locks[self.BASIC_VALUES_LOCK] = asyncio.Lock()
 
-        if self.locks["modbus"].locked():
-            logger.warning("Modbus is still locked, skipping this loop")
+        if self.locks[self.BASIC_VALUES_LOCK].locked():
+            logger.warning("Previous loop is still running, skipping this loop")
             return
 
-        async with self.locks["modbus"]:
+        async with self.locks[self.BASIC_VALUES_LOCK]:
             results = await asyncio.gather(
                 self.modbus.loop(),
                 self.wallbox.loop()
@@ -161,14 +170,14 @@ class Service:
                 self.influxdb.flush_loop()
 
     async def monitoring_loop(self):
-        if self.locks.get("energy") is None:
-            self.locks["energy"] = asyncio.Lock()
+        if self.locks.get(self.MONITORING_LOCK) is None:
+            self.locks[self.MONITORING_LOCK] = asyncio.Lock()
 
-        if self.locks["energy"].locked():
-            logger.warning("Energy is still locked, skipping this loop")
+        if self.locks[self.MONITORING_LOCK].locked():
+            logger.warning("Monitoring is still locked, skipping this loop")
             return
 
-        async with self.locks["energy"]:
+        async with self.locks[self.MONITORING_LOCK]:
             modules = self.monitoring.get_module_energies()
 
             if modules is None:
