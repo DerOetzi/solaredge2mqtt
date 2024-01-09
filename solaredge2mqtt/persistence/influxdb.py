@@ -101,7 +101,7 @@ class InfluxDB:
 
     @staticmethod
     def _strip_flux(flux: str) -> str:
-        return "".join(flux.split())
+        return "".join(line.strip() for line in flux.splitlines()).replace(" ", "")
 
     def _get_flux_query(self, query_name: str) -> str:
         if query_name not in self.flux_cache:
