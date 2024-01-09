@@ -8,7 +8,6 @@ import asyncio
 import signal
 import datetime as dt
 
-from typing import Optional
 
 from scheduler.asyncio import Scheduler
 
@@ -21,179 +20,173 @@ from solaredge2mqtt.mqtt import MQTTClient
 from solaredge2mqtt.wallbox import WallboxClient
 from solaredge2mqtt.settings import service_settings
 
-STOP = asyncio.Event()
-
-settings = service_settings()
-
 
 def run():
-    """Initializes and starts the SolarEdge2MQTT service."""
-    initialize_logging(settings.logging_level)
-
-    logger.info("Starting SolarEdge2MQTT service...")
-
+    service = Service()
     loop = asyncio.get_event_loop()
-    loop.add_signal_handler(signal.SIGINT, ask_stop)
-    loop.add_signal_handler(signal.SIGTERM, ask_stop)
-    loop.run_until_complete(main())
+    loop.add_signal_handler(signal.SIGINT, service.cancel)
+    loop.add_signal_handler(signal.SIGTERM, service.cancel)
+    loop.run_until_complete(service.main_loop())
     loop.close()
 
 
-def ask_stop():
-    """Stops the SolarEdge2MQTT service by setting the STOP event."""
-    logger.info("Stopping SolarEdge2MQTT service...")
-    STOP.set()
+class Service:
+    def __init__(self):
+        self.settings = service_settings()
 
+        self.scheduler: Scheduler
 
-async def main():
-    """
-    Initializes the SolarEdge inverter and logs the connection details.
-    This function is the main entry point for the SolarEdge2MQTT service.
-    """
+        self.modbus = Modbus(self.settings)
+        self.mqtt: MQTTClient
 
-    modbus = Modbus(settings)
+        self.cancel_request = asyncio.Event()
+        self.locks: dict[str, asyncio.Lock] = {}
 
-    if settings.is_wallbox_configured:
-        wallbox = WallboxClient(settings)
-    else:
-        wallbox = None
+        self.wallbox: WallboxClient | None = None
+        self.influxdb: InfluxDB | None = None
+        self.monitoring: MonitoringSite | None = None
 
-    if settings.is_influxdb_configured:
-        influxdb = InfluxDB(settings)
-        influxdb.initialize_buckets()
-        influxdb.initialize_task()
-    else:
-        influxdb = None
+    def cancel(self):
+        logger.info("Stopping SolarEdge2MQTT service...")
+        self.cancel_request.set()
 
-    async with MQTTClient(settings) as mqtt:
-        await mqtt.publish_status_online()
+    async def main_loop(self):
+        initialize_logging(self.settings.logging_level)
+        logger.info("Starting SolarEdge2MQTT service...")
 
-        loop = asyncio.get_running_loop()
-        scheduler = Scheduler(loop=loop)
-        scheduler.cyclic(
-            dt.timedelta(seconds=settings.interval),
-            modbus_and_wallbox_loop,
-            args=[modbus, mqtt, wallbox, influxdb],
-        )
+        if self.settings.is_wallbox_configured:
+            self.wallbox = WallboxClient(self.settings)
 
-        if settings.is_api_configured:
-            monitoring = MonitoringSite(settings)
-            monitoring.login()
-            await energy_loop(monitoring, mqtt)
-            scheduler.cyclic(
-                dt.timedelta(seconds=300), energy_loop, args=[monitoring, mqtt]
+        if self.settings.is_influxdb_configured:
+            self.influxdb = InfluxDB(self.settings)
+            self.influxdb.initialize_buckets()
+            self.influxdb.initialize_task()
+
+        async with MQTTClient(self.settings) as self.mqtt:
+            await self.mqtt.publish_status_online()
+
+            self.scheduler = Scheduler(loop=asyncio.get_running_loop())
+            self.scheduler.cyclic(
+                dt.timedelta(seconds=self.settings.interval),
+                self.basic_values_loop,
             )
 
-        logger.debug(scheduler)
+            if self.settings.is_api_configured:
+                self.monitoring = MonitoringSite(self.settings)
+                self.monitoring.login()
+                await self.monitoring_loop()
+                self.scheduler.cyclic(dt.timedelta(seconds=300), self.monitoring_loop)
 
-        while not STOP.is_set():
-            await asyncio.sleep(1)
+            logger.debug(self.scheduler)
 
-        scheduler.delete_jobs()
+            while not self.cancel_request.is_set():
+                await asyncio.sleep(1)
 
-        await mqtt.publish_status_offline()
+            if self.scheduler is not None:
+                self.scheduler.delete_jobs()
 
+            if self.mqtt is not None:
+                await self.mqtt.publish_status_offline()
 
-modbus_lock = asyncio.Lock()
+    async def basic_values_loop(self):
+        if self.locks.get("modbus") is None:
+            self.locks["modbus"] = asyncio.Lock()
 
-
-async def modbus_and_wallbox_loop(
-    modbus: Modbus,
-    mqtt: MQTTClient,
-    wallbox: Optional[WallboxClient] = None,
-    influxdb: Optional[InfluxDB] = None,
-):
-    if modbus_lock.locked():
-        logger.warning("Modbus is still locked, skipping this loop")
-        return
-
-    async with modbus_lock:
-        results = await asyncio.gather(
-            modbus.loop(),
-            wallbox.loop() if settings.is_wallbox_configured else asyncio.sleep(0),
-        )
-
-        inverter_data, meters_data, batteries_data = results[0]
-
-        if any(data is None for data in [inverter_data, meters_data, batteries_data]):
-            logger.warning("Invalid modbus data, skipping this loop")
+        if self.locks["modbus"].locked():
+            logger.warning("Modbus is still locked, skipping this loop")
             return
 
-        wallbox_data = results[1]
-        evcharger = 0
+        async with self.locks["modbus"]:
+            results = await asyncio.gather(
+                self.modbus.loop(),
+                self.wallbox.loop()
+                if self.settings.is_wallbox_configured
+                else asyncio.sleep(0),
+            )
 
-        if wallbox_data is not None:
-            logger.trace("Wallbox: {wallbox_data.power} W", wallbox_data=wallbox_data)
-            evcharger = wallbox_data.power
-        elif settings.is_wallbox_configured:
-            logger.warning("Invalid wallbox data, skipping this loop")
-            return
+            inverter_data, meters_data, batteries_data = results[0]
 
-        powerflow = Powerflow(inverter_data, meters_data, batteries_data, evcharger)
-        if not powerflow.is_valid:
-            logger.warning("Invalid powerflow data")
-            return
+            if any(
+                data is None for data in [inverter_data, meters_data, batteries_data]
+            ):
+                logger.warning("Invalid modbus data, skipping this loop")
+                return
 
-        if Powerflow.is_not_valid_with_last(powerflow):
-            logger.warning("Value change not valid")
-            return
+            wallbox_data = results[1]
+            evcharger = 0
 
-        logger.debug(powerflow)
-        logger.info(
-            "Powerflow: PV {pv_production} W, Inverter {inverter.power} W, House {consumer.house} W, "
-            + "Grid {grid.power} W, Battery {battery.power} W, Wallbox {consumer.evcharger} W",
-            pv_production=powerflow.pv_production,
-            inverter=powerflow.inverter,
-            consumer=powerflow.consumer,
-            grid=powerflow.grid,
-            battery=powerflow.battery,
-        )
+            if wallbox_data is not None:
+                logger.trace(
+                    "Wallbox: {wallbox_data.power} W", wallbox_data=wallbox_data
+                )
+                evcharger = wallbox_data.power
+            elif self.settings.is_wallbox_configured:
+                logger.warning("Invalid wallbox data, skipping this loop")
+                logger.trace(wallbox_data)
+                return
 
-        await mqtt.publish_inverter(inverter_data)
-        await mqtt.publish_meters(meters_data)
-        await mqtt.publish_batteries(batteries_data)
-        await mqtt.publish_powerflow(powerflow)
+            powerflow = Powerflow(inverter_data, meters_data, batteries_data, evcharger)
+            if not powerflow.is_valid:
+                logger.warning("Invalid powerflow data, skipping this loop")
+                logger.trace(powerflow)
+                return
 
-        if wallbox_data is not None:
-            await mqtt.publish_wallbox(wallbox_data)
+            if Powerflow.is_not_valid_with_last(powerflow):
+                logger.warning("Value change not valid, skipping this loop")
+                logger.trace(powerflow)
+                return
 
-        if influxdb is not None:
-            influxdb.write_components(
+            logger.debug(powerflow)
+            logger.info(
+                "Powerflow: PV {pv_production} W, Inverter {inverter.power} W, House {consumer.house} W, "
+                + "Grid {grid.power} W, Battery {battery.power} W, Wallbox {consumer.evcharger} W",
+                pv_production=powerflow.pv_production,
+                inverter=powerflow.inverter,
+                consumer=powerflow.consumer,
+                grid=powerflow.grid,
+                battery=powerflow.battery,
+            )
+
+            await self.mqtt.publish_components(
                 inverter_data, meters_data, batteries_data, wallbox_data
             )
+            await self.mqtt.publish_powerflow(powerflow)
 
-            influxdb.write_powerflow(powerflow)
-            influxdb.flush_loop()
+            if self.influxdb is not None:
+                self.influxdb.write_components(
+                    inverter_data, meters_data, batteries_data, wallbox_data
+                )
+                self.influxdb.write_powerflow(powerflow)
 
+                self.influxdb.flush_loop()
 
-energy_lock = asyncio.Lock()
+    async def monitoring_loop(self):
+        if self.locks.get("energy") is None:
+            self.locks["energy"] = asyncio.Lock()
 
-
-async def energy_loop(monitoring: MonitoringSite, mqtt: MQTTClient):
-    """Publishes the energy data from monitoring site to the MQTT broker."""
-    if energy_lock.locked():
-        logger.warning("Energy is still locked, skipping this loop")
-        return
-
-    async with energy_lock:
-        modules = monitoring.get_module_energies()
-
-        if modules is None:
-            logger.warning("Invalid monitoring data, skipping this loop")
+        if self.locks["energy"].locked():
+            logger.warning("Energy is still locked, skipping this loop")
             return
 
-        energy_total = 0
-        count_modules = 0
-        for module in modules:
-            if module.energy is not None:
-                count_modules += 1
-                energy_total += module.energy
+        async with self.locks["energy"]:
+            modules = self.monitoring.get_module_energies()
 
-        logger.info(
-            "Read from monitoring total energy: {energy_total} kWh from {count_modules} modules",
-            energy_total=energy_total / 1000,
-            count_modules=count_modules,
-        )
+            if modules is None:
+                logger.warning("Invalid monitoring data, skipping this loop")
+                return
 
-        await mqtt.publish_pv_energy_today(energy_total)
-        await mqtt.publish_module_energy(modules)
+            energy_total = 0
+            count_modules = 0
+            for module in modules:
+                if module.energy is not None:
+                    count_modules += 1
+                    energy_total += module.energy
+
+            logger.info(
+                "Read from monitoring total energy: {energy_total} kWh from {count_modules} modules",
+                energy_total=energy_total / 1000,
+                count_modules=count_modules,
+            )
+
+            await self.mqtt.publish_pv_energy_today(energy_total)
+            await self.mqtt.publish_module_energy(modules)
