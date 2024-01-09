@@ -123,7 +123,11 @@ async def modbus_and_wallbox_loop(
         evcharger = 0
 
         if wallbox_data is not None:
+            logger.trace("Wallbox: {wallbox_data.power} W", wallbox_data=wallbox_data)
             evcharger = wallbox_data.power
+        elif settings.is_wallbox_configured:
+            logger.warning("Invalid wallbox data, skipping this loop")
+            return
 
         powerflow = Powerflow(inverter_data, meters_data, batteries_data, evcharger)
         if not powerflow.is_valid:
