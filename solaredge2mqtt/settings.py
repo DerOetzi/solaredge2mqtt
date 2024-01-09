@@ -1,6 +1,8 @@
+from functools import lru_cache
 from os import path
-
+from time import localtime, strftime
 from typing import Optional
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -62,6 +64,7 @@ class ServiceSettings(BaseSettings):
     influxdb_retention_aggregated: Optional[int] = Field(SECONDS_PER_2_YEARS)
 
     logging_level: LoggingLevelEnum = LoggingLevelEnum.INFO
+    timezone: str = Field(strftime("%z", localtime()))
 
     model_config = MODEL_CONFIG
 
@@ -131,6 +134,7 @@ class ServiceBaseSettings(BaseSettings):
     model_config = SettingsConfigDict(**MODEL_CONFIG_WITHOUT_SECRETS, extra="ignore")
 
 
+@lru_cache()
 def service_settings() -> ServiceSettings:
     environment = ServiceBaseSettings().environment
     return environment.settings_class()

@@ -5,20 +5,19 @@
     The module also includes a run function to initialize and start the service.
 """
 import asyncio
-import signal
 import datetime as dt
-
+import signal
 
 from scheduler.asyncio import Scheduler
 
 from solaredge2mqtt.api import MonitoringSite
 from solaredge2mqtt.logging import initialize_logging, logger
-from solaredge2mqtt.persistence.influxdb import InfluxDB
 from solaredge2mqtt.modbus import Modbus
 from solaredge2mqtt.models import Powerflow
 from solaredge2mqtt.mqtt import MQTTClient
-from solaredge2mqtt.wallbox import WallboxClient
+from solaredge2mqtt.persistence.influxdb import InfluxDB
 from solaredge2mqtt.settings import service_settings
+from solaredge2mqtt.wallbox import WallboxClient
 
 
 def run():
@@ -36,7 +35,6 @@ class Service:
 
     def __init__(self):
         self.settings = service_settings()
-
         self.scheduler: Scheduler
 
         self.modbus = Modbus(self.settings)
@@ -68,6 +66,8 @@ class Service:
         logger.info("Starting SolarEdge2MQTT service...")
         logger.debug(self.settings)
 
+        logger.info("Timezone: {timezone}", timezone=self.settings.timezone)
+
         if self.settings.is_influxdb_configured:
             self.influxdb.initialize_buckets()
             self.influxdb.initialize_task()
@@ -84,7 +84,11 @@ class Service:
             if self.settings.is_api_configured:
                 self.monitoring.login()
                 await self.monitoring_loop()
-                self.scheduler.cyclic(dt.timedelta(seconds=300), self.monitoring_loop)
+                self.scheduler.cyclic(dt.timedelta(minutes=5), self.monitoring_loop)
+
+            if self.settings.is_influxdb_configured:
+                await self.energy_loop()
+                self.scheduler.cyclic(dt.timedelta(minutes=5), self.energy_loop)
 
             logger.debug(self.scheduler)
 
@@ -131,18 +135,18 @@ class Service:
                 evcharger = wallbox_data.power
             elif self.settings.is_wallbox_configured:
                 logger.warning("Invalid wallbox data, skipping this loop")
-                logger.trace(wallbox_data)
+                logger.debug(wallbox_data)
                 return
 
             powerflow = Powerflow(inverter_data, meters_data, batteries_data, evcharger)
             if not powerflow.is_valid:
                 logger.warning("Invalid powerflow data, skipping this loop")
-                logger.trace(powerflow)
+                logger.info(powerflow)
                 return
 
             if Powerflow.is_not_valid_with_last(powerflow):
                 logger.warning("Value change not valid, skipping this loop")
-                logger.trace(powerflow)
+                logger.debug(powerflow)
                 return
 
             logger.debug(powerflow)
@@ -199,3 +203,6 @@ class Service:
 
             await self.mqtt.publish_pv_energy_today(energy_total)
             await self.mqtt.publish_module_energy(modules)
+
+    async def energy_loop(self):
+        pass

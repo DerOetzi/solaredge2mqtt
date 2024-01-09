@@ -1,14 +1,13 @@
 import "date"
+import "timezone"
 
-fullTime = date.truncate(t: now(), unit: UNIT)
-startTime = date.sub(from: fullTime, d: UNIT)
-stopTime = date.sub(from: fullTime, d: 1s)
+option location = timezone.location(name: "TIMEZONE")
 
-bucket = if "UNIT" == "1h" then "BUCKET_RAW" else "BUCKET_AGGREGATEDW"
+stopTime = date.truncate(t: now(), unit: UNIT)
+startTime = date.sub(from: stopTime, d: UNIT)
 
-from(bucket: bucket)
+from(bucket: "BUCKET_AGGREGATED")
  |> range(start: startTime, stop: stopTime)
  |> filter(fn: (r) => r._measurement == "energy")
  |> sum()
- |> pivot(rowKey: ["_start"], columnKey: ["_field"], valueColumn: "_value")
-
+ |> pivot(rowKey: ["_measurement"], columnKey: ["_field"], valueColumn: "_value")
