@@ -1,22 +1,12 @@
-from typing import Dict
-
-from aiomqtt import Client as AsyncClient
-from aiomqtt import Will
+from aiomqtt import Client, Will
 from pydantic import BaseModel
 
 from solaredge2mqtt.logging import logger
-from solaredge2mqtt.models import (
-    LogicalModule,
-    Powerflow,
-    SunSpecBattery,
-    SunSpecInverter,
-    SunSpecMeter,
-    WallboxAPI,
-)
+from solaredge2mqtt.models import Component, LogicalModule, Powerflow
 from solaredge2mqtt.settings import ServiceSettings
 
 
-class MQTTClient(AsyncClient):
+class MQTTClient(Client):
     def __init__(self, settings: ServiceSettings):
         self.broker = settings.broker
         self.port = settings.port
@@ -48,19 +38,22 @@ class MQTTClient(AsyncClient):
     async def publish_status_offline(self) -> None:
         await self.publish(f"{self.topic_prefix}/status", "offline", qos=1, retain=True)
 
-    async def publish_inverter(self, inverter: SunSpecInverter) -> None:
-        await self._publish("modbus/inverter", inverter)
-
-    async def publish_meters(self, meters: Dict[str, SunSpecMeter]) -> None:
-        for meter_key, meter in meters.items():
-            await self._publish(f"modbus/meter/{meter_key.lower()}", meter)
-
-    async def publish_batteries(self, batteries: Dict[str, SunSpecBattery]) -> None:
-        for battery_key, battery in batteries.items():
-            await self._publish(f"modbus/battery/{battery_key.lower()}", battery)
-
-    async def publish_wallbox(self, wallbox: WallboxAPI) -> None:
-        await self._publish("rest/wallbox", wallbox)
+    async def publish_components(
+        self, *args: list[Component | dict[str, Component] | None]
+    ) -> None:
+        for arg in args:
+            if isinstance(arg, dict):
+                for component_key, component in arg.items():
+                    await self._publish(
+                        f"{component.SOURCE}/{component.COMPONENT}/{component_key.lower()}",
+                        component,
+                    )
+            elif isinstance(arg, Component):
+                await self._publish(f"{arg.SOURCE}/{arg.COMPONENT}", arg)
+            elif arg is None:
+                continue
+            else:
+                raise ValueError(f"Invalid component: {arg}")
 
     async def publish_powerflow(self, powerflow: Powerflow) -> None:
         await self._publish("powerflow", powerflow)
