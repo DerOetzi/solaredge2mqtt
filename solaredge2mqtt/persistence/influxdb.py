@@ -168,3 +168,4 @@ class InfluxDB:
         self, conf: (str, str, str), data: str, error: InfluxDBError
     ) -> None:
         logger.error(f"InfluxDB error while writting: {conf} {error}")
+        logger.debug(data)
