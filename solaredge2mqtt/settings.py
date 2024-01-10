@@ -64,7 +64,7 @@ class ServiceSettings(BaseSettings):
     influxdb_retention_aggregated: Optional[int] = Field(SECONDS_PER_2_YEARS)
 
     logging_level: LoggingLevelEnum = LoggingLevelEnum.INFO
-    timezone: str = Field(strftime("%z", localtime()))
+    timezone: str = Field(strftime("%Z", localtime()))
 
     model_config = MODEL_CONFIG
 

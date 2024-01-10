@@ -69,7 +69,10 @@ class WallboxClient:
             else:
                 response.raise_for_status()
                 wallbox = WallboxAPI(response.json())
-                logger.info(f"Wallbox: {wallbox.state}, {wallbox.power / 1000} kW", wallbox=wallbox)
+                logger.info(
+                    f"Wallbox: {wallbox.state}, {wallbox.power / 1000} kW",
+                    wallbox=wallbox,
+                )
         except HTTPError as error:
             logger.error(
                 "Failed to get Wallbox data: {error}",
