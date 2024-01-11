@@ -93,10 +93,11 @@ class InfluxDB:
             new_flux = self._strip_flux(flux)
             stored_flux = self._strip_flux(tasks[0].flux)
 
-            if new_flux != stored_flux:
+            if new_flux != stored_flux or tasks[0].every != "1h":
                 logger.info(f"Updating task '{self.task_name}'")
                 logger.debug(flux)
                 tasks[0].flux = flux
+                tasks[0].every = "1h"
                 tasks_api.update_task(tasks[0])
 
     @staticmethod
