@@ -1,4 +1,5 @@
 from __future__ import annotations
+from collections.abc import MutableMapping
 from typing import Any, Dict, Optional, ClassVar
 
 from enum import Enum
@@ -36,25 +37,24 @@ class EnumModel(Enum):
         return self.value
 
 
-class InfluxDBModel(BaseModel):
-    def influxdb_fields(self, prefix: Optional[str] = None) -> Dict[str, Any]:
-        fields = {}
-        for attr, value in self.__dict__.items():
-            if attr == "info":
-                continue
-            if isinstance(value, InfluxDBModel):
-                attr_name = attr
-                if prefix is not None:
-                    attr_name = f"{prefix}_{attr_name}"
-                fields = {**fields, **value.influxdb_fields(attr_name)}
+class Solaredge2MQTTBaseModel(BaseModel):
+    def model_dump_influxdb(
+        self, exclude: Optional[list[str]] = None
+    ) -> Dict[str, Any]:
+        return self._flatten_dict(self.model_dump(exclude=exclude, exclude_none=True))
+
+    def _flatten_dict(self, d: MutableMapping, parent_key: str = "") -> MutableMapping:
+        items = []
+        for k, v in d.items():
+            new_key = parent_key + "_" + k if parent_key else k
+            if isinstance(v, MutableMapping):
+                items.extend(self._flatten_dict(v, new_key).items())
             else:
-                if prefix is not None:
-                    attr = f"{prefix}_{attr}"
-                fields[attr] = float(value) if isinstance(value, int) else value
-        return fields
+                items.append((new_key, float(v) if isinstance(v, int) else v))
+        return dict(items)
 
 
-class ComponentValueGroup(InfluxDBModel):
+class ComponentValueGroup(Solaredge2MQTTBaseModel):
     @staticmethod
     def scale_value(
         data: Dict[str, str | int],
@@ -69,14 +69,6 @@ class ComponentValueGroup(InfluxDBModel):
         scale = int(data[scale_key])
 
         return round(value * 10**scale, digits)
-
-    # @staticmethod
-    # def is_three_phase(data: Dict[str, Any]) -> bool:
-    #     return data["c_sunspec_did"] in [
-    #         sunspecDID.THREE_PHASE_INVERTER.value,
-    #         sunspecDID.WYE_THREE_PHASE_METER.value,
-    #         sunspecDID.DELTA_THREE_PHASE_METER.value,
-    #     ]
 
 
 class Component(ComponentValueGroup):

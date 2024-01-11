@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from pydantic import BaseModel
 from solaredge_modbus import BATTERY_STATUS_MAP, C_SUNSPEC_DID_MAP, INVERTER_STATUS_MAP
@@ -43,6 +43,9 @@ class SunSpecComponent(Component):
     def __init__(self, data: Dict[str, str | int], **kwargs):
         info = SunSpecInfo(data)
         super().__init__(info=info, **kwargs)
+
+    def model_dump_influxdb(self, exclude: list[str] | None = None) -> Dict[str, Any]:
+        return super().model_dump_influxdb(["info", *exclude] if exclude else ["info"])
 
     @property
     def influxdb_tags(self) -> Dict[str, str]:

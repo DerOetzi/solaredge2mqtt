@@ -146,14 +146,14 @@ class InfluxDB:
             for key, value in additional_tags.items():
                 point.tag(key, value)
 
-        for key, value in component.influxdb_fields().items():
+        for key, value in component.model_dump_influxdb().items():
             point.field(key, value)
 
         return point
 
     def write_powerflow(self, powerflow: Powerflow) -> None:
         point = Point("powerflow")
-        for key, value in powerflow.influxdb_fields().items():
+        for key, value in powerflow.model_dump_influxdb().items():
             point.field(key, value)
         self.loop_points.append(point)
 

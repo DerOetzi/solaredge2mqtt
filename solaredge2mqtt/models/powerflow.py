@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-from typing import Dict, Optional, ClassVar
+from typing import ClassVar, Dict, Optional
 
-from solaredge2mqtt.models.base import InfluxDBModel
+from pydantic import Field, computed_field
+
+from solaredge2mqtt.logging import logger
+from solaredge2mqtt.models.base import Solaredge2MQTTBaseModel
 from solaredge2mqtt.models.modbus import SunSpecBattery, SunSpecInverter, SunSpecMeter
 
 
-class InverterPowerflow(InfluxDBModel):
+class InverterPowerflow(Solaredge2MQTTBaseModel):
     power: int
     dc_power: int
-    consumption: int
-    production: int
-    pv_production: int
-    battery_production: int
+    battery_factor: float = Field(exclude=True)
 
     def __init__(
         self,
@@ -21,50 +21,60 @@ class InverterPowerflow(InfluxDBModel):
     ):
         power = int(inverter_data.ac.power.actual)
         dc_power = int(inverter_data.dc.power)
+        battery_factor = 0.0
 
-        if power >= 0:
-            consumption = 0
-            production = power
-            if battery.discharge > 0:
-                battery_factor = battery.discharge / inverter_data.dc.power
-                battery_production = int(round(production * battery_factor))
-                battery_production = min(battery_production, production)
-                pv_production = production - battery_production
-            else:
-                battery_production = 0
-                pv_production = production
-
-        else:
-            consumption = int(abs(power))
-            production = 0
-            pv_production = 0
-            battery_production = 0
+        if power > 0 and battery.discharge > 0:
+            battery_factor = battery.discharge / dc_power
 
         super().__init__(
             power=power,
             dc_power=dc_power,
-            consumption=consumption,
-            production=production,
-            pv_production=pv_production,
-            battery_production=battery_production,
+            battery_factor=battery_factor,
         )
+
+    @computed_field
+    @property
+    def consumption(self) -> int:
+        return abs(self.power) if self.power < 0 else 0
+
+    @computed_field
+    @property
+    def production(self) -> int:
+        return self.power if self.power > 0 else 0
+
+    @computed_field
+    @property
+    def battery_production(self) -> int:
+        battery_production = 0
+        if self.production > 0 and self.battery_factor > 0:
+            battery_production = int(round(self.production * self.battery_factor))
+            battery_production = min(battery_production, self.production)
+        return battery_production
+
+    @computed_field
+    @property
+    def pv_production(self) -> int:
+        return self.production - self.battery_production
 
     @property
     def is_valid(self) -> bool:
-        return all(
-            [
-                self.consumption >= 0.0,
-                self.production >= 0.0,
-                self.pv_production >= 0.0,
-                self.battery_production >= 0.0,
-            ]
-        )
+        valid = False
+        if self.consumption < 0:
+            logger.warning("Inverter consumption is negative")
+        elif self.production < 0:
+            logger.warning("Inverter production is negative")
+        elif self.pv_production < 0:
+            logger.warning("Inverter PV production is negative")
+        elif self.battery_production < 0:
+            logger.warning("Inverter battery production is negative")
+        else:
+            valid = True
+
+        return valid
 
 
-class GridPowerflow(InfluxDBModel):
+class GridPowerflow(Solaredge2MQTTBaseModel):
     power: int
-    consumption: int
-    delivery: int
 
     def __init__(self, meters_data: Dict[str, SunSpecMeter]):
         grid = 0
@@ -72,104 +82,137 @@ class GridPowerflow(InfluxDBModel):
             if "Import" in meter.info.option and "Export" in meter.info.option:
                 grid += meter.power.actual
 
-        if grid >= 0:
-            consumption = 0
-            delivery = grid
-        else:
-            consumption = int(abs(grid))
-            delivery = 0
+        super().__init__(power=grid)
 
-        super().__init__(power=grid, consumption=consumption, delivery=delivery)
+    @computed_field
+    @property
+    def consumption(self) -> int:
+        return abs(self.power) if self.power < 0 else 0
+
+    @computed_field
+    @property
+    def delivery(self) -> int:
+        return self.power if self.power > 0 else 0
 
     @property
     def is_valid(self) -> bool:
-        return all([self.consumption >= 0.0, self.delivery >= 0.0])
+        valid = False
+        if self.consumption < 0:
+            logger.warning("Grid consumption is negative")
+        elif self.delivery < 0:
+            logger.warning("Grid delivery is negative")
+        else:
+            valid = True
+
+        return valid
 
 
-class BatteryPowerflow(InfluxDBModel):
+class BatteryPowerflow(Solaredge2MQTTBaseModel):
     power: int
-    charge: int
-    discharge: int
 
     def __init__(self, batteries_data: Dict[str, SunSpecBattery]):
         batteries_power = 0
         for battery in batteries_data.values():
             batteries_power += battery.power
 
-        if batteries_power >= 0:
-            charge = batteries_power
-            discharge = 0
-        else:
-            charge = 0
-            discharge = abs(batteries_power)
+        super().__init__(power=batteries_power)
 
-        super().__init__(power=batteries_power, charge=charge, discharge=discharge)
+    @computed_field
+    @property
+    def charge(self) -> int:
+        return self.power if self.power > 0 else 0
+
+    @computed_field
+    @property
+    def discharge(self) -> int:
+        return abs(self.power) if self.power < 0 else 0
 
     @property
     def is_valid(self) -> bool:
-        return all([self.charge >= 0.0, self.discharge >= 0.0])
+        valid = False
+        if self.charge < 0:
+            logger.warning("Battery charge is negative")
+        elif self.discharge < 0:
+            logger.warning("Battery discharge is negative")
+        else:
+            valid = True
+
+        return valid
 
 
-class ConsumerPowerflow(InfluxDBModel):
+class ConsumerPowerflow(Solaredge2MQTTBaseModel):
     house: int
     evcharger: int = 0
     inverter: int
 
-    total: int
-
     used_production: int
-    used_pv_production: int
-    used_battery_production: int
+    battery_factor: float = Field(exclude=True)
 
     def __init__(
         self, inverter: InverterPowerflow, grid: GridPowerflow, evcharger: int
     ):
-        house = int(abs(grid.power - inverter.power))
-        if evcharger < house:
-            house -= evcharger
-        else:
-            # Happens when EV Charger starts up and meters are not yet updated
-            evcharger = 0
+        house = int(abs(grid.power - inverter.power)) - evcharger
 
-        total = house + evcharger + inverter.consumption
+        battery_factor = inverter.battery_factor
 
         if inverter.production > 0 and inverter.production > grid.delivery:
             used_production = inverter.production - grid.delivery
-            battery_factor = inverter.battery_production / inverter.production
-            used_battery_production = int(round(used_production * battery_factor))
-            used_battery_production = min(used_battery_production, used_production)
-            used_pv_production = used_production - used_battery_production
         else:
             used_production = 0
-            used_pv_production = 0
-            used_battery_production = 0
 
         super().__init__(
             house=house,
             evcharger=evcharger,
-            used_production=used_production,
-            used_pv_production=used_pv_production,
-            used_battery_production=used_battery_production,
             inverter=inverter.consumption,
-            total=total,
+            used_production=used_production,
+            battery_factor=battery_factor,
         )
+
+    @computed_field
+    @property
+    def total(self) -> int:
+        return self.house + self.evcharger + self.inverter
+
+    @computed_field
+    @property
+    def used_battery_production(self) -> int:
+        battery_production = 0
+        if self.used_production > 0 and self.battery_factor > 0:
+            battery_production = int(round(self.used_production * self.battery_factor))
+            battery_production = min(battery_production, self.used_production)
+        return battery_production
+
+    @computed_field
+    @property
+    def used_pv_production(self) -> int:
+        return self.used_production - self.used_battery_production
 
     @property
     def is_valid(self) -> bool:
-        return all(
-            [
-                self.house >= 0.0,
-                self.evcharger >= 0.0,
-                self.inverter >= 0.0,
-                self.used_pv_production >= 0.0,
-                self.used_battery_production >= 0.0,
-                self.total >= 0.0,
-                self.total >= self.used_production,
-            ]
-        )
+        valid = False
+        if self.house < 0:
+            logger.warning("Consumer house is negative")
+        elif self.evcharger < 0:
+            logger.warning("Consumer evcharger is negative")
+        elif self.inverter < 0:
+            logger.warning("Consumer inverter is negative")
+        elif self.used_production < 0:
+            logger.warning("Consumer used production is negative")
+        elif self.used_pv_production < 0:
+            logger.warning("Consumer used PV production is negative")
+        elif self.used_battery_production < 0:
+            logger.warning("Consumer used battery production is negative")
+        elif self.total < 0:
+            logger.warning("Consumer total is negative")
+        elif self.total < self.used_production:
+            logger.warning("Consumer total is less than used production")
+        else:
+            valid = True
+
+        return valid
 
 
-class Powerflow(InfluxDBModel):
+class Powerflow(Solaredge2MQTTBaseModel):
     pv_production: int
     inverter: InverterPowerflow
     grid: GridPowerflow
@@ -209,17 +252,28 @@ class Powerflow(InfluxDBModel):
 
     @property
     def is_valid(self) -> bool:
-        return all(
-            [
-                self.inverter.is_valid,
-                self.grid.is_valid,
-                self.battery.is_valid,
-                self.consumer.is_valid,
-                self.pv_production >= 0,
-                self.consumer.used_production + self.grid.delivery
-                == self.inverter.production,
-            ]
-        )
+        valid = False
+
+        if self.pv_production < 0:
+            logger.warning("PV production is negative")
+        elif (
+            self.consumer.used_production + self.grid.delivery
+            != self.inverter.production
+        ):
+            logger.warning(
+                "Consumer used production + grid delivery is not equal to inverter production"
+            )
+        else:
+            valid = all(
+                [
+                    self.inverter.is_valid,
+                    self.grid.is_valid,
+                    self.battery.is_valid,
+                    self.consumer.is_valid,
+                ]
+            )
+
+        return valid
 
     @classmethod
     def is_not_valid_with_last(cls, powerflow: Powerflow) -> bool:
