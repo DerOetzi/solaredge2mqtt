@@ -10,6 +10,8 @@ import signal
 
 from scheduler.asyncio import Scheduler
 
+from aiomqtt import MqttError
+
 from solaredge2mqtt.api import MonitoringSite
 from solaredge2mqtt.logging import initialize_logging, logger
 from solaredge2mqtt.modbus import Modbus
@@ -38,7 +40,7 @@ class Service:
         self.scheduler: Scheduler
 
         self.modbus = Modbus(self.settings)
-        self.mqtt: MQTTClient
+        self.mqtt: MQTTClient = MQTTClient(self.settings)
 
         self.cancel_request = asyncio.Event()
         self.locks: dict[str, asyncio.Lock] = {}
@@ -72,33 +74,34 @@ class Service:
             self.influxdb.initialize_buckets()
             self.influxdb.initialize_task()
 
-        async with MQTTClient(self.settings) as self.mqtt:
+        async with self.mqtt:
             await self.mqtt.publish_status_online()
 
-            self.scheduler = Scheduler(loop=asyncio.get_running_loop())
-            self.scheduler.cyclic(
-                dt.timedelta(seconds=self.settings.interval),
-                self.basic_values_loop,
-            )
+        self.scheduler = Scheduler(loop=asyncio.get_running_loop())
+        self.scheduler.cyclic(
+            dt.timedelta(seconds=self.settings.interval),
+            self.basic_values_loop,
+        )
 
-            if self.settings.is_api_configured:
-                self.monitoring.login()
-                await self.monitoring_loop()
-                self.scheduler.cyclic(dt.timedelta(minutes=5), self.monitoring_loop)
+        if self.settings.is_api_configured:
+            self.monitoring.login()
+            await self.monitoring_loop()
+            self.scheduler.cyclic(dt.timedelta(minutes=5), self.monitoring_loop)
 
-            if self.settings.is_influxdb_configured:
-                await self.energy_loop()
-                self.scheduler.cyclic(dt.timedelta(minutes=5), self.energy_loop)
+        if self.settings.is_influxdb_configured:
+            await self.energy_loop()
+            self.scheduler.cyclic(dt.timedelta(minutes=5), self.energy_loop)
 
-            logger.debug(self.scheduler)
+        logger.debug(self.scheduler)
 
-            while not self.cancel_request.is_set():
-                await asyncio.sleep(1)
+        while not self.cancel_request.is_set():
+            await asyncio.sleep(1)
 
-            if self.scheduler is not None:
-                self.scheduler.delete_jobs()
+        if self.scheduler is not None:
+            self.scheduler.delete_jobs()
 
-            if self.mqtt is not None:
+        if self.mqtt is not None:
+            async with self.mqtt:
                 await self.mqtt.publish_status_offline()
 
     async def basic_values_loop(self):
@@ -168,10 +171,14 @@ class Service:
 
                 self.influxdb.flush_loop()
 
-            await self.mqtt.publish_components(
-                inverter_data, meters_data, batteries_data, wallbox_data
-            )
-            await self.mqtt.publish_powerflow(powerflow)
+            async with self.mqtt:
+                try:
+                    await self.mqtt.publish_components(
+                        inverter_data, meters_data, batteries_data, wallbox_data
+                    )
+                    await self.mqtt.publish_powerflow(powerflow)
+                except MqttError:
+                    logger.warning("MQTT publish failed")
 
     async def monitoring_loop(self):
         if self.locks.get(self.MONITORING_LOCK) is None:
@@ -201,8 +208,12 @@ class Service:
                 count_modules=count_modules,
             )
 
-            await self.mqtt.publish_pv_energy_today(energy_total)
-            await self.mqtt.publish_module_energy(modules)
+            async with self.mqtt:
+                try:
+                    await self.mqtt.publish_pv_energy_today(energy_total)
+                    await self.mqtt.publish_module_energy(modules)
+                except MqttError:
+                    logger.warning("MQTT publish failed")
 
     async def energy_loop(self):
         pass
