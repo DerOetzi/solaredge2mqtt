@@ -90,10 +90,9 @@ class Service:
                 logger.debug("Loops cancelled")
                 return
             finally:
-                await aio.sleep(1)
+                await aio.sleep(2)
                 for loop in self.loops:
                     loop.cancel()
-                self.loops.clear()
 
     def schedule_loop(self, interval_in_seconds: int, handle: callable):
         loop = aio.create_task(self.run_loop(interval_in_seconds, handle))
