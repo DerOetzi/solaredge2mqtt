@@ -160,11 +160,6 @@ class Service:
                 battery=powerflow.battery,
             )
 
-            await self.mqtt.publish_components(
-                inverter_data, meters_data, batteries_data, wallbox_data
-            )
-            await self.mqtt.publish_powerflow(powerflow)
-
             if self.influxdb is not None:
                 self.influxdb.write_components(
                     inverter_data, meters_data, batteries_data, wallbox_data
@@ -172,6 +167,11 @@ class Service:
                 self.influxdb.write_powerflow(powerflow)
 
                 self.influxdb.flush_loop()
+
+            await self.mqtt.publish_components(
+                inverter_data, meters_data, batteries_data, wallbox_data
+            )
+            await self.mqtt.publish_powerflow(powerflow)
 
     async def monitoring_loop(self):
         if self.locks.get(self.MONITORING_LOCK) is None:
