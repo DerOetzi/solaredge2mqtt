@@ -1,30 +1,6 @@
 import "date"
 
-option task = {name: "TASK_NAME", every: 1m}
-
-// energy actual hour so far
-from(bucket: "BUCKET_RAW")
-    |> range(start: -task.every)
-    |> filter(fn: (r) => r._measurement == "powerflow")
-    |> aggregateWindow(
-        every: 1m,
-        fn: (tables=<-, column) =>
-            tables
-                |> integral(unit: 1h)
-                |> map(fn: (r) => ({r with _value: r._value / 1000.0})),
-    )
-    |> keep(
-        columns: [
-            "_measurement",
-            "_field",
-            "_value",
-            "_start",
-            "_stop",
-            "_time",
-        ],
-    )
-    |> set(key: "_measurement", value: "energy")
-    |> to(bucket: "BUCKET_RAW")
+option task = {name: "TASK_NAME", every: 1h}
 
 // Historical data
 fullHourTime = date.truncate(t: now(), unit: 1h)
@@ -61,7 +37,10 @@ data
     |> set(key: "agg_type", value: "min")
     |> to(bucket: "BUCKET_AGGREGATED")
 
+exclude_fields = ["battery_power", "grid_power", "inverter_power"]
+
 data
+    |> filter(fn: (r) => contains(value: r._field, set: exclude_fields) == false)
     |> aggregateWindow(
         every: 1h,
         fn: (tables=<-, column) =>
