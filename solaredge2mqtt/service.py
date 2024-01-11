@@ -5,10 +5,7 @@
     The module also includes a run function to initialize and start the service.
 """
 import asyncio
-import datetime as dt
 import signal
-
-from scheduler.asyncio import Scheduler
 
 from aiomqtt import MqttError
 
@@ -32,18 +29,15 @@ def run():
 
 
 class Service:
-    BASIC_VALUES_LOCK = "basic_values"
-    MONITORING_LOCK = "monitoring"
 
     def __init__(self):
         self.settings = service_settings()
-        self.scheduler: Scheduler
+        self.mqtt = MQTTClient(self.settings)
 
         self.modbus = Modbus(self.settings)
-        self.mqtt: MQTTClient
 
         self.cancel_request = asyncio.Event()
-        self.locks: dict[str, asyncio.Lock] = {}
+        self.loops: set[asyncio.Task] = set()
 
         self.wallbox: WallboxClient | None = (
             WallboxClient(self.settings)
@@ -62,6 +56,8 @@ class Service:
     def cancel(self):
         logger.info("Stopping SolarEdge2MQTT service...")
         self.cancel_request.set()
+        for loop in self.loops:
+            loop.cancel()
 
     async def main_loop(self):
         initialize_logging(self.settings.logging_level)
@@ -76,49 +72,34 @@ class Service:
 
         while not self.cancel_request.is_set():
             try:
-                async with MQTTClient(self.settings) as self.mqtt:
+                async with self.mqtt:
                     await self.mqtt.publish_status_online()
 
-                    self.scheduler = Scheduler(loop=asyncio.get_running_loop())
-                    self.scheduler.cyclic(
-                        dt.timedelta(seconds=self.settings.interval),
-                        self.basic_values_loop,
-                    )
+                    basic_loop = asyncio.create_task(self.basic_values_loop())
+                    self.loops.add(basic_loop)
+                    basic_loop.add_done_callback(self.loops.remove)
 
                     if self.settings.is_api_configured:
-                        self.monitoring.login()
-                        await self.monitoring_loop()
-                        self.scheduler.cyclic(
-                            dt.timedelta(minutes=5), self.monitoring_loop
-                        )
+                        monitoring_loop = asyncio.create_task(self.monitoring_loop())
+                        self.loops.add(monitoring_loop)
+                        monitoring_loop.add_done_callback(self.loops.remove)
 
-                    if self.settings.is_influxdb_configured:
-                        await self.energy_loop()
-                        self.scheduler.cyclic(dt.timedelta(minutes=5), self.energy_loop)
+                    await asyncio.gather(*self.loops)
 
-                    logger.debug(self.scheduler)
-
-                    while not self.cancel_request.is_set():
-                        await asyncio.sleep(1)
-
-                    if self.scheduler is not None:
-                        self.scheduler.delete_jobs()
-
-                    if self.mqtt is not None:
-                        await self.mqtt.publish_status_offline()
             except MqttError:
                 logger.error("MQTT error, reconnecting in 5 seconds...")
                 await asyncio.sleep(5)
+            except asyncio.exceptions.CancelledError:
+                logger.debug("Loops cancelled")
+                return
+            finally:
+                await asyncio.sleep(1)
+                for loop in self.loops:
+                    loop.cancel()
+                self.loops.clear()
 
     async def basic_values_loop(self):
-        if self.locks.get(self.BASIC_VALUES_LOCK) is None:
-            self.locks[self.BASIC_VALUES_LOCK] = asyncio.Lock()
-
-        if self.locks[self.BASIC_VALUES_LOCK].locked():
-            logger.warning("Previous loop is still running, skipping this loop")
-            return
-
-        async with self.locks[self.BASIC_VALUES_LOCK]:
+        while not self.cancel_request.is_set():
             results = await asyncio.gather(
                 self.modbus.loop(),
                 self.wallbox.loop()
@@ -182,15 +163,11 @@ class Service:
 
                 self.influxdb.flush_loop()
 
+            await asyncio.sleep(self.settings.interval)
+
     async def monitoring_loop(self):
-        if self.locks.get(self.MONITORING_LOCK) is None:
-            self.locks[self.MONITORING_LOCK] = asyncio.Lock()
-
-        if self.locks[self.MONITORING_LOCK].locked():
-            logger.warning("Monitoring is still locked, skipping this loop")
-            return
-
-        async with self.locks[self.MONITORING_LOCK]:
+        self.monitoring.login()
+        while not self.cancel_request.is_set():
             modules = self.monitoring.get_module_energies()
 
             if modules is None:
@@ -212,6 +189,8 @@ class Service:
 
             await self.mqtt.publish_pv_energy_today(energy_total)
             await self.mqtt.publish_module_energy(modules)
+
+            await asyncio.sleep(300)
 
     async def energy_loop(self):
         pass
