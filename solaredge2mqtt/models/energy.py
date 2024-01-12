@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import ClassVar
 
 from pydantic import computed_field
 
@@ -56,8 +55,6 @@ class Energy(Solaredge2MQTTBaseModel):
     battery: BatteryEnergy
     consumer: ConsumerEnergy
 
-    KEY_PREFIXES: ClassVar[set[str]] = ["consumer", "inverter", "grid", "battery"]
-
     def __init__(
         self,
         energy_data: dict,
@@ -73,7 +70,7 @@ class Energy(Solaredge2MQTTBaseModel):
             if len(keys) < 2:
                 continue
 
-            if keys[0] in self.KEY_PREFIXES:
+            if keys[0] in ["consumer", "inverter", "grid", "battery"]:
                 if keys[0] not in subclass_values:
                     subclass_values[keys[0]] = {}
 
