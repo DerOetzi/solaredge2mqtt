@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional
 from pydantic import BaseModel
 from solaredge_modbus import BATTERY_STATUS_MAP, C_SUNSPEC_DID_MAP, INVERTER_STATUS_MAP
 
+from solaredge2mqtt.logging import logger
 from solaredge2mqtt.models.base import Component, ComponentValueGroup
 
 
@@ -232,3 +233,18 @@ class SunSpecBattery(SunSpecComponent):
             state_of_charge=state_of_charge,
             state_of_health=state_of_health,
         )
+
+    @property
+    def is_valid(self) -> bool:
+        valid = False
+
+        if self.state_of_charge < 0:
+            logger.warning("Battery state of charge is negative")
+        elif self.state_of_health < 0:
+            logger.warning("Battery state of health is negative")
+        elif self.current < -1000000:
+            logger.warning("Battery current is a huge negative")
+        else:
+            valid = True
+
+        return valid

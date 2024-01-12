@@ -118,6 +118,12 @@ class Service:
             logger.warning("Invalid modbus data, skipping this loop")
             return
 
+        for battery in batteries_data.values():
+            if not battery.is_valid:
+                logger.warning("Invalid battery data, skipping this loop")
+                logger.debug(battery)
+                return
+
         wallbox_data = results[1]
         evcharger = 0
 
