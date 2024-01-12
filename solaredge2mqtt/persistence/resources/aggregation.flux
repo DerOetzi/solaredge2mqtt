@@ -3,9 +3,9 @@ import "date"
 option task = {name: "TASK_NAME", every: UNIT}
 
 // Historical data
-fullHourTime = date.truncate(t: now(), unit: UNIT)
-startTime = date.sub(from: fullHourTime, d: UNIT)
-stopTime = date.sub(from: fullHourTime, d: 1s)
+fullUnitTime = date.truncate(t: now(), unit: UNIT)
+startTime = date.sub(from: fullUnitTime, d: UNIT)
+stopTime = fullUnitTime
 
 data =
     from(bucket: "BUCKET_RAW")
