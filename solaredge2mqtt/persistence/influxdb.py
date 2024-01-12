@@ -1,17 +1,10 @@
-from influxdb_client import (
-    InfluxDBClient,
-    Point,
-    BucketRetentionRules,
-    BucketsApi,
-    TaskCreateRequest,
-)
-
+import pkg_resources
+from influxdb_client import (BucketRetentionRules, BucketsApi, InfluxDBClient,
+                             Point, TaskCreateRequest)
 from influxdb_client.client.exceptions import InfluxDBError
 
-import pkg_resources
-
 from solaredge2mqtt.logging import logger
-from solaredge2mqtt.models import Component, Powerflow
+from solaredge2mqtt.models import Component, Energy, EnergyPeriod, Powerflow
 from solaredge2mqtt.settings import ServiceSettings
 
 
@@ -32,6 +25,8 @@ class InfluxDB:
             error_callback=self.write_error_callback,
             retry_callback=self.write_error_callback,
         )
+
+        self.query_api = self.client.query_api()
 
         self.loop_points: list[Point] = []
 
@@ -117,8 +112,10 @@ class InfluxDB:
             flux = pkg_resources.resource_string(
                 __name__, f"resources/{query_name}.flux"
             ).decode("utf-8")
-            flux = flux.replace("BUCKET_RAW", self.bucket_raw).replace(
-                "BUCKET_AGGREGATED", self.bucket_aggregated
+            flux = (
+                flux.replace("BUCKET_RAW", self.bucket_raw)
+                .replace("BUCKET_AGGREGATED", self.bucket_aggregated)
+                .replace("TIMEZONE", self.settings.timezone)
             )
             self.flux_cache[query_name] = flux
 
@@ -178,3 +175,15 @@ class InfluxDB:
     ) -> None:
         logger.error(f"InfluxDB error while writting: {conf} {error}")
         logger.debug(data)
+
+    def query_energy(self, period: EnergyPeriod) -> Energy | None:
+        energy: Energy = None
+        query = self._get_flux_query(period.query.query).replace("UNIT", period.unit)
+        logger.trace(query)
+        tables = self.query_api.query(query)
+        for table in tables:
+            for record in table.records:
+                logger.trace(record)
+                energy = Energy(record.values, period)
+
+        return energy

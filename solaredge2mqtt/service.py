@@ -12,7 +12,7 @@ from aiomqtt import MqttError
 from solaredge2mqtt.api import MonitoringSite
 from solaredge2mqtt.logging import initialize_logging, logger
 from solaredge2mqtt.modbus import Modbus
-from solaredge2mqtt.models import Powerflow
+from solaredge2mqtt.models import EnergyPeriod, EnergyQuery, Powerflow
 from solaredge2mqtt.mqtt import MQTTClient
 from solaredge2mqtt.persistence.influxdb import InfluxDB
 from solaredge2mqtt.settings import service_settings
@@ -80,9 +80,13 @@ class Service:
                         self.monitoring.login()
                         self.schedule_loop(300, self.monitoring_loop)
 
+                    if self.settings.is_influxdb_configured:
+                        self.schedule_loop(300, self.energy_loop)
+
                     await aio.gather(*self.loops)
 
                     await self.mqtt.publish_status_offline()
+
             except MqttError:
                 logger.error("MQTT error, reconnecting in 5 seconds...")
                 await aio.sleep(5)
@@ -194,4 +198,23 @@ class Service:
         await self.mqtt.publish_module_energy(modules)
 
     async def energy_loop(self):
-        pass
+        for period in EnergyPeriod:
+            energy = self.influxdb.query_energy(period)
+            if energy is None:
+                if period.query == EnergyQuery.LAST:
+                    logger.info(
+                        "No data found for {period}, skipping this loop", period=period
+                    )
+                else:
+                    logger.warning(
+                        "No data found for {period}, skipping this loop", period=period
+                    )
+                continue
+
+            logger.info(
+                "Read from influxdb {period} energy: {energy.pv_production} kWh",
+                period=period,
+                energy=energy,
+            )
+
+            await self.mqtt.publish_energy(energy, period)

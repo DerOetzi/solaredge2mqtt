@@ -2,7 +2,8 @@ from aiomqtt import Client, Will
 from pydantic import BaseModel
 
 from solaredge2mqtt.logging import logger
-from solaredge2mqtt.models import Component, LogicalModule, Powerflow
+from solaredge2mqtt.models import (Component, Energy, EnergyPeriod,
+                                   LogicalModule, Powerflow)
 from solaredge2mqtt.settings import ServiceSettings
 
 
@@ -57,6 +58,9 @@ class MQTTClient(Client):
 
     async def publish_powerflow(self, powerflow: Powerflow) -> None:
         await self._publish("powerflow", powerflow)
+
+    async def publish_energy(self, energy: Energy, period: EnergyPeriod) -> None:
+        await self._publish(f"energy/{period.topic}", energy)
 
     async def publish_pv_energy_today(self, energy: int) -> None:
         await self._publish("api/monitoring/pv_energy_today", energy)
