@@ -70,10 +70,11 @@ Environment Variable             | default (production/development) | descriptio
 SE2MQTT_INFLUXDB_HOST                 | *None*                           | Set your host (for example: http://localhost)
 SE2MQTT_INFLUXDB_PORT                 | 8086                             | Set your port
 SE2MQTT_INFLUXDB_TOKEN                | *None*                           | Set your token (for security reasons use a secret with docker) The token must have full access because the service manages the needed buckets and tasks
-SE2MQTT_INFLUXDB_ORG                  | *None*                          | Set your organization ID
-SE2MQTT_INFLUXDB_PREFIX               | solaredge/solaredgedev          | Set a prefix for bucket and task names
-SE2MQTT_INFLUXDB_RETENTION_RAW        | 86400 = 1 day                   | Set a retention policy in seconds for bucket raw
-SE2MQTT_INFLUXDB_RETENTION_AGGREGATED | 63072000 = 2 years                 | Set a retention policy in seconds for bucket aggegrated
+SE2MQTT_INFLUXDB_ORG                  | *None*                           | Set your organization ID
+SE2MQTT_INFLUXDB_PREFIX               | solaredge/solaredgedev           | Set a prefix for bucket and task names
+SE2MQTT_INFLUXDB_RETENTION_RAW        | 90000 = 25h                      | Set a retention policy in seconds for bucket raw
+SE2MQTT_INFLUXDB_RETENTION_AGGREGATED | 63072000 = 2 years               | Set a retention policy in seconds for bucket aggegrated
+SE2MQTT_INFLUXDB_AGGREGATED_INTERVAL  | 10m                              | Aggregate power and energy valuse in InfluxDB  set a interval for the task should be between 10m and 1h
 
 
 #### Example configuration

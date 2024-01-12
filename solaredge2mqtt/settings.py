@@ -26,6 +26,7 @@ MODEL_CONFIG = (
 
 
 SECONDS_PER_DAY = 86400
+SECONDS_PER_HOUR = 3600
 SECONDS_PER_YEAR = SECONDS_PER_DAY * 365
 SECONDS_PER_2_YEARS = SECONDS_PER_YEAR * 2
 
@@ -60,7 +61,7 @@ class ServiceSettings(BaseSettings):
     influxdb_token: Optional[str] = Field(None)
     influxdb_org: Optional[str] = Field(None)
     influxdb_prefix: Optional[str] = Field("solaredge")
-    influxdb_retention_raw: Optional[int] = Field(SECONDS_PER_DAY)
+    influxdb_retention_raw: Optional[int] = Field(SECONDS_PER_DAY + SECONDS_PER_HOUR)
     influxdb_retention_aggregated: Optional[int] = Field(SECONDS_PER_2_YEARS)
     influxdb_aggregate_interval: Optional[str] = "10m"
 
