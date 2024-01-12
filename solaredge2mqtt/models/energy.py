@@ -4,8 +4,6 @@ from datetime import datetime
 from typing import ClassVar
 
 from pydantic import computed_field
-from pydantic.config import ConfigDict
-from typing_extensions import Unpack
 
 from solaredge2mqtt.logging import logger
 from solaredge2mqtt.models.base import EnumModel, Solaredge2MQTTBaseModel

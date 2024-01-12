@@ -152,8 +152,9 @@ class Service:
 
         logger.debug(powerflow)
         logger.info(
-            "Powerflow: PV {pv_production} W, Inverter {inverter.power} W, House {consumer.house} W, "
-            + "Grid {grid.power} W, Battery {battery.power} W, Wallbox {consumer.evcharger} W",
+            "Powerflow: PV {pv_production} W, Inverter {inverter.power} W, "
+            + "House {consumer.house} W, Grid {grid.power} W, "
+            + "Battery {battery.power} W, Wallbox {consumer.evcharger} W",
             pv_production=powerflow.pv_production,
             inverter=powerflow.inverter,
             consumer=powerflow.consumer,
