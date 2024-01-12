@@ -62,6 +62,7 @@ class ServiceSettings(BaseSettings):
     influxdb_prefix: Optional[str] = Field("solaredge")
     influxdb_retention_raw: Optional[int] = Field(SECONDS_PER_DAY)
     influxdb_retention_aggregated: Optional[int] = Field(SECONDS_PER_2_YEARS)
+    influxdb_aggregate_interval: Optional[str] = "10m"
 
     logging_level: LoggingLevelEnum = LoggingLevelEnum.INFO
     timezone: str = Field(strftime("%Z", localtime()))

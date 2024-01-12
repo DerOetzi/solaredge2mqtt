@@ -17,10 +17,7 @@ from solaredge2mqtt.settings import ServiceSettings
 
 class InfluxDB:
     def __init__(self, settings: ServiceSettings) -> None:
-        self.prefix: str = settings.influxdb_prefix
-
-        self.retention_raw: int = settings.influxdb_retention_raw
-        self.retention_aggregated: int = settings.influxdb_retention_aggregated
+        self.settings = settings
 
         self.org: str = settings.influxdb_org
 
@@ -42,9 +39,13 @@ class InfluxDB:
 
     def initialize_buckets(self) -> None:
         buckets_api = self.client.buckets_api()
-        self._create_or_update_bucket(buckets_api, self.bucket_raw, self.retention_raw)
         self._create_or_update_bucket(
-            buckets_api, self.bucket_aggregated, self.retention_aggregated
+            buckets_api, self.bucket_raw, self.settings.influxdb_retention_raw
+        )
+        self._create_or_update_bucket(
+            buckets_api,
+            self.bucket_aggregated,
+            self.settings.influxdb_retention_aggregated,
         )
 
     def _create_or_update_bucket(
@@ -69,16 +70,20 @@ class InfluxDB:
 
     @property
     def bucket_raw(self) -> str:
-        return f"{self.prefix}_raw"
+        return f"{self.settings.influxdb_prefix}_raw"
 
     @property
     def bucket_aggregated(self) -> str:
-        return f"{self.prefix}"
+        return f"{self.settings.influxdb_prefix}"
 
     def initialize_task(self) -> None:
         tasks_api = self.client.tasks_api()
         tasks = tasks_api.find_tasks(name=self.task_name)
-        flux = self._get_flux_query("aggregation").replace("TASK_NAME", self.task_name)
+        flux = (
+            self._get_flux_query("aggregation")
+            .replace("TASK_NAME", self.task_name)
+            .replace("UNIT", self.settings.influxdb_aggregate_interval)
+        )
 
         if not tasks:
             task_request = TaskCreateRequest(
@@ -93,11 +98,14 @@ class InfluxDB:
             new_flux = self._strip_flux(flux)
             stored_flux = self._strip_flux(tasks[0].flux)
 
-            if new_flux != stored_flux or tasks[0].every != "1h":
+            if (
+                new_flux != stored_flux
+                or tasks[0].every != self.settings.influxdb_aggregate_interval
+            ):
                 logger.info(f"Updating task '{self.task_name}'")
                 logger.debug(flux)
                 tasks[0].flux = flux
-                tasks[0].every = "1h"
+                tasks[0].every = self.settings.influxdb_aggregate_interval
                 tasks_api.update_task(tasks[0])
 
     @staticmethod
@@ -118,7 +126,7 @@ class InfluxDB:
 
     @property
     def task_name(self) -> str:
-        return f"{self.prefix}_aggregation"
+        return f"{self.settings.influxdb_prefix}_aggregation"
 
     def write_components(
         self, *args: list[Component | dict[str, Component] | None]

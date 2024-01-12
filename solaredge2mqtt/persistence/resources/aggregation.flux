@@ -1,10 +1,10 @@
 import "date"
 
-option task = {name: "TASK_NAME", every: 1h}
+option task = {name: "TASK_NAME", every: UNIT}
 
 // Historical data
-fullHourTime = date.truncate(t: now(), unit: 1h)
-startTime = date.sub(from: fullHourTime, d: 1h)
+fullHourTime = date.truncate(t: now(), unit: UNIT)
+startTime = date.sub(from: fullHourTime, d: UNIT)
 stopTime = date.sub(from: fullHourTime, d: 1s)
 
 data =
@@ -23,17 +23,17 @@ data =
         )
 
 data
-    |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
+    |> aggregateWindow(every: UNIT, fn: mean, createEmpty: false)
     |> set(key: "agg_type", value: "mean")
     |> to(bucket: "BUCKET_AGGREGATED")
 
 data
-    |> aggregateWindow(every: 1h, fn: max, createEmpty: false)
+    |> aggregateWindow(every: UNIT, fn: max, createEmpty: false)
     |> set(key: "agg_type", value: "max")
     |> to(bucket: "BUCKET_AGGREGATED")
 
 data
-    |> aggregateWindow(every: 1h, fn: min, createEmpty: false)
+    |> aggregateWindow(every: UNIT, fn: min, createEmpty: false)
     |> set(key: "agg_type", value: "min")
     |> to(bucket: "BUCKET_AGGREGATED")
 
@@ -42,7 +42,7 @@ exclude_fields = ["battery_power", "grid_power", "inverter_power"]
 data
     |> filter(fn: (r) => contains(value: r._field, set: exclude_fields) == false)
     |> aggregateWindow(
-        every: 1h,
+        every: UNIT,
         fn: (tables=<-, column) =>
             tables
                 |> integral(unit: 1h)
@@ -83,16 +83,16 @@ dataBattery =
         )
 
 dataBattery
-    |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
+    |> aggregateWindow(every: UNIT, fn: mean, createEmpty: false)
     |> set(key: "agg_type", value: "mean")
     |> to(bucket: "BUCKET_AGGREGATED")
 
 dataBattery
-    |> aggregateWindow(every: 1h, fn: max, createEmpty: false)
+    |> aggregateWindow(every: UNIT, fn: max, createEmpty: false)
     |> set(key: "agg_type", value: "max")
     |> to(bucket: "BUCKET_AGGREGATED")
 
 dataBattery
-    |> aggregateWindow(every: 1h, fn: min, createEmpty: false)
+    |> aggregateWindow(every: UNIT, fn: min, createEmpty: false)
     |> set(key: "agg_type", value: "min")
     |> to(bucket: "BUCKET_AGGREGATED")
