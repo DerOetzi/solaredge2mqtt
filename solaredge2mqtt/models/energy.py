@@ -143,8 +143,10 @@ class SelfConsumptionRate(Solaredge2MQTTBaseModel):
     total: int
 
     def __init__(self, energy: Energy):
-        if energy.inverter.production > 0
-            grid_rate = int(round(energy.grid.delivery / energy.inverter.production * 100))
+        if energy.inverter.production > 0:
+            grid_rate = int(
+                round(energy.grid.delivery / energy.inverter.production * 100)
+            )
             battery_rate = int(
                 round(
                     energy.consumer.used_battery_production
@@ -176,9 +178,15 @@ class SelfSufficiencyRate(Solaredge2MQTTBaseModel):
 
     def __init__(self, energy: Energy):
         if energy.consumer.total > 0:
-            grid_rate = int(round(energy.grid.consumption / energy.consumer.total * 100))
+            grid_rate = int(
+                round(energy.grid.consumption / energy.consumer.total * 100)
+            )
             battery_rate = int(
-                round(energy.consumer.used_battery_production / energy.consumer.total * 100)
+                round(
+                    energy.consumer.used_battery_production
+                    / energy.consumer.total
+                    * 100
+                )
             )
             pv_rate = 100 - grid_rate - battery_rate
             total = battery_rate + pv_rate
