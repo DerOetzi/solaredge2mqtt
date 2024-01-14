@@ -85,14 +85,11 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Load solaredge2mqtt wheel
-      uses: actions/download-artifact@v3
-      with:
-        name: python-artifacts-3.10-${{ env.REF_NAME }}
-        path: docker/container
+    - name: Prepare container directory
+      run: mkdir -p docker/container
 
-    - name: Copy requirements.txt for core
-      run: cp requirements.txt docker/container/
+    - name: Copy needed sources
+      run: cp -r solaredge2mqtt LICENSE MANIFEST.in README.md setup.cfg setup.py THIRD-PARTY-NOTICES docker/container/
   
     - name: Set up QEMU
       uses: docker/setup-qemu-action@master

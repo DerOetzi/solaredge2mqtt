@@ -1,12 +1,16 @@
 FROM python:3.10-slim AS buildimage
 
-COPY container/requirements.txt requirements.txt
+COPY container/* /root/solaredge2mqtt/
 
 RUN set -eux; \
+    cd /root/solaredge2mqtt; \
     pip3 wheel \
     --wheel-dir=/root/wheels \
     --extra-index-url https://www.piwheels.org/simple \
-    -r requirements.txt
+    -r requirements.txt; \
+    pip3 install wheel; \
+    python3 setup.py bdist_wheel; \
+    cp dist/*.whl /root/wheels;
 
 FROM python:3.10-slim
 
@@ -15,7 +19,6 @@ ENV SE2MQTT_HOME=/solaredge2mqtt \
     GROUP_ID=9002
 
 COPY --from=buildimage /root/wheels /root/wheels
-COPY container/*.whl /root/wheels
 COPY entrypoint.sh /
 
 RUN set -eux; \
