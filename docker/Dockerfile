@@ -26,6 +26,7 @@ RUN set -eux; \
     ln -s -f $(which gosu) /usr/local/bin/gosu; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*; \
+    mkdir -p ${SE2MQTT_HOME}; \
     cd ${SE2MQTT_HOME}; \
     pip3 install \
     --no-index \
