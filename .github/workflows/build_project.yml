@@ -89,7 +89,7 @@ jobs:
       run: mkdir -p docker/container
 
     - name: Copy needed sources
-      run: cp -r solaredge2mqtt LICENSE MANIFEST.in README.md setup.cfg setup.py THIRD-PARTY-NOTICES docker/container/
+      run: cp -r solaredge2mqtt requirements.txt LICENSE MANIFEST.in README.md setup.cfg setup.py THIRD-PARTY-NOTICES docker/container/
   
     - name: Set up QEMU
       uses: docker/setup-qemu-action@master

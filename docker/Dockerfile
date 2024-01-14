@@ -9,8 +9,8 @@ RUN set -eux; \
     --extra-index-url https://www.piwheels.org/simple \
     -r requirements.txt; \
     pip3 install wheel; \
-    python3 setup.py bdist_wheel; \
-    cp dist/*.whl /root/wheels;
+    pip3 wheel \
+        --wheel-dir=/root/wheels .;
 
 FROM python:3.10-slim
 
