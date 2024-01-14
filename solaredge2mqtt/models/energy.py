@@ -143,16 +143,22 @@ class SelfConsumptionRate(Solaredge2MQTTBaseModel):
     total: int
 
     def __init__(self, energy: Energy):
-        grid_rate = int(round(energy.grid.delivery / energy.inverter.production * 100))
-        battery_rate = int(
-            round(
-                energy.consumer.used_battery_production
-                / energy.inverter.production
-                * 100
+        if energy.inverter.production > 0
+            grid_rate = int(round(energy.grid.delivery / energy.inverter.production * 100))
+            battery_rate = int(
+                round(
+                    energy.consumer.used_battery_production
+                    / energy.inverter.production
+                    * 100
+                )
             )
-        )
-        pv_rate = 100 - grid_rate - battery_rate
-        total = battery_rate + pv_rate
+            pv_rate = 100 - grid_rate - battery_rate
+            total = battery_rate + pv_rate
+        else:
+            grid_rate = 0
+            battery_rate = 0
+            pv_rate = 0
+            total = 0
 
         super().__init__(
             grid=grid_rate,
@@ -169,12 +175,18 @@ class SelfSufficiencyRate(Solaredge2MQTTBaseModel):
     total: int
 
     def __init__(self, energy: Energy):
-        grid_rate = int(round(energy.grid.consumption / energy.consumer.total * 100))
-        battery_rate = int(
-            round(energy.consumer.used_battery_production / energy.consumer.total * 100)
-        )
-        pv_rate = 100 - grid_rate - battery_rate
-        total = battery_rate + pv_rate
+        if energy.consumer.total > 0:
+            grid_rate = int(round(energy.grid.consumption / energy.consumer.total * 100))
+            battery_rate = int(
+                round(energy.consumer.used_battery_production / energy.consumer.total * 100)
+            )
+            pv_rate = 100 - grid_rate - battery_rate
+            total = battery_rate + pv_rate
+        else:
+            grid_rate = 0
+            battery_rate = 0
+            pv_rate = 0
+            total = 0
 
         super().__init__(
             grid=grid_rate,
