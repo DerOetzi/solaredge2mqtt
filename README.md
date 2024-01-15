@@ -107,7 +107,7 @@ Add optional environment arguments from above to fit to your setup.
 
 Copy the [.env.example](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/.env.example) file to `.env` and modify it according to your needs.
 
-Get the [docker-compose.yml](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/docker/docker-compose.yml) file.
+Get the [docker-compose.yml](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/docker-compose.yml) file.
 
 Generate a `.secrets` directory and put at least a file called `mqtt_password` inside with your MQTT broker password.
 

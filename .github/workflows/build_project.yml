@@ -84,12 +84,6 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-
-    - name: Prepare container directory
-      run: mkdir -p docker/container
-
-    - name: Copy needed sources
-      run: cp -r solaredge2mqtt requirements.txt LICENSE MANIFEST.in README.md setup.cfg setup.py THIRD-PARTY-NOTICES docker/container/
   
     - name: Set up QEMU
       uses: docker/setup-qemu-action@master
@@ -136,7 +130,7 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         builder: ${{ steps.buildx.outputs.name }}
-        context: docker
+        context: .
         push: ${{github.event_name == 'release' || (github.event_name == 'push' && github.ref_name == 'main')}}
         tags: ${{github.event_name == 'release' && steps.meta_release.outputs.tags || steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
