@@ -145,3 +145,6 @@ setup.cfg
 setup.py
 doc
 versioneer.py
+Dockerfile
+.dockerignore
+MANIFEST.in
