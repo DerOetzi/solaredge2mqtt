@@ -1,4 +1,4 @@
-FROM python:3.10 AS buildimage
+FROM python:3.11 AS buildimage
 
 WORKDIR /app
 
@@ -17,7 +17,7 @@ RUN set -eux; \
     --extra-index-url https://www.piwheels.org/simple \
     -r requirements.txt; 
 
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
