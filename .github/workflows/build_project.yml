@@ -131,6 +131,7 @@ jobs:
       with:
         builder: ${{ steps.buildx.outputs.name }}
         context: .
+        platforms: linux/amd64,linux/arm64, linux/arm/v7
         push: ${{github.event_name == 'release' || (github.event_name == 'push' && github.ref_name == 'main')}}
         tags: ${{github.event_name == 'release' && steps.meta_release.outputs.tags || steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
