@@ -1,5 +1,5 @@
 # SolarEdge 2 MQTT Service
-[![License](https://img.shields.io/github/license/DerOetzi/solaredge2mqtt)](https://github.com/DerOetzi/solaredge2mqtt/blob/main/LICENSE) [![Release](https://img.shields.io/github/v/release/DerOetzi/solaredge2mqtt)](https://github.com/DerOetzi/solaredge2mqtt/releases/latest) [![Build Status](https://img.shields.io/github/actions/workflow/status/DerOetzi/solaredge2mqtt/build_project.yml?branch=main)](https://github.com/DerOetzi/solaredge2mqtt/actions/workflows/build_project.yml) [![PyPI version](https://img.shields.io/pypi/v/solaredge2mqtt.svg)](https://pypi.org/project/solaredge2mqtt/) 
+[![License](https://img.shields.io/github/license/DerOetzi/solaredge2mqtt)](https://github.com/DerOetzi/solaredge2mqtt/blob/main/LICENSE) [![Release](https://img.shields.io/github/v/release/DerOetzi/solaredge2mqtt)](https://github.com/DerOetzi/solaredge2mqtt/releases/latest) [![Build Status](https://img.shields.io/github/actions/workflow/status/DerOetzi/solaredge2mqtt/build_project.yml?branch=main)](https://github.com/DerOetzi/solaredge2mqtt/actions/workflows/build_project.yml) [![PyPI version](https://img.shields.io/pypi/v/solaredge2mqtt.svg)](https://pypi.org/project/solaredge2mqtt/) [![Discord Chat](https://img.shields.io/discord/1196540254686032014)](https://discord.gg/QXfghc93pY)
 
 The SolarEdge2MQTT service is a project designed to read power data from a SolarEdge inverter and publish it to an MQTT broker. The service is useful for integrating SolarEdge inverters into home automation systems or other applications that use MQTT for data exchange. It provides real-time monitoring of power flow and other parameters from the inverter via Modbus. 
 
@@ -10,6 +10,15 @@ The SolarEdge Wallbox can be monitored as well via REST API.
 Additionally all values can be saved for visualization into a InfluxDB.
 
 *The SolarEdge2MQTT service is currently in an early stage of development. While it is functional and can be used to read data from a SolarEdge inverter and publish it to an MQTT broker, it is still undergoing active development. Features may be added, removed, or changed, and there may be bugs. Users should be aware of this and use the service with caution. Despite its early state, the project is open-source and contributions are welcome.*
+
+
+## Contact and Feedback
+
+If you have any questions, please contact me on Discord.
+
+[![Discord Banner](https://discordapp.com/api/guilds/1196540254686032014/widget.png?style=banner2)](https://discord.gg/QXfghc93pY)
+
+Please share your ideas, suggestions or problems by opening an [issue](https://github.com/DerOetzi/solaredge2mqtt/issues). I am really looking forward to your feedback.
 
 ## Installation and Configuration
 
