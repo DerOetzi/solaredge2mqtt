@@ -12,7 +12,7 @@ from solaredge2mqtt.models import (
     SunSpecInverter,
     SunSpecMeter,
 )
-from solaredge2mqtt.settings import ServiceSettings
+from solaredge2mqtt.settings import ModbusSettings
 
 SunSpecRawData = Dict[str, str | int]
 
@@ -20,18 +20,18 @@ SunSpecRawData = Dict[str, str | int]
 class Modbus:
     inverter: Inverter
 
-    def __init__(self, settings: ServiceSettings):
+    def __init__(self, settings: ModbusSettings):
         self.inverter = Inverter(
-            host=settings.modbus_host,
-            port=settings.modbus_port,
-            timeout=settings.modbus_timeout,
-            unit=settings.modbus_unit,
+            host=settings.host,
+            port=settings.port,
+            timeout=settings.timeout,
+            unit=settings.unit,
         )
 
         logger.info(
             "Using SolarEdge inverter via modbus: {host}:{port}",
-            host=settings.modbus_host,
-            port=settings.modbus_port,
+            host=settings.host,
+            port=settings.port,
         )
 
     async def loop(

@@ -10,7 +10,7 @@ from requests.exceptions import HTTPError, Timeout
 
 from solaredge2mqtt.logging import logger
 from solaredge2mqtt.models import WallboxAPI
-from solaredge2mqtt.settings import ServiceSettings
+from solaredge2mqtt.settings import WallboxSettings
 
 urllib3.disable_warnings()
 
@@ -37,14 +37,12 @@ class AuthorizationTokens(BaseModel):
 
 
 class WallboxClient:
-    def __init__(self, settings: ServiceSettings):
-        self.host = settings.wallbox_host
-        self.password = settings.wallbox_password
-        self.serial = settings.wallbox_serial
+    def __init__(self, settings: WallboxSettings):
+        self.settings = settings
 
         logger.info(
             "Using Wallbox charger: {host}",
-            host=settings.wallbox_host,
+            host=settings.host,
         )
 
         self.authorization: Optional[AuthorizationTokens] = None
@@ -56,7 +54,9 @@ class WallboxClient:
             self._get_access()
 
             response = get(
-                WALLBOX_URL.format(host=self.host, serial=self.serial),
+                WALLBOX_URL.format(
+                    host=self.settings.host, serial=self.settings.serial
+                ),
                 headers={"Authorization": f"Bearer {self.authorization.access_token}"},
                 timeout=5,
                 verify=False,  # pylint: disable=insecure-request-warning
@@ -118,8 +118,8 @@ class WallboxClient:
         logger.info("Logging in to Wallbox charger...")
         self.authorization = None
         response = post(
-            LOGIN_URL.format(host=self.host),
-            json={"password": self.password, "username": "admin"},
+            LOGIN_URL.format(host=self.settings.host),
+            json={"password": self.settings.password, "username": "admin"},
             timeout=5,
             verify=False,  # pylint: disable=insecure-request-warning
         )
@@ -131,7 +131,7 @@ class WallboxClient:
     def _refresh_token(self):
         logger.info("Refreshing access token Wallbox...")
         response = post(
-            REFRESH_URL.format(host=self.host),
+            REFRESH_URL.format(host=self.settings.host),
             headers={"Authorization": f"Bearer {self.authorization.refresh_token}"},
             timeout=5,
             verify=False,  # pylint: disable=insecure-request-warning

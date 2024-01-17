@@ -2,13 +2,18 @@ from aiomqtt import Client, Will
 from pydantic import BaseModel
 
 from solaredge2mqtt.logging import logger
-from solaredge2mqtt.models import (Component, Energy, EnergyPeriod,
-                                   LogicalModule, Powerflow)
-from solaredge2mqtt.settings import ServiceSettings
+from solaredge2mqtt.models import (
+    Component,
+    Energy,
+    EnergyPeriod,
+    LogicalModule,
+    Powerflow,
+)
+from solaredge2mqtt.settings import MQTTSettings
 
 
 class MQTTClient(Client):
-    def __init__(self, settings: ServiceSettings):
+    def __init__(self, settings: MQTTSettings):
         self.broker = settings.broker
         self.port = settings.port
 

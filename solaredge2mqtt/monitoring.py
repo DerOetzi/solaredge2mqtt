@@ -11,17 +11,17 @@ from solaredge2mqtt.models import (
     LogicalModule,
     LogicalString,
 )
-from solaredge2mqtt.settings import ServiceSettings
+from solaredge2mqtt.settings import MonitoringSettings
 
 LOGIN_URL = "https://monitoring.solaredge.com/solaredge-apigw/api/login"
 LOGICAL_URL = "https://monitoring.solaredge.com/solaredge-apigw/api/sites/{site_id}/layout/logical"
 
 
 class MonitoringSite:
-    def __init__(self, settings: ServiceSettings) -> None:
-        self.username = settings.api_username
-        self.password = settings.api_password
-        self.site_id = settings.api_site_id
+    def __init__(self, settings: MonitoringSettings) -> None:
+        self.username = settings.username
+        self.password = settings.password
+        self.site_id = settings.site_id
 
         self.session = requests.session()
 

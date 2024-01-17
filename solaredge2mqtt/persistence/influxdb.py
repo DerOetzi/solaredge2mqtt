@@ -1,23 +1,26 @@
 import pkg_resources
-from influxdb_client import (BucketRetentionRules, BucketsApi, InfluxDBClient,
-                             Point, TaskCreateRequest)
+from influxdb_client import (
+    BucketRetentionRules,
+    BucketsApi,
+    InfluxDBClient,
+    Point,
+    TaskCreateRequest,
+)
 from influxdb_client.client.exceptions import InfluxDBError
 
 from solaredge2mqtt.logging import logger
 from solaredge2mqtt.models import Component, Energy, EnergyPeriod, Powerflow
-from solaredge2mqtt.settings import ServiceSettings
+from solaredge2mqtt.settings import InfluxDBSettings
 
 
 class InfluxDB:
-    def __init__(self, settings: ServiceSettings) -> None:
+    def __init__(self, settings: InfluxDBSettings) -> None:
         self.settings = settings
 
-        self.org: str = settings.influxdb_org
-
         self.client: InfluxDBClient = InfluxDBClient(
-            url=f"{settings.influxdb_host}:{settings.influxdb_port}",
-            token=settings.influxdb_token,
-            org=settings.influxdb_org,
+            url=f"{settings.host}:{settings.port}",
+            token=settings.token,
+            org=settings.org,
         )
 
         self.write_api = self.client.write_api(
@@ -35,12 +38,12 @@ class InfluxDB:
     def initialize_buckets(self) -> None:
         buckets_api = self.client.buckets_api()
         self._create_or_update_bucket(
-            buckets_api, self.bucket_raw, self.settings.influxdb_retention_raw
+            buckets_api, self.bucket_raw, self.settings.retention_raw
         )
         self._create_or_update_bucket(
             buckets_api,
             self.bucket_aggregated,
-            self.settings.influxdb_retention_aggregated,
+            self.settings.retention_aggregated,
         )
 
     def _create_or_update_bucket(
@@ -65,11 +68,11 @@ class InfluxDB:
 
     @property
     def bucket_raw(self) -> str:
-        return f"{self.settings.influxdb_prefix}_raw"
+        return f"{self.settings.prefix}_raw"
 
     @property
     def bucket_aggregated(self) -> str:
-        return f"{self.settings.influxdb_prefix}"
+        return f"{self.settings.prefix}"
 
     def initialize_task(self) -> None:
         tasks_api = self.client.tasks_api()
@@ -77,12 +80,12 @@ class InfluxDB:
         flux = (
             self._get_flux_query("aggregation")
             .replace("TASK_NAME", self.task_name)
-            .replace("UNIT", self.settings.influxdb_aggregate_interval)
+            .replace("UNIT", self.settings.aggregate_interval)
         )
 
         if not tasks:
             task_request = TaskCreateRequest(
-                flux=flux, org_id=self.org, status="active"
+                flux=flux, org_id=self.settings.org, status="active"
             )
             logger.info(f"Creating task '{self.task_name}'")
             logger.debug(flux)
@@ -95,12 +98,12 @@ class InfluxDB:
 
             if (
                 new_flux != stored_flux
-                or tasks[0].every != self.settings.influxdb_aggregate_interval
+                or tasks[0].every != self.settings.aggregate_interval
             ):
                 logger.info(f"Updating task '{self.task_name}'")
                 logger.debug(flux)
                 tasks[0].flux = flux
-                tasks[0].every = self.settings.influxdb_aggregate_interval
+                tasks[0].every = self.settings.aggregate_interval
                 tasks_api.update_task(tasks[0])
 
     @staticmethod
@@ -123,7 +126,7 @@ class InfluxDB:
 
     @property
     def task_name(self) -> str:
-        return f"{self.settings.influxdb_prefix}_aggregation"
+        return f"{self.settings.prefix}_aggregation"
 
     def write_components(
         self, *args: list[Component | dict[str, Component] | None]

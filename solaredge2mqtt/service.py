@@ -9,7 +9,8 @@ import signal
 
 from aiomqtt import MqttError
 
-from solaredge2mqtt.api import MonitoringSite
+from solaredge2mqtt import __version__
+from solaredge2mqtt.monitoring import MonitoringSite
 from solaredge2mqtt.logging import initialize_logging, logger
 from solaredge2mqtt.modbus import Modbus
 from solaredge2mqtt.models import EnergyPeriod, EnergyQuery, Powerflow
@@ -31,25 +32,30 @@ def run():
 class Service:
     def __init__(self):
         self.settings = service_settings()
-        self.mqtt = MQTTClient(self.settings)
+        initialize_logging(self.settings.logging_level)
 
-        self.modbus = Modbus(self.settings)
+        self.mqtt = MQTTClient(self.settings.mqtt)
+        self.modbus = Modbus(self.settings.modbus)
 
         self.cancel_request = aio.Event()
         self.loops: set[aio.Task] = set()
 
         self.wallbox: WallboxClient | None = (
-            WallboxClient(self.settings)
+            WallboxClient(self.settings.wallbox)
             if self.settings.is_wallbox_configured
             else None
         )
 
         self.influxdb: InfluxDB | None = (
-            InfluxDB(self.settings) if self.settings.is_influxdb_configured else None
+            InfluxDB(self.settings.influxdb)
+            if self.settings.is_influxdb_configured
+            else None
         )
 
         self.monitoring: MonitoringSite | None = (
-            MonitoringSite(self.settings) if self.settings.is_api_configured else None
+            MonitoringSite(self.settings.monitoring)
+            if self.settings.is_monitoring_configured
+            else None
         )
 
     def cancel(self):
@@ -59,11 +65,11 @@ class Service:
             loop.cancel()
 
     async def main_loop(self):
-        initialize_logging(self.settings.logging_level)
         logger.info("Starting SolarEdge2MQTT service...")
+        logger.info("Version: {version}", version=__version__)
         logger.debug(self.settings)
 
-        logger.info("Timezone: {timezone}", timezone=self.settings.timezone)
+        logger.info("Timezone: {timezone}", timezone=self.settings.influxdb.timezone)
 
         if self.settings.is_influxdb_configured:
             self.influxdb.initialize_buckets()
@@ -76,7 +82,7 @@ class Service:
 
                     self.schedule_loop(self.settings.interval, self.basic_values_loop)
 
-                    if self.settings.is_api_configured:
+                    if self.settings.is_monitoring_configured:
                         self.monitoring.login()
                         self.schedule_loop(300, self.monitoring_loop)
 

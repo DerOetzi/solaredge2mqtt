@@ -4,44 +4,47 @@ services:
     container_name: solaredge2mqtt
     image: ghcr.io/deroetzi/solaredge2mqtt:latest
     secrets:
-      - se2mqtt_password
-    #      - se2mqtt_api_password
+      - se2mqtt_mqtt__password
+    # - se2mqtt_monitoring__password
+    # - se2mqtt_wallbox__password
+    # - se2mqtt_influxdb__token
     environment:
-      - SE2MQTT_ENVIRONMENT=production
-      - SE2MQTT_MODBUS_HOST
-      - SE2MQTT_MODBUS_PORT
-      - SE2MQTT_MODBUS_TIMEOUT
-      - SE2MQTT_MODBUS_UNIT_ID
-      - SE2MQTT_BROKER
-      - SE2MQTT_PORT
-      - SE2MQTT_USERNAME
-      - SE2MQTT_TOPIC_PREFIX
       - SE2MQTT_INTERVAL
       - SE2MQTT_LOGGING_LEVEL
-      - SE2MQTT_API_SITE_ID
-      - SE2MQTT_API_USERNAME
-      - SE2MQTT_WALLBOX_HOST
-      - SE2MQTT_WALLBOX_PASSWORD
-      - SE2MQTT_WALLBOX_SERIAL
-      - SE2MQTT_INFLUXDB_HOST
-      - SE2MQTT_INFLUXDB_PORT
-      - SE2MQTT_INFLUXDB_TOKEN
-      - SE2MQTT_INFLUXDB_ORG
-      - SE2MQTT_INFLUXDB_PREFIX
-      - SE2MQTT_INFLUXDB_RETENTION_RAW
-      - SE2MQTT_INFLUXDB_RETENTION_AGGREGATED
+      - SE2MQTT_MODBUS__HOST
+      - SE2MQTT_MODBUS__PORT
+      - SE2MQTT_MODBUS__TIMEOUT
+      - SE2MQTT_MODBUS__UNIT_ID
+      - SE2MQTT_MQTT__CLIENT_ID
+      - SE2MQTT_MQTT__BROKER
+      - SE2MQTT_MQTT__PORT
+      - SE2MQTT_MQTT__USERNAME
+      - SE2MQTT_MQTT__TOPIC_PREFIX
+      - SE2MQTT_MONITORING__SITE_ID
+      - SE2MQTT_MONITORING__USERNAME
+      - SE2MQTT_WALLBOX__HOST
+      - SE2MQTT_WALLBOX__PASSWORD
+      - SE2MQTT_WALLBOX__SERIAL
+      - SE2MQTT_INFLUXDB__HOST
+      - SE2MQTT_INFLUXDB__PORT
+      - SE2MQTT_INFLUXDB__TOKEN
+      - SE2MQTT_INFLUXDB__ORG
+      - SE2MQTT_INFLUXDB__PREFIX
+      - SE2MQTT_INFLUXDB__RETENTION_RAW
+      - SE2MQTT_INFLUXDB__RETENTION_AGGREGATED
+      - SE2MQTT_INFLUXDB__AGGREGATED_INTERVAL
       - TZ
     restart: unless-stopped
 
 secrets:
-  se2mqtt_password:
+  se2mqtt__password:
     file: .secrets/mqtt_password
 
-#  se2mqtt_api_password:
-#    file: .secrets/api_password
+#  se2mqtt_monitoring__password:
+#    file: .secrets/monitoring_password
 
-#  se2mqtt_wallbox_password:
+#  se2mqtt_wallbox__password:
 #    file: .secrets/wallbox_password
 
-#  se2mqtt_influxdb_token:
+#  se2mqtt_influxdb__token:
 #    file: .secrets/influxdb_token

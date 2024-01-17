@@ -3,7 +3,7 @@ from os import path
 from time import localtime, strftime
 from typing import Optional
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from solaredge2mqtt.logging import LoggingLevelEnum
@@ -11,7 +11,11 @@ from solaredge2mqtt.models import EnumModel
 
 DOCKER_SECRETS_DIR = "/run/secrets"
 
-MODEL_CONFIG_WITHOUT_SECRETS = {"env_file": ".env", "env_prefix": "se2mqtt_"}
+MODEL_CONFIG_WITHOUT_SECRETS = {
+    "env_file": ".env",
+    "env_prefix": "se2mqtt_",
+    "env_nested_delimiter": "__",
+}
 
 MODEL_CONFIG_WITH_SECRETS = {
     **MODEL_CONFIG_WITHOUT_SECRETS,
@@ -31,18 +35,14 @@ SECONDS_PER_YEAR = SECONDS_PER_DAY * 365
 SECONDS_PER_2_YEARS = SECONDS_PER_YEAR * 2
 
 
-class ServiceSettings(BaseSettings):
-    environment: str = "production"
+class ModbusSettings(BaseModel):
+    host: str
+    port: int = Field(1502)
+    timeout: int = Field(1)
+    unit: int = Field(1)
 
-    modbus_host: str
-    modbus_port: int = Field(1502)
-    modbus_timeout: int = Field(1)
-    modbus_unit: int = Field(1)
 
-    api_site_id: Optional[str] = Field(None)
-    api_username: Optional[str] = Field(None)
-    api_password: Optional[str] = Field(None)
-
+class MQTTSettings(BaseModel):
     client_id: str = Field("solaredge2mqtt")
     broker: str
     port: int = Field(1883)
@@ -50,93 +50,86 @@ class ServiceSettings(BaseSettings):
     password: str
     topic_prefix: str = Field("solaredge")
 
-    interval: int = Field(5)
 
-    wallbox_host: Optional[str] = Field(None)
-    wallbox_password: Optional[str] = Field(None)
-    wallbox_serial: Optional[str] = Field(None)
+class MonitoringSettings(BaseModel):
+    site_id: str = Field(None)
+    username: str = Field(None)
+    password: str = Field(None)
 
-    influxdb_host: Optional[str] = Field(None)
-    influxdb_port: Optional[int] = Field(8086)
-    influxdb_token: Optional[str] = Field(None)
-    influxdb_org: Optional[str] = Field(None)
-    influxdb_prefix: Optional[str] = Field("solaredge")
-    influxdb_retention_raw: Optional[int] = Field(SECONDS_PER_DAY + SECONDS_PER_HOUR)
-    influxdb_retention_aggregated: Optional[int] = Field(SECONDS_PER_2_YEARS)
-    influxdb_aggregate_interval: Optional[str] = "10m"
+    @property
+    def is_configured(self) -> bool:
+        return all(
+            [
+                self.site_id is not None,
+                self.username is not None,
+                self.password is not None,
+            ]
+        )
 
-    logging_level: LoggingLevelEnum = LoggingLevelEnum.INFO
+
+class WallboxSettings(BaseModel):
+    host: str = Field(None)
+    password: str = Field(None)
+    serial: str = Field(None)
+
+    @property
+    def is_configured(self) -> bool:
+        return all(
+            [self.host is not None, self.password is not None, self.serial is not None]
+        )
+
+
+class InfluxDBSettings(BaseModel):
+    host: str = Field(None)
+    port: int = Field(8086)
+    token: str = Field(None)
+    org: str = Field(None)
+    prefix: str = Field("solaredge")
+    retention_raw: int = Field(SECONDS_PER_DAY + SECONDS_PER_HOUR)
+    retention_aggregated: int = Field(SECONDS_PER_2_YEARS)
+    aggregate_interval: str = "10m"
     timezone: str = Field(strftime("%Z", localtime()))
+
+    @property
+    def is_configured(self) -> bool:
+        return all(
+            [
+                self.host is not None,
+                self.port is not None,
+                self.token is not None,
+                self.org is not None,
+            ]
+        )
+
+
+class ServiceSettings(BaseSettings):
+    environment: str = "production"
+    interval: int = Field(5)
+    logging_level: LoggingLevelEnum = LoggingLevelEnum.INFO
+
+    modbus: ModbusSettings
+    mqtt: MQTTSettings
+
+    monitoring: Optional[MonitoringSettings] = None
+    wallbox: Optional[WallboxSettings] = None
+
+    influxdb: Optional[InfluxDBSettings] = None
 
     model_config = MODEL_CONFIG
 
     @property
-    def is_api_configured(self) -> bool:
-        return all(
-            [
-                self.api_site_id is not None,
-                self.api_username is not None,
-                self.api_password is not None,
-            ]
-        )
+    def is_monitoring_configured(self) -> bool:
+        return self.monitoring is not None and self.monitoring.is_configured
 
     @property
     def is_wallbox_configured(self) -> bool:
-        return all(
-            [
-                self.wallbox_host is not None,
-                self.wallbox_password is not None,
-                self.wallbox_serial is not None,
-            ]
-        )
+        return self.wallbox is not None and self.wallbox.is_configured
 
     @property
     def is_influxdb_configured(self) -> bool:
-        return all(
-            [
-                self.influxdb_host is not None,
-                self.influxdb_port is not None,
-                self.influxdb_token is not None,
-                self.influxdb_org is not None,
-            ]
-        )
-
-
-class DevelopmentSettings(ServiceSettings):
-    debug: bool = Field(True)
-
-    environment: str = "development"
-
-    influxdb_prefix: Optional[str] = Field("solaredgedev")
-
-    model_config = MODEL_CONFIG
-
-
-class ServiceEnvironment(EnumModel):
-    PROD = "production", ServiceSettings
-    DEV = "development", DevelopmentSettings
-
-    def __init__(self, description: str, settings_class: ServiceSettings):
-        # pylint: disable=super-init-not-called
-        self._description: str = description
-        self._settings_class: ServiceSettings = settings_class
-
-    @property
-    def description(self) -> str:
-        return self._description
-
-    @property
-    def settings_class(self) -> ServiceSettings:
-        return self._settings_class
-
-
-class ServiceBaseSettings(BaseSettings):
-    environment: ServiceEnvironment = ServiceEnvironment.PROD
-
-    model_config = SettingsConfigDict(**MODEL_CONFIG_WITHOUT_SECRETS, extra="ignore")
+        return self.influxdb is not None and self.influxdb.is_configured
 
 
 @lru_cache()
 def service_settings() -> ServiceSettings:
-    environment = ServiceBaseSettings().environment
-    return environment.settings_class()
+    return ServiceSettings()
