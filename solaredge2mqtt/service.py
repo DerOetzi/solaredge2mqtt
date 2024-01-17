@@ -10,10 +10,11 @@ import signal
 from aiomqtt import MqttError
 
 from solaredge2mqtt import __version__
-from solaredge2mqtt.monitoring import MonitoringSite
+from solaredge2mqtt.forecast import ForecastAPI
 from solaredge2mqtt.logging import initialize_logging, logger
 from solaredge2mqtt.modbus import Modbus
 from solaredge2mqtt.models import EnergyPeriod, EnergyQuery, Powerflow
+from solaredge2mqtt.monitoring import MonitoringSite
 from solaredge2mqtt.mqtt import MQTTClient
 from solaredge2mqtt.persistence.influxdb import InfluxDB
 from solaredge2mqtt.settings import service_settings
@@ -58,6 +59,12 @@ class Service:
             else None
         )
 
+        self.forecast: ForecastAPI | None = (
+            ForecastAPI(self.settings.forecast)
+            if self.settings.is_forecast_configured
+            else None
+        )
+
     def cancel(self):
         logger.info("Stopping SolarEdge2MQTT service...")
         self.cancel_request.set()
@@ -88,6 +95,9 @@ class Service:
 
                     if self.settings.is_influxdb_configured:
                         self.schedule_loop(300, self.energy_loop)
+
+                    if self.settings.is_forecast_configured:
+                        logger.info(await self.forecast.loop())
 
                     await aio.gather(*self.loops)
 

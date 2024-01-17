@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from functools import lru_cache
 from os import path
 from time import localtime, strftime
@@ -7,7 +9,6 @@ from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from solaredge2mqtt.logging import LoggingLevelEnum
-from solaredge2mqtt.models import EnumModel
 
 DOCKER_SECRETS_DIR = "/run/secrets"
 
@@ -79,6 +80,35 @@ class WallboxSettings(BaseModel):
         )
 
 
+class ForecastSettings(BaseModel):
+    latitude: str = Field(None)
+    longitude: str = Field(None)
+    api_key: Optional[str] = Field(None)
+
+    string1: ForecastStringSettings = Field(None)
+    string2: ForecastStringSettings = Field(None)
+
+    @property
+    def is_configured(self) -> bool:
+        return all(
+            [
+                self.latitude is not None,
+                self.longitude is not None,
+                self.string1 is not None,
+            ]
+        )
+
+
+class ForecastStringSettings(BaseModel):
+    declination: float = Field(None)
+    azimuth: float = Field(None)
+    peak_power: float = Field(None)
+
+    @property
+    def url_string(self) -> str:
+        return f"/{self.declination}/{self.azimuth}/{self.peak_power}"
+
+
 class InfluxDBSettings(BaseModel):
     host: str = Field(None)
     port: int = Field(8086)
@@ -115,6 +145,8 @@ class ServiceSettings(BaseSettings):
 
     influxdb: Optional[InfluxDBSettings] = None
 
+    forecast: Optional[ForecastSettings] = None
+
     model_config = MODEL_CONFIG
 
     @property
@@ -128,6 +160,10 @@ class ServiceSettings(BaseSettings):
     @property
     def is_influxdb_configured(self) -> bool:
         return self.influxdb is not None and self.influxdb.is_configured
+
+    @property
+    def is_forecast_configured(self) -> bool:
+        return self.forecast is not None and self.forecast.is_configured
 
 
 @lru_cache()
