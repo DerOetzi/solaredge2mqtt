@@ -2,16 +2,11 @@ import json
 from typing import Dict, Tuple
 
 from pymodbus.exceptions import ModbusException
-
 from solaredge_modbus import Inverter
 
+from solaredge2mqtt.exceptions import InvalidDataException
 from solaredge2mqtt.logging import LOGGING_DEVICE_INFO, logger
-from solaredge2mqtt.models import (
-    Powerflow,
-    SunSpecBattery,
-    SunSpecInverter,
-    SunSpecMeter,
-)
+from solaredge2mqtt.models import SunSpecBattery, SunSpecInverter, SunSpecMeter
 from solaredge2mqtt.settings import ModbusSettings
 
 SunSpecRawData = Dict[str, str | int]
@@ -52,10 +47,7 @@ class Modbus:
             meters_data = self._map_meters(meters_raw)
             batteries_data = self._map_batteries(batteries_raw)
         except ModbusException as error:
-            logger.error(
-                "Exception while reading data from modbus: {exception}",
-                exception=error,
-            )
+            raise InvalidDataException("Invalid modbus data") from error
 
         return inverter_data, meters_data, batteries_data
 
@@ -145,31 +137,3 @@ class Modbus:
             batteries[battery_key] = battery_data
 
         return batteries
-
-    @staticmethod
-    def calc_powerflow(
-        inverter: SunSpecInverter,
-        meters: Dict[str, SunSpecMeter],
-        batteries: Dict[str, SunSpecBattery],
-    ) -> Powerflow:
-        """
-        Calculates the power flow in the system by summing the power of all meters and batteries.
-        It considers both import and export options for each meter in the calculation.
-        Returns a PowerFlow object representing the total power flow in the system.
-        """
-
-        powerflow = Powerflow.calc(inverter, meters, batteries)
-
-        logger.debug(powerflow)
-        logger.info(
-            "Powerflow: PV {pv_production} W, Inverter {inverter.power} W, "
-            + "House {house_consumption} W, "
-            + "Grid {grid.power} W, Battery {battery.power} W",
-            pv_production=powerflow.pv_production,
-            inverter=powerflow.inverter,
-            house_consumption=powerflow.house_consumption,
-            grid=powerflow.grid,
-            battery=powerflow.battery,
-        )
-
-        return powerflow

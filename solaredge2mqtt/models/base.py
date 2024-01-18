@@ -81,3 +81,7 @@ class Component(ComponentValueGroup):
             "component": self.COMPONENT,
             "source": self.SOURCE,
         }
+
+    @property
+    def mqtt_topic(self) -> str:
+        return f"{self.SOURCE}/{self.COMPONENT}"

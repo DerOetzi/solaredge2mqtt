@@ -1,14 +1,9 @@
+from typing import Optional
+
 from aiomqtt import Client, Will
 from pydantic import BaseModel
 
 from solaredge2mqtt.logging import logger
-from solaredge2mqtt.models import (
-    Component,
-    Energy,
-    EnergyPeriod,
-    LogicalModule,
-    Powerflow,
-)
 from solaredge2mqtt.settings import MQTTSettings
 
 
@@ -39,48 +34,21 @@ class MQTTClient(Client):
         )
 
     async def publish_status_online(self) -> None:
-        await self.publish(f"{self.topic_prefix}/status", "online", qos=1, retain=True)
+        await self.publish_to("status", "online", True)
 
     async def publish_status_offline(self) -> None:
-        await self.publish(f"{self.topic_prefix}/status", "offline", qos=1, retain=True)
+        await self.publish_to("status", "offline", True)
 
-    async def publish_components(
-        self, *args: list[Component | dict[str, Component] | None]
-    ) -> None:
-        for arg in args:
-            if isinstance(arg, dict):
-                for component_key, component in arg.items():
-                    await self._publish(
-                        f"{component.SOURCE}/{component.COMPONENT}/{component_key.lower()}",
-                        component,
-                    )
-            elif isinstance(arg, Component):
-                await self._publish(f"{arg.SOURCE}/{arg.COMPONENT}", arg)
-            elif arg is None:
-                continue
-            else:
-                raise ValueError(f"Invalid component: {arg}")
-
-    async def publish_powerflow(self, powerflow: Powerflow) -> None:
-        await self._publish("powerflow", powerflow)
-
-    async def publish_energy(self, energy: Energy, period: EnergyPeriod) -> None:
-        await self._publish(f"energy/{period.topic}", energy)
-
-    async def publish_pv_energy_today(self, energy: int) -> None:
-        await self._publish("api/monitoring/pv_energy_today", energy)
-
-    async def publish_module_energy(self, modules: list[LogicalModule]) -> None:
-        for module in modules:
-            await self._publish(
-                f"api/monitoring/module/{module.info.serialnumber}",
-                module,
-            )
-
-    async def _publish(
-        self, topic: str, payload: str | int | float | BaseModel
+    async def publish_to(
+        self,
+        topic: str,
+        payload: str | int | float | BaseModel,
+        retain: Optional[bool] = False,
+        qos: Optional[int] = 1,
     ) -> None:
         if self._connected:
             if isinstance(payload, BaseModel):
                 payload = payload.model_dump_json()
-            await self.publish(f"{self.topic_prefix}/{topic}", payload, qos=1)
+            await self.publish(
+                f"{self.topic_prefix}/{topic}", payload, qos=qos, retain=retain
+            )
