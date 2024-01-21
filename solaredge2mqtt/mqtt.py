@@ -28,7 +28,7 @@ class MQTTClient(Client):
             self.broker,
             self.port,
             username=settings.username,
-            password=settings.password,
+            password=settings.password.get_secret_value(),
             client_id=settings.client_id,
             will=will,
         )

@@ -57,7 +57,7 @@ class MonitoringSite(HTTPClient):
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
                 data={
                     "j_username": self.settings.username,
-                    "j_password": self.settings.password,
+                    "j_password": self.settings.password.get_secret_value(),
                 },
                 timeout=10,
                 expect_json=False,

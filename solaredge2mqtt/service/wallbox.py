@@ -96,7 +96,10 @@ class WallboxClient(HTTPClient):
             self.authorization = None
             response = self._post(
                 LOGIN_URL.format(host=self.settings.host),
-                {"password": self.settings.password, "username": "admin"},
+                {
+                    "password": self.settings.password.get_secret_value(),
+                    "username": "admin",
+                },
                 verify=False,
             )
             logger.trace(response)

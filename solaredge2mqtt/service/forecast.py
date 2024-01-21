@@ -27,7 +27,11 @@ class ForecastAPI(HTTPClient):
         account = ForecastAccount.PUBLIC
         if self.settings.api_key is not None:
             try:
-                result = self._get(API_KEY_INFO.format(api_key=self.settings.api_key))
+                result = self._get(
+                    API_KEY_INFO.format(
+                        api_key=self.settings.api_key.get_secret_value()
+                    )
+                )
                 api_key_info = ForecastAPIKeyInfo(**result["result"])
                 account = api_key_info.account
             except HTTPError as error:
@@ -82,7 +86,7 @@ class ForecastAPI(HTTPClient):
     @property
     def estimate_url(self) -> str:
         estimate_url = ESTIMATE_URL.format(
-            api_key=self.settings.api_key,
+            api_key=self.settings.api_key.get_secret_value(),
             latitude=self.settings.latitude,
             longitude=self.settings.longitude,
         )

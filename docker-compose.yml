@@ -19,6 +19,7 @@ services:
       - SE2MQTT_MQTT__BROKER
       - SE2MQTT_MQTT__PORT
       - SE2MQTT_MQTT__USERNAME
+      - SE2MQTT_MQTT__PASSWORD
       - SE2MQTT_MQTT__TOPIC_PREFIX
       - SE2MQTT_MONITORING__SITE_ID
       - SE2MQTT_MONITORING__USERNAME
@@ -37,7 +38,7 @@ services:
     restart: unless-stopped
 
 secrets:
-  se2mqtt__password:
+  se2mqtt_mqtt__password:
     file: .secrets/mqtt_password
 
 #  se2mqtt_monitoring__password:
