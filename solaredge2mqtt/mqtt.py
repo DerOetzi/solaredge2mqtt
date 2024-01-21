@@ -29,7 +29,7 @@ class MQTTClient(Client):
             self.port,
             username=settings.username,
             password=settings.password.get_secret_value(),
-            client_id=settings.client_id,
+            identifier=settings.client_id,
             will=will,
         )
 
