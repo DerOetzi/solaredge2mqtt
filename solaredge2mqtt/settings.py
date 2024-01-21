@@ -128,8 +128,8 @@ class ServiceSettings(BaseModel):
     forecast: Optional[ForecastSettings] = None
 
     def __init__(self, **data: dict[str, any]):
-        self._sources = [self._read_environment, self._read_dotenv, self._read_secrets]
-        data = self._parse_key_and_values(data)
+        sources = [self._read_environment, self._read_dotenv, self._read_secrets]
+        data = self._parse_key_and_values(sources, data)
         super().__init__(**data)
 
     @property
@@ -148,8 +148,10 @@ class ServiceSettings(BaseModel):
     def is_forecast_configured(self) -> bool:
         return self.forecast is not None and self.forecast.is_configured
 
-    def _parse_key_and_values(self, data: dict[str, any]) -> dict[str, any]:
-        for source in self._sources:
+    def _parse_key_and_values(
+        self, sources: list[callable], data: dict[str, any]
+    ) -> dict[str, any]:
+        for source in sources:
             for key, value in source():
                 key = key.lower().strip()[8:]  # remove prefix
                 subkeys = key.split("__")  # get nested structure
