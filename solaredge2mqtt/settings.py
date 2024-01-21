@@ -163,7 +163,7 @@ class ServiceSettings(BaseModel):
 
                 context[
                     subkeys[-1]
-                ] = value  # Missing possibility to set nested json values
+                ] = value.strip()  # Missing possibility to set nested json values
 
         return data
 
