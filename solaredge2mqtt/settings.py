@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from os import path, environ
+from os import environ, path, listdir
 from time import localtime, strftime
 from typing import Optional
 
@@ -175,8 +175,8 @@ class ServiceSettings(BaseModel):
 
     @classmethod
     def _read_secrets(cls) -> tuple[str, str]:
-        if path.exists(DOCKER_SECRETS_DIR):
-            for filename in path.listdir(DOCKER_SECRETS_DIR):
+        if path.exists(DOCKER_SECRETS_DIR) and path.isdir(DOCKER_SECRETS_DIR):
+            for filename in listdir(DOCKER_SECRETS_DIR):
                 if cls._has_prefix(filename):
                     with open(
                         path.join(DOCKER_SECRETS_DIR, filename), "r", encoding="utf-8"
