@@ -36,6 +36,7 @@ class Service:
     def __init__(self):
         self.settings = service_settings()
         initialize_logging(self.settings.logging_level)
+        logger.debug(self.settings)
 
         self.mqtt = MQTTClient(self.settings.mqtt)
 

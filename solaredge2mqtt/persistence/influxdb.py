@@ -19,7 +19,7 @@ class InfluxDB:
 
         self.client: InfluxDBClient = InfluxDBClient(
             url=f"{settings.host}:{settings.port}",
-            token=settings.token,
+            token=settings.token.get_secret_value(),
             org=settings.org,
         )
 

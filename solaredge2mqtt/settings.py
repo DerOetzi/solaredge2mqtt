@@ -1,34 +1,15 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from os import path
+from os import path, environ
 from time import localtime, strftime
 from typing import Optional
 
-from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import BaseModel, Field, SecretStr
 
 from solaredge2mqtt.logging import LoggingLevelEnum
 
 DOCKER_SECRETS_DIR = "/run/secrets"
-
-MODEL_CONFIG_WITHOUT_SECRETS = {
-    "env_file": ".env",
-    "env_prefix": "se2mqtt_",
-    "env_nested_delimiter": "__",
-}
-
-MODEL_CONFIG_WITH_SECRETS = {
-    **MODEL_CONFIG_WITHOUT_SECRETS,
-    "secrets_dir": DOCKER_SECRETS_DIR,
-}
-
-MODEL_CONFIG = (
-    SettingsConfigDict(**MODEL_CONFIG_WITH_SECRETS)
-    if path.exists(DOCKER_SECRETS_DIR)
-    else SettingsConfigDict(**MODEL_CONFIG_WITHOUT_SECRETS)
-)
-
 
 SECONDS_PER_DAY = 86400
 SECONDS_PER_HOUR = 3600
@@ -48,14 +29,14 @@ class MQTTSettings(BaseModel):
     broker: str
     port: int = Field(1883)
     username: str
-    password: str
+    password: SecretStr
     topic_prefix: str = Field("solaredge")
 
 
 class MonitoringSettings(BaseModel):
     site_id: str = Field(None)
     username: str = Field(None)
-    password: str = Field(None)
+    password: SecretStr = Field(None)
 
     @property
     def is_configured(self) -> bool:
@@ -70,7 +51,7 @@ class MonitoringSettings(BaseModel):
 
 class WallboxSettings(BaseModel):
     host: str = Field(None)
-    password: str = Field(None)
+    password: SecretStr = Field(None)
     serial: str = Field(None)
 
     @property
@@ -83,7 +64,7 @@ class WallboxSettings(BaseModel):
 class ForecastSettings(BaseModel):
     latitude: str = Field(None)
     longitude: str = Field(None)
-    api_key: Optional[str] = Field(None)
+    api_key: Optional[SecretStr] = Field(None)
 
     string1: ForecastStringSettings = Field(None)
     string2: ForecastStringSettings = Field(None)
@@ -112,7 +93,7 @@ class ForecastStringSettings(BaseModel):
 class InfluxDBSettings(BaseModel):
     host: str = Field(None)
     port: int = Field(8086)
-    token: str = Field(None)
+    token: SecretStr = Field(None)
     org: str = Field(None)
     prefix: str = Field("solaredge")
     retention_raw: int = Field(SECONDS_PER_DAY + SECONDS_PER_HOUR)
@@ -132,8 +113,7 @@ class InfluxDBSettings(BaseModel):
         )
 
 
-class ServiceSettings(BaseSettings):
-    environment: str = "production"
+class ServiceSettings(BaseModel):
     interval: int = Field(5)
     logging_level: LoggingLevelEnum = LoggingLevelEnum.INFO
 
@@ -147,7 +127,10 @@ class ServiceSettings(BaseSettings):
 
     forecast: Optional[ForecastSettings] = None
 
-    model_config = MODEL_CONFIG
+    def __init__(self, **data: dict[str, any]):
+        self._sources = [self._read_environment, self._read_dotenv, self._read_secrets]
+        data = self._parse_key_and_values(data)
+        super().__init__(**data)
 
     @property
     def is_monitoring_configured(self) -> bool:
@@ -164,6 +147,53 @@ class ServiceSettings(BaseSettings):
     @property
     def is_forecast_configured(self) -> bool:
         return self.forecast is not None and self.forecast.is_configured
+
+    def _parse_key_and_values(self, data: dict[str, any]) -> dict[str, any]:
+        for source in self._sources:
+            for key, value in source():
+                key = key.lower().strip()[8:]  # remove prefix
+                subkeys = key.split("__")  # get nested structure
+                context = data
+                for subkey in subkeys[:-1]:
+                    if subkey not in context:
+                        context[subkey] = {}
+                    context = context[subkey]
+
+                context[
+                    subkeys[-1]
+                ] = value  # Missing possibility to set nested json values
+
+        return data
+
+    @classmethod
+    def _read_environment(cls) -> tuple[str, str]:
+        for key, value in environ.items():
+            if cls._has_prefix(key):
+                yield key, value
+
+    @classmethod
+    def _read_secrets(cls) -> tuple[str, str]:
+        if path.exists(DOCKER_SECRETS_DIR):
+            for filename in path.listdir(DOCKER_SECRETS_DIR):
+                if cls._has_prefix(filename):
+                    with open(
+                        path.join(DOCKER_SECRETS_DIR, filename), "r", encoding="utf-8"
+                    ) as f:
+                        yield filename, f.read()
+
+    @classmethod
+    def _read_dotenv(cls) -> tuple[str, str]:
+        if path.exists(".env"):
+            with open(".env", "r", encoding="utf-8") as f:
+                for line in f.readlines():
+                    line = line.strip()
+                    if cls._has_prefix(line) and "=" in line:
+                        key, value = line.split("=", 1)
+                        yield key, value
+
+    @staticmethod
+    def _has_prefix(key: str) -> bool:
+        return key.lower().startswith("se2mqtt_")
 
 
 @lru_cache()
