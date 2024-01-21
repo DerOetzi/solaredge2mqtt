@@ -55,7 +55,7 @@ jobs:
       run: python -m build
 
     - name: Save python artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: python-artifacts-${{ matrix.python-version }}-${{ env.REF_NAME }}
         path: |
