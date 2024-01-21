@@ -4,4 +4,4 @@ loguru==0.7.2
 requests==2.31.0
 influxdb-client==1.39.0
 pyjwt==2.8.0
-aiomqtt==1.2.1
+aiomqtt==2.0.0
