@@ -1,8 +1,17 @@
+from typing import Optional
+
 from requests.exceptions import HTTPError
 
 from solaredge2mqtt.exceptions import ConfigurationException
 from solaredge2mqtt.logging import logger
-from solaredge2mqtt.models import Forecast, ForecastAccount, ForecastAPIKeyInfo
+from solaredge2mqtt.models import (
+    EnergyForecast,
+    Forecast,
+    ForecastAccount,
+    ForecastAPIKeyInfo,
+)
+from solaredge2mqtt.mqtt import MQTTClient
+from solaredge2mqtt.persistence.influxdb import InfluxDB
 from solaredge2mqtt.service.http import HTTPClient
 from solaredge2mqtt.settings import ForecastSettings
 
@@ -15,9 +24,19 @@ ESTIMATE_URL = "https://api.forecast.solar/{api_key}/estimate" + LOCATION_PART
 
 
 class ForecastAPI(HTTPClient):
-    def __init__(self, settings: ForecastSettings) -> None:
+
+    def __init__(
+        self,
+        settings: ForecastSettings,
+        mqtt: MQTTClient,
+        influxdb: Optional[InfluxDB] = None,
+    ) -> None:
         super().__init__("Forecast API")
         self.settings = settings
+
+        self.mqtt = mqtt
+
+        self.influxdb = influxdb
 
         self.account = self.get_account()
 
@@ -77,7 +96,17 @@ class ForecastAPI(HTTPClient):
             )
 
             forecast = Forecast(**result["result"])
-            logger.info(forecast)
+            logger.debug(forecast.model_dump_json(indent=4))
+
+            energy = EnergyForecast(forecast)
+
+            await self.mqtt.publish_to("forecast/energy", energy)
+
+            if self.influxdb:
+                self.influxdb.write_points_to_aggregated_bucket(
+                    forecast.influxdb_points
+                )
+
         except HTTPError as error:
             logger.warning("Cannot get forecast: {error}", error=error)
 

@@ -170,6 +170,9 @@ class InfluxDB:
         self.write_api.write(bucket=self.bucket_raw, record=self.loop_points)
         self.loop_points = []
 
+    def write_points_to_aggregated_bucket(self, points: list[Point]) -> None:
+        self.write_api.write(bucket=self.bucket_aggregated, record=points)
+
     def write_success_callback(self, conf: (str, str, str), data: str) -> None:
         logger.debug(f"InfluxDB batch written: {conf} {data}")
 
