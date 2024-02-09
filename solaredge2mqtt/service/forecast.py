@@ -96,7 +96,7 @@ class ForecastAPI(HTTPClient):
             )
 
             forecast = Forecast(**result["result"])
-            logger.info(forecast.model_dump_json(indent=4))
+            logger.debug(forecast.model_dump_json(indent=4))
 
             energy = EnergyForecast(forecast)
 
