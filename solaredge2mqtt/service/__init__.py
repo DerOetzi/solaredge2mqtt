@@ -4,6 +4,7 @@
     library for asynchronous I/O and the aiomqtt library for MQTT communication. 
     The module also includes a run function to initialize and start the service.
 """
+
 import asyncio as aio
 import signal
 
@@ -58,7 +59,7 @@ class Service:
         )
 
         self.forecast: ForecastAPI | None = (
-            ForecastAPI(self.settings.forecast)
+            ForecastAPI(self.settings.forecast, self.mqtt, self.influxdb)
             if self.settings.is_forecast_configured
             else None
         )
