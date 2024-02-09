@@ -91,6 +91,7 @@ class ForecastAPI(HTTPClient):
         forecast = None
 
         try:
+            logger.info("Read forecast from API")
             result = self._get(
                 self.estimate_url, headers={"Accept": "application/json"}
             )
@@ -100,9 +101,12 @@ class ForecastAPI(HTTPClient):
 
             energy = EnergyForecast(forecast)
 
+            logger.info("Read forecast from API: {energy}", energy=energy)
+
             await self.mqtt.publish_to("forecast/energy", energy)
 
             if self.influxdb:
+                logger.info("Write forecast to influxdb")
                 self.influxdb.write_points_to_aggregated_bucket(
                     forecast.influxdb_points
                 )
