@@ -63,7 +63,7 @@ class Forecast(Solaredge2MQTTBaseModel):
         points = [
             Point("forecast")
             .field("power", power)
-            .field("energy", energy)
+            .field("energy", energy / 1000)
             .time(timestamp, write_precision="s")
             for timestamp, (power, energy) in merged_power_and_energy.items()
         ]
