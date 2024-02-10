@@ -5,7 +5,7 @@ from solaredge2mqtt.exceptions import InvalidDataException
 from solaredge2mqtt.logging import logger
 from solaredge2mqtt.models import EnergyPeriod, EnergyQuery, Powerflow
 from solaredge2mqtt.mqtt import MQTTClient
-from solaredge2mqtt.persistence.influxdb import InfluxDB
+from solaredge2mqtt.persistence.influxdb import InfluxDB, Point
 from solaredge2mqtt.service.modbus import Modbus
 from solaredge2mqtt.service.wallbox import WallboxClient
 from solaredge2mqtt.settings import ServiceSettings
@@ -35,9 +35,11 @@ class BaseLoops:
     async def powerflow_loop(self):
         results = await aio.gather(
             self.modbus.loop(),
-            self.wallbox.loop()
-            if self.settings.is_wallbox_configured
-            else aio.sleep(0),
+            (
+                self.wallbox.loop()
+                if self.settings.is_wallbox_configured
+                else aio.sleep(0)
+            ),
         )
 
         inverter_data, meters_data, batteries_data = results[0]
@@ -98,6 +100,7 @@ class BaseLoops:
             self.influxdb.flush_loop()
 
     async def energy_loop(self):
+
         for period in EnergyPeriod:
             energy = self.influxdb.query_energy(period)
             if energy is None:
@@ -117,3 +120,14 @@ class BaseLoops:
             )
 
             await self.mqtt.publish_to(f"energy/{period.topic}", energy)
+
+    async def prices_loop(self):
+        logger.info("Save prices to influxdb")
+
+        point = Point("prices")
+        if self.settings.prices.is_consumption_configured:
+            point.field("consumption", self.settings.prices.consumption)
+        if self.settings.prices.is_delivery_configured:
+            point.field("delivery", self.settings.prices.delivery)
+
+        self.influxdb.write_point_to_raw_bucket(point)

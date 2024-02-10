@@ -96,3 +96,9 @@ dataBattery
     |> aggregateWindow(every: UNIT, fn: min, createEmpty: false)
     |> set(key: "agg_type", value: "min")
     |> to(bucket: "BUCKET_AGGREGATED")
+
+from(bucket: "BUCKET_RAW")
+    |> range(start: startTime, stop: stopTime)
+    |> filter(fn: (r) => r._measurement == "prices")
+    |> aggregateWindow(every: UNIT, fn: last, createEmpty: false)
+    |> to(bucket: "BUCKET_AGGREGATED")
