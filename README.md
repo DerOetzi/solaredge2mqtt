@@ -102,6 +102,21 @@ SE2MQTT_INFLUXDB__RETENTION_RAW        | 90000 = 25h            | Set a retentio
 SE2MQTT_INFLUXDB__RETENTION_AGGREGATED | 63072000 = 2 years     | Set a retention policy in seconds for bucket aggegrated
 SE2MQTT_INFLUXDB__AGGREGATED_INTERVAL  | 10m                    | Aggregate power and energy valuse in InfluxDB  set a interval for the task should be between 10m and 1h
 
+#### Forecast
+
+The service can read forecast estimations from [forecast.solar](forecast.solar). You can setup information for 1 or 2 strings, and you need an API-key. See forecast.solar documentation for more information about settings. If you have configured influxdb power and energy forecast will be saved for visualization as well.
+
+Environment Variable                   | description                                            
+-------------------------------------- | ------------------------------------------------------
+SE2MQTT_FORECAST__LATITUDE             | Set latitude for forecast values
+SE2MQTT_FORECAST__LONGITUDE            | Set longitude for forecast values
+SE2MQTT_FORECAST__API_KEY              | Set your API key for forecast values from https://forecast.solar/ (for security reasons use a secret with docker)
+SE2MQTT_FORECAST__STRING1__PEAK_POWER  | Set values for the forecast calculation of string 1
+SE2MQTT_FORECAST__STRING1__DECLINATION | Set values for the forecast calculation of string 1
+SE2MQTT_FORECAST__STRING1__AZIMUTH     | Set values for the forecast calculation of string 1 
+SE2MQTT_FORECAST__STRING2__PEAK_POWER  | Set values for the forecast calculation of string 2 (you need at least a Personal Plus plan for a second string)
+SE2MQTT_FORECAST__STRING2__DECLINATION | Set values for the forecast calculation of string 2 (you need at least a Personal Plus plan for a second string)
+SE2MQTT_FORECAST__STRING2__AZIMUTH     | Set values for the forecast calculation of string 2 (you need at least a Personal Plus plan for a second string)
 
 #### Example configuration
 
