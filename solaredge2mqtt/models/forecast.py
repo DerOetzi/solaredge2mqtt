@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from influxdb_client import Point
 
@@ -64,7 +64,7 @@ class Forecast(Solaredge2MQTTBaseModel):
             Point("forecast")
             .field("power", power)
             .field("energy", energy / 1000)
-            .time(timestamp, write_precision="s")
+            .time(timestamp.astimezone(timezone.utc), write_precision="s")
             for timestamp, (power, energy) in merged_power_and_energy.items()
         ]
 
