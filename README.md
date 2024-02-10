@@ -102,6 +102,14 @@ SE2MQTT_INFLUXDB__RETENTION_RAW        | 90000 = 25h            | Set a retentio
 SE2MQTT_INFLUXDB__RETENTION_AGGREGATED | 63072000 = 2 years     | Set a retention policy in seconds for bucket aggegrated
 SE2MQTT_INFLUXDB__AGGREGATED_INTERVAL  | 10m                    | Aggregate power and energy valuse in InfluxDB  set a interval for the task should be between 10m and 1h
 
+In order to calculate your savings and earnings, you can specify the amount you pay for consumption and the amount you earn for delivery per kilowatt-hour (kWh). Please note that this feature is only functional in combination with InfluxDB.
+
+Environment Variable                   | description                                            
+-------------------------------------- | ------------------------------------------------------ 
+SE2MQTT_PRICES__CONSUMPTION            | Set the price you pay per 1 kWh for energy received from the grid
+SE2MQTT_PRICES__DELIVERY               | Set the price you receive per 1 kWh for energy delivered to the grid
+
+
 #### Forecast
 
 The service can read forecast estimations from [forecast.solar](forecast.solar). You can setup information for 1 or 2 strings, and you need an API-key. See forecast.solar documentation for more information about settings. If you have configured influxdb power and energy forecast will be saved for visualization as well.
