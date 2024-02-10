@@ -95,6 +95,8 @@ class Service:
 
                     if self.settings.is_influxdb_configured:
                         self.schedule_loop(300, self.basics.energy_loop)
+                        if self.settings.is_prices_configured:
+                            self.schedule_loop(300, self.basics.prices_loop)
 
                     if self.settings.is_forecast_configured:
                         self.schedule_loop(

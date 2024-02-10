@@ -113,12 +113,31 @@ class InfluxDBSettings(BaseModel):
         )
 
 
+class PriceSettings(BaseModel):
+    consumption: float = Field(None)
+    delivery: float = Field(None)
+
+    @property
+    def is_configured(self) -> bool:
+        return self.is_consumption_configured or self.is_delivery_configured
+
+    @property
+    def is_consumption_configured(self) -> bool:
+        return self.consumption is not None
+
+    @property
+    def is_delivery_configured(self) -> bool:
+        return self.delivery is not None
+
+
 class ServiceSettings(BaseModel):
     interval: int = Field(5)
     logging_level: LoggingLevelEnum = LoggingLevelEnum.INFO
 
     modbus: ModbusSettings
     mqtt: MQTTSettings
+
+    prices: Optional[PriceSettings] = None
 
     monitoring: Optional[MonitoringSettings] = None
     wallbox: Optional[WallboxSettings] = None
@@ -131,6 +150,10 @@ class ServiceSettings(BaseModel):
         sources = [self._read_environment, self._read_dotenv, self._read_secrets]
         data = self._parse_key_and_values(sources, data)
         super().__init__(**data)
+
+    @property
+    def is_prices_configured(self) -> bool:
+        return self.prices is not None and self.prices.is_configured
 
     @property
     def is_monitoring_configured(self) -> bool:
@@ -161,9 +184,9 @@ class ServiceSettings(BaseModel):
                         context[subkey] = {}
                     context = context[subkey]
 
-                context[
-                    subkeys[-1]
-                ] = value.strip()  # Missing possibility to set nested json values
+                context[subkeys[-1]] = (
+                    value.strip()
+                )  # Missing possibility to set nested json values
 
         return data
 
