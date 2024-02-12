@@ -39,27 +39,28 @@ data
 
 exclude_fields = ["battery_power", "grid_power", "inverter_power"]
 
-data
-    |> filter(fn: (r) => contains(value: r._field, set: exclude_fields) == false)
-    |> aggregateWindow(
-        every: UNIT,
-        fn: (tables=<-, column) =>
-            tables
-                |> integral(unit: 1h)
-                |> map(fn: (r) => ({r with _value: r._value / 1000.0})),
-    )
-    |> keep(
-        columns: [
-            "_measurement",
-            "_field",
-            "_value",
-            "_start",
-            "_stop",
-            "_time",
-        ],
-    )
-    |> set(key: "_measurement", value: "energy")
-    |> to(bucket: "BUCKET_AGGREGATED")
+energy_data =
+    data
+        |> filter(fn: (r) => contains(value: r._field, set: exclude_fields) == false)
+        |> aggregateWindow(
+            every: UNIT,
+            fn: (tables=<-, column) =>
+                tables
+                    |> integral(unit: 1h)
+                    |> map(fn: (r) => ({r with _value: r._value / 1000.0})),
+        )
+        |> keep(
+            columns: [
+                "_measurement",
+                "_field",
+                "_value",
+                "_start",
+                "_stop",
+                "_time",
+            ],
+        )
+        |> set(key: "_measurement", value: "energy")
+        |> to(bucket: "BUCKET_AGGREGATED")
 
 batteryfields = ["current", "state_of_charge", "state_of_health", "voltage"]
 
@@ -97,8 +98,33 @@ dataBattery
     |> set(key: "agg_type", value: "min")
     |> to(bucket: "BUCKET_AGGREGATED")
 
-from(bucket: "BUCKET_RAW")
-    |> range(start: startTime, stop: stopTime)
-    |> filter(fn: (r) => r._measurement == "prices")
-    |> aggregateWindow(every: UNIT, fn: last, createEmpty: false)
+prices_data =
+    from(bucket: "BUCKET_RAW")
+        |> range(start: startTime, stop: stopTime)
+        |> filter(fn: (r) => r._measurement == "prices")
+        |> aggregateWindow(every: UNIT, fn: last, createEmpty: false)
+        |> to(bucket: "BUCKET_AGGREGATED")
+
+savings_left =
+    energy_data
+        |> filter(fn: (r) => r._field == "consumer_used_production")
+
+savings_right =
+    prices_data
+        |> filter(fn: (r) => r._field == "consumption")
+
+join(tables: {t1: savings_left, t2: savings_right}, on: ["_time"])
+    |> map(fn: (r) => ({_time: r._time, _value: r._value_t1 * r._value_t2, _field: "savings", _measurement: "money"}))
+    |> to(bucket: "BUCKET_AGGREGATED")
+
+earnings_left =
+    energy_data
+        |> filter(fn: (r) => r._field == "grid_delivery")
+
+earnings_right =
+    prices_data
+        |> filter(fn: (r) => r._field == "delivery")
+
+join(tables: {t1: earnings_left, t2: earnings_right}, on: ["_time"])
+    |> map(fn: (r) => ({_time: r._time, _value: r._value_t1 * r._value_t2, _field: "earnings", _measurement: "money"}))
     |> to(bucket: "BUCKET_AGGREGATED")
