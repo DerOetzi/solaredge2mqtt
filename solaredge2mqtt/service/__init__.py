@@ -89,20 +89,11 @@ class Service:
                         self.settings.interval, self.basics.powerflow_loop
                     )
 
-                    if self.settings.is_monitoring_configured:
-                        self.monitoring.login()
-                        self.schedule_loop(300, self.monitoring.loop)
+                    self.schedule_monitoring_loop()
 
-                    if self.settings.is_influxdb_configured:
-                        self.schedule_loop(300, self.basics.energy_loop)
-                        if self.settings.is_prices_configured:
-                            self.schedule_loop(300, self.basics.prices_loop)
+                    self.schedule_influxdb_loops()
 
-                    if self.settings.is_forecast_configured:
-                        self.schedule_loop(
-                            self.forecast.account.interval_in_seconds,
-                            self.forecast.loop,
-                        )
+                    self.schedule_forecast_loop()
 
                     await aio.gather(*self.loops)
 
@@ -117,6 +108,24 @@ class Service:
             finally:
                 for loop in self.loops:
                     loop.cancel()
+
+    def schedule_monitoring_loop(self):
+        if self.settings.is_monitoring_configured:
+            self.monitoring.login()
+            self.schedule_loop(300, self.monitoring.loop)
+
+    def schedule_influxdb_loops(self):
+        if self.settings.is_influxdb_configured:
+            self.schedule_loop(300, self.basics.energy_loop)
+            if self.settings.is_prices_configured:
+                self.schedule_loop(300, self.basics.prices_loop)
+
+    def schedule_forecast_loop(self):
+        if self.settings.is_forecast_configured:
+            self.schedule_loop(
+                self.forecast.account.interval_in_seconds,
+                self.forecast.loop,
+            )
 
     def schedule_loop(
         self, interval_in_seconds: int, handle: callable, args: list[any] = None
