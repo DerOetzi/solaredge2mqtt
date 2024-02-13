@@ -6,10 +6,11 @@ from influxdb_client import (
     Point,
     TaskCreateRequest,
 )
+from influxdb_client.client.flux_table import FluxRecord
 from influxdb_client.client.exceptions import InfluxDBError
 
 from solaredge2mqtt.logging import logger
-from solaredge2mqtt.models import Component, Energy, EnergyPeriod, Powerflow
+from solaredge2mqtt.models import Component, HistoricPeriod, Powerflow
 from solaredge2mqtt.settings import InfluxDBSettings
 
 
@@ -191,14 +192,22 @@ class InfluxDB:
         logger.error(f"InfluxDB error while writting: {conf} {error}")
         logger.debug(data)
 
-    def query_energy(self, period: EnergyPeriod) -> Energy | None:
-        energy: Energy = None
-        query = self._get_flux_query(period.query.query).replace("UNIT", period.unit)
+    def query_historic(
+        self, period: HistoricPeriod, measurement: str
+    ) -> FluxRecord | None:
+        query = (
+            self._get_flux_query(period.query.query)
+            .replace("UNIT", period.unit)
+            .replace("MEASUREMENT", measurement)
+        )
         logger.trace(query)
+
+        record = None
+
         tables = self.query_api.query(query)
         for table in tables:
             for record in table.records:
-                logger.trace(record)
-                energy = Energy(record.values, period)
+                break
+            break
 
-        return energy
+        return record

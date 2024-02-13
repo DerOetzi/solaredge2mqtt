@@ -3,7 +3,13 @@ from typing import Optional
 
 from solaredge2mqtt.exceptions import InvalidDataException
 from solaredge2mqtt.logging import logger
-from solaredge2mqtt.models import EnergyPeriod, EnergyQuery, Powerflow
+from solaredge2mqtt.models import (
+    HistoricEnergy,
+    HistoricMoney,
+    HistoricPeriod,
+    HistoricQuery,
+    Powerflow,
+)
 from solaredge2mqtt.mqtt import MQTTClient
 from solaredge2mqtt.persistence.influxdb import InfluxDB, Point
 from solaredge2mqtt.service.modbus import Modbus
@@ -100,11 +106,10 @@ class BaseLoops:
             self.influxdb.flush_loop()
 
     async def energy_loop(self):
-
-        for period in EnergyPeriod:
-            energy = self.influxdb.query_energy(period)
-            if energy is None:
-                if period.query == EnergyQuery.LAST:
+        for period in HistoricPeriod:
+            record = self.influxdb.query_historic(period, "energy")
+            if record is None:
+                if period.query == HistoricQuery.LAST:
                     logger.info(
                         "No data found for {period}, skipping this loop", period=period
                     )
@@ -112,6 +117,8 @@ class BaseLoops:
                     raise InvalidDataException(f"No energy data for {period}")
 
                 continue
+
+            energy = HistoricEnergy(record.values, period)
 
             logger.info(
                 "Read from influxdb {period} energy: {energy.pv_production} kWh",
@@ -131,3 +138,25 @@ class BaseLoops:
             point.field("delivery", self.settings.prices.delivery)
 
         self.influxdb.write_point_to_raw_bucket(point)
+
+        for period in HistoricPeriod:
+            record = self.influxdb.query_historic(period, "money")
+            if record is None:
+                if period.query == HistoricQuery.LAST:
+                    logger.info(
+                        "No data found for {period}, skipping this loop", period=period
+                    )
+                else:
+                    raise InvalidDataException(f"No money data for {period}")
+
+                continue
+
+            money = HistoricMoney(record.values, period)
+
+            logger.info(
+                "Read from influxdb {period} savings: {money.savings} €, earnings: {money.earnings} €",
+                period=period,
+                money=money,
+            )
+
+            await self.mqtt.publish_to(f"money/{period.topic}", money)
