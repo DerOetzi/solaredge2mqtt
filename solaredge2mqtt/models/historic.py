@@ -8,47 +8,17 @@ from solaredge2mqtt.logging import logger
 from solaredge2mqtt.models.base import EnumModel, Solaredge2MQTTBaseModel
 
 
-class EnergyQuery(EnumModel):
-    ACTUAL = "energy_actual_unit"
-    LAST = "energy_last_unit"
+class HistoricBaseModel(Solaredge2MQTTBaseModel):
+    info: HistoricInfo
 
-    def __init__(self, query: str) -> None:
-        self._query: str = query
-
-    @property
-    def query(self) -> str:
-        return self._query
+    def __init__(self, data: dict, period: HistoricPeriod, **kwargs):
+        super().__init__(
+            info=HistoricInfo(period=period, start=data["_start"], stop=data["_stop"]),
+            **kwargs,
+        )
 
 
-class EnergyPeriod(EnumModel):
-    TODAY = "today", "1d", EnergyQuery.ACTUAL
-    YESTERDAY = "yesterday", "1d", EnergyQuery.LAST
-    THIS_WEEK = "this_week", "1w", EnergyQuery.ACTUAL
-    LAST_WEEK = "last_week", "1w", EnergyQuery.LAST
-    THIS_MONTH = "this_month", "1mo", EnergyQuery.ACTUAL
-    LAST_MONTH = "last_month", "1mo", EnergyQuery.LAST
-    THIS_YEAR = "this_year", "1y", EnergyQuery.ACTUAL
-
-    def __init__(self, topic: str, unit: str, query: EnergyQuery) -> None:
-        self._topic: str = topic
-        self._unit: str = unit
-        self._query: EnergyQuery = query
-
-    @property
-    def topic(self) -> str:
-        return self._topic
-
-    @property
-    def unit(self) -> str:
-        return self._unit
-
-    @property
-    def query(self) -> EnergyQuery:
-        return self._query
-
-
-class Energy(Solaredge2MQTTBaseModel):
-    info: EnergyInfo
+class HistoricEnergy(HistoricBaseModel):
     pv_production: float
     inverter: InverterEnergy
     grid: GridEnergy
@@ -58,7 +28,7 @@ class Energy(Solaredge2MQTTBaseModel):
     def __init__(
         self,
         energy_data: dict,
-        period: EnergyPeriod,
+        period: HistoricPeriod,
     ):
         logger.trace(energy_data)
         pv_production = energy_data["pv_production"]
@@ -79,14 +49,13 @@ class Energy(Solaredge2MQTTBaseModel):
         logger.debug(subclass_values["consumer"])
 
         super().__init__(
+            period=period,
+            data=energy_data,
             pv_production=round(pv_production, 3),
             inverter=InverterEnergy(**subclass_values["inverter"]),
             grid=GridEnergy(**subclass_values["grid"]),
             battery=BatteryEnergy(**subclass_values["battery"]),
             consumer=ConsumerEnergy(**subclass_values["consumer"]),
-            info=EnergyInfo(
-                period=period, start=energy_data["_start"], stop=energy_data["_stop"]
-            ),
         )
 
     @computed_field
@@ -100,10 +69,62 @@ class Energy(Solaredge2MQTTBaseModel):
         return SelfSufficiencyRate(self)
 
 
-class EnergyInfo(Solaredge2MQTTBaseModel):
-    period: EnergyPeriod
+class HistoricMoney(HistoricBaseModel):
+    earnings: float
+    savings: float
+
+    def __init__(self, money_data: dict, period: HistoricPeriod):
+        super().__init__(
+            period=period,
+            data=money_data,
+            earnings=round(money_data["earnings"], 2),
+            savings=round(money_data["savings"], 2),
+        )
+
+
+class HistoricInfo(Solaredge2MQTTBaseModel):
+    period: HistoricPeriod
     start: datetime
     stop: datetime
+
+
+class HistoricQuery(EnumModel):
+    ACTUAL = "historic_actual_unit"
+    LAST = "historic_last_unit"
+
+    def __init__(self, query: str) -> None:
+        self._query: str = query
+
+    @property
+    def query(self) -> str:
+        return self._query
+
+
+class HistoricPeriod(EnumModel):
+    TODAY = "today", "1d", HistoricQuery.ACTUAL
+    YESTERDAY = "yesterday", "1d", HistoricQuery.LAST
+    THIS_WEEK = "this_week", "1w", HistoricQuery.ACTUAL
+    LAST_WEEK = "last_week", "1w", HistoricQuery.LAST
+    THIS_MONTH = "this_month", "1mo", HistoricQuery.ACTUAL
+    LAST_MONTH = "last_month", "1mo", HistoricQuery.LAST
+    THIS_YEAR = "this_year", "1y", HistoricQuery.ACTUAL
+
+    def __init__(self, topic: str, unit: str, query: HistoricQuery) -> None:
+        self._topic: str = topic
+        self._unit: str = unit
+        self._query: HistoricQuery = query
+
+    @property
+    def topic(self) -> str:
+        return self._topic
+
+    @property
+    def unit(self) -> str:
+        return self._unit
+
+    @property
+    def query(self) -> HistoricQuery:
+        return self._query
 
 
 class InverterEnergy(Solaredge2MQTTBaseModel):
@@ -142,7 +163,7 @@ class SelfConsumptionRate(Solaredge2MQTTBaseModel):
     pv: int
     total: int
 
-    def __init__(self, energy: Energy):
+    def __init__(self, energy: HistoricEnergy):
         if energy.inverter.production > 0:
             grid_rate = int(
                 round(energy.grid.delivery / energy.inverter.production * 100)
@@ -176,7 +197,7 @@ class SelfSufficiencyRate(Solaredge2MQTTBaseModel):
     pv: int
     total: int
 
-    def __init__(self, energy: Energy):
+    def __init__(self, energy: HistoricEnergy):
         if energy.consumer.total > 0:
             grid_rate = int(
                 round(energy.grid.consumption / energy.consumer.total * 100)
