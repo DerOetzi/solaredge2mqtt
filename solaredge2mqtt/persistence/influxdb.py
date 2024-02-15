@@ -6,11 +6,11 @@ from influxdb_client import (
     Point,
     TaskCreateRequest,
 )
-from influxdb_client.client.flux_table import FluxRecord
 from influxdb_client.client.exceptions import InfluxDBError
+from influxdb_client.client.flux_table import FluxRecord
 
 from solaredge2mqtt.logging import logger
-from solaredge2mqtt.models import Component, HistoricPeriod, Powerflow
+from solaredge2mqtt.models import Component, ForecastPeriod, HistoricPeriod, Powerflow
 from solaredge2mqtt.settings import InfluxDBSettings
 
 
@@ -192,8 +192,8 @@ class InfluxDB:
         logger.error(f"InfluxDB error while writting: {conf} {error}")
         logger.debug(data)
 
-    def query_historic(
-        self, period: HistoricPeriod, measurement: str
+    def query_timeunit(
+        self, period: HistoricPeriod | ForecastPeriod, measurement: str
     ) -> FluxRecord | None:
         query = (
             self._get_flux_query(period.query.query)

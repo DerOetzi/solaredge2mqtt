@@ -4,12 +4,14 @@ from solaredge2mqtt.models.forecast import (
     Forecast,
     ForecastAccount,
     ForecastAPIKeyInfo,
+    ForecastPeriod,
+    ForecastQuery,
 )
 from solaredge2mqtt.models.historic import (
     HistoricEnergy,
+    HistoricMoney,
     HistoricPeriod,
     HistoricQuery,
-    HistoricMoney,
 )
 from solaredge2mqtt.models.modbus import SunSpecBattery, SunSpecInverter, SunSpecMeter
 from solaredge2mqtt.models.monitoring import (

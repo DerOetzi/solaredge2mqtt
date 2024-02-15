@@ -107,7 +107,7 @@ class BaseLoops:
 
     async def energy_loop(self):
         for period in HistoricPeriod:
-            record = self.influxdb.query_historic(period, "energy")
+            record = self.influxdb.query_timeunit(period, "energy")
             if record is None:
                 if period.query == HistoricQuery.LAST:
                     logger.info(
@@ -140,7 +140,7 @@ class BaseLoops:
         self.influxdb.write_point_to_raw_bucket(point)
 
         for period in HistoricPeriod:
-            record = self.influxdb.query_historic(period, "money")
+            record = self.influxdb.query_timeunit(period, "money")
             if record is None:
                 if period.query == HistoricQuery.LAST:
                     logger.info(
