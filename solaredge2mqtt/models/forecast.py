@@ -66,49 +66,79 @@ class Forecast(Solaredge2MQTTBaseModel):
             .field("energy", energy / 1000)
             .time(timestamp.astimezone(timezone.utc), write_precision="s")
             for timestamp, (power, energy) in merged_power_and_energy.items()
+            if timestamp > datetime.now()
         ]
 
         return points
 
 
-class EnergyForecast(Solaredge2MQTTBaseModel):
-    current_day: int
-    next_day: int
-    current_hour: int
-    next_hour: int
-    next_three_hours: int
+class ForecastQuery(EnumModel):
+    ACTUAL = "actual_unit"
+    NEXT = "forecast_unit"
 
-    def __init__(self, forecast: Forecast):
+    def __init__(self, query: str) -> None:
+        self._query: str = query
+
+    @property
+    def query(self) -> str:
+        return self._query
+
+
+class ForecastPeriod(EnumModel):
+    TODAY = "today", "1d", ForecastQuery.ACTUAL
+    TOMORROW = "tomorrow", "1d", ForecastQuery.NEXT
+    CURRENT_HOUR = "current_hour", "1h", ForecastQuery.ACTUAL
+    NEXT_HOUR = "next_hour", "1h", ForecastQuery.NEXT
+
+    def __init__(self, topic: str, unit: str, query: ForecastQuery) -> None:
+        self._topic: str = topic
+        self._unit: str = unit
+        self._query: ForecastQuery = query
+
+    @property
+    def topic(self) -> str:
+        return self._topic
+
+    @property
+    def unit(self) -> str:
+        return self._unit
+
+    @property
+    def query(self) -> ForecastQuery:
+        return self._query
+
+
+class EnergyForecast(Solaredge2MQTTBaseModel):
+    today: float
+    tomorrow: float
+    current_hour: float
+    next_hour: float
+
+    @classmethod
+    def from_api(cls, forecast: Forecast):
         time_current_hour = datetime.now().replace(minute=0, second=0, microsecond=0)
         time_next_hour = time_current_hour + timedelta(hours=1)
 
-        current_hour = self._calc_energy(forecast, time_current_hour, time_next_hour)
+        current_hour = cls._calc_energy(forecast, time_current_hour, time_next_hour)
 
         time_next_two_hours = time_current_hour + timedelta(hours=2)
 
-        next_hour = self._calc_energy(forecast, time_next_hour, time_next_two_hours)
-
-        time_next_three_hours = time_current_hour + timedelta(hours=3)
-
-        next_three_hours = self._calc_energy(
-            forecast, time_current_hour, time_next_three_hours
-        )
+        next_hour = cls._calc_energy(forecast, time_next_hour, time_next_two_hours)
 
         time_current_day = datetime.now().replace(
             hour=0, minute=0, second=0, microsecond=0
         )
         time_next_day = time_current_day + timedelta(days=1)
-        current_day = self._calc_energy(forecast, time_current_day, time_next_day)
+        today = cls._calc_energy(forecast, time_current_day, time_next_day)
 
         time_next_two_days = time_current_day + timedelta(days=2)
-        next_day = self._calc_energy(forecast, time_next_day, time_next_two_days)
+        tomorrow = cls._calc_energy(forecast, time_next_day, time_next_two_days)
 
-        super().__init__(
-            current_day=current_day,
-            next_day=next_day,
-            current_hour=current_hour,
-            next_hour=next_hour,
-            next_three_hours=next_three_hours,
+        return cls(
+            today=today / 1000,
+            tomorrow=tomorrow / 1000,
+            current_hour=current_hour / 1000,
+            next_hour=next_hour / 1000,
         )
 
     @staticmethod

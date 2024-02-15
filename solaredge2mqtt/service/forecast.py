@@ -9,6 +9,7 @@ from solaredge2mqtt.models import (
     Forecast,
     ForecastAccount,
     ForecastAPIKeyInfo,
+    ForecastPeriod,
 )
 from solaredge2mqtt.mqtt import MQTTClient
 from solaredge2mqtt.persistence.influxdb import InfluxDB
@@ -99,22 +100,37 @@ class ForecastAPI(HTTPClient):
             forecast = Forecast(**result["result"])
             logger.debug(forecast.model_dump_json(indent=4))
 
-            energy = EnergyForecast(forecast)
-
-            logger.info("Read forecast from API: {energy}", energy=energy)
-
-            await self.mqtt.publish_to("forecast/energy", energy)
-
             if self.influxdb:
                 logger.info("Write forecast to influxdb")
                 self.influxdb.write_points_to_aggregated_bucket(
                     forecast.influxdb_points
                 )
 
+                energy = self.read_from_influxdb()
+                logger.info("Read forecast from influxdb: {energy}", energy=energy)
+            else:
+                energy = EnergyForecast.from_api(forecast)
+                logger.info("Read forecast from API: {energy}", energy=energy)
+
+            await self.mqtt.publish_to("forecast/energy", energy)
+
         except HTTPError as error:
             logger.warning("Cannot get forecast: {error}", error=error)
 
         return forecast
+
+    def read_from_influxdb(self) -> EnergyForecast:
+        energies = {}
+
+        for period in ForecastPeriod:
+            record = self.influxdb.query_timeunit(period, "forecast")
+            if record is not None:
+                energies[period.topic] = round(record.values["energy"], 3)
+            else:
+                energies[period.topic] = 0
+
+        energy = EnergyForecast(**energies)
+        return energy
 
     @property
     def estimate_url(self) -> str:

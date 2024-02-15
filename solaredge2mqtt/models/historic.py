@@ -89,8 +89,8 @@ class HistoricInfo(Solaredge2MQTTBaseModel):
 
 
 class HistoricQuery(EnumModel):
-    ACTUAL = "historic_actual_unit"
-    LAST = "historic_last_unit"
+    ACTUAL = "actual_unit"
+    LAST = "historic_unit"
 
     def __init__(self, query: str) -> None:
         self._query: str = query
