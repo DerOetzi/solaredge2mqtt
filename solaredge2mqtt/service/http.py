@@ -16,6 +16,7 @@ class HTTPClient:
     def _get(
         self,
         url: str,
+        params: Optional[dict[str, str | int | float]] = None,
         headers: Optional[dict[str, str]] = None,
         timeout: Optional[int] = 5,
         verify: Optional[bool] = True,
@@ -24,7 +25,7 @@ class HTTPClient:
         result = None
         try:
             response = self.session.get(
-                url, headers=headers, timeout=timeout, verify=verify
+                url, params=params, headers=headers, timeout=timeout, verify=verify
             )
 
             if response.status_code in (401, 403) and login:

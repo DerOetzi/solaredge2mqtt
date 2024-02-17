@@ -11,13 +11,14 @@ import signal
 from aiomqtt import MqttError
 
 from solaredge2mqtt import __version__
-from solaredge2mqtt.logging import initialize_logging, logger
 from solaredge2mqtt.exceptions import ConfigurationException, InvalidDataException
+from solaredge2mqtt.logging import initialize_logging, logger
 from solaredge2mqtt.mqtt import MQTTClient
 from solaredge2mqtt.persistence.influxdb import InfluxDB
 from solaredge2mqtt.service.base import BaseLoops
+from solaredge2mqtt.service.forecast import Forecast
 from solaredge2mqtt.service.monitoring import MonitoringSite
-from solaredge2mqtt.service.forecast import ForecastAPI
+from solaredge2mqtt.service.weather import WeatherClient
 from solaredge2mqtt.settings import service_settings
 
 
@@ -58,8 +59,14 @@ class Service:
             else None
         )
 
-        self.forecast: ForecastAPI | None = (
-            ForecastAPI(self.settings.forecast, self.mqtt, self.influxdb)
+        self.weather: WeatherClient | None = (
+            WeatherClient(self.settings, self.mqtt)
+            if self.settings.is_weather_configured
+            else None
+        )
+
+        self.forecast: Forecast | None = (
+            Forecast(self.settings.location, self.mqtt, self.influxdb, self.weather)
             if self.settings.is_forecast_configured
             else None
         )
@@ -80,6 +87,9 @@ class Service:
             self.influxdb.initialize_buckets()
             self.influxdb.initialize_task()
 
+        if self.settings.is_forecast_configured:
+            self.forecast.train()
+
         while not self.cancel_request.is_set():
             try:
                 async with self.mqtt:
@@ -93,7 +103,7 @@ class Service:
 
                     self.schedule_influxdb_loops()
 
-                    self.schedule_forecast_loop()
+                    self.schedule_weather_loops()
 
                     await aio.gather(*self.loops)
 
@@ -120,12 +130,13 @@ class Service:
             if self.settings.is_prices_configured:
                 self.schedule_loop(300, self.basics.prices_loop)
 
-    def schedule_forecast_loop(self):
-        if self.settings.is_forecast_configured:
-            self.schedule_loop(
-                self.forecast.account.interval_in_seconds,
-                self.forecast.loop,
-            )
+    def schedule_weather_loops(self):
+        if self.settings.is_weather_configured:
+            self.schedule_loop(600, self.weather.loop)
+
+            if self.settings.is_influxdb_configured:
+                self.schedule_loop(600, self.forecast.training_loop)
+                self.schedule_loop(600, self.forecast.forecast_loop)
 
     def schedule_loop(
         self, interval_in_seconds: int, handle: callable, args: list[any] = None

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from os import environ, path, listdir
+from os import environ, listdir, path
 from time import localtime, strftime
 from typing import Optional
 
 from pydantic import BaseModel, Field, SecretStr
 
-from solaredge2mqtt.logging import LoggingLevelEnum
+from solaredge2mqtt.logging import LoggingLevelEnum, logger
 
 DOCKER_SECRETS_DIR = "/run/secrets"
 
@@ -61,35 +61,6 @@ class WallboxSettings(BaseModel):
         )
 
 
-class ForecastSettings(BaseModel):
-    latitude: str = Field(None)
-    longitude: str = Field(None)
-    api_key: Optional[SecretStr] = Field(None)
-
-    string1: ForecastStringSettings = Field(None)
-    string2: ForecastStringSettings = Field(None)
-
-    @property
-    def is_configured(self) -> bool:
-        return all(
-            [
-                self.latitude is not None,
-                self.longitude is not None,
-                self.string1 is not None,
-            ]
-        )
-
-
-class ForecastStringSettings(BaseModel):
-    declination: float = Field(None)
-    azimuth: float = Field(None)
-    peak_power: float = Field(None)
-
-    @property
-    def url_string(self) -> str:
-        return f"/{self.declination}/{self.azimuth}/{self.peak_power}"
-
-
 class InfluxDBSettings(BaseModel):
     host: str = Field(None)
     port: int = Field(8086)
@@ -130,6 +101,22 @@ class PriceSettings(BaseModel):
         return self.delivery is not None
 
 
+class LocationSettings(BaseModel):
+    latitude: float
+    longitude: float
+
+    timezone: str = Field(strftime("%Z", localtime()))
+
+
+class WeatherSettings(BaseModel):
+    api_key: Optional[SecretStr] = Field(None)
+    language: str = Field("en")
+
+    @property
+    def is_configured(self) -> bool:
+        return self.api_key is not None
+
+
 class ServiceSettings(BaseModel):
     interval: int = Field(5)
     logging_level: LoggingLevelEnum = LoggingLevelEnum.INFO
@@ -137,6 +124,7 @@ class ServiceSettings(BaseModel):
     modbus: ModbusSettings
     mqtt: MQTTSettings
 
+    location: Optional[LocationSettings] = None
     prices: Optional[PriceSettings] = None
 
     monitoring: Optional[MonitoringSettings] = None
@@ -144,12 +132,16 @@ class ServiceSettings(BaseModel):
 
     influxdb: Optional[InfluxDBSettings] = None
 
-    forecast: Optional[ForecastSettings] = None
+    weather: Optional[WeatherSettings] = None
 
     def __init__(self, **data: dict[str, any]):
         sources = [self._read_environment, self._read_dotenv, self._read_secrets]
         data = self._parse_key_and_values(sources, data)
         super().__init__(**data)
+
+    @property
+    def is_location_configured(self) -> bool:
+        return self.location is not None
 
     @property
     def is_prices_configured(self) -> bool:
@@ -168,8 +160,20 @@ class ServiceSettings(BaseModel):
         return self.influxdb is not None and self.influxdb.is_configured
 
     @property
+    def is_weather_configured(self) -> bool:
+        is_configured = self.weather is not None and self.weather.is_configured
+
+        if is_configured and not self.is_location_configured:
+            logger.warning(
+                "Weather settings are configured but location is not configured. Weather will not be collected."
+            )
+            is_configured = False
+
+        return is_configured
+
+    @property
     def is_forecast_configured(self) -> bool:
-        return self.forecast is not None and self.forecast.is_configured
+        return self.is_weather_configured and self.is_influxdb_configured
 
     def _parse_key_and_values(
         self, sources: list[callable], data: dict[str, any]

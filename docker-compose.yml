@@ -8,9 +8,12 @@ services:
     # - se2mqtt_monitoring__password
     # - se2mqtt_wallbox__password
     # - se2mqtt_influxdb__token
+    # - se2mqtt_weather__api_key
     environment:
       - SE2MQTT_INTERVAL
       - SE2MQTT_LOGGING_LEVEL
+      - SE2MQTT_LOCATION__LATITUDE
+      - SE2MQTT_LOCATION__LONGITUDE
       - SE2MQTT_MODBUS__HOST
       - SE2MQTT_MODBUS__PORT
       - SE2MQTT_MODBUS__TIMEOUT
@@ -36,15 +39,8 @@ services:
       - SE2MQTT_INFLUXDB__RETENTION_RAW
       - SE2MQTT_INFLUXDB__RETENTION_AGGREGATED
       - SE2MQTT_INFLUXDB__AGGREGATED_INTERVAL
-      - SE2MQTT_FORECAST__LATITUDE
-      - SE2MQTT_FORECAST__LONGITUDE
-      - SE2MQTT_FORECAST__API_KEY
-      - SE2MQTT_FORECAST__STRING1__PEAK_POWER
-      - SE2MQTT_FORECAST__STRING1__DECLINATION
-      - SE2MQTT_FORECAST__STRING1__AZIMUTH
-      - SE2MQTT_FORECAST__STRING2__PEAK_POWER
-      - SE2MQTT_FORECAST__STRING2__DECLINATION
-      - SE2MQTT_FORECAST__STRING2__AZIMUTH
+      - SE2MQTT_WEATHER__API_KEY
+      - SE2MQTT_WEATHER__LANGUAGE
       - TZ
     restart: unless-stopped
 
@@ -60,3 +56,6 @@ secrets:
 
 #  se2mqtt_influxdb__token:
 #    file: .secrets/influxdb_token
+
+#  se2mqtt_weather__api_key:
+#    file: .secrets/owm_api_key

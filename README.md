@@ -110,21 +110,6 @@ SE2MQTT_PRICES__CONSUMPTION            | Set the price you pay per 1 kWh for ene
 SE2MQTT_PRICES__DELIVERY               | Set the price you receive per 1 kWh for energy delivered to the grid
 
 
-#### Forecast
-
-The service can read forecast estimations from [forecast.solar](forecast.solar). You can setup information for 1 or 2 strings, and you need an API-key. See forecast.solar documentation for more information about settings. If you have configured influxdb power and energy forecast will be saved for visualization as well.
-
-Environment Variable                   | description                                            
--------------------------------------- | ------------------------------------------------------
-SE2MQTT_FORECAST__LATITUDE             | Set latitude for forecast values
-SE2MQTT_FORECAST__LONGITUDE            | Set longitude for forecast values
-SE2MQTT_FORECAST__API_KEY              | Set your API key for forecast values from https://forecast.solar/ (for security reasons use a secret with docker)
-SE2MQTT_FORECAST__STRING1__PEAK_POWER  | Set values for the forecast calculation of string 1
-SE2MQTT_FORECAST__STRING1__DECLINATION | Set values for the forecast calculation of string 1
-SE2MQTT_FORECAST__STRING1__AZIMUTH     | Set values for the forecast calculation of string 1 
-SE2MQTT_FORECAST__STRING2__PEAK_POWER  | Set values for the forecast calculation of string 2 (you need at least a Personal Plus plan for a second string)
-SE2MQTT_FORECAST__STRING2__DECLINATION | Set values for the forecast calculation of string 2 (you need at least a Personal Plus plan for a second string)
-SE2MQTT_FORECAST__STRING2__AZIMUTH     | Set values for the forecast calculation of string 2 (you need at least a Personal Plus plan for a second string)
 
 #### Example configuration
 

@@ -64,6 +64,8 @@ class BaseLoops:
             wallbox_data = results[1]
             logger.trace("Wallbox: {wallbox_data.power} W", wallbox_data=wallbox_data)
             evcharger = wallbox_data.power
+        else:
+            wallbox_data = None
 
         powerflow = Powerflow(inverter_data, meters_data, batteries_data, evcharger)
         if not powerflow.is_valid:
@@ -118,7 +120,7 @@ class BaseLoops:
 
                 continue
 
-            energy = HistoricEnergy(record.values, period)
+            energy = HistoricEnergy(record, period)
 
             logger.info(
                 "Read from influxdb {period} energy: {energy.pv_production} kWh",
@@ -151,7 +153,7 @@ class BaseLoops:
 
                 continue
 
-            money = HistoricMoney(record.values, period)
+            money = HistoricMoney(record, period)
 
             logger.info(
                 "Read from influxdb {period} savings: {money.savings} €, earnings: {money.earnings} €",
