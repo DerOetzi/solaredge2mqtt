@@ -1,18 +1,16 @@
 from __future__ import annotations
 
-from typing import Dict, Optional
-
 from pydantic import BaseModel
 
 
 class LogicalInfo(BaseModel):
     id: str
-    serialnumber: Optional[str]
+    serialnumber: str | None
     name: str
     type: str
 
     @staticmethod
-    def map(data: Dict[str, str | int]) -> Dict[str, str]:
+    def map(data: dict[str, str | int]) -> dict[str, str]:
         return {
             "id": str(data["id"]),
             "serialnumber": data["serialNumber"],
@@ -23,16 +21,16 @@ class LogicalInfo(BaseModel):
 
 class LogicalInverter(BaseModel):
     info: LogicalInfo
-    energy: Optional[float]
+    energy: float | None
     strings: list[LogicalString] = []
 
 
 class LogicalString(BaseModel):
     info: LogicalInfo
-    energy: Optional[float]
+    energy: float | None
     modules: list[LogicalModule] = []
 
 
 class LogicalModule(BaseModel):
     info: LogicalInfo
-    energy: Optional[float]
+    energy: float | None

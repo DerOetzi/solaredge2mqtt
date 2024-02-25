@@ -1,6 +1,6 @@
 from __future__ import annotations
 from collections.abc import MutableMapping
-from typing import Any, Dict, Optional, ClassVar
+from typing import ClassVar
 
 from enum import Enum
 
@@ -38,9 +38,7 @@ class EnumModel(Enum):
 
 
 class Solaredge2MQTTBaseModel(BaseModel):
-    def model_dump_influxdb(
-        self, exclude: Optional[list[str]] = None
-    ) -> Dict[str, Any]:
+    def model_dump_influxdb(self, exclude: list[str] | None = None) -> dict[str, any]:
         return self._flatten_dict(self.model_dump(exclude=exclude, exclude_none=True))
 
     def _flatten_dict(self, d: MutableMapping, parent_key: str = "") -> MutableMapping:
@@ -57,10 +55,10 @@ class Solaredge2MQTTBaseModel(BaseModel):
 class ComponentValueGroup(Solaredge2MQTTBaseModel):
     @staticmethod
     def scale_value(
-        data: Dict[str, str | int],
+        data: dict[str, str | int],
         value_key: str,
-        scale_key: Optional[str] = None,
-        digits: Optional[int] = 2,
+        scale_key: str | None = None,
+        digits: int = 2,
     ) -> float:
         if scale_key is None:
             scale_key = f"{value_key}_scale"
@@ -76,7 +74,7 @@ class Component(ComponentValueGroup):
     SOURCE: ClassVar[str] = "unknown"
 
     @property
-    def influxdb_tags(self) -> Dict[str, str]:
+    def influxdb_tags(self) -> dict[str, str]:
         return {
             "component": self.COMPONENT,
             "source": self.SOURCE,

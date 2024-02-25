@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from pydantic import Field, computed_field, field_serializer, model_serializer
 
@@ -35,10 +34,10 @@ class OpenWeatherMapBaseData(Solaredge2MQTTBaseModel):
     visibility: int
     wind_speed: float
     wind_deg: int
-    wind_gust: Optional[float] = Field(None)
+    wind_gust: float | None = Field(None)
     weather: list[OpenWeatherMapCondition]
     rain: OpenWeatherMapRain = Field(OpenWeatherMapRain())
-    irradiance: Optional[OpenWeatherMapIrradianceUnit] = Field(None)
+    irradiance: OpenWeatherMapIrradianceUnit | None = Field(None)
 
     @property
     def localtime(self) -> datetime:

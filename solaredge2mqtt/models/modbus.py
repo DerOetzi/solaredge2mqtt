@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
-
 from pydantic import BaseModel
 from solaredge_modbus import BATTERY_STATUS_MAP, C_SUNSPEC_DID_MAP, INVERTER_STATUS_MAP
 
@@ -12,12 +10,12 @@ from solaredge2mqtt.models.base import Component, ComponentValueGroup
 class SunSpecInfo(BaseModel):
     manufacturer: str
     model: str
-    option: Optional[str] = None
+    option: str | None = None
     sunspec_type: str
     version: str
     serialnumber: str
 
-    def __init__(self, data: Dict[str, str | int]) -> Dict[str, str]:
+    def __init__(self, data: dict[str, str | int]) -> dict[str, str]:
         values = {
             "manufacturer": data["c_manufacturer"],
             "model": data["c_model"],
@@ -41,15 +39,15 @@ class SunSpecComponent(Component):
 
     info: SunSpecInfo
 
-    def __init__(self, data: Dict[str, str | int], **kwargs):
+    def __init__(self, data: dict[str, str | int], **kwargs):
         info = SunSpecInfo(data)
         super().__init__(info=info, **kwargs)
 
-    def model_dump_influxdb(self, exclude: list[str] | None = None) -> Dict[str, Any]:
+    def model_dump_influxdb(self, exclude: list[str] | None = None) -> dict[str, any]:
         return super().model_dump_influxdb(["info", *exclude] if exclude else ["info"])
 
     @property
-    def influxdb_tags(self) -> Dict[str, str]:
+    def influxdb_tags(self) -> dict[str, str]:
         return {
             **super().influxdb_tags,
             "manufacturer": self.info.manufacturer,
@@ -63,10 +61,10 @@ class SunSpecComponent(Component):
 class SunSpecACCurrent(ComponentValueGroup):
     actual: float
     l1: float
-    l2: Optional[float] = None
-    l3: Optional[float] = None
+    l2: float | None = None
+    l3: float | None = None
 
-    def __init__(self, data: Dict[str, str | int]):
+    def __init__(self, data: dict[str, str | int]):
         values = {"actual": self.scale_value(data, "current")}
 
         for phase in ["l1", "l2", "l3"]:
@@ -79,14 +77,14 @@ class SunSpecACCurrent(ComponentValueGroup):
 
 
 class SunSpecACVoltage(ComponentValueGroup):
-    l1: Optional[float] = None
-    l2: Optional[float] = None
-    l3: Optional[float] = None
-    l1n: Optional[float] = None
-    l2n: Optional[float] = None
-    l3n: Optional[float] = None
+    l1: float | None = None
+    l2: float | None = None
+    l3: float | None = None
+    l1n: float | None = None
+    l2n: float | None = None
+    l3n: float | None = None
 
-    def __init__(self, data: Dict[str, str | int]):
+    def __init__(self, data: dict[str, str | int]):
         values = {}
         for phase in ["l1", "l2", "l3"]:
             if f"{phase}_voltage" in data:
@@ -108,7 +106,7 @@ class SunSpecACPower(ComponentValueGroup):
     apparent: float
     factor: float
 
-    def __init__(self, data: Dict[str, str | int], power_key: str):
+    def __init__(self, data: dict[str, str | int], power_key: str):
         actual = self.scale_value(data, power_key)
         reactive = self.scale_value(data, "power_reactive")
         apparent = self.scale_value(data, "power_apparent")
@@ -124,7 +122,7 @@ class SunSpecAC(ComponentValueGroup):
     power: SunSpecACPower
     frequency: float
 
-    def __init__(self, data: Dict[str, str | int]):
+    def __init__(self, data: dict[str, str | int]):
         current = SunSpecACCurrent(data)
         voltage = SunSpecACVoltage(data)
         power = SunSpecACPower(data, "power_ac")
@@ -139,7 +137,7 @@ class SunSpecEnergy(ComponentValueGroup):
     totalexport: float
     totalimport: float
 
-    def __init__(self, data: Dict[str, str | int]):
+    def __init__(self, data: dict[str, str | int]):
         super().__init__(
             totalexport=self.scale_value(
                 data, "export_energy_active", "energy_active_scale"
@@ -155,7 +153,7 @@ class SunSpecDC(ComponentValueGroup):
     voltage: float
     power: float
 
-    def __init__(self, data: Dict[str, str | int]):
+    def __init__(self, data: dict[str, str | int]):
         super().__init__(
             current=self.scale_value(data, "current_dc"),
             voltage=self.scale_value(data, "voltage_dc"),
@@ -171,7 +169,7 @@ class SunSpecInverter(SunSpecComponent):
     energytotal: float
     status: str
 
-    def __init__(self, data: Dict[str, str | int]):
+    def __init__(self, data: dict[str, str | int]):
         ac = SunSpecAC(data)
         dc = SunSpecDC(data)
         energytotal = self.scale_value(data, "energy_total")
@@ -189,7 +187,7 @@ class SunSpecMeter(SunSpecComponent):
     energy: SunSpecEnergy
     frequency: float
 
-    def __init__(self, data: Dict[str, str | int]):
+    def __init__(self, data: dict[str, str | int]):
         current = SunSpecACCurrent(data)
         voltage = SunSpecACVoltage(data)
         power = SunSpecACPower(data, "power")
@@ -216,7 +214,7 @@ class SunSpecBattery(SunSpecComponent):
     state_of_charge: float
     state_of_health: float
 
-    def __init__(self, data: Dict[str, str | int]):
+    def __init__(self, data: dict[str, str | int]):
         status = BATTERY_STATUS_MAP[data["status"]]
         current = round(data["instantaneous_current"], 2)
         voltage = round(data["instantaneous_voltage"], 2)

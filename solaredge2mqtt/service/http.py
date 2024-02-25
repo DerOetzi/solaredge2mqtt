@@ -1,5 +1,5 @@
 from json import loads as json_loads
-from typing import Callable, Optional
+from typing import Callable
 
 from requests import session
 from requests.exceptions import ConnectionError as RequestsConnectionError
@@ -16,11 +16,11 @@ class HTTPClient:
     def _get(
         self,
         url: str,
-        params: Optional[dict[str, str | int | float]] = None,
-        headers: Optional[dict[str, str]] = None,
-        timeout: Optional[int] = 5,
-        verify: Optional[bool] = True,
-        login: Optional[Callable] = None,
+        params: dict[str, str | int | float] | None = None,
+        headers: dict[str, str] | None = None,
+        timeout: int = 5,
+        verify: bool = True,
+        login: Callable | None = None,
     ) -> dict | None:
         result = None
         try:
@@ -45,13 +45,13 @@ class HTTPClient:
     def _post(
         self,
         url: str,
-        json: Optional[dict[str, str]] = None,
-        data: Optional[dict[str, str]] = None,
-        headers: Optional[dict[str, str]] = None,
-        timeout: Optional[int] = 5,
-        verify: Optional[bool] = True,
-        expect_json: Optional[bool] = True,
-        login: Optional[Callable] = None,
+        json: dict[str, str] | None = None,
+        data: dict[str, str] | None = None,
+        headers: dict[str, str] | None = None,
+        timeout: int = 5,
+        verify: bool = True,
+        expect_json: bool = True,
+        login: Callable | None = None,
     ) -> dict | None:
         result = None
         try:
