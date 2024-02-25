@@ -101,6 +101,7 @@ class HistoricQuery(EnumModel):
 
 
 class HistoricPeriod(EnumModel):
+    LAST_HOUR = "last_hour", "1h", HistoricQuery.LAST
     TODAY = "today", "1d", HistoricQuery.ACTUAL
     YESTERDAY = "yesterday", "1d", HistoricQuery.LAST
     THIS_WEEK = "this_week", "1w", HistoricQuery.ACTUAL

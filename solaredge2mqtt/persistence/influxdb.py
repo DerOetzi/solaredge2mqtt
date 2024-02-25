@@ -1,3 +1,5 @@
+from typing import Any
+
 import pkg_resources
 from influxdb_client import (
     BucketRetentionRules,
@@ -7,7 +9,7 @@ from influxdb_client import (
     TaskCreateRequest,
 )
 from influxdb_client.client.exceptions import InfluxDBError
-from influxdb_client.client.flux_table import FluxRecord
+from pandas import DataFrame
 
 from solaredge2mqtt.logging import logger
 from solaredge2mqtt.models import Component, ForecastPeriod, HistoricPeriod, Powerflow
@@ -78,10 +80,9 @@ class InfluxDB:
     def initialize_task(self) -> None:
         tasks_api = self.client.tasks_api()
         tasks = tasks_api.find_tasks(name=self.task_name)
-        flux = (
-            self._get_flux_query("aggregation")
-            .replace("TASK_NAME", self.task_name)
-            .replace("UNIT", self.settings.aggregate_interval)
+        flux = self._get_flux_query(
+            "aggregation",
+            {"TASK_NAME": self.task_name, "UNIT": self.settings.aggregate_interval},
         )
 
         if not tasks:
@@ -110,20 +111,6 @@ class InfluxDB:
     @staticmethod
     def _strip_flux(flux: str) -> str:
         return "".join(line.strip() for line in flux.splitlines()).replace(" ", "")
-
-    def _get_flux_query(self, query_name: str) -> str:
-        if query_name not in self.flux_cache:
-            flux = pkg_resources.resource_string(
-                __name__, f"resources/{query_name}.flux"
-            ).decode("utf-8")
-            flux = (
-                flux.replace("BUCKET_RAW", self.bucket_raw)
-                .replace("BUCKET_AGGREGATED", self.bucket_aggregated)
-                .replace("TIMEZONE", self.settings.timezone)
-            )
-            self.flux_cache[query_name] = flux
-
-        return self.flux_cache[query_name]
 
     @property
     def task_name(self) -> str:
@@ -183,31 +170,64 @@ class InfluxDB:
     def write_points_to_aggregated_bucket(self, points: list[Point]) -> None:
         self.write_api.write(bucket=self.bucket_aggregated, record=points)
 
-    def write_success_callback(self, conf: (str, str, str), data: str) -> None:
+    def write_success_callback(self, conf: tuple[str, str, str], data: str) -> None:
         logger.debug(f"InfluxDB batch written: {conf} {data}")
 
     def write_error_callback(
-        self, conf: (str, str, str), data: str, error: InfluxDBError
+        self, conf: tuple[str, str, str], data: str, error: InfluxDBError
     ) -> None:
         logger.error(f"InfluxDB error while writting: {conf} {error}")
         logger.debug(data)
 
     def query_timeunit(
         self, period: HistoricPeriod | ForecastPeriod, measurement: str
-    ) -> FluxRecord | None:
-        query = (
-            self._get_flux_query(period.query.query)
-            .replace("UNIT", period.unit)
-            .replace("MEASUREMENT", measurement)
+    ) -> dict[str, Any] | None:
+        return self.query_first(
+            period.query.query, {"UNIT": period.unit, "MEASUREMENT": measurement}
         )
+
+    def query_first(
+        self, query_name: str, additional_replacements: dict[str, any] | None = None
+    ) -> dict[str, Any] | None:
+        result = self.query(query_name, additional_replacements)
+        return result[0] if len(result) > 0 else None
+
+    def query(
+        self, query_name: str, additional_replacements: dict[str, any] | None = None
+    ) -> list[dict[str, Any]]:
+
+        tables = self.query_api.query(
+            self._get_flux_query(query_name, additional_replacements)
+        )
+        return [record.values for table in tables for record in table.records]
+
+    def query_dataframe(
+        self, query_name: str, additional_replacements: dict[str, any] | None = None
+    ) -> DataFrame:
+        return self.query_api.query_data_frame(
+            self._get_flux_query(query_name, additional_replacements)
+        )
+
+    def _get_flux_query(
+        self, query_name: str, additional_replacements: dict[str, any] | None = None
+    ) -> str:
+        if query_name not in self.flux_cache:
+            flux = pkg_resources.resource_string(
+                __name__, f"resources/{query_name}.flux"
+            ).decode("utf-8")
+            flux = (
+                flux.replace("{{BUCKET_RAW}}", self.bucket_raw)
+                .replace("{{BUCKET_AGGREGATED}}", self.bucket_aggregated)
+                .replace("{{TIMEZONE}}", self.settings.timezone)
+            )
+            self.flux_cache[query_name] = flux
+
+        query = self.flux_cache[query_name]
+
+        if additional_replacements is not None:
+            for key, value in additional_replacements.items():
+                query = query.replace("{{" + key + "}}", str(value))
+
         logger.trace(query)
 
-        record = None
-
-        tables = self.query_api.query(query)
-        for table in tables:
-            for record in table.records:
-                break
-            break
-
-        return record
+        return query

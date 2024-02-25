@@ -1,12 +1,5 @@
 from solaredge2mqtt.models.base import Component, EnumModel
-from solaredge2mqtt.models.forecast import (
-    EnergyForecast,
-    Forecast,
-    ForecastAccount,
-    ForecastAPIKeyInfo,
-    ForecastPeriod,
-    ForecastQuery,
-)
+from solaredge2mqtt.models.forecast import ForecastPeriod, ForecastQuery
 from solaredge2mqtt.models.historic import (
     HistoricEnergy,
     HistoricMoney,
@@ -22,3 +15,11 @@ from solaredge2mqtt.models.monitoring import (
 )
 from solaredge2mqtt.models.powerflow import Powerflow
 from solaredge2mqtt.models.wallbox import WallboxAPI
+from solaredge2mqtt.models.weather import (
+    OpenWeatherMapBaseData,
+    OpenWeatherMapCurrentData,
+    OpenWeatherMapForecastData,
+    OpenWeatherMapIrradianceHour,
+    OpenWeatherMapOneCall,
+    OpenWeatherMapSolarData,
+)
