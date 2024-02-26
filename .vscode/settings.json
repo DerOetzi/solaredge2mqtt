@@ -14,4 +14,6 @@
         "**/__pycache__": true
     },
     "git.alwaysSignOff": true,
+    "python.analysis.typeCheckingMode": "off",
+    "python.analysis.autoImportCompletions": true,
 }
