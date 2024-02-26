@@ -1,4 +1,3 @@
-from typing import Dict
 from solaredge2mqtt.models.base import Component
 
 
@@ -11,7 +10,7 @@ class WallboxAPI(Component):
     vehicle_plugged: bool
     max_current: float
 
-    def __init__(self, data: Dict[str, str | int]):
+    def __init__(self, data: dict[str, str | int]):
         power = round(data["meter"]["totalActivePower"] / 1000)
         state = data["state"]
         vehicle_connected = bool(data["vehiclePlugged"])

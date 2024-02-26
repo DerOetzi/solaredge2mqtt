@@ -1,5 +1,3 @@
-from typing import Any
-
 import pkg_resources
 from influxdb_client import (
     BucketRetentionRules,
@@ -181,20 +179,20 @@ class InfluxDB:
 
     def query_timeunit(
         self, period: HistoricPeriod | ForecastPeriod, measurement: str
-    ) -> dict[str, Any] | None:
+    ) -> dict[str, any] | None:
         return self.query_first(
             period.query.query, {"UNIT": period.unit, "MEASUREMENT": measurement}
         )
 
     def query_first(
         self, query_name: str, additional_replacements: dict[str, any] | None = None
-    ) -> dict[str, Any] | None:
+    ) -> dict[str, any] | None:
         result = self.query(query_name, additional_replacements)
         return result[0] if len(result) > 0 else None
 
     def query(
         self, query_name: str, additional_replacements: dict[str, any] | None = None
-    ) -> list[dict[str, Any]]:
+    ) -> list[dict[str, any]]:
 
         tables = self.query_api.query(
             self._get_flux_query(query_name, additional_replacements)

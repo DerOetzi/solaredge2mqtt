@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from os import environ, listdir, path
 from time import localtime, strftime
-from typing import Optional
+from typing import Generator
 
 from pydantic import BaseModel, Field, SecretStr
 
@@ -109,7 +109,7 @@ class LocationSettings(BaseModel):
 
 
 class WeatherSettings(BaseModel):
-    api_key: Optional[SecretStr] = Field(None)
+    api_key: SecretStr | None = Field(None)
     language: str = Field("en")
 
     @property
@@ -124,15 +124,15 @@ class ServiceSettings(BaseModel):
     modbus: ModbusSettings
     mqtt: MQTTSettings
 
-    location: Optional[LocationSettings] = None
-    prices: Optional[PriceSettings] = None
+    location: LocationSettings | None = None
+    prices: PriceSettings | None = None
 
-    monitoring: Optional[MonitoringSettings] = None
-    wallbox: Optional[WallboxSettings] = None
+    monitoring: MonitoringSettings | None = None
+    wallbox: WallboxSettings | None = None
 
-    influxdb: Optional[InfluxDBSettings] = None
+    influxdb: InfluxDBSettings | None = None
 
-    weather: Optional[WeatherSettings] = None
+    weather: WeatherSettings | None = None
 
     def __init__(self, **data: dict[str, any]):
         sources = [self._read_environment, self._read_dotenv, self._read_secrets]
@@ -195,13 +195,13 @@ class ServiceSettings(BaseModel):
         return data
 
     @classmethod
-    def _read_environment(cls) -> tuple[str, str]:
+    def _read_environment(cls) -> Generator[tuple[str, str], any, any]:
         for key, value in environ.items():
             if cls._has_prefix(key):
                 yield key, value
 
     @classmethod
-    def _read_secrets(cls) -> tuple[str, str]:
+    def _read_secrets(cls) -> Generator[tuple[str, str], any, any]:
         if path.exists(DOCKER_SECRETS_DIR) and path.isdir(DOCKER_SECRETS_DIR):
             for filename in listdir(DOCKER_SECRETS_DIR):
                 if cls._has_prefix(filename):
@@ -211,7 +211,7 @@ class ServiceSettings(BaseModel):
                         yield filename, f.read()
 
     @classmethod
-    def _read_dotenv(cls) -> tuple[str, str]:
+    def _read_dotenv(cls) -> Generator[tuple[str, str], any, any]:
         if path.exists(".env"):
             with open(".env", "r", encoding="utf-8") as f:
                 for line in f.readlines():

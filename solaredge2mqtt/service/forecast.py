@@ -1,6 +1,5 @@
 import time  # Importieren der time Bibliothek
 from datetime import datetime, timedelta, timezone
-from typing import List
 
 import pandas as pd
 from pandas import DataFrame, to_datetime
@@ -213,7 +212,7 @@ class Forecast:
 
 
 class Forecaster:
-    NUMERIC_FEATURES: List[str] = [
+    NUMERIC_FEATURES: list[str] = [
         "clear_sky_dhi",
         "clear_sky_dni",
         "clear_sky_ghi",
@@ -236,7 +235,7 @@ class Forecaster:
         "wind_speed",
         "wind_gust",
     ]
-    CATEGORICAL_FEATURES: List[str] = ["hour", "month", "weather_id", "weather_main"]
+    CATEGORICAL_FEATURES: list[str] = ["hour", "month", "weather_id", "weather_main"]
 
     def __init__(self, target_column: str) -> None:
         self.target_column: str = target_column

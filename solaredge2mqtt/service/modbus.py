@@ -1,5 +1,4 @@
 import json
-from typing import Dict, Tuple
 
 from pymodbus.exceptions import ModbusException
 from solaredge_modbus import Inverter
@@ -9,7 +8,7 @@ from solaredge2mqtt.logging import LOGGING_DEVICE_INFO, logger
 from solaredge2mqtt.models import SunSpecBattery, SunSpecInverter, SunSpecMeter
 from solaredge2mqtt.settings import ModbusSettings
 
-SunSpecRawData = Dict[str, str | int]
+SunSpecRawData = dict[str, str | int]
 
 
 class Modbus:
@@ -31,11 +30,14 @@ class Modbus:
 
     async def loop(
         self,
-    ) -> Tuple[
-        SunSpecInverter | None,
-        Dict[str, SunSpecMeter] | None,
-        Dict[str, SunSpecBattery | None],
-    ] | None:
+    ) -> (
+        tuple[
+            SunSpecInverter | None,
+            dict[str, SunSpecMeter] | None,
+            dict[str, SunSpecBattery | None],
+        ]
+        | None
+    ):
         inverter_data = None
         meters_data = None
         batteries_data = None
@@ -46,14 +48,14 @@ class Modbus:
             inverter_data = self._map_inverter(inverter_raw)
             meters_data = self._map_meters(meters_raw)
             batteries_data = self._map_batteries(batteries_raw)
-        except ModbusException as error:
+        except (ModbusException, KeyError) as error:
             raise InvalidDataException("Invalid modbus data") from error
 
         return inverter_data, meters_data, batteries_data
 
     def _get_raw_data(
         self,
-    ) -> Tuple[SunSpecRawData, Dict[str, SunSpecRawData], Dict[str, SunSpecRawData]]:
+    ) -> tuple[SunSpecRawData, dict[str, SunSpecRawData], dict[str, SunSpecRawData]]:
         inverter_raw = self.inverter.read_all()
         meters_raw = {
             meter_key: meter_obj.read_all()
@@ -88,8 +90,8 @@ class Modbus:
         return inverter_data
 
     def _map_meters(
-        self, meters_raw: Dict[str, SunSpecRawData]
-    ) -> Dict[str, SunSpecInverter]:
+        self, meters_raw: dict[str, SunSpecRawData]
+    ) -> dict[str, SunSpecInverter]:
         meters = {}
         for meter_key, meter_raw in meters_raw.items():
             logger.debug(
@@ -114,8 +116,8 @@ class Modbus:
         return meters
 
     def _map_batteries(
-        self, batteries_raw: Dict[str, SunSpecRawData]
-    ) -> Dict[str, SunSpecInverter]:
+        self, batteries_raw: dict[str, SunSpecRawData]
+    ) -> dict[str, SunSpecInverter]:
         batteries = {}
         for battery_key, battery_raw in batteries_raw.items():
             logger.debug(

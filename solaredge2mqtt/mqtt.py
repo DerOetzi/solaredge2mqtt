@@ -1,5 +1,3 @@
-from typing import Optional
-
 from aiomqtt import Client, Will
 from pydantic import BaseModel
 
@@ -43,8 +41,8 @@ class MQTTClient(Client):
         self,
         topic: str,
         payload: str | int | float | BaseModel,
-        retain: Optional[bool] = False,
-        qos: Optional[int] = 1,
+        retain: bool = False,
+        qos: int = 1,
     ) -> None:
         if self._connected:
             if isinstance(payload, BaseModel):

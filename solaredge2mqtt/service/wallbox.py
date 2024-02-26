@@ -1,5 +1,4 @@
 import time
-from typing import Optional
 
 import jwt
 import urllib3
@@ -20,8 +19,8 @@ WALLBOX_URL = "https://{host}:8443/v2/wallboxes/{serial}"
 
 
 class AuthorizationTokens(BaseModel):
-    access_token: str = Field(None, alias="accessToken")
-    refresh_token: str = Field(None, alias="refreshToken")
+    access_token: str | None = Field(None, alias="accessToken")
+    refresh_token: str | None = Field(None, alias="refreshToken")
 
     @property
     def access_token_expires(self) -> int:
@@ -46,7 +45,7 @@ class WallboxClient(HTTPClient):
             host=settings.host,
         )
 
-        self.authorization: Optional[AuthorizationTokens] = None
+        self.authorization: AuthorizationTokens | None = None
 
     async def loop(self) -> WallboxAPI | None:
         wallbox = None

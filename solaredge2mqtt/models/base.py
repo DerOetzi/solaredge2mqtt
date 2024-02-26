@@ -1,8 +1,8 @@
 from __future__ import annotations
-from collections.abc import MutableMapping
-from typing import Any, Dict, Optional, ClassVar
 
+from collections.abc import MutableMapping
 from enum import Enum
+from typing import ClassVar
 
 from pydantic import BaseModel, model_serializer
 
@@ -19,28 +19,26 @@ class EnumModel(Enum):
     def __repr__(self) -> str:
         return str(self._value_)
 
-    def __eq__(self, obj) -> bool:
-        return isinstance(obj, self.__class__) and self.value == obj.value
+    def __eq__(self, other) -> bool:
+        return isinstance(other, self.__class__) and self.value == other.value
 
     def __hash__(self):
         return hash(self.value)
 
     @classmethod
-    def from_string(cls, value: str):
+    def from_string(cls, value: str) -> EnumModel:
         for item in cls.__members__.values():
             if item.value == value:
                 return item
         raise ValueError(f"No enum value {value} found.")
 
     @model_serializer
-    def serialize(self):
+    def serialize(self) -> any:
         return self.value
 
 
 class Solaredge2MQTTBaseModel(BaseModel):
-    def model_dump_influxdb(
-        self, exclude: Optional[list[str]] = None
-    ) -> Dict[str, Any]:
+    def model_dump_influxdb(self, exclude: list[str] | None = None) -> dict[str, any]:
         return self._flatten_dict(self.model_dump(exclude=exclude, exclude_none=True))
 
     def _flatten_dict(self, d: MutableMapping, parent_key: str = "") -> MutableMapping:
@@ -57,10 +55,10 @@ class Solaredge2MQTTBaseModel(BaseModel):
 class ComponentValueGroup(Solaredge2MQTTBaseModel):
     @staticmethod
     def scale_value(
-        data: Dict[str, str | int],
+        data: dict[str, str | int],
         value_key: str,
-        scale_key: Optional[str] = None,
-        digits: Optional[int] = 2,
+        scale_key: str | None = None,
+        digits: int = 2,
     ) -> float:
         if scale_key is None:
             scale_key = f"{value_key}_scale"
@@ -76,7 +74,7 @@ class Component(ComponentValueGroup):
     SOURCE: ClassVar[str] = "unknown"
 
     @property
-    def influxdb_tags(self) -> Dict[str, str]:
+    def influxdb_tags(self) -> dict[str, str]:
         return {
             "component": self.COMPONENT,
             "source": self.SOURCE,

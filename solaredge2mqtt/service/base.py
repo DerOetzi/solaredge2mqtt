@@ -1,5 +1,4 @@
 import asyncio as aio
-from typing import Optional
 
 from solaredge2mqtt.exceptions import InvalidDataException
 from solaredge2mqtt.logging import logger
@@ -22,7 +21,7 @@ class BaseLoops:
         self,
         settings: ServiceSettings,
         mqtt: MQTTClient,
-        influxdb: Optional[InfluxDB] = None,
+        influxdb: InfluxDB | None = None,
     ):
         self.settings = settings
 

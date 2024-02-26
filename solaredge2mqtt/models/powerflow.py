@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import ClassVar, Dict, Optional
+from typing import ClassVar
 
 from pydantic import Field, computed_field
 
@@ -76,7 +76,7 @@ class InverterPowerflow(Solaredge2MQTTBaseModel):
 class GridPowerflow(Solaredge2MQTTBaseModel):
     power: int
 
-    def __init__(self, meters_data: Dict[str, SunSpecMeter]):
+    def __init__(self, meters_data: dict[str, SunSpecMeter]):
         grid = 0
         for meter in meters_data.values():
             if "Import" in meter.info.option and "Export" in meter.info.option:
@@ -110,7 +110,7 @@ class GridPowerflow(Solaredge2MQTTBaseModel):
 class BatteryPowerflow(Solaredge2MQTTBaseModel):
     power: int
 
-    def __init__(self, batteries_data: Dict[str, SunSpecBattery]):
+    def __init__(self, batteries_data: dict[str, SunSpecBattery]):
         batteries_power = 0
         for battery in batteries_data.values():
             batteries_power += battery.power
@@ -224,9 +224,9 @@ class Powerflow(Solaredge2MQTTBaseModel):
     def __init__(
         self,
         inverter_data: SunSpecInverter,
-        meters_data: Dict[str, SunSpecMeter],
-        batteries_data: Dict[str, SunSpecBattery],
-        evcharger: Optional[int] = 0,
+        meters_data: dict[str, SunSpecMeter],
+        batteries_data: dict[str, SunSpecBattery],
+        evcharger: int = 0,
     ):
         grid = GridPowerflow(meters_data)
         battery = BatteryPowerflow(batteries_data)
