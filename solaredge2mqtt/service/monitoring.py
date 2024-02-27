@@ -73,6 +73,11 @@ class MonitoringSite(HTTPClient):
         modules = None
         logical = self._get_logical()
 
+        if logical is None:
+            raise InvalidDataException(
+                "Unable to read logical layout from monitoring site"
+            )
+
         inverters = self._parse_inverters(
             logical["logicalTree"]["children"], logical["reportersData"]
         )
@@ -113,9 +118,11 @@ class MonitoringSite(HTTPClient):
             if "INVERTER" in info["type"]:
                 inverter = LogicalInverter(
                     info=info,
-                    energy=reporters_data[info["id"]]["unscaledEnergy"]
-                    if info["id"] in reporters_data
-                    else None,
+                    energy=(
+                        reporters_data[info["id"]]["unscaledEnergy"]
+                        if info["id"] in reporters_data
+                        else None
+                    ),
                 )
 
                 self._parse_strings(inverter, inverter_obj["children"], reporters_data)
@@ -132,9 +139,11 @@ class MonitoringSite(HTTPClient):
             info = LogicalInfo.map(string_obj["data"])
             string = LogicalString(
                 info=info,
-                energy=reporters_data[info["id"]]["unscaledEnergy"]
-                if info["id"] in reporters_data
-                else None,
+                energy=(
+                    reporters_data[info["id"]]["unscaledEnergy"]
+                    if info["id"] in reporters_data
+                    else None
+                ),
             )
 
             self._parse_panels(string, string_obj["children"], reporters_data)
@@ -146,9 +155,11 @@ class MonitoringSite(HTTPClient):
             info = LogicalInfo.map(panel_obj["data"])
             panel = LogicalModule(
                 info=info,
-                energy=reporters_data[info["id"]]["unscaledEnergy"]
-                if info["id"] in reporters_data
-                else None,
+                energy=(
+                    reporters_data[info["id"]]["unscaledEnergy"]
+                    if info["id"] in reporters_data
+                    else None
+                ),
             )
 
             string.modules.append(panel)
