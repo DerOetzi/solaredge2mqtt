@@ -1,5 +1,5 @@
 solaredge_modbus==0.8.0
-pydantic==2.6.2
+pydantic==2.6.3
 loguru==0.7.2
 requests==2.31.0
 influxdb-client==1.40.0
