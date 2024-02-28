@@ -7,6 +7,10 @@ from influxdb_client import (
     TaskCreateRequest,
 )
 from influxdb_client.client.exceptions import InfluxDBError
+from influxdb_client.client.influxdb_client_async import (
+    InfluxDBClientAsync,
+    QueryApiAsync,
+)
 from pandas import DataFrame
 
 from solaredge2mqtt.logging import logger
@@ -31,6 +35,9 @@ class InfluxDB:
         )
 
         self.query_api = self.client.query_api()
+
+        self.client_async: InfluxDBClientAsync | None = None
+        self.query_api_async: QueryApiAsync | None = None
 
         self.loop_points: list[Point] = []
 
@@ -199,12 +206,22 @@ class InfluxDB:
         )
         return [record.values for table in tables for record in table.records]
 
-    def query_dataframe(
+    async def query_dataframe(
         self, query_name: str, additional_replacements: dict[str, any] | None = None
     ) -> DataFrame:
-        return self.query_api.query_data_frame(
-            self._get_flux_query(query_name, additional_replacements)
+        await self.init_client_async()
+        async with self.client_async:
+            return await self.query_api_async.query_data_frame(
+                self._get_flux_query(query_name, additional_replacements)
+            )
+
+    async def init_client_async(self) -> None:
+        self.client_async = InfluxDBClientAsync(
+            url=f"{self.settings.host}:{self.settings.port}",
+            token=self.settings.token.get_secret_value(),
+            org=self.settings.org,
         )
+        self.query_api_async = self.client_async.query_api()
 
     def _get_flux_query(
         self, query_name: str, additional_replacements: dict[str, any] | None = None

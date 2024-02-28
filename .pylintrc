@@ -3,7 +3,7 @@ load-plugins=pylint.extensions.docparams
 accept-no-param-doc=false
 
 [messages control]
-disable=C0114,C0115,C0116,W9011
+disable=C0114,C0115,C0116,W9011,W9015
 
 [Parameter_documentation]
 accept-no-return-doc=no

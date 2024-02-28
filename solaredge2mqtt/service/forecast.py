@@ -1,42 +1,70 @@
-import time  # Importieren der time Bibliothek
-from datetime import datetime, timedelta, timezone
+from __future__ import annotations
 
-import pandas as pd
+import asyncio as aio
+import time
+from datetime import datetime, timedelta, timezone
+from numpy import cos, pi, sin, percentile
 from pandas import DataFrame, to_datetime
 from pysolar.solar import get_altitude, get_azimuth
+from sklearn import clone
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
-from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.impute import SimpleImputer
-from sklearn.metrics import mean_squared_error
-from sklearn.model_selection import train_test_split
+from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.inspection import permutation_importance
+from sklearn.model_selection import GridSearchCV, TimeSeriesSplit, train_test_split
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, RobustScaler
-from sklearn.feature_selection import SelectFromModel
 
 from solaredge2mqtt.exceptions import InvalidDataException
 from solaredge2mqtt.logging import logger
-from solaredge2mqtt.models import OpenWeatherMapForecastData
+from solaredge2mqtt.models import OpenWeatherMapForecastData, EnumModel
 from solaredge2mqtt.mqtt import MQTTClient
 from solaredge2mqtt.persistence.influxdb import InfluxDB, Point
 from solaredge2mqtt.service.weather import WeatherClient
-from solaredge2mqtt.settings import LocationSettings
+from solaredge2mqtt.settings import ForecastSettings, LocationSettings
+
+
+class ForecasterType(EnumModel):
+    ENERGY = "energy"
+    POWER = "power"
+
+    def __init__(self, target_column: str) -> None:
+        self._target_column: str = target_column
+
+    @property
+    def target_column(self) -> str:
+        return self._target_column
+
+    def prepare_value(self, value: float | int) -> float | int:
+        if value <= 0:
+            prepared = 0
+        elif self.target_column == "energy":
+            prepared = round(value / 1000, 3)
+        else:
+            prepared = int(round(value))
+
+        return prepared
 
 
 class Forecast:
 
     def __init__(
         self,
+        settings: ForecastSettings,
         location: LocationSettings,
         mqtt: MQTTClient,
         influxdb: InfluxDB,
         weather: WeatherClient,
-    ):
+    ) -> None:
+        self.settings = settings
         self.location = location
         self.mqtt = mqtt
         self.influxdb = influxdb
         self.weather = weather
 
-        self.forecaster = Forecaster("power")
+        self.forecasters: dict[ForecasterType, Forecaster] = {
+            typed: Forecaster(typed, settings.hyperparametertuning)
+            for typed in ForecasterType
+        }
 
         self.last_weather_forecast: list[OpenWeatherMapForecastData] | None = None
 
@@ -53,8 +81,12 @@ class Forecast:
 
         self.write_new_training_data_to_influxdb(training_data)
 
-        if rounded_minutes == 10 or not self.forecaster.is_trained:
-            self.train()
+        if (
+            rounded_minutes == 10
+            or not self.forecasters[ForecasterType.ENERGY].is_trained
+            or not self.forecasters[ForecasterType.POWER].is_trained
+        ):
+            await self.train()
 
     def get_weather_training(
         self, forecast_time: datetime
@@ -64,7 +96,7 @@ class Forecast:
             or forecast_time.hour != self.last_weather_forecast[0].hour
         ):
             logger.info("Retrieve weather forecast for training of production forecast")
-            self.last_weather_forecast = self.weather.get_weather(True).hourly
+            self.last_weather_forecast = self.weather.get_weather().hourly
 
         if self.last_weather_forecast[0].hour != forecast_time.hour:
             raise InvalidDataException("Missing weather forecast for previous hour")
@@ -79,8 +111,12 @@ class Forecast:
         if production_data is None:
             raise InvalidDataException("Missing production data for last 10 minutes")
 
-        trainings_data["power"] = round(production_data["power"])
-        trainings_data["energy"] = round(production_data["energy"], 2)
+        trainings_data[ForecasterType.POWER.target_column] = round(
+            production_data[ForecasterType.POWER.target_column]
+        )
+        trainings_data[ForecasterType.ENERGY.target_column] = round(
+            production_data[ForecasterType.ENERGY.target_column], 2
+        )
         return trainings_data
 
     def write_new_training_data_to_influxdb(self, trainings_data):
@@ -95,20 +131,29 @@ class Forecast:
         logger.debug(trainings_data)
         self.influxdb.write_point_to_aggregated_bucket(point)
 
-    def train(self) -> None:
-        data = self.influxdb.query_dataframe("training_data")
-        self.forecaster.train(data)
+    async def train(self) -> None:
+        data = await self.influxdb.query_dataframe("training_data")
+        data["time"] = data["_time"].dt.tz_convert(self.location.timezone)
+        await aio.to_thread(self.training, data)
 
-    def replay_prediction(self, data):
-        data = self.forecaster.predict(data)
+    def training(self, data: DataFrame) -> None:
+        for forecaster in self.forecasters.values():
+            forecaster.train(data)
+            # self.replay_prediction(data, forecaster)
+
+    def replay_prediction(self, data: DataFrame, forecaster: Forecaster) -> None:
+        """FOR DEVELOPMENT PURPOSE ONLY"""
+        logger.warning("Replaying prediction for development purpose")
+        data = forecaster.predict(data)
         data["time"] = data["_time"]
-        periods = self._calculate_periods_prediction(data)
-        self._write_periods_to_influxdb(periods)
-        pd.set_option("display.max_rows", None)
-        logger.info(periods)
+        periods = self._calculate_periods_prediction(data, forecaster.typed)
+        self._write_periods_to_influxdb(periods, forecaster.typed)
 
     async def forecast_loop(self):
-        if not self.forecaster.is_trained:
+        if (
+            not self.forecasters[ForecasterType.ENERGY].is_trained
+            or not self.forecasters[ForecasterType.POWER].is_trained
+        ):
             raise InvalidDataException("Forecast model is not trained yet")
 
         if self.last_weather_forecast is None:
@@ -134,33 +179,40 @@ class Forecast:
         ]
 
         data = DataFrame(estimation_data_list)
-        data = self.forecaster.predict(data)
+        data = self.add_last_10_minutes_pv_production(data)
 
-        periods = self._calculate_periods_prediction(data)
-        self._write_periods_to_influxdb(periods)
+        for typed, forecaster in self.forecasters.items():
+            predicted_data = forecaster.predict(data)
 
-        hours = self._calculate_hourly_prediction(periods)
-        logger.debug("Forecasted next hour: {hours}", hours=hours)
-        await self._publish_hours_to_mqtt(hours)
+            periods = self._calculate_periods_prediction(predicted_data, typed)
+            self._write_periods_to_influxdb(periods, typed)
 
-    def _calculate_periods_prediction(self, data) -> DataFrame:
-        data.loc[data["sun_altitude"] < -10, "power"] = 0
+            hours = self._calculate_hourly_prediction(periods, typed)
+            logger.debug("Forecasted next hour: {hours}", hours=hours)
+            await self._publish_hours_to_mqtt(hours, typed)
 
-        data["energy"] = data["power"].apply(
-            lambda x: round(x / 6000, 3) if x >= 0 else 0
-        )
-        data["power"] = data["power"].apply(lambda x: round(x) if x >= 0 else 0)
+    def _calculate_periods_prediction(
+        self, data: DataFrame, typed: ForecasterType
+    ) -> DataFrame:
+        data["year"] = data["time"].dt.year
+        data["month"] = data["time"].dt.month
+        data["day"] = data["time"].dt.day
+        data["hour"] = data["time"].dt.hour
 
-        return data[["time", "year", "month", "day", "hour", "energy", "power"]]
+        return data[["time", "year", "month", "day", "hour", typed.target_column]]
 
-    def _calculate_hourly_prediction(self, data) -> DataFrame:
-        hourly = data.groupby(["year", "month", "day", "hour"], as_index=False)[
-            "energy"
-        ].sum()
+    def _calculate_hourly_prediction(
+        self, data: DataFrame, typed: ForecasterType
+    ) -> DataFrame:
 
-        hourly["power"] = data.groupby(
-            ["year", "month", "day", "hour"], as_index=False
-        )["power"].mean()["power"]
+        if typed == ForecasterType.ENERGY:
+            hourly = data.groupby(["year", "month", "day", "hour"], as_index=False)[
+                ForecasterType.ENERGY.target_column
+            ].sum()
+        elif typed == ForecasterType.POWER:
+            hourly = data.groupby(["year", "month", "day", "hour"], as_index=False)[
+                ForecasterType.POWER.target_column
+            ].mean()
 
         hourly["time"] = hourly.apply(
             lambda row: to_datetime(
@@ -169,14 +221,15 @@ class Forecast:
             axis=1,
         )
 
-        return hourly[["time", "year", "month", "day", "hour", "energy", "power"]]
+        return hourly[["time", "year", "month", "day", "hour", typed.target_column]]
 
-    def _write_periods_to_influxdb(self, periods: DataFrame) -> None:
+    def _write_periods_to_influxdb(
+        self, periods: DataFrame, typed: ForecasterType
+    ) -> None:
         points = []
         for _, period in periods.iterrows():
             point = Point("forecast")
-            point.field("energy", period["energy"])
-            point.field("power", period["power"])
+            point.field(typed.target_column, period[typed.target_column])
             utc_time = period["time"].astimezone(timezone.utc)
             point.time(utc_time)
             points.append(point)
@@ -184,10 +237,14 @@ class Forecast:
         logger.info("Write forecast data to influxdb")
         self.influxdb.write_points_to_aggregated_bucket(points)
 
-    async def _publish_hours_to_mqtt(self, hours: DataFrame) -> None:
-        data = hours[["time", "power", "energy"]]
+    async def _publish_hours_to_mqtt(
+        self, hours: DataFrame, typed: ForecasterType
+    ) -> None:
+        data = hours[["time", typed.target_column]]
         data = self._replace_time_with_iso(data)
-        await self.mqtt.publish_to("forecast/hourly", data.to_json(orient="records"))
+        await self.mqtt.publish_to(
+            f"forecast/{typed.target_column}/hourly", data.to_json(orient="records")
+        )
 
     @staticmethod
     def _replace_time_with_iso(data: DataFrame) -> str:
@@ -213,13 +270,7 @@ class Forecast:
 
 class Forecaster:
     NUMERIC_FEATURES: list[str] = [
-        "clear_sky_dhi",
-        "clear_sky_dni",
-        "clear_sky_ghi",
         "clouds",
-        "cloudy_sky_dhi",
-        "cloudy_sky_dni",
-        "cloudy_sky_ghi",
         "dew_point",
         "feels_like",
         "humidity",
@@ -227,113 +278,152 @@ class Forecaster:
         "pressure",
         "rain",
         "sun_altitude",
-        "sun_azimuth",
         "temp",
         "uvi",
         "visibility",
-        "wind_deg",
         "wind_speed",
         "wind_gust",
     ]
-    CATEGORICAL_FEATURES: list[str] = ["hour", "month", "weather_id", "weather_main"]
+    CATEGORICAL_FEATURES: list[str] = ["weather_id", "weather_main"]
+    CYCLICAL_FEATURES: dict[str, int] = {
+        "wind_deg": 360,
+        "sun_azimuth": 360,
+    }
+    TIME_FEATURES: list[str] = ["time"]
+    TARGET_FEATURES: dict[str, str] = {
+        ForecasterType.ENERGY.target_column: "energy",
+        ForecasterType.POWER.target_column: "power",
+    }
 
-    def __init__(self, target_column: str) -> None:
-        self.target_column: str = target_column
+    def __init__(
+        self, typed: ForecasterType, enable_hyperparameter_tuning: bool = False
+    ) -> None:
+        self.typed: ForecasterType = typed
+        self.enable_hyperparameter_tuning = enable_hyperparameter_tuning
         self.model_pipeline: Pipeline = None
-
-    def _prepare_data(self, data: DataFrame) -> DataFrame:
-        all_features = self.NUMERIC_FEATURES + self.CATEGORICAL_FEATURES
-        relevant_features = [col for col in all_features if col in data.columns]
-        logger.debug(relevant_features)
-        return data[relevant_features]
 
     def train(self, data: DataFrame) -> None:
         data_count = len(data)
         if data_count < 300:
             raise InvalidDataException("Not enough data to train the model")
 
-        logger.info(
-            f"Training model {self.target_column} with {data_count} data points"
-        )
+        logger.info(f"Training model {self.typed} with {data_count} data points")
 
         start_time = time.time()
+        y_vector = data[self.typed.target_column]
 
-        x_vector = data.drop(columns=[self.target_column])
-        y_vector = data[self.target_column]
+        pipeline = self._prepare_model_pipeline(data.columns.to_list())
 
-        x_prepared = self._prepare_data(x_vector)
+        if self.enable_hyperparameter_tuning:
+            self.model_pipeline = self._hyperparametertuning(data, y_vector, pipeline)
+        else:
+            self.model_pipeline = pipeline
 
-        numeric_cols = [
-            col for col in self.NUMERIC_FEATURES if col in x_prepared.columns
-        ]
-        categorical_cols = [
-            col for col in self.CATEGORICAL_FEATURES if col in x_prepared.columns
-        ]
+        self.model_pipeline.fit(data, y_vector)
 
-        preprocessor = ColumnTransformer(
-            transformers=[
-                (
-                    "num",
-                    Pipeline(
-                        [
-                            ("imputer", SimpleImputer(strategy="median")),
-                            ("scaler", RobustScaler()),
-                        ]
-                    ),
-                    numeric_cols,
-                ),
-                (
-                    "cat",
-                    Pipeline(
-                        [
-                            ("imputer", SimpleImputer(strategy="most_frequent")),
-                            ("encoder", OneHotEncoder(handle_unknown="ignore")),
-                        ]
-                    ),
-                    categorical_cols,
-                ),
-            ]
-        )
+        execution_time = time.time() - start_time
 
-        self.model_pipeline = Pipeline(
-            steps=[
-                ("preprocessor", preprocessor),
-                (
-                    "feature_selector",
-                    SelectFromModel(GradientBoostingRegressor(random_state=42)),
-                ),
-                ("model", GradientBoostingRegressor(random_state=42)),
-            ]
-        )
-
-        x_train, x_test, y_train, y_test = train_test_split(
-            x_prepared, y_vector, test_size=0.2, random_state=42
-        )
-
-        self.model_pipeline.fit(x_train, y_train)
-
-        end_time = time.time()
-        execution_time = end_time - start_time
-
-        transformed_feature_names = self.model_pipeline[
+        transformed_features = self.model_pipeline[
             "preprocessor"
         ].get_feature_names_out()
-        logger.debug(transformed_feature_names)
+        logger.debug(
+            "Transformed features ({count}): {features} ",
+            count=len(transformed_features),
+            features=", ".join(transformed_features),
+        )
 
-        selected_features_mask = self.model_pipeline["feature_selector"].get_support()
-        logger.trace(selected_features_mask)
-        selected_features = transformed_feature_names[selected_features_mask]
-
-        predictions = self.model_pipeline.predict(x_test)
-        mse = mean_squared_error(y_test, predictions)
-
-        logger.info(f"Training MSE: {mse}")
-        logger.info(f"Training execution time: {execution_time:.2f} seconds")
+        selected_features = self.model_pipeline[
+            "feature_selector"
+        ].important_features_.tolist()
         logger.info(
             "Selected features ({count}): {features} ",
             count=len(selected_features),
             features=", ".join(selected_features),
         )
+
+        logger.info(f"Training execution time: {execution_time:.2f} seconds")
+
+    def _hyperparametertuning(self, data, y_vector, pipeline):
+        param_grid = {
+            "model__max_iter": [100, 200, 300],
+            "model__max_depth": [None, 5, 10],
+            "model__learning_rate": [0.01, 0.1],
+        }
+
+        grid_search = GridSearchCV(
+            estimator=pipeline,
+            param_grid=param_grid,
+            cv=TimeSeriesSplit(n_splits=2),
+            scoring="neg_mean_squared_error",
+        )
+        grid_search.fit(data, y_vector)
+
+        logger.info(
+            "Training with best parameters: {params}", params=grid_search.best_params_
+        )
+        logger.info("Training with best score: {score}", score=grid_search.best_score_)
+
+        return clone(grid_search.best_estimator_)
+
+    def _prepare_model_pipeline(self, x_vector_columns: list[str]) -> None:
+        return Pipeline(
+            steps=[
+                ("preprocessor", self._prepare_preprocessor(x_vector_columns)),
+                (
+                    "feature_selector",
+                    PFISelector(
+                        estimator=HistGradientBoostingRegressor(
+                            random_state=42, categorical_features="from_dtype"
+                        )
+                    ),
+                ),
+                (
+                    "model",
+                    HistGradientBoostingRegressor(
+                        random_state=42, categorical_features="from_dtype"
+                    ),
+                ),
+            ]
+        )
+
+    def _prepare_preprocessor(self, x_vector_columns: list[str]) -> ColumnTransformer:
+        ct = ColumnTransformer(
+            transformers=[
+                (
+                    "cyc",
+                    CyclicalEncoder(**self.CYCLICAL_FEATURES),
+                    self._extract_used_columns(
+                        self.CYCLICAL_FEATURES, x_vector_columns
+                    ),
+                ),
+                (
+                    "num",
+                    "passthrough",
+                    self._extract_used_columns(self.NUMERIC_FEATURES, x_vector_columns),
+                ),
+                (
+                    "time",
+                    TimeEncoder(),
+                    self._extract_used_columns(self.TIME_FEATURES, x_vector_columns),
+                ),
+                (
+                    "cat",
+                    CategoricalEncoder(),
+                    self._extract_used_columns(
+                        self.CATEGORICAL_FEATURES, x_vector_columns
+                    ),
+                ),
+            ],
+            remainder="drop",
+        )
+        ct.set_output(transform="pandas")
+        return ct
+
+    @staticmethod
+    def _extract_used_columns(
+        typed_features: list[str] | dict[str, int], x_vector_columns: list[str]
+    ) -> list[str]:
+        return [col for col in typed_features if col in x_vector_columns]
 
     @property
     def is_trained(self) -> bool:
@@ -344,9 +434,151 @@ class Forecaster:
             raise InvalidDataException("The model has not been trained yet.")
 
         data_for_prediction = new_data.copy()
-        prepared_data_for_prediction = self._prepare_data(data_for_prediction)
 
-        predictions = self.model_pipeline.predict(prepared_data_for_prediction)
-        data_for_prediction[self.target_column] = predictions
+        predictions = self.model_pipeline.predict(data_for_prediction)
+        data_for_prediction[self.typed.target_column] = predictions
+        data_for_prediction.loc[
+            data_for_prediction["sun_altitude"] < -10, self.typed.target_column
+        ] = 0
+        data_for_prediction[self.typed.target_column] = data_for_prediction[
+            self.typed.target_column
+        ].apply(self.typed.prepare_value)
 
         return data_for_prediction
+
+
+class BaseEncoder(BaseEstimator, TransformerMixin):
+    def __init__(self) -> None:
+        self.features: list[str] | None = None
+        self._feature_names_out: list[str] = []
+
+    def fit(self, x_vector: DataFrame, *_) -> BaseEncoder:
+        if not hasattr(x_vector, "columns"):
+            raise AttributeError("x_vector has no columns")
+
+        self.features = x_vector.columns.tolist()
+        return self
+
+    def _transform(self, x_vector: DataFrame) -> DataFrame:
+        if self.features is None:
+            raise AttributeError(f"Encoder {self.__class__} is not been fitted yet.")
+
+        if not hasattr(x_vector, "columns"):
+            raise AttributeError("x_vector has no columns")
+
+        if not all(feature in self.features for feature in x_vector.columns):
+            raise AttributeError(f"Columns {x_vector.columns} are not in the vector")
+
+        if not all(feature in x_vector.columns for feature in self.features):
+            raise AttributeError(f"Columns {self.features} are not in the vector")
+
+        return x_vector
+
+    def _save_feature_names_out(self, x_vector: DataFrame) -> DataFrame:
+        self._feature_names_out = x_vector.columns.to_list()
+        return x_vector
+
+    def get_feature_names_out(self, *_) -> list[str]:
+        return self._feature_names_out
+
+
+class CyclicalEncoder(BaseEncoder):
+    def __init__(self, **cycle_lengths: dict[str, int]) -> None:
+        super().__init__()
+        self.cycle_lengths: dict[str, int] = cycle_lengths
+
+    def transform(self, x_vector: DataFrame) -> DataFrame:
+        x_vector = self._transform(x_vector)
+        for feature in self.features:
+            cycle = self.cycle_lengths.get(feature, None)
+            if not cycle:
+                raise ValueError(f"Unknown cyclical feature {feature}")
+
+            x_vector = self.transform_cycle_columns(
+                x_vector, feature, x_vector[feature], cycle
+            )
+            x_vector.drop(feature, axis=1, inplace=True)
+
+        return self._save_feature_names_out(x_vector)
+
+    def get_params(self, deep=True) -> dict[str, int]:
+        return self.cycle_lengths
+
+    @staticmethod
+    def transform_cycle_columns(
+        x_vector: DataFrame, prefix: str, cycle_vector: DataFrame, cycle_length: int
+    ) -> DataFrame:
+        x_vector[f"{prefix}_cos"] = cos(2 * pi * cycle_vector / cycle_length)
+        x_vector[f"{prefix}_sin"] = sin(2 * pi * cycle_vector / cycle_length)
+
+        return x_vector
+
+
+class TimeEncoder(BaseEncoder):
+    def transform(self, x_vector: DataFrame) -> DataFrame:
+        x_vector = self._transform(x_vector)
+        for feature in self.features:
+
+            x_vector = CyclicalEncoder.transform_cycle_columns(
+                x_vector, f"{feature}_hour", x_vector[feature].dt.hour, 24
+            )
+
+            x_vector = CyclicalEncoder.transform_cycle_columns(
+                x_vector, f"{feature}_month", x_vector[feature].dt.month, 12
+            )
+
+            x_vector[f"{feature}_dst"] = (
+                x_vector[feature]
+                .apply(lambda x: x.dst() != timedelta(0))
+                .astype("category")
+            )
+
+            logger.debug(x_vector.head())
+            x_vector.drop(feature, axis=1, inplace=True)
+
+        return self._save_feature_names_out(x_vector)
+
+
+class CategoricalEncoder(BaseEncoder):
+    def transform(self, x_vector) -> DataFrame:
+        x_vector = self._transform(x_vector).astype("category")
+        return self._save_feature_names_out(x_vector)
+
+
+class PFISelector(BaseEstimator, TransformerMixin):
+    def __init__(self, estimator, n_repeats=10):
+        self.estimator = estimator
+        self.n_repeats = n_repeats
+
+        self.estimator_ = None
+        self.feature_importances_ = None
+        self.important_indices_ = None
+        self.important_features_ = None
+
+    def fit(self, x_vector: DataFrame, y_vector=None) -> PFISelector:
+        x_train, x_test, y_train, y_test = train_test_split(
+            x_vector, y_vector, test_size=0.1, random_state=42
+        )
+        self.estimator_ = self.estimator.fit(x_train, y_train)
+        results = permutation_importance(
+            self.estimator_,
+            x_test,
+            y_test,
+            n_repeats=self.n_repeats,
+            random_state=42,
+            n_jobs=-1,
+        )
+
+        self.feature_importances_ = results.importances_mean
+
+        threshold_value = percentile(self.feature_importances_, 75)
+
+        self.important_indices_ = self.feature_importances_ > threshold_value
+        self.important_features_ = x_vector.columns[self.important_indices_]
+        return self
+
+    def transform(self, x_vector: DataFrame) -> DataFrame:
+        return x_vector[self.important_features_]
+
+    def get_support(self, *_) -> list[bool]:
+        return self.important_indices_.to_list()
