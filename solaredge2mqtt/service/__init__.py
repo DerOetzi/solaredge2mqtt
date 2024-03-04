@@ -8,6 +8,7 @@
 import asyncio as aio
 import signal
 
+from time import time
 from aiomqtt import MqttError
 
 from solaredge2mqtt import __version__
@@ -66,7 +67,13 @@ class Service:
         )
 
         self.forecast: Forecast | None = (
-            Forecast(self.settings.location, self.mqtt, self.influxdb, self.weather)
+            Forecast(
+                self.settings.forecast,
+                self.settings.location,
+                self.mqtt,
+                self.influxdb,
+                self.weather,
+            )
             if self.settings.is_forecast_configured
             else None
         )
@@ -87,9 +94,6 @@ class Service:
             self.influxdb.initialize_buckets()
             self.influxdb.initialize_task()
 
-        if self.settings.is_forecast_configured:
-            self.forecast.train()
-
         while not self.cancel_request.is_set():
             try:
                 async with self.mqtt:
@@ -103,7 +107,7 @@ class Service:
 
                     self.schedule_influxdb_loops()
 
-                    self.schedule_weather_loops()
+                    await self.schedule_weather_loops()
 
                     await aio.gather(*self.loops)
 
@@ -130,28 +134,48 @@ class Service:
             if self.settings.is_prices_configured:
                 self.schedule_loop(300, self.basics.prices_loop)
 
-    def schedule_weather_loops(self):
+    async def schedule_weather_loops(self):
         if self.settings.is_weather_configured:
             self.schedule_loop(600, self.weather.loop)
 
-            if self.settings.is_influxdb_configured:
-                self.schedule_loop(600, self.forecast.training_loop)
-                self.schedule_loop(600, self.forecast.forecast_loop)
+            if self.settings.is_forecast_configured:
+                await self.forecast.train()
+                self.schedule_loop(600, self.forecast.training_loop, True)
+                self.schedule_loop(600, self.forecast.forecast_loop, True)
 
     def schedule_loop(
-        self, interval_in_seconds: int, handle: callable, args: list[any] = None
+        self,
+        interval_in_seconds: int,
+        handle: callable,
+        delay_start: bool = False,
+        args: list[any] = None,
     ):
-        loop = aio.create_task(self.run_loop(interval_in_seconds, handle, args))
+        loop = aio.create_task(
+            self.run_loop(interval_in_seconds, handle, delay_start, args)
+        )
         self.loops.add(loop)
         loop.add_done_callback(self.loops.remove)
 
     async def run_loop(
-        self, interval_in_seconds: int, handle: callable, args: list[any] = None
+        self,
+        interval_in_seconds: int,
+        handle: callable,
+        delay_start: bool = False,
+        args: list[any] = None,
     ):
+        if delay_start:
+            await aio.sleep(interval_in_seconds)
+
         while not self.cancel_request.is_set():
+            execution_time = 0
             try:
+                start_time = time()
                 await handle(*args or [])
+                execution_time = time() - start_time
             except InvalidDataException as error:
                 logger.warning("{message}, skipping this loop", message=error.message)
 
-            await aio.sleep(interval_in_seconds)
+            if execution_time < interval_in_seconds:
+                await aio.sleep(interval_in_seconds - execution_time)
+            else:
+                await aio.sleep(interval_in_seconds)

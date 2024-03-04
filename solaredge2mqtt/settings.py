@@ -117,6 +117,15 @@ class WeatherSettings(BaseModel):
         return self.api_key is not None
 
 
+class ForecastSettings(BaseModel):
+    enable: bool = Field(False)
+    hyperparametertuning: bool = Field(False)
+
+    @property
+    def is_configured(self) -> bool:
+        return self.enable
+
+
 class ServiceSettings(BaseModel):
     interval: int = Field(5)
     logging_level: LoggingLevelEnum = LoggingLevelEnum.INFO
@@ -133,6 +142,8 @@ class ServiceSettings(BaseModel):
     influxdb: InfluxDBSettings | None = None
 
     weather: WeatherSettings | None = None
+
+    forecast: ForecastSettings | None = None
 
     def __init__(self, **data: dict[str, any]):
         sources = [self._read_environment, self._read_dotenv, self._read_secrets]
@@ -165,7 +176,7 @@ class ServiceSettings(BaseModel):
 
         if is_configured and not self.is_location_configured:
             logger.warning(
-                "Weather settings are configured but location is not configured. Weather will not be collected."
+                "Weather settings are configured but location is not configured."
             )
             is_configured = False
 
@@ -173,7 +184,21 @@ class ServiceSettings(BaseModel):
 
     @property
     def is_forecast_configured(self) -> bool:
-        return self.is_weather_configured and self.is_influxdb_configured
+        is_configured = self.forecast is not None and self.forecast.is_configured
+
+        if is_configured and not self.is_location_configured:
+            logger.warning(
+                "Forecast settings are configured but location is not configured."
+            )
+            is_configured = False
+
+        if is_configured and not self.is_weather_configured:
+            logger.warning(
+                "Forecast settings are configured but weather is not configured."
+            )
+            is_configured = False
+
+        return is_configured
 
     def _parse_key_and_values(
         self, sources: list[callable], data: dict[str, any]

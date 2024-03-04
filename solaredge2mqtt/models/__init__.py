@@ -19,7 +19,5 @@ from solaredge2mqtt.models.weather import (
     OpenWeatherMapBaseData,
     OpenWeatherMapCurrentData,
     OpenWeatherMapForecastData,
-    OpenWeatherMapIrradianceHour,
     OpenWeatherMapOneCall,
-    OpenWeatherMapSolarData,
 )
