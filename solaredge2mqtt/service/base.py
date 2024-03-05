@@ -10,7 +10,7 @@ from solaredge2mqtt.models import (
     Powerflow,
 )
 from solaredge2mqtt.mqtt import MQTTClient
-from solaredge2mqtt.persistence.influxdb import InfluxDB, Point
+from solaredge2mqtt.service.influxdb import InfluxDB, Point
 from solaredge2mqtt.service.modbus import Modbus
 from solaredge2mqtt.service.wallbox import WallboxClient
 from solaredge2mqtt.settings import ServiceSettings

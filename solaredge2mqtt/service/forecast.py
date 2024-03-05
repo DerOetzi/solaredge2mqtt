@@ -3,7 +3,8 @@ from __future__ import annotations
 import asyncio as aio
 import time
 from datetime import datetime, timedelta, timezone
-from numpy import cos, pi, sin, percentile
+
+from numpy import cos, percentile, pi, sin
 from pandas import DataFrame, to_datetime
 from pysolar.solar import get_altitude, get_azimuth
 from sklearn import clone
@@ -11,14 +12,15 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.inspection import permutation_importance
-from sklearn.model_selection import GridSearchCV, TimeSeriesSplit, train_test_split
+from sklearn.model_selection import (GridSearchCV, TimeSeriesSplit,
+                                     train_test_split)
 from sklearn.pipeline import Pipeline
 
 from solaredge2mqtt.exceptions import InvalidDataException
 from solaredge2mqtt.logging import logger
-from solaredge2mqtt.models import OpenWeatherMapForecastData, EnumModel
+from solaredge2mqtt.models import EnumModel, OpenWeatherMapForecastData
 from solaredge2mqtt.mqtt import MQTTClient
-from solaredge2mqtt.persistence.influxdb import InfluxDB, Point
+from solaredge2mqtt.service.influxdb import InfluxDB, Point
 from solaredge2mqtt.service.weather import WeatherClient
 from solaredge2mqtt.settings import ForecastSettings, LocationSettings
 

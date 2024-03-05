@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 import pkg_resources
 from influxdb_client import BucketRetentionRules, InfluxDBClient, Point
 from influxdb_client.client.exceptions import InfluxDBError
@@ -8,10 +10,7 @@ from influxdb_client.client.influxdb_client_async import (
 from pandas import DataFrame
 
 from solaredge2mqtt.logging import logger
-from solaredge2mqtt.models import (
-    ForecastPeriod,
-    HistoricPeriod,
-)
+from solaredge2mqtt.models import ForecastPeriod, HistoricPeriod
 from solaredge2mqtt.settings import InfluxDBSettings
 
 
@@ -32,6 +31,7 @@ class InfluxDB:
         )
 
         self.query_api = self.client.query_api()
+        self.delete_api = self.client.delete_api()
 
         self.client_async: InfluxDBClientAsync | None = None
         self.query_api_async: QueryApiAsync | None = None
@@ -60,6 +60,38 @@ class InfluxDB:
                 )
                 bucket.retention_rules[0] = retention_rules
                 buckets_api.update_bucket(bucket=bucket)
+
+    async def loop(self) -> None:
+        now = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0)
+
+        logger.info("Cleanup current hour powerflow and energy data")
+        self.delete_from_measurements(
+            now.replace(minute=1), now + timedelta(hours=1), ["powerflow", "energy"]
+        )
+
+        logger.info("Aggregate powerflow and energy raw data")
+        self.query_api.query(self._get_flux_query("aggregate"))
+
+        logger.info("Apply retention on raw data")
+        retention_time = now - timedelta(hours=self.settings.retention_raw)
+        self.delete_from_measurements(
+            datetime(1970, 1, 1, tzinfo=timezone.utc),
+            retention_time,
+            ["powerflow_raw", "battery_raw"],
+        )
+
+    def delete_from_measurements(
+        self, start: datetime, stop: datetime, measurements: list[str]
+    ) -> None:
+        for measurement in measurements:
+            self.delete_from_measurement(start, stop, measurement)
+
+    def delete_from_measurement(
+        self, start: datetime, stop: datetime, measurement: str
+    ) -> None:
+        self.delete_api.delete(
+            start, stop, f'_measurement="{measurement}"', self.bucket_name
+        )
 
     @property
     def bucket_name(self) -> str:
@@ -124,10 +156,12 @@ class InfluxDB:
     ) -> str:
         if query_name not in self.flux_cache:
             flux = pkg_resources.resource_string(
-                __name__, f"resources/{query_name}.flux"
+                __name__, f"../flux/{query_name}.flux"
             ).decode("utf-8")
-            flux = flux.replace("{{BUCKET_AGGREGATED}}", self.bucket_name).replace(
-                "{{TIMEZONE}}", self.settings.timezone
+            flux = (
+                flux.replace("{{BUCKET_AGGREGATED}}", self.bucket_name)
+                .replace("{{BUCKET_NAME}}", self.bucket_name)
+                .replace("{{TIMEZONE}}", self.settings.timezone)
             )
             self.flux_cache[query_name] = flux
 
