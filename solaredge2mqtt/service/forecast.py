@@ -129,7 +129,7 @@ class Forecast:
 
         logger.info("Write new training data to influxdb")
         logger.debug(trainings_data)
-        self.influxdb.write_point_to_aggregated_bucket(point)
+        self.influxdb.write_point(point)
 
     async def train(self) -> None:
         data = await self.influxdb.query_dataframe("training_data")
@@ -235,7 +235,7 @@ class Forecast:
             points.append(point)
 
         logger.info("Write forecast data to influxdb")
-        self.influxdb.write_points_to_aggregated_bucket(points)
+        self.influxdb.write_points(points)
 
     async def _publish_hours_to_mqtt(
         self, hours: DataFrame, typed: ForecasterType

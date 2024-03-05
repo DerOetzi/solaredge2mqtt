@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from typing import ClassVar
 
+from influxdb_client import Point
 from pydantic import Field, computed_field
 
 from solaredge2mqtt.logging import logger
 from solaredge2mqtt.models.base import Solaredge2MQTTBaseModel
-from solaredge2mqtt.models.modbus import SunSpecBattery, SunSpecInverter, SunSpecMeter
+from solaredge2mqtt.models.modbus import (SunSpecBattery, SunSpecInverter,
+                                          SunSpecMeter)
 
 
 class InverterPowerflow(Solaredge2MQTTBaseModel):
@@ -290,3 +292,10 @@ class Powerflow(Solaredge2MQTTBaseModel):
         cls.last_powerflow = powerflow
 
         return check
+
+    def prepare_point(self, measurement: str = "powerflow_raw") -> Point:
+        point = Point(measurement)
+        for key, value in self.model_dump_influxdb().items():
+            point.field(key, value)
+
+        return point

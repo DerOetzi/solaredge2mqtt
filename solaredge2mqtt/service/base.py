@@ -99,12 +99,12 @@ class BaseLoops:
         await self.mqtt.publish_to("powerflow", powerflow)
 
         if self.influxdb is not None:
-            self.influxdb.write_components(
-                inverter_data, meters_data, batteries_data, wallbox_data
-            )
-            self.influxdb.write_powerflow(powerflow)
+            points = [powerflow.prepare_point()]
 
-            self.influxdb.flush_loop()
+            for battery in batteries_data.values():
+                points.append(battery.prepare_point())
+
+            self.influxdb.write_points(points)
 
     async def energy_loop(self):
         for period in HistoricPeriod:

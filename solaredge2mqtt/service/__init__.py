@@ -92,7 +92,7 @@ class Service:
 
         if self.settings.is_influxdb_configured:
             self.influxdb.initialize_buckets()
-            self.influxdb.initialize_task()
+            # self.influxdb.initialize_task()
 
         while not self.cancel_request.is_set():
             try:
@@ -103,11 +103,11 @@ class Service:
                         self.settings.interval, self.basics.powerflow_loop
                     )
 
-                    self.schedule_monitoring_loop()
-
                     self.schedule_influxdb_loops()
 
-                    await self.schedule_weather_loops()
+                    # self.schedule_monitoring_loop()
+
+                    # await self.schedule_weather_loops()
 
                     await aio.gather(*self.loops)
 
