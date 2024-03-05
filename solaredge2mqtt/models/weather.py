@@ -68,20 +68,21 @@ class OpenWeatherMapBaseData(Solaredge2MQTTBaseModel):
     ) -> OpenWeatherMapCondition:
         return weather[0]
 
-
-class OpenWeatherMapCurrentData(OpenWeatherMapBaseData):
-    sunrise: datetime = Field(exclude=True)
-    sunset: datetime = Field(exclude=True)
-
-
-class OpenWeatherMapForecastData(OpenWeatherMapBaseData):
-    pop: float
-
     def model_dump_estimation_data(self) -> dict[str, str | float | int | None]:
         model_dict = self.model_dump(exclude=["weather", "dt"], exclude_none=True)
         model_dict["weather_id"] = self.weather[0].id
         model_dict["weather_main"] = self.weather[0].main
         return model_dict
+
+
+class OpenWeatherMapCurrentData(OpenWeatherMapBaseData):
+    sunrise: datetime = Field(exclude=True)
+    sunset: datetime = Field(exclude=True)
+    pop: float = Field(0.0)
+
+
+class OpenWeatherMapForecastData(OpenWeatherMapBaseData):
+    pop: float
 
 
 class OpenWeatherMapOneCall(Solaredge2MQTTBaseModel):

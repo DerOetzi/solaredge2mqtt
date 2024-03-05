@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from influxdb_client import Point
 from pydantic import BaseModel
 from solaredge_modbus import BATTERY_STATUS_MAP, C_SUNSPEC_DID_MAP, INVERTER_STATUS_MAP
 
@@ -246,3 +247,12 @@ class SunSpecBattery(SunSpecComponent):
             valid = True
 
         return valid
+
+    def prepare_point(self, measurement: str = "battery_raw") -> Point:
+        point = Point(measurement)
+        point.field("current", self.current)
+        point.field("voltage", self.voltage)
+        point.field("state_of_charge", self.state_of_charge)
+        point.field("state_of_health", self.state_of_health)
+
+        return point

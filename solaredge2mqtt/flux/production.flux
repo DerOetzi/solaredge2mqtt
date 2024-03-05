@@ -3,19 +3,19 @@ import "timezone"
 
 option location = timezone.location(name: "{{TIMEZONE}}")
 
-stopTime = date.truncate(t: now(), unit: 10m)
-startTime = date.sub(from: stopTime, d: 10m)
+stopTime = date.truncate(t: now(), unit: 1h)
+startTime = date.sub(from: stopTime, d: 1h)
 
 power =
-    from(bucket: "{{BUCKET_RAW}}")
+    from(bucket: "{{BUCKET_NAME}}")
         |> range(start: startTime, stop: stopTime)
-        |> filter(fn: (r) => r._measurement == "powerflow")
+        |> filter(fn: (r) => r._measurement == "powerflow_raw")
         |> filter(fn: (r) => r._field == "pv_production")
 
 energy =
     power
         |> aggregateWindow(
-            every: 10m,
+            every: 1h,
             fn: (tables=<-, column) =>
                 tables
                     |> integral(unit: 1h)
@@ -24,7 +24,7 @@ energy =
 
 mean_power =
     power
-        |> aggregateWindow(every: 10m, fn: mean)
+        |> aggregateWindow(every: 1h, fn: mean)
         |> map(fn: (r) => ({r with _value: r._value}))
 
 join(tables: {t1: energy, t2: mean_power}, on: ["_time"])

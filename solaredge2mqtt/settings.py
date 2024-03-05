@@ -66,10 +66,9 @@ class InfluxDBSettings(BaseModel):
     port: int = Field(8086)
     token: SecretStr = Field(None)
     org: str = Field(None)
-    prefix: str = Field("solaredge")
-    retention_raw: int = Field(SECONDS_PER_DAY + SECONDS_PER_HOUR)
-    retention_aggregated: int = Field(SECONDS_PER_2_YEARS)
-    aggregate_interval: str = "10m"
+    bucket: str = Field("solaredge")
+    retention: int = Field(SECONDS_PER_2_YEARS)
+    retention_raw: int = Field(48)
     timezone: str = Field(strftime("%Z", localtime()))
 
     @property

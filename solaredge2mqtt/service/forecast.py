@@ -3,7 +3,8 @@ from __future__ import annotations
 import asyncio as aio
 import time
 from datetime import datetime, timedelta, timezone
-from numpy import cos, pi, sin, percentile
+
+from numpy import cos, percentile, pi, sin
 from pandas import DataFrame, to_datetime
 from pysolar.solar import get_altitude, get_azimuth
 from sklearn import clone
@@ -16,9 +17,9 @@ from sklearn.pipeline import Pipeline
 
 from solaredge2mqtt.exceptions import InvalidDataException
 from solaredge2mqtt.logging import logger
-from solaredge2mqtt.models import OpenWeatherMapForecastData, EnumModel
+from solaredge2mqtt.models import EnumModel, OpenWeatherMapForecastData
 from solaredge2mqtt.mqtt import MQTTClient
-from solaredge2mqtt.persistence.influxdb import InfluxDB, Point
+from solaredge2mqtt.service.influxdb import InfluxDB, Point
 from solaredge2mqtt.service.weather import WeatherClient
 from solaredge2mqtt.settings import ForecastSettings, LocationSettings
 
@@ -46,7 +47,6 @@ class ForecasterType(EnumModel):
 
 
 class Forecast:
-
     def __init__(
         self,
         settings: ForecastSettings,
@@ -71,13 +71,11 @@ class Forecast:
     async def training_loop(self):
         now = datetime.now().astimezone()
         rounded_minutes = (now.minute // 10) * 10
-        last_10_minutes = now.replace(
-            minute=rounded_minutes, second=0, microsecond=0
-        ) - timedelta(minutes=10)
+        last_hour = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)
 
-        training_data = self.get_weather_training(last_10_minutes)
-        training_data = self.add_sun_position(last_10_minutes, training_data)
-        training_data = self.add_last_10_minutes_pv_production(training_data)
+        training_data = self.get_weather_training(last_hour)
+        training_data = self.add_sun_position(last_hour, training_data)
+        training_data = self.add_last_hour_pv_production(training_data)
 
         self.write_new_training_data_to_influxdb(training_data)
 
@@ -98,12 +96,9 @@ class Forecast:
             logger.info("Retrieve weather forecast for training of production forecast")
             self.last_weather_forecast = self.weather.get_weather().hourly
 
-        if self.last_weather_forecast[0].hour != forecast_time.hour:
-            raise InvalidDataException("Missing weather forecast for previous hour")
-
         return self.last_weather_forecast[0].model_dump_estimation_data()
 
-    def add_last_10_minutes_pv_production(
+    def add_last_hour_pv_production(
         self, trainings_data
     ) -> dict[str, str | float | int | None]:
         production_data = self.influxdb.query_first("production")
@@ -129,7 +124,7 @@ class Forecast:
 
         logger.info("Write new training data to influxdb")
         logger.debug(trainings_data)
-        self.influxdb.write_point_to_aggregated_bucket(point)
+        self.influxdb.write_point(point)
 
     async def train(self) -> None:
         data = await self.influxdb.query_dataframe("training_data")
@@ -167,7 +162,7 @@ class Forecast:
                         month=weather_forecast.month,
                         day=weather_forecast.day,
                         hour=weather_forecast.hour,
-                        minute=minute,
+                        minute=0,
                         second=0,
                         microsecond=0,
                     ).astimezone(),
@@ -175,11 +170,9 @@ class Forecast:
                 )
             )
             for weather_forecast in self.last_weather_forecast
-            for minute in range(0, 60, 10)
         ]
 
         data = DataFrame(estimation_data_list)
-        data = self.add_last_10_minutes_pv_production(data)
 
         for typed, forecaster in self.forecasters.items():
             predicted_data = forecaster.predict(data)
@@ -235,7 +228,7 @@ class Forecast:
             points.append(point)
 
         logger.info("Write forecast data to influxdb")
-        self.influxdb.write_points_to_aggregated_bucket(points)
+        self.influxdb.write_points(points)
 
     async def _publish_hours_to_mqtt(
         self, hours: DataFrame, typed: ForecasterType
@@ -253,11 +246,11 @@ class Forecast:
         return data
 
     def add_sun_position(
-        self, last_10_minutes, data
+        self, last_hour: datetime, data
     ) -> dict[str, str | float | int | None]:
-        data["time"] = last_10_minutes
+        data["time"] = last_hour
 
-        sun_time = last_10_minutes + timedelta(minutes=5)
+        sun_time = last_hour + timedelta(minutes=30)
         data["sun_azimuth"] = round(
             get_azimuth(self.location.latitude, self.location.longitude, sun_time), 2
         )
@@ -304,7 +297,7 @@ class Forecaster:
 
     def train(self, data: DataFrame) -> None:
         data_count = len(data)
-        if data_count < 300:
+        if data_count < 60:
             raise InvalidDataException("Not enough data to train the model")
 
         logger.info(f"Training model {self.typed} with {data_count} data points")

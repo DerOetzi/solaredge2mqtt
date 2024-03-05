@@ -15,7 +15,7 @@ from solaredge2mqtt import __version__
 from solaredge2mqtt.exceptions import ConfigurationException, InvalidDataException
 from solaredge2mqtt.logging import initialize_logging, logger
 from solaredge2mqtt.mqtt import MQTTClient
-from solaredge2mqtt.persistence.influxdb import InfluxDB
+from solaredge2mqtt.service.influxdb import InfluxDB
 from solaredge2mqtt.service.base import BaseLoops
 from solaredge2mqtt.service.forecast import Forecast
 from solaredge2mqtt.service.monitoring import MonitoringSite
@@ -92,7 +92,7 @@ class Service:
 
         if self.settings.is_influxdb_configured:
             self.influxdb.initialize_buckets()
-            self.influxdb.initialize_task()
+            # self.influxdb.initialize_task()
 
         while not self.cancel_request.is_set():
             try:
@@ -103,9 +103,9 @@ class Service:
                         self.settings.interval, self.basics.powerflow_loop
                     )
 
-                    self.schedule_monitoring_loop()
-
                     self.schedule_influxdb_loops()
+
+                    self.schedule_monitoring_loop()
 
                     await self.schedule_weather_loops()
 
@@ -130,9 +130,8 @@ class Service:
 
     def schedule_influxdb_loops(self):
         if self.settings.is_influxdb_configured:
-            self.schedule_loop(300, self.basics.energy_loop)
-            if self.settings.is_prices_configured:
-                self.schedule_loop(300, self.basics.prices_loop)
+            self.schedule_loop(600, self.influxdb.loop)
+            self.schedule_loop(600, self.basics.energy_loop)
 
     async def schedule_weather_loops(self):
         if self.settings.is_weather_configured:

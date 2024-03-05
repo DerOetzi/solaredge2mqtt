@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import computed_field
+from pydantic import Field, computed_field
 
 from solaredge2mqtt.logging import logger
 from solaredge2mqtt.models.base import EnumModel, Solaredge2MQTTBaseModel
@@ -24,6 +24,7 @@ class HistoricEnergy(HistoricBaseModel):
     grid: GridEnergy
     battery: BatteryEnergy
     consumer: ConsumerEnergy
+    money: HistoricMoney | None = Field(None)
 
     def __init__(
         self,
@@ -40,7 +41,7 @@ class HistoricEnergy(HistoricBaseModel):
             if len(keys) < 2:
                 continue
 
-            if keys[0] in ["consumer", "inverter", "grid", "battery"]:
+            if keys[0] in ["consumer", "inverter", "grid", "battery", "money"]:
                 if keys[0] not in subclass_values:
                     subclass_values[keys[0]] = {}
 
@@ -56,6 +57,11 @@ class HistoricEnergy(HistoricBaseModel):
             grid=GridEnergy(**subclass_values["grid"]),
             battery=BatteryEnergy(**subclass_values["battery"]),
             consumer=ConsumerEnergy(**subclass_values["consumer"]),
+            money=(
+                HistoricMoney(**subclass_values["money"])
+                if "money" in subclass_values
+                else None
+            ),
         )
 
     @computed_field
@@ -69,17 +75,11 @@ class HistoricEnergy(HistoricBaseModel):
         return SelfSufficiencyRate(self)
 
 
-class HistoricMoney(HistoricBaseModel):
+class HistoricMoney(Solaredge2MQTTBaseModel):
     earnings: float
     savings: float
-
-    def __init__(self, money_data: dict, period: HistoricPeriod):
-        super().__init__(
-            period=period,
-            data=money_data,
-            earnings=round(money_data["earnings"], 2),
-            savings=round(money_data["savings"], 2),
-        )
+    price_in: float = Field(exclude=True)
+    price_out: float = Field(exclude=True)
 
 
 class HistoricInfo(Solaredge2MQTTBaseModel):
