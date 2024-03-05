@@ -56,7 +56,8 @@ class InfluxDB:
             logger.info(f"Bucket '{self.bucket_name}' already exists.")
             if bucket.retention_rules[0].every_seconds != self.settings.retention:
                 logger.info(
-                    f"Updating retention rules for bucket '{self.bucket_name}' to {self.settings.retention} seconds."
+                    f"Updating retention rules for bucket '{self.bucket_name}' "
+                    + f"to {self.settings.retention} seconds."
                 )
                 bucket.retention_rules[0] = retention_rules
                 buckets_api.update_bucket(bucket=bucket)

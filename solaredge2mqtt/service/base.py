@@ -4,7 +4,6 @@ from solaredge2mqtt.exceptions import InvalidDataException
 from solaredge2mqtt.logging import logger
 from solaredge2mqtt.models import (
     HistoricEnergy,
-    HistoricMoney,
     HistoricPeriod,
     HistoricQuery,
     Powerflow,
@@ -119,6 +118,30 @@ class BaseLoops:
 
                 continue
 
+            if (
+                period == HistoricPeriod.LAST_HOUR
+                and self.settings.is_prices_configured
+            ):
+                price_in = self.settings.prices.consumption
+                savings = price_in * record["consumer_used_production"]
+
+                price_out = self.settings.prices.delivery
+                earnings = price_out * record["grid_delivery"]
+
+                record["money_price_in"] = price_in
+                record["money_price_out"] = price_out
+                record["money_savings"] = savings
+                record["money_earnings"] = earnings
+
+                self.influxdb.write_point(
+                    Point("energy")
+                    .field("money_price_in", price_in)
+                    .field("money_price_out", price_out)
+                    .field("money_savings", savings)
+                    .field("money_earnings", earnings)
+                    .time(record["_stop"])
+                )
+
             energy = HistoricEnergy(record, period)
 
             logger.info(
@@ -128,36 +151,3 @@ class BaseLoops:
             )
 
             await self.mqtt.publish_to(f"energy/{period.topic}", energy)
-
-    async def prices_loop(self):
-        logger.info("Save prices to influxdb")
-
-        point = Point("prices")
-        if self.settings.prices.is_consumption_configured:
-            point.field("consumption", self.settings.prices.consumption)
-        if self.settings.prices.is_delivery_configured:
-            point.field("delivery", self.settings.prices.delivery)
-
-        self.influxdb.write_point_to_raw_bucket(point)
-
-        for period in HistoricPeriod:
-            record = self.influxdb.query_timeunit(period, "money")
-            if record is None:
-                if period.query == HistoricQuery.LAST:
-                    logger.info(
-                        "No data found for {period}, skipping this loop", period=period
-                    )
-                else:
-                    raise InvalidDataException(f"No money data for {period}")
-
-                continue
-
-            money = HistoricMoney(record, period)
-
-            logger.info(
-                "Read from influxdb {period} savings: {money.savings} €, earnings: {money.earnings} €",
-                period=period,
-                money=money,
-            )
-
-            await self.mqtt.publish_to(f"money/{period.topic}", money)

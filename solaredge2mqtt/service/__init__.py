@@ -131,6 +131,7 @@ class Service:
     def schedule_influxdb_loops(self):
         if self.settings.is_influxdb_configured:
             self.schedule_loop(600, self.influxdb.loop)
+            self.schedule_loop(600, self.basics.energy_loop)
 
     async def schedule_weather_loops(self):
         if self.settings.is_weather_configured:
