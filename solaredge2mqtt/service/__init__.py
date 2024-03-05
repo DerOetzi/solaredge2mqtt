@@ -105,9 +105,9 @@ class Service:
 
                     self.schedule_influxdb_loops()
 
-                    # self.schedule_monitoring_loop()
+                    self.schedule_monitoring_loop()
 
-                    # await self.schedule_weather_loops()
+                    await self.schedule_weather_loops()
 
                     await aio.gather(*self.loops)
 

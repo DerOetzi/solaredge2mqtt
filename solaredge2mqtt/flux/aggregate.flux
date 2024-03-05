@@ -6,7 +6,7 @@ startTime = date.sub(from: stopTime, d: 2h)
 
 bucket = "{{BUCKET_NAME}}"
 
-exclude = ["inverter_power", "inverter_dc_power", "grid_power", "battery_power"]
+exclude = ["inverter_power", "grid_power", "battery_power"]
 
 power =
     from(bucket: bucket)

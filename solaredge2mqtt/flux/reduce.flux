@@ -1,4 +1,5 @@
 import "date"
+import "math"
 
 startTime = date.add(to: date.truncate(t: now(), unit: 1y), d: 13d)
 stopTime = date.truncate(t: now(), unit: 1h)
@@ -33,22 +34,33 @@ training =
     from(bucket: "solaredge")
         |> range(start: startTime, stop: stopTime)
         |> filter(fn: (r) => r._measurement == "forecast_training")
-        |> map(fn: (r) => ({r with _time: date.add(to: r._time, d: 10m)}))
 
 training
     |> filter(fn: (r) => r._field == "energy")
     |> aggregateWindow(every: 1h, fn: sum, createEmpty: false)
     |> map(fn: (r) => ({r with _time: date.sub(from: r._time, d: 1h)}))
+    |> map(fn: (r) => ({r with _value: math.round(x: r._value * 100.0) / 100.0}))
     |> to(bucket: "solaredgenew")
 
 training
     |> filter(fn: (r) => r._field == "power")
     |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
     |> map(fn: (r) => ({r with _time: date.sub(from: r._time, d: 1h)}))
+    |> map(fn: (r) => ({r with _value: int(v: math.round(x: r._value))}))
     |> to(bucket: "solaredgenew")
 
 training
-    |> filter(fn: (r) => r._field != "power" and r._field != "energy")
+    |> filter(fn: (r) => r._field == "sun_altitude" or r._field == "sun_azimuth")
+    |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
+    |> map(fn: (r) => ({r with _time: date.sub(from: r._time, d: 1h)}))
+    |> map(fn: (r) => ({r with _value: math.round(x: r._value * 100.0) / 100.0}))
+    |> to(bucket: "solaredgenew")
+
+training
+    |> filter(
+        fn: (r) =>
+            r._field != "power" and r._field != "energy" and r._field != "sun_altitude" and r._field != "sun_azimuth",
+    )
     |> aggregateWindow(every: 1h, fn: first, createEmpty: false)
     |> map(fn: (r) => ({r with _time: date.sub(from: r._time, d: 1h)}))
     |> to(bucket: "solaredgenew")
