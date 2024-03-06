@@ -36,8 +36,6 @@ class InfluxDB:
         self.client_async: InfluxDBClientAsync | None = None
         self.query_api_async: QueryApiAsync | None = None
 
-        self.loop_points: list[Point] = []
-
         self.flux_cache: dict[str, str] = {}
 
     def initialize_buckets(self) -> None:
@@ -67,7 +65,9 @@ class InfluxDB:
 
         logger.info("Cleanup current hour powerflow and energy data")
         self.delete_from_measurements(
-            now.replace(minute=1), now + timedelta(hours=1), ["powerflow", "energy"]
+            now.replace(minute=1) - timedelta(hours=23),
+            now + timedelta(hours=1),
+            ["powerflow", "energy"],
         )
 
         logger.info("Aggregate powerflow and energy raw data")

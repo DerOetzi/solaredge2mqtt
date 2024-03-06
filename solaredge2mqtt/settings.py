@@ -68,7 +68,7 @@ class InfluxDBSettings(BaseModel):
     org: str = Field(None)
     bucket: str = Field("solaredge")
     retention: int = Field(SECONDS_PER_2_YEARS)
-    retention_raw: int = Field(48)
+    retention_raw: int = Field(25)
     timezone: str = Field(strftime("%Z", localtime()))
 
     @property
