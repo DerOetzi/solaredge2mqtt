@@ -1,8 +1,8 @@
 solaredge_modbus==0.8.0
-pydantic==2.6.2
+pydantic==2.6.3
 loguru==0.7.2
 requests==2.31.0
-influxdb-client==1.40.0
+influxdb-client==1.41.0
 pyjwt==2.8.0
 aiomqtt==2.0.0
 pysolar==0.11

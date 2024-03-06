@@ -7,17 +7,19 @@
 
 import asyncio as aio
 import signal
-
 from time import time
+from typing import Callable
+
 from aiomqtt import MqttError
 
 from solaredge2mqtt import __version__
-from solaredge2mqtt.exceptions import ConfigurationException, InvalidDataException
+from solaredge2mqtt.exceptions import (ConfigurationException,
+                                       InvalidDataException)
 from solaredge2mqtt.logging import initialize_logging, logger
 from solaredge2mqtt.mqtt import MQTTClient
-from solaredge2mqtt.service.influxdb import InfluxDB
 from solaredge2mqtt.service.base import BaseLoops
 from solaredge2mqtt.service.forecast import Forecast
+from solaredge2mqtt.service.influxdb import InfluxDB
 from solaredge2mqtt.service.monitoring import MonitoringSite
 from solaredge2mqtt.service.weather import WeatherClient
 from solaredge2mqtt.settings import service_settings
@@ -130,27 +132,28 @@ class Service:
 
     def schedule_influxdb_loops(self):
         if self.settings.is_influxdb_configured:
-            self.schedule_loop(600, self.influxdb.loop)
-            self.schedule_loop(600, self.basics.energy_loop)
+            loop_handles = [self.influxdb.loop, self.basics.energy_loop]
+            if self.settings.is_forecast_configured:
+                loop_handles.append(self.forecast.training_loop)
+
+            self.schedule_loop(600, loop_handles)
 
     async def schedule_weather_loops(self):
         if self.settings.is_weather_configured:
             self.schedule_loop(600, self.weather.loop)
 
             if self.settings.is_forecast_configured:
-                await self.forecast.train()
-                self.schedule_loop(600, self.forecast.training_loop, True)
                 self.schedule_loop(600, self.forecast.forecast_loop, True)
 
     def schedule_loop(
         self,
         interval_in_seconds: int,
-        handle: callable,
+        handles: Callable | list[Callable],
         delay_start: bool = False,
         args: list[any] = None,
     ):
         loop = aio.create_task(
-            self.run_loop(interval_in_seconds, handle, delay_start, args)
+            self.run_loop(interval_in_seconds, handles, delay_start, args)
         )
         self.loops.add(loop)
         loop.add_done_callback(self.loops.remove)
@@ -158,10 +161,13 @@ class Service:
     async def run_loop(
         self,
         interval_in_seconds: int,
-        handle: callable,
+        handles: Callable | list[Callable],
         delay_start: bool = False,
         args: list[any] = None,
     ):
+        if not isinstance(handles, list):
+            handles = [handles]
+
         if delay_start:
             await aio.sleep(interval_in_seconds)
 
@@ -169,7 +175,8 @@ class Service:
             execution_time = 0
             try:
                 start_time = time()
-                await handle(*args or [])
+                for handle in handles:
+                    await handle(*args or [])
                 execution_time = time() - start_time
             except InvalidDataException as error:
                 logger.warning("{message}, skipping this loop", message=error.message)
