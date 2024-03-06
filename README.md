@@ -94,8 +94,8 @@ To access current weather data, ensure you have an OpenWeatherMap account, an AP
 
 The SolarEdge2MQTT service features an integrated machine learning component designed to forecast PV production for the current and following day. For optimal functionality, confirm that your settings for [location](https://github.com/DerOetzi/solaredge2mqtt/blob/main/README.md#basic-configuration), [InfluxDB](https://github.com/DerOetzi/solaredge2mqtt/blob/main/README.md#influxdb) and [weather](https://github.com/DerOetzi/solaredge2mqtt/blob/main/README.md#weather) are correctly configured.
 
-SE2MQTT_FORECAST__ENABLE: Activate the machine learning-based forecast feature by setting this to true. The default is false.
-SE2MQTT_FORECAST__HYPERPARAMETERTUNING: Optimize forecast accuracy by enabling hyperparameter tuning. Note that this process is computationally intensive and may not be suitable for devices with limited processing power, such as Raspberry Pi. The default setting is false.
+- **SE2MQTT_FORECAST__ENABLE**: Activate the machine learning-based forecast feature by setting this to true. The default is false.
+- **SE2MQTT_FORECAST__HYPERPARAMETERTUNING**: Optimize forecast accuracy by enabling hyperparameter tuning. Note that this process is computationally intensive and may not be suitable for devices with limited processing power, such as Raspberry Pi. The default setting is false.
 
 *Your experience and feedback, especially regarding forecast accuracy and performance on low-powered devices, are highly valued. This continuous improvement effort aims to enhance the predictive capabilities of the SolarEdge2MQTT service for all users.*
 
