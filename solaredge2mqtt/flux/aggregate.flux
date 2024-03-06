@@ -2,7 +2,7 @@ import "date"
 
 // Definieren der Start- und Stoppzeit
 stopTime = date.truncate(t: now(), unit: 1h)
-startTime = date.sub(from: stopTime, d: 2h)
+startTime = date.sub(from: stopTime, d: 24h)
 
 bucket = "{{BUCKET_NAME}}"
 
