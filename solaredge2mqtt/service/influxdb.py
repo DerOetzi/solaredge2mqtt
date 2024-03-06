@@ -65,7 +65,7 @@ class InfluxDB:
 
         logger.info("Cleanup current hour powerflow and energy data")
         self.delete_from_measurements(
-            now.replace(minute=1) - timedelta(hours=23),
+            now.replace(minute=1) - timedelta(hours=1),
             now + timedelta(hours=1),
             ["powerflow", "energy"],
         )
