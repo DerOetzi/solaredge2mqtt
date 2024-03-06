@@ -1,162 +1,142 @@
 # SolarEdge 2 MQTT Service
 [![License](https://img.shields.io/github/license/DerOetzi/solaredge2mqtt)](https://github.com/DerOetzi/solaredge2mqtt/blob/main/LICENSE) [![Release](https://img.shields.io/github/v/release/DerOetzi/solaredge2mqtt)](https://github.com/DerOetzi/solaredge2mqtt/releases/latest) [![Build Status](https://img.shields.io/github/actions/workflow/status/DerOetzi/solaredge2mqtt/build_project.yml?branch=main)](https://github.com/DerOetzi/solaredge2mqtt/actions/workflows/build_project.yml) [![PyPI version](https://img.shields.io/pypi/v/solaredge2mqtt.svg)](https://pypi.org/project/solaredge2mqtt/) [![Discord Chat](https://img.shields.io/discord/1196540254686032014)](https://discord.gg/QXfghc93pY)
 
-The SolarEdge2MQTT service is a project designed to read power data from a SolarEdge inverter and publish it to an MQTT broker. The service is useful for integrating SolarEdge inverters into home automation systems or other applications that use MQTT for data exchange. It provides real-time monitoring of power flow and other parameters from the inverter via Modbus. 
+The SolarEdge2MQTT service facilitates the retrieval of power data from SolarEdge inverters and its publication to an MQTT broker. Ideal for integrating SolarEdge inverters into home automation systems, this service supports real-time monitoring of power flow and additional parameters via Modbus.
 
-You can also gather the panels' energy production data from the SolarEdge monitoring site. This feature is optional and does not use the API, but rather your monitoring platform account.
+Users can optionally collect panel energy production data directly from the SolarEdge monitoring site, without employing the API, by leveraging their monitoring platform account.
 
-The SolarEdge Wallbox can be monitored as well via REST API.
+It also enables the monitoring of SolarEdge Wallbox via the REST API and supports saving all values into InfluxDB for advanced visualization.
 
-Additionally all values can be saved for visualization into a InfluxDB.
-
-*The SolarEdge2MQTT service is currently in an early stage of development. While it is functional and can be used to read data from a SolarEdge inverter and publish it to an MQTT broker, it is still undergoing active development. Features may be added, removed, or changed, and there may be bugs. Users should be aware of this and use the service with caution. Despite its early state, the project is open-source and contributions are welcome.*
-
+*Please note: The SolarEdge2MQTT service is in its early development stages. Although operational for reading and publishing data from a SolarEdge inverter, active development may introduce changes to features, potential removals, or bugs. Users are advised to proceed with caution. As an open-source project, contributions are highly encouraged.*
 
 ## Contact and Feedback
 
-If you have any questions, please contact me on Discord.
+For inquiries, feel free to reach out on Discord.
 
 [![Discord Banner](https://discordapp.com/api/guilds/1196540254686032014/widget.png?style=banner2)](https://discord.gg/QXfghc93pY)
 
-Please share your ideas, suggestions or problems by opening an [issue](https://github.com/DerOetzi/solaredge2mqtt/issues). I am really looking forward to your feedback.
+We highly value your input. Share your ideas, suggestions, or issues by opening an [issue](https://github.com/DerOetzi/solaredge2mqtt/issues). Your feedback is eagerly awaited.
 
-## Installation and Configuration
-
-Install and update using pip.
-```
-pip install -U solaredge2mqtt
-```
-
-Install and update using docker
-```
-docker pull ghcr.io/deroetzi/solaredge2mqtt:latest
-```
-
-### Service configuration
-
-The service is configured by environment variables. The following options can be set:
-
-#### Basic configuration
-
-Environment Variable             | default  | description                                            
--------------------------------- | -------- | ------------------------------------------------------ 
-SE2MQTT_INTERVAL                 | 5        | Interval between requests in seconds
-SE2MQTT_LOGGING_LEVEL            | INFO     | Set logging level to DEBUG, INFO, WARNING, ERROR, CRITICAL
-
-#### Modbus configuration
-
-Environment Variable             | default  | description                                            
--------------------------------- | -------- | ------------------------------------------------------ 
-SE2MQTT_MODBUS__HOST             | *None*   | IP address of your inverter
-SE2MQTT_MODBUS__PORT             | 1502     | Modbus port of your inverter
-SE2MQTT_MODBUS__TIMEOUT          | 1        | Timeout for the modbus connection
-SE2MQTT_MODBUS__UNIT             | 1        | Modbus unit address
-
-#### MQTT configuration
-
-Environment Variable             | default        | description                                            
--------------------------------- | ---------------| ------------------------------------------------------ 
-SE2MQTT_MQTT__CLIENT_ID          | solaredge2mqtt | MQTT client id
-SE2MQTT_MQTT__BROKER             | *None*         | IP address of your MQTT broker
-SE2MQTT_MQTT__PORT               | 1883           | Port of your MQTT broker
-SE2MQTT_MQTT__USERNAME           | *None*         | Username to authenticate to your MQTT broker
-SE2MQTT_MQTT__PASSWORD           | *None*         | Password to authenticate to your MQTT broker (for security reason use secrets with docker)
-SE2MQTT_MQTT__TOPIC_PREFIX       | solaredge      | SolarEdge2MQTT will use this as prefix topic
-
-#### Monitoring
-
-If you want to get panel energy values from the SolarEdge monitoring platform, add additional parameters.
-
-Environment Variable             | description                                            
--------------------------------- | ------------------------------------------------------ 
-SE2MQTT_MONITORING__SITE_ID      | Your site id from the SolarEdge monitoring plattform
-SE2MQTT_MONITORING__USERNAME     | Your username for your account on the SolarEdge monitoring platform
-SE2MQTT_MONITORING__PASSWORD     | Your password for your account on the SolarEdge monitoring plattform (for security reason use secrets with docker)
-
-If you want to monitor the power values of your SolarEdge Wallbox, add additional parameters. The Wallbox needs to have firmware version >= 1.15.0 and activated REST API. 
-
-#### Wallbox
-
-Environment Variable      | description                                            
---------------------------| ------------------------------------------------------ 
-SE2MQTT_WALLBOX__HOST     | The IP adress of your wallbox
-SE2MQTT_WALLBOX__PASSWORD | The password of user `admin` you use to login the Web UI of your Wallbox
-SE2MQTT_WALLBOX__SERIAL   | The serial number of your wallbox
-
-#### InfluxDB
-
-If you want to save the monitoring data to a InfluxDB you have to generate a full access token, because the service will generate two buckets and a task for you.
-
-The first bucket (raw) is used to store every interval the data of the components `inverter`, `meters`, `batteries` and `wallbox` to a measurement called `component` and the current `powerflow` state. This can be useful for debugging reasons. The generated aggregation task will store the `energy` values of every minute to this bucket. By default this bucket holds the values for 24h.
-
-The second bucket is used by the aggregation task to store the `powerflow` states and `energy` values aggregated by 1 hour intervals. By default this bucket holds the values for 2 years.
-
-Environment Variable                   | default                | description                                            
--------------------------------------- | ---------------------- | ------------------------------------------------------ 
-SE2MQTT_INFLUXDB__HOST                 | *None*                 | Set your host (for example: http://localhost)
-SE2MQTT_INFLUXDB__PORT                 | 8086                   | Set your port
-SE2MQTT_INFLUXDB__TOKEN                | *None*                 | Set your token (for security reasons use a secret with docker) The token must have full access because the service manages the needed buckets and tasks
-SE2MQTT_INFLUXDB__ORG                  | *None*                 | Set your organization ID
-SE2MQTT_INFLUXDB__PREFIX               | solaredge/solaredgedev | Set a prefix for bucket and task names
-SE2MQTT_INFLUXDB__RETENTION_RAW        | 90000 = 25h            | Set a retention policy in seconds for bucket raw
-SE2MQTT_INFLUXDB__RETENTION_AGGREGATED | 63072000 = 2 years     | Set a retention policy in seconds for bucket aggegrated
-SE2MQTT_INFLUXDB__AGGREGATED_INTERVAL  | 10m                    | Aggregate power and energy valuse in InfluxDB  set a interval for the task should be between 10m and 1h
-
-In order to calculate your savings and earnings, you can specify the amount you pay for consumption and the amount you earn for delivery per kilowatt-hour (kWh). Please note that this feature is only functional in combination with InfluxDB.
-
-Environment Variable                   | description                                            
--------------------------------------- | ------------------------------------------------------ 
-SE2MQTT_PRICES__CONSUMPTION            | Set the price you pay per 1 kWh for energy received from the grid
-SE2MQTT_PRICES__DELIVERY               | Set the price you receive per 1 kWh for energy delivered to the grid
-
-
-
-#### Example configuration
+## Configuration
 
 You can download [.env.example](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/.env.example) and rename it to `.env`. Inside, you can modify the default configuration values to meet your needs in this file.
 
-## Run the service 
+Configure the service using environment variables. The available options are listed below for customization:
 
-### In the console
+### Basic configuration
 
-Copy the [.env.example](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/.env.example) file to .env and modify it according to your needs.
+- **SE2MQTT_INTERVAL**: The frequency (in seconds) of data retrieval requests. Default is every 5 seconds.
+- **SE2MQTT_LOGGING_LEVEL**: Adjust the verbosity of logs. Options include DEBUG, INFO, WARNING, ERROR, and CRITICAL.
+- **SE2MQTT_LOCATION__LATITUDE** and **SE2MQTT_LOCATION__LONGITUDE**: Specify your location to enable weather and forecast services. These settings are essential for accurate environmental data and PV production forecasts.
 
-Then, simply run `solaredge2mqtt` to start the service.
+### Modbus configuration
 
-### With docker:
+- **SE2MQTT_MODBUS__HOST**: The IP address of your SolarEdge inverter.
+- **SE2MQTT_MODBUS__PORT**: The port on which your inverter's Modbus is accessible. Default is 1502.
+- **SE2MQTT_MODBUS__TIMEOUT**: The timeout (in seconds) for Modbus connections. A lower value makes the system more responsive but may lead to incomplete data in environments with poor network conditions.
+- **SE2MQTT_MODBUS__UNIT**: The unit address for Modbus communication. Default is 1.
+
+### MQTT configuration
+
+- **SE2MQTT_MQTT__CLIENT_ID**: Identifier for the MQTT client, defaults to 'solaredge2mqtt'.
+- **SE2MQTT_MQTT__BROKER**: The IP address of your MQTT broker.
+- **SE2MQTT_MQTT__PORT**: The port your MQTT broker listens on. Default is 1883.
+- **SE2MQTT_MQTT__USERNAME** and **SE2MQTT_MQTT__PASSWORD**: Credentials for connecting to your MQTT broker. It's recommended to use secrets for the password if deploying with Docker.
+- **SE2MQTT_MQTT__TOPIC_PREFIX**: The prefix used for MQTT topics. Defaults to 'solaredge'.
+
+### Monitoring
+
+To enable panel energy value retrieval from the SolarEdge monitoring platform, you must configure:
+
+- **SE2MQTT_MONITORING__SITE_ID**: Your site ID as registered on the SolarEdge platform.
+- **SE2MQTT_MONITORING__USERNAME**: Your username for the SolarEdge monitoring platform.
+- **SE2MQTT_MONITORING__PASSWORD**: Your password. Ensure to use Docker secrets or a secure method to protect this information.
+
+### Wallbox
+
+For monitoring SolarEdge Wallbox, provide:
+
+- **SE2MQTT_WALLBOX__HOST**: The IP address of your Wallbox.
+- **SE2MQTT_WALLBOX__PASSWORD**: The admin password for Wallbox web UI access.
+- **SE2MQTT_WALLBOX__SERIAL**: The serial number of your Wallbox.
+
+### InfluxDB
+
+Configure your InfluxDB settings with these environment variables to store monitoring data effectively:
+
+- **SE2MQTT_INFLUXDB__HOST**: Specify the host of your InfluxDB instance (e.g., http://localhost). Default is None.
+- **SE2MQTT_INFLUXDB__PORT**: The port number on which your InfluxDB instance is running. The default value is 8086.
+- **SE2MQTT_INFLUXDB__TOKEN**: Your access token for InfluxDB. It is imperative to use this token securely, especially when deploying with Docker. The token requires full access since the service will be managing necessary buckets and tasks. Default is None.
+- **SE2MQTT_INFLUXDB__ORG**: The ID of your organization within InfluxDB. Default is None.
+- **SE2MQTT_INFLUXDB__BUCKET**: The name of the bucket where the data will be saved. Default bucket name is solaredge.
+- **SE2MQTT_INFLUXDB__RETENTION_RAW**: The retention policy for raw data in hours. This setting defines how long the raw power values are stored in InfluxDB. Default is 25 hours.
+- **SE2MQTT_INFLUXDB__RETENTION**: The retention policy for aggregated data in seconds. This sets how long the aggregated data will be stored in InfluxDB, with the default being 2 years (63072000 seconds).
+These configurations allow you to tailor the InfluxDB storage for your SolarEdge monitoring data, ensuring that you have the flexibility to define how long the data should be retained both in raw and aggregated forms.
+
+### Price Configuration
+To calculate your savings and earnings, you can specify the amount you pay for consumption and the amount you receive for delivery per kilowatt-hour (kWh). Please note, this feature is only operational in conjunction with InfluxDB.
+
+- **SE2MQTT_PRICES__CONSUMPTION**: Set the price you pay per 1 kWh for energy received from the grid.
+- **SE2MQTT_PRICES__DELIVERY**: Set the price you receive per 1 kWh for energy delivered to the grid.
+
+These additional settings allow for a comprehensive analysis of your energy production and usage, enabling you not just to monitor energy flow but also understand the financial aspects of your energy generation and consumption.
+
+### Weather
+
+Leverage real-time weather data in your SolarEdge2MQTT service by integrating with OpenWeatherMap. This feature enriches your service with accurate environmental conditions, which can be essential for detailed energy production analysis.
+
+- **SE2MQTT_WEATHER__API_KEY**: Securely set your OpenWeatherMap OneCall API key here. For enhanced security, it's recommended to use this key as a secret within Docker environments.
+- **SE2MQTT_WEATHER__LANGUAGE**: Customize the language for weather data retrieved from the API. The default setting is English (en).
+
+To access current weather data, ensure you have an OpenWeatherMap account, an API key, and a subscription to the One-Call API. Visit [OpenWeatherMap](https://openweathermap.org/) for more information on obtaining these prerequisites.
+
+### Forecast
+
+The SolarEdge2MQTT service features an integrated machine learning component designed to forecast PV production for the current and following day. For optimal functionality, confirm that your settings for [location](https://github.com/DerOetzi/solaredge2mqtt/blob/main/README.md#basic-configuration), [InfluxDB](https://github.com/DerOetzi/solaredge2mqtt/blob/main/README.md#influxdb) and [weather](https://github.com/DerOetzi/solaredge2mqtt/blob/main/README.md#weather) are correctly configured.
+
+SE2MQTT_FORECAST__ENABLE: Activate the machine learning-based forecast feature by setting this to true. The default is false.
+SE2MQTT_FORECAST__HYPERPARAMETERTUNING: Optimize forecast accuracy by enabling hyperparameter tuning. Note that this process is computationally intensive and may not be suitable for devices with limited processing power, such as Raspberry Pi. The default setting is false.
+
+*Your experience and feedback, especially regarding forecast accuracy and performance on low-powered devices, are highly valued. This continuous improvement effort aims to enhance the predictive capabilities of the SolarEdge2MQTT service for all users.*
+
+## Running the service 
+
+Each of these methods provides a different level of control and isolation, catering to various use cases from development and testing to full-scale production deployment.
+
+### In the Console
+
+For users looking to run SolarEdge2MQTT directly within their console, which is ideal for testing or development environments, follow these steps:
+
+1. **Preparation**: Ensure you have Python installed on your system. The service is compatible with Python >=3.10.
+2. **Installation**: If you haven't already, install the service using pip with the command `pip install -U solaredge2mqtt`. This command fetches the latest version and installs all necessary dependencies.
+3. **Environment Configuration**: Copy the [.env.example](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/.env.example) file to a new file named `.env`. Open this file in a text editor and adjust the environment variables to match your system and preferences. This includes setting up your MQTT broker, InfluxDB credentials, and any other service configurations as detailed in the README.
+4. **Execution**: With your environment configured, run the command solaredge2mqtt in your terminal. The service will start and begin operating based on the settings you've specified in the .env file.
+
+### With Docker
+
+Docker offers a more isolated and scalable approach to deploying the SolarEdge2MQTT service. To run the service using Docker:
+
+1. **Docker Installation**: Ensure Docker is installed and running on your system. Docker is available for various operating systems and provides detailed installation guides on its website.
+2. **Pulling the Docker Image**: Execute the command `docker pull ghcr.io/deroetzi/solaredge2mqtt:latest` to download the latest Docker image of the service.
+3. **Running the Container**: Use the docker run command to start the service. Include environment variable flags (-e) for each configuration option you need to specify. For example:
 
 ```
 docker run --name solaredge2mqtt --rm \
     -e "SE2MQTT_MODBUS__HOST=<INVERTER_IP>" \
     -e "SE2MQTT_MQTT__BROKER=<BROKER_IP>" \
-    -e "SE2MQTT_MQTT__USERNAME=<MQTT_USERNAME>" \
-    -e "SE2MQTT_MQTT__PASSWORD=<MQTT_PASSWORD>" \
     -e "TZ=Europe/Berlin" \
     ghcr.io/deroetzi/solaredge2mqtt:latest
 ```
 
-Add optional environment arguments from above to fit to your setup.
+Replace <INVERTER_IP> and <BROKER_IP> with your specific values. Add any additional environment variables as needed.
 
-### With docker-compose
+### With Docker Compose
 
-Copy the [.env.example](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/.env.example) file to `.env` and modify it according to your needs.
+For a more advanced deployment, especially when integrating with other services like MQTT brokers or InfluxDB, Docker Compose facilitates managing multi-container Docker applications:
 
-Get the [docker-compose.yml](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/docker-compose.yml) file.
+1. **Docker Compose Installation**: Ensure Docker Compose is installed on your system. It's typically included with Docker Desktop for Windows and Mac but may require separate installation on Linux.
+2. **Configuration**: Obtain the [docker-compose.yml](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/docker-compose.yml) file from the SolarEdge2MQTT GitHub repository. Edit this file to include your specific environment variables and any other services you wish to integrate.
+3. **Environment File**: Similar to running in the console, copy the [.env.example](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/.env.example) file to `.env` and adjust the settings to fit your setup.
+4. **Execution**: Run `docker-compose up -d` to start the service in detached mode. This command reads your `docker-compose.yml` and `.env` file, setting up your SolarEdge2MQTT service along with any other specified services.
 
-Generate a `.secrets` directory and put at least a file called `mqtt_password` inside with your MQTT broker password.
-
-If you want to use module energy values additionally, uncomment the secrets parts for the `se2mqtt_monitoring__password` secret inside the `docker-compose.yml` file and place an `monitoring_password` file in the `.secrets` directory. The same applies to `wallbox_password` and `influxdb_token`. These are the minimum secrets you should use. Feel free to extend it with other parameters such as usernames, site_id, and location. 
-
-Read more about docker secrets here: https://docs.docker.com/engine/swarm/secrets/
-
-Run the docker container
-
-```
-docker-compose up -d
-```
-
-Stop the docker container
-
-```
-docker-compose down
-```
+Stopping the Service: When you need to stop the service, use `docker-compose down` to gracefully stop and remove the containers defined in your Docker Compose file.
