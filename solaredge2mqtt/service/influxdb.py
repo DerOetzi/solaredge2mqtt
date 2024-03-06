@@ -11,12 +11,13 @@ from pandas import DataFrame
 
 from solaredge2mqtt.logging import logger
 from solaredge2mqtt.models import ForecastPeriod, HistoricPeriod
-from solaredge2mqtt.settings import InfluxDBSettings
+from solaredge2mqtt.settings import InfluxDBSettings, PriceSettings
 
 
 class InfluxDB:
-    def __init__(self, settings: InfluxDBSettings) -> None:
-        self.settings = settings
+    def __init__(self, settings: InfluxDBSettings, prices: PriceSettings) -> None:
+        self.settings: InfluxDBSettings = settings
+        self.prices: PriceSettings = prices
 
         self.client: InfluxDBClient = InfluxDBClient(
             url=f"{settings.host}:{settings.port}",
@@ -63,15 +64,12 @@ class InfluxDB:
     async def loop(self) -> None:
         now = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0)
 
-        logger.info("Cleanup current hour powerflow and energy data")
-        self.delete_from_measurements(
-            now.replace(minute=1) - timedelta(hours=1),
-            now + timedelta(hours=1),
-            ["powerflow", "energy"],
-        )
-
         logger.info("Aggregate powerflow and energy raw data")
-        self.query_api.query(self._get_flux_query("aggregate"))
+        aggregate_query = self._get_flux_query(
+            "aggregate",
+            {"PRICE_IN": self.prices.price_in, "PRICE_OUT": self.prices.price_out},
+        )
+        self.query_api.query(aggregate_query)
 
         logger.info("Apply retention on raw data")
         retention_time = now - timedelta(hours=self.settings.retention_raw)

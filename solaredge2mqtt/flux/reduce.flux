@@ -12,22 +12,26 @@ battery =
 battery
     |> filter(fn: (r) => r.agg_type == "min")
     |> aggregateWindow(every: 1h, fn: min, createEmpty: false)
+    |> map(fn: (r) => ({r with _time: date.truncate(t: date.sub(from: r._time, d: 1s), unit: 1h)}))
     |> to(bucket: "solaredgenew")
 
 battery
     |> filter(fn: (r) => r.agg_type == "mean")
     |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
+    |> map(fn: (r) => ({r with _time: date.truncate(t: date.sub(from: r._time, d: 1s), unit: 1h)}))
     |> to(bucket: "solaredgenew")
 
 battery
     |> filter(fn: (r) => r.agg_type == "max")
     |> aggregateWindow(every: 1h, fn: max, createEmpty: false)
+    |> map(fn: (r) => ({r with _time: date.truncate(t: date.sub(from: r._time, d: 1s), unit: 1h)}))
     |> to(bucket: "solaredgenew")
 
 from(bucket: "solaredge")
     |> range(start: startTime, stop: stopTime)
     |> filter(fn: (r) => r._measurement == "energy")
     |> aggregateWindow(every: 1h, fn: sum, createEmpty: false)
+    |> map(fn: (r) => ({r with _time: date.truncate(t: date.sub(from: r._time, d: 1s), unit: 1h)}))
     |> to(bucket: "solaredgenew")
 
 training =
@@ -95,14 +99,17 @@ powerflow =
 powerflow
     |> filter(fn: (r) => r.agg_type == "min")
     |> aggregateWindow(every: 1h, fn: min, createEmpty: false)
+    |> map(fn: (r) => ({r with _time: date.truncate(t: date.sub(from: r._time, d: 1s), unit: 1h)}))
     |> to(bucket: "solaredgenew")
 
 powerflow
     |> filter(fn: (r) => r.agg_type == "mean")
     |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
+    |> map(fn: (r) => ({r with _time: date.truncate(t: date.sub(from: r._time, d: 1s), unit: 1h)}))
     |> to(bucket: "solaredgenew")
 
 powerflow
     |> filter(fn: (r) => r.agg_type == "max")
     |> aggregateWindow(every: 1h, fn: max, createEmpty: false)
+    |> map(fn: (r) => ({r with _time: date.truncate(t: date.sub(from: r._time, d: 1s), unit: 1h)}))
     |> to(bucket: "solaredgenew")
