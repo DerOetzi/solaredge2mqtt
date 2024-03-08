@@ -9,7 +9,7 @@ from solaredge2mqtt.models import (
     Powerflow,
 )
 from solaredge2mqtt.mqtt import MQTTClient
-from solaredge2mqtt.service.influxdb import InfluxDB, Point
+from solaredge2mqtt.service.influxdb import InfluxDB
 from solaredge2mqtt.service.modbus import Modbus
 from solaredge2mqtt.service.wallbox import WallboxClient
 from solaredge2mqtt.settings import ServiceSettings
@@ -117,30 +117,6 @@ class BaseLoops:
                     raise InvalidDataException(f"No energy data for {period}")
 
                 continue
-
-            if (
-                period == HistoricPeriod.LAST_HOUR
-                and self.settings.is_prices_configured
-            ):
-                price_in = self.settings.prices.consumption
-                savings = price_in * record["consumer_used_production"]
-
-                price_out = self.settings.prices.delivery
-                earnings = price_out * record["grid_delivery"]
-
-                record["money_price_in"] = price_in
-                record["money_price_out"] = price_out
-                record["money_savings"] = savings
-                record["money_earnings"] = earnings
-
-                self.influxdb.write_point(
-                    Point("energy")
-                    .field("money_price_in", price_in)
-                    .field("money_price_out", price_out)
-                    .field("money_savings", savings)
-                    .field("money_earnings", earnings)
-                    .time(record["_stop"])
-                )
 
             energy = HistoricEnergy(record, period)
 

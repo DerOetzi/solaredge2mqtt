@@ -22,6 +22,10 @@ class OpenWeatherMapRain(Solaredge2MQTTBaseModel):
         return self.one_hour
 
 
+class OpenWeatherMapSnow(OpenWeatherMapRain):
+    pass
+
+
 class OpenWeatherMapBaseData(Solaredge2MQTTBaseModel):
     dt: datetime
     temp: float
@@ -29,7 +33,7 @@ class OpenWeatherMapBaseData(Solaredge2MQTTBaseModel):
     pressure: int
     humidity: int
     dew_point: float
-    uvi: float
+    uvi: float | None = Field(None)
     clouds: int
     visibility: int
     wind_speed: float
@@ -37,6 +41,7 @@ class OpenWeatherMapBaseData(Solaredge2MQTTBaseModel):
     wind_gust: float | None = Field(None)
     weather: list[OpenWeatherMapCondition]
     rain: OpenWeatherMapRain = Field(OpenWeatherMapRain())
+    snow: OpenWeatherMapSnow = Field(OpenWeatherMapSnow())
 
     @property
     def localtime(self) -> datetime:
@@ -78,17 +83,23 @@ class OpenWeatherMapBaseData(Solaredge2MQTTBaseModel):
 class OpenWeatherMapCurrentData(OpenWeatherMapBaseData):
     sunrise: datetime = Field(exclude=True)
     sunset: datetime = Field(exclude=True)
-    pop: float = Field(0.0)
 
 
 class OpenWeatherMapForecastData(OpenWeatherMapBaseData):
     pop: float
 
 
-class OpenWeatherMapOneCall(Solaredge2MQTTBaseModel):
+class OpenWeatherMapOneCallBase(Solaredge2MQTTBaseModel):
     lat: float
     lon: float
     timezone: str
     timezone_offset: int
+
+
+class OpenWeatherMapOneCall(OpenWeatherMapOneCallBase):
     current: OpenWeatherMapCurrentData
     hourly: list[OpenWeatherMapForecastData]
+
+
+class OpenWeatherMapOneCallTimemachine(OpenWeatherMapOneCallBase):
+    data: list[OpenWeatherMapCurrentData]

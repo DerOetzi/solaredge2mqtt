@@ -99,6 +99,14 @@ class PriceSettings(BaseModel):
     def is_delivery_configured(self) -> bool:
         return self.delivery is not None
 
+    @property
+    def price_in(self) -> float:
+        return self.consumption or 0.0
+
+    @property
+    def price_out(self) -> float:
+        return self.delivery or 0.0
+
 
 class LocationSettings(BaseModel):
     latitude: float
@@ -133,7 +141,7 @@ class ServiceSettings(BaseModel):
     mqtt: MQTTSettings
 
     location: LocationSettings | None = None
-    prices: PriceSettings | None = None
+    prices: PriceSettings = PriceSettings()
 
     monitoring: MonitoringSettings | None = None
     wallbox: WallboxSettings | None = None

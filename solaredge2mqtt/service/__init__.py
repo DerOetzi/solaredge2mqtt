@@ -13,8 +13,7 @@ from typing import Callable
 from aiomqtt import MqttError
 
 from solaredge2mqtt import __version__
-from solaredge2mqtt.exceptions import (ConfigurationException,
-                                       InvalidDataException)
+from solaredge2mqtt.exceptions import ConfigurationException, InvalidDataException
 from solaredge2mqtt.logging import initialize_logging, logger
 from solaredge2mqtt.mqtt import MQTTClient
 from solaredge2mqtt.service.base import BaseLoops
@@ -49,7 +48,7 @@ class Service:
         self.loops: set[aio.Task] = set()
 
         self.influxdb: InfluxDB | None = (
-            InfluxDB(self.settings.influxdb)
+            InfluxDB(self.settings.influxdb, self.settings.prices)
             if self.settings.is_influxdb_configured
             else None
         )
