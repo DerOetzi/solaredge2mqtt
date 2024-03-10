@@ -102,10 +102,16 @@ class WallboxClient(HTTPClient):
                 verify=False,
             )
             logger.trace(response)
+
+            if response is None:
+                raise ConfigurationException("wallbox", "Invalid Wallbox login")
+
             self.authorization = AuthorizationTokens(**response)
             logger.info("Logged in to EV charger")
         except HTTPError as error:
-            raise ConfigurationException("Unable to login to EV charger") from error
+            raise ConfigurationException(
+                "wallbox", "Unable to login to EV charger"
+            ) from error
 
     def _refresh_token(self):
         logger.info("Refreshing access token Wallbox...")

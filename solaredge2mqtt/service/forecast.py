@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-import asyncio as aio
 import time
+from asyncio import Event, to_thread
 from datetime import datetime, timedelta, timezone
 
+import ephem
+from astral import LocationInfo
+from astral.sun import azimuth, elevation, sun
 from numpy import cos, percentile, pi, sin
-from pandas import DataFrame, to_datetime
-from pysolar.solar import get_altitude, get_azimuth
+from pandas import DataFrame, Series, to_datetime
 from sklearn import clone
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
@@ -62,7 +64,7 @@ class Forecast:
         self.weather = weather
 
         self.forecasters: dict[ForecasterType, Forecaster] = {
-            typed: Forecaster(typed, settings.hyperparametertuning)
+            typed: Forecaster(typed, location, settings.hyperparametertuning)
             for typed in ForecasterType
         }
 
@@ -74,7 +76,7 @@ class Forecast:
         last_hour = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)
 
         training_data = self.get_weather_training(last_hour)
-        training_data = self.add_sun_position(last_hour, training_data)
+        training_data["time"] = last_hour
         training_data = self.add_last_hour_pv_production(training_data)
 
         self.write_new_training_data_to_influxdb(training_data)
@@ -129,17 +131,17 @@ class Forecast:
     async def train(self) -> None:
         data = await self.influxdb.query_dataframe("training_data")
         data["time"] = data["_time"].dt.tz_convert(self.location.timezone)
-        await aio.to_thread(self.training, data)
+        await to_thread(self.training, data)
 
     def training(self, data: DataFrame) -> None:
         for forecaster in self.forecasters.values():
             forecaster.train(data)
-            # self.replay_prediction(data, forecaster)
+            # self.replay_priHediction(data, forecaster)
 
-    def replay_prediction(self, data: DataFrame, forecaster: Forecaster) -> None:
+    async def replay_prediction(self, data: DataFrame, forecaster: Forecaster) -> None:
         """FOR DEVELOPMENT PURPOSE ONLY"""
         logger.warning("Replaying prediction for development purpose")
-        data = forecaster.predict(data)
+        data = await forecaster.predict(data)
         data["time"] = data["_time"]
         periods = self._calculate_periods_prediction(data, forecaster.typed)
         self._write_periods_to_influxdb(periods, forecaster.typed)
@@ -155,27 +157,25 @@ class Forecast:
             raise InvalidDataException("Missing weather forecast for forecast")
 
         estimation_data_list = [
-            dict(
-                self.add_sun_position(
-                    datetime(
-                        year=weather_forecast.year,
-                        month=weather_forecast.month,
-                        day=weather_forecast.day,
-                        hour=weather_forecast.hour,
-                        minute=0,
-                        second=0,
-                        microsecond=0,
-                    ).astimezone(),
-                    weather_forecast.model_dump_estimation_data(),
-                )
-            )
+            {
+                "time": datetime(
+                    year=weather_forecast.year,
+                    month=weather_forecast.month,
+                    day=weather_forecast.day,
+                    hour=weather_forecast.hour,
+                    minute=0,
+                    second=0,
+                    microsecond=0,
+                ).astimezone(),
+                **weather_forecast.model_dump_estimation_data(),
+            }
             for weather_forecast in self.last_weather_forecast
         ]
 
         data = DataFrame(estimation_data_list)
 
         for typed, forecaster in self.forecasters.items():
-            predicted_data = forecaster.predict(data)
+            predicted_data = await forecaster.predict(data)
 
             periods = self._calculate_periods_prediction(predicted_data, typed)
             self._write_periods_to_influxdb(periods, typed)
@@ -245,21 +245,6 @@ class Forecast:
         data["time"] = data["time"].dt.strftime("%Y-%m-%dT%H:%M:%S%z")
         return data
 
-    def add_sun_position(
-        self, last_hour: datetime, data
-    ) -> dict[str, str | float | int | None]:
-        data["time"] = last_hour
-
-        sun_time = last_hour + timedelta(minutes=30)
-        data["sun_azimuth"] = round(
-            get_azimuth(self.location.latitude, self.location.longitude, sun_time), 2
-        )
-        data["sun_altitude"] = round(
-            get_altitude(self.location.latitude, self.location.longitude, sun_time), 2
-        )
-
-        return data
-
 
 class Forecaster:
     NUMERIC_FEATURES: list[str] = [
@@ -270,7 +255,6 @@ class Forecaster:
         "pop",
         "pressure",
         "rain",
-        "sun_altitude",
         "temp",
         "uvi",
         "visibility",
@@ -280,20 +264,23 @@ class Forecaster:
     CATEGORICAL_FEATURES: list[str] = ["weather_id", "weather_main"]
     CYCLICAL_FEATURES: dict[str, int] = {
         "wind_deg": 360,
-        "sun_azimuth": 360,
     }
-    TIME_FEATURES: list[str] = ["time"]
     TARGET_FEATURES: dict[str, str] = {
         ForecasterType.ENERGY.target_column: "energy",
         ForecasterType.POWER.target_column: "power",
     }
 
     def __init__(
-        self, typed: ForecasterType, enable_hyperparameter_tuning: bool = False
+        self,
+        typed: ForecasterType,
+        location: LocationSettings,
+        enable_hyperparameter_tuning: bool = False,
     ) -> None:
         self.typed: ForecasterType = typed
+        self.location = location
         self.enable_hyperparameter_tuning = enable_hyperparameter_tuning
         self.model_pipeline: Pipeline = None
+        self.training_completed: Event = Event()
 
     def train(self, data: DataFrame) -> None:
         data_count = len(data)
@@ -302,6 +289,7 @@ class Forecaster:
 
         logger.info(f"Training model {self.typed} with {data_count} data points")
 
+        self.training_completed.clear()
         start_time = time.time()
         y_vector = data[self.typed.target_column]
 
@@ -315,6 +303,7 @@ class Forecaster:
         self.model_pipeline.fit(data, y_vector)
 
         execution_time = time.time() - start_time
+        self.training_completed.set()
 
         transformed_features = self.model_pipeline[
             "preprocessor"
@@ -397,8 +386,9 @@ class Forecaster:
                 (
                     "time",
                     TimeEncoder(),
-                    self._extract_used_columns(self.TIME_FEATURES, x_vector_columns),
+                    ["time"],
                 ),
+                ("sun", SunEncoder(self.location), ["time"]),
                 (
                     "cat",
                     CategoricalEncoder(),
@@ -422,17 +412,16 @@ class Forecaster:
     def is_trained(self) -> bool:
         return self.model_pipeline is not None
 
-    def predict(self, new_data: DataFrame) -> DataFrame:
+    async def predict(self, new_data: DataFrame) -> DataFrame:
         if self.model_pipeline is None:
             raise InvalidDataException("The model has not been trained yet.")
 
         data_for_prediction = new_data.copy()
 
+        await self.training_completed.wait()
+
         predictions = self.model_pipeline.predict(data_for_prediction)
         data_for_prediction[self.typed.target_column] = predictions
-        data_for_prediction.loc[
-            data_for_prediction["sun_altitude"] < -10, self.typed.target_column
-        ] = 0
         data_for_prediction[self.typed.target_column] = data_for_prediction[
             self.typed.target_column
         ].apply(self.typed.prepare_value)
@@ -475,6 +464,12 @@ class BaseEncoder(BaseEstimator, TransformerMixin):
         return self._feature_names_out
 
 
+class CategoricalEncoder(BaseEncoder):
+    def transform(self, x_vector: DataFrame) -> DataFrame:
+        x_vector = self._transform(x_vector).astype("category")
+        return self._save_feature_names_out(x_vector)
+
+
 class CyclicalEncoder(BaseEncoder):
     def __init__(self, **cycle_lengths: dict[str, int]) -> None:
         super().__init__()
@@ -499,7 +494,7 @@ class CyclicalEncoder(BaseEncoder):
 
     @staticmethod
     def transform_cycle_columns(
-        x_vector: DataFrame, prefix: str, cycle_vector: DataFrame, cycle_length: int
+        x_vector: DataFrame, prefix: str, cycle_vector: DataFrame, cycle_length: float
     ) -> DataFrame:
         x_vector[f"{prefix}_cos"] = cos(2 * pi * cycle_vector / cycle_length)
         x_vector[f"{prefix}_sin"] = sin(2 * pi * cycle_vector / cycle_length)
@@ -508,10 +503,13 @@ class CyclicalEncoder(BaseEncoder):
 
 
 class TimeEncoder(BaseEncoder):
+    def __init__(self) -> None:
+        super().__init__()
+        self.season_starts: dict[int, dict[str, datetime]] = {}
+
     def transform(self, x_vector: DataFrame) -> DataFrame:
         x_vector = self._transform(x_vector)
         for feature in self.features:
-
             x_vector = CyclicalEncoder.transform_cycle_columns(
                 x_vector, f"{feature}_hour", x_vector[feature].dt.hour, 24
             )
@@ -526,16 +524,104 @@ class TimeEncoder(BaseEncoder):
                 .astype("category")
             )
 
-            logger.debug(x_vector.head())
+            x_vector[f"{feature}_season"] = (
+                x_vector[feature].apply(self._map_season).astype("category")
+            )
+            x_vector = CyclicalEncoder.transform_cycle_columns(
+                x_vector,
+                f"{feature}_day_of_year",
+                x_vector[feature].dt.dayofyear,
+                365.25,
+            )
+
             x_vector.drop(feature, axis=1, inplace=True)
 
+        logger.trace(x_vector.head(30))
         return self._save_feature_names_out(x_vector)
 
+    def _map_season(self, date: datetime) -> str:
+        year = date.year
+        if year not in self.season_starts:
+            equinox_mar = ephem.next_vernal_equinox(str(year))
+            solstice_jun = ephem.next_summer_solstice(equinox_mar)
+            equinox_sep = ephem.next_autumnal_equinox(solstice_jun)
+            solstice_dec = ephem.next_winter_solstice(equinox_sep)
 
-class CategoricalEncoder(BaseEncoder):
-    def transform(self, x_vector) -> DataFrame:
-        x_vector = self._transform(x_vector).astype("category")
+            self.season_starts[year] = {
+                "spring": equinox_mar.datetime().astimezone(),
+                "summer": solstice_jun.datetime().astimezone(),
+                "autumn": equinox_sep.datetime().astimezone(),
+                "winter": solstice_dec.datetime().astimezone(),
+            }
+
+        starts = self.season_starts[year]
+
+        season = "winter"
+
+        if date >= starts["spring"]:
+            if date < starts["summer"]:
+                season = "spring"
+            elif date < starts["autumn"]:
+                season = "summer"
+            elif date < starts["winter"]:
+                season = "autumn"
+
+        return season
+
+
+class SunEncoder(BaseEncoder):
+    def __init__(self, location: LocationSettings) -> None:
+        super().__init__()
+        self.location = location
+        self._location = LocationInfo(
+            "name",
+            "region",
+            timezone=location.timezone,
+            latitude=location.latitude,
+            longitude=location.longitude,
+        )
+
+    def transform(self, x_vector: DataFrame) -> DataFrame:
+        x_vector = self._transform(x_vector)
+
+        for feature in self.features:
+            time_key = f"{feature}_time"
+
+            x_vector[time_key] = x_vector[feature].apply(
+                lambda x: x + timedelta(minutes=30)
+            )
+
+            x_vector[f"{feature}_elevation"] = x_vector[time_key].apply(
+                lambda x: elevation(self._location.observer, x)
+            )
+
+            x_vector = CyclicalEncoder.transform_cycle_columns(
+                x_vector,
+                f"{feature}_azimuth",
+                x_vector[time_key].apply(lambda x: azimuth(self._location.observer, x)),
+                360,
+            )
+
+            x_vector[
+                [
+                    f"{feature}_daylight",
+                    f"{feature}_delta_sunrise",
+                    f"{feature}_delta_sunset",
+                ]
+            ] = x_vector[time_key].apply(self.daylight_info)
+
+            x_vector.drop([feature, time_key], axis=1, inplace=True)
+
         return self._save_feature_names_out(x_vector)
+
+    def daylight_info(self, row_time: datetime) -> Series:
+        s = sun(self._location.observer, row_time)
+        daylight = (s["sunset"] - s["sunrise"]).total_seconds() / 3600
+
+        delta_sunrise = (row_time - s["sunrise"]).total_seconds() / 3600
+        delta_sunset = (s["sunset"] - row_time).total_seconds() / 3600
+
+        return Series([daylight, delta_sunrise, delta_sunset])
 
 
 class PFISelector(BaseEstimator, TransformerMixin):

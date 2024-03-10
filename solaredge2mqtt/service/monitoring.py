@@ -66,7 +66,7 @@ class MonitoringSite(HTTPClient):
             logger.info("Login to monitoring site successful")
         except HTTPError as error:
             raise ConfigurationException(
-                "Unable to login to monitoring account"
+                "Monitoring","Unable to login to monitoring account"
             ) from error
 
     def get_module_energies(self) -> list[LogicalInverter] | None:
