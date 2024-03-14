@@ -4,7 +4,7 @@ loguru==0.7.2
 requests==2.31.0
 influxdb-client==1.41.0
 pyjwt==2.8.0
-aiomqtt==2.0.0
+aiomqtt==2.0.1
 pysolar==0.11
 numpy==1.26.4
 pandas==2.2.1
