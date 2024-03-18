@@ -125,6 +125,8 @@ class Modbus:
                 battery=battery_key,
                 raw=json.dumps(battery_raw, indent=4),
             )
+            if not battery_raw:
+                continue
 
             battery_data = SunSpecBattery(battery_raw)
             logger.debug(battery_data)
