@@ -36,9 +36,9 @@ class HTTPClient:
                 response.raise_for_status()
                 result = json_loads(response.content.decode("utf-8"))
         except RequestsConnectionError as error:
-            logger.error(f"Cannot connect to {self.service}: {error}")
+            logger.warning(f"Cannot connect to {self.service}: {error}")
         except Timeout as error:
-            logger.error(f"Connection to {self.service} timed out: {error}")
+            logger.warning(f"Connection to {self.service} timed out: {error}")
 
         return result
 
@@ -77,11 +77,11 @@ class HTTPClient:
                 else:
                     result = response.content.decode("utf-8")
         except RequestsConnectionError as error:
-            logger.error(f"Cannot connect to {self.service}: {error}")
+            logger.warning(f"Cannot connect to {self.service}: {error}")
         except Timeout as error:
-            logger.error(f"Connection to {self.service} timed out: {error}")
+            logger.warning(f"Connection to {self.service} timed out: {error}")
         except HTTPError as error:
-            logger.error(f"HTTP error from {self.service}: {error}")
+            logger.warning(f"HTTP error from {self.service}: {error}")
             raise error
 
         return result

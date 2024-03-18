@@ -1,6 +1,4 @@
-import asyncio as aio
-
-from solaredge2mqtt.exceptions import InvalidDataException
+from solaredge2mqtt.exceptions import ConfigurationException, InvalidDataException
 from solaredge2mqtt.logging import logger
 from solaredge2mqtt.models import (
     HistoricEnergy,
@@ -36,17 +34,8 @@ class BaseLoops:
             else None
         )
 
-    async def powerflow_loop(self):
-        results = await aio.gather(
-            self.modbus.loop(),
-            (
-                self.wallbox.loop()
-                if self.settings.is_wallbox_configured
-                else aio.sleep(0)
-            ),
-        )
-
-        inverter_data, meters_data, batteries_data = results[0]
+    async def powerflow_loop(self) -> None:
+        inverter_data, meters_data, batteries_data = await self.modbus.loop()
 
         if any(data is None for data in [inverter_data, meters_data, batteries_data]):
             raise InvalidDataException("Invalid modbus data")
@@ -57,13 +46,18 @@ class BaseLoops:
                 raise InvalidDataException("Invalid battery data")
 
         evcharger = 0
-
+        wallbox_data = None
         if self.settings.is_wallbox_configured:
-            wallbox_data = results[1]
-            logger.trace("Wallbox: {wallbox_data.power} W", wallbox_data=wallbox_data)
-            evcharger = wallbox_data.power
-        else:
-            wallbox_data = None
+            try:
+                wallbox_data = await self.wallbox.loop()
+                logger.trace(
+                    "Wallbox: {wallbox_data.power} W", wallbox_data=wallbox_data
+                )
+                evcharger = wallbox_data.power
+            except ConfigurationException as ex:
+                logger.warning(f"{ex.component}: {ex.message}")
+
+        evcharger = 0
 
         powerflow = Powerflow(inverter_data, meters_data, batteries_data, evcharger)
         if not powerflow.is_valid:

@@ -28,16 +28,16 @@ class OpenWeatherMapSnow(OpenWeatherMapRain):
 
 class OpenWeatherMapBaseData(Solaredge2MQTTBaseModel):
     dt: datetime
-    temp: float
-    feels_like: float
-    pressure: int
-    humidity: int
-    dew_point: float
+    temp: float | None = Field(None)
+    feels_like: float | None = Field(None)
+    pressure: int | None = Field(None)
+    humidity: int | None = Field(None)
+    dew_point: float | None = Field(None)
     uvi: float | None = Field(None)
-    clouds: int
-    visibility: int
-    wind_speed: float
-    wind_deg: int
+    clouds: int | None = Field(None)
+    visibility: int | None = Field(None)
+    wind_speed: float | None = Field(None)
+    wind_deg: int | None = Field(None)
     wind_gust: float | None = Field(None)
     weather: list[OpenWeatherMapCondition]
     rain: OpenWeatherMapRain = Field(OpenWeatherMapRain())
