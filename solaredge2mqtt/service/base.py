@@ -57,8 +57,6 @@ class BaseLoops:
             except ConfigurationException as ex:
                 logger.warning(f"{ex.component}: {ex.message}")
 
-        evcharger = 0
-
         powerflow = Powerflow(inverter_data, meters_data, batteries_data, evcharger)
         if not powerflow.is_valid:
             logger.info(powerflow)
