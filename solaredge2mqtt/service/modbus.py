@@ -62,8 +62,9 @@ class Modbus:
             for meter_key, meter_obj in self.inverter.meters().items()
         }
         batteries_raw = {
-            battery_key: battery_obj.read_all()
+            battery_key: battery_raw
             for battery_key, battery_obj in self.inverter.batteries().items()
+            if (battery_raw := battery_obj.read_all())
         }
 
         return inverter_raw, meters_raw, batteries_raw
