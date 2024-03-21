@@ -16,6 +16,8 @@ SECONDS_PER_HOUR = 3600
 SECONDS_PER_YEAR = SECONDS_PER_DAY * 365
 SECONDS_PER_2_YEARS = SECONDS_PER_YEAR * 2
 
+LOCAL_TZ = strftime("%Z", localtime())
+
 
 class ModbusSettings(BaseModel):
     host: str
@@ -69,7 +71,6 @@ class InfluxDBSettings(BaseModel):
     bucket: str = Field("solaredge")
     retention: int = Field(SECONDS_PER_2_YEARS)
     retention_raw: int = Field(25)
-    timezone: str = Field(strftime("%Z", localtime()))
 
     @property
     def is_configured(self) -> bool:
@@ -111,8 +112,6 @@ class PriceSettings(BaseModel):
 class LocationSettings(BaseModel):
     latitude: float
     longitude: float
-
-    timezone: str = Field(strftime("%Z", localtime()))
 
 
 class WeatherSettings(BaseModel):

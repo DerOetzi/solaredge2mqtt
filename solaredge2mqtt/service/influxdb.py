@@ -11,7 +11,7 @@ from pandas import DataFrame
 
 from solaredge2mqtt.logging import logger
 from solaredge2mqtt.models import ForecastPeriod, HistoricPeriod
-from solaredge2mqtt.settings import InfluxDBSettings, PriceSettings
+from solaredge2mqtt.settings import LOCAL_TZ, InfluxDBSettings, PriceSettings
 
 
 class InfluxDB:
@@ -160,7 +160,7 @@ class InfluxDB:
             flux = (
                 flux.replace("{{BUCKET_AGGREGATED}}", self.bucket_name)
                 .replace("{{BUCKET_NAME}}", self.bucket_name)
-                .replace("{{TIMEZONE}}", self.settings.timezone)
+                .replace("{{TIMEZONE}}", LOCAL_TZ)
             )
             self.flux_cache[query_name] = flux
 

@@ -21,7 +21,7 @@ from solaredge2mqtt.service.forecast import Forecast
 from solaredge2mqtt.service.influxdb import InfluxDB
 from solaredge2mqtt.service.monitoring import MonitoringSite
 from solaredge2mqtt.service.weather import WeatherClient
-from solaredge2mqtt.settings import service_settings
+from solaredge2mqtt.settings import LOCAL_TZ, service_settings
 
 
 def run():
@@ -89,11 +89,10 @@ class Service:
         logger.info("Starting SolarEdge2MQTT service...")
         logger.info("Version: {version}", version=__version__)
         logger.debug(self.settings)
-        logger.info("Timezone: {timezone}", timezone=self.settings.influxdb.timezone)
+        logger.info("Timezone: {timezone}", timezone=LOCAL_TZ)
 
         if self.settings.is_influxdb_configured:
             self.influxdb.initialize_buckets()
-            # self.influxdb.initialize_task()
 
         while not self.cancel_request.is_set():
             try:

@@ -14,7 +14,8 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.inspection import permutation_importance
-from sklearn.model_selection import GridSearchCV, TimeSeriesSplit, train_test_split
+from sklearn.model_selection import (GridSearchCV, TimeSeriesSplit,
+                                     train_test_split)
 from sklearn.pipeline import Pipeline
 
 from solaredge2mqtt.exceptions import InvalidDataException
@@ -23,7 +24,8 @@ from solaredge2mqtt.models import EnumModel, OpenWeatherMapForecastData
 from solaredge2mqtt.mqtt import MQTTClient
 from solaredge2mqtt.service.influxdb import InfluxDB, Point
 from solaredge2mqtt.service.weather import WeatherClient
-from solaredge2mqtt.settings import ForecastSettings, LocationSettings
+from solaredge2mqtt.settings import (LOCAL_TZ, ForecastSettings,
+                                     LocationSettings)
 
 
 class ForecasterType(EnumModel):
@@ -130,7 +132,7 @@ class Forecast:
 
     async def train(self) -> None:
         data = await self.influxdb.query_dataframe("training_data")
-        data["time"] = data["_time"].dt.tz_convert(self.location.timezone)
+        data["time"] = data["_time"].dt.tz_convert(LOCAL_TZ)
         await to_thread(self.training, data)
 
     def training(self, data: DataFrame) -> None:
@@ -210,7 +212,7 @@ class Forecast:
         hourly["time"] = hourly.apply(
             lambda row: to_datetime(
                 f"{int(row['year'])}-{int(row['month'])}-{int(row['day'])}T{int(row['hour'])}:00:00"
-            ).tz_localize(self.location.timezone),
+            ).tz_localize(LOCAL_TZ),
             axis=1,
         )
 
@@ -576,7 +578,7 @@ class SunEncoder(BaseEncoder):
         self._location = LocationInfo(
             "name",
             "region",
-            timezone=location.timezone,
+            timezone=LOCAL_TZ,
             latitude=location.latitude,
             longitude=location.longitude,
         )
