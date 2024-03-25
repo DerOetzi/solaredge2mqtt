@@ -44,6 +44,7 @@ htmlcov/
 .coverage
 .coverage.*
 .cache
+.pylintrc
 nosetests.xml
 coverage.xml
 *.cover
@@ -103,6 +104,8 @@ celerybeat.pid
 
 # Environments
 .env
+.env.dev.example
+.env.example
 .venv
 env/
 venv/

@@ -20,5 +20,4 @@ from solaredge2mqtt.models.weather import (
     OpenWeatherMapCurrentData,
     OpenWeatherMapForecastData,
     OpenWeatherMapOneCall,
-    OpenWeatherMapOneCallTimemachine,
 )
