@@ -99,7 +99,3 @@ class OpenWeatherMapOneCallBase(Solaredge2MQTTBaseModel):
 class OpenWeatherMapOneCall(OpenWeatherMapOneCallBase):
     current: OpenWeatherMapCurrentData
     hourly: list[OpenWeatherMapForecastData]
-
-
-class OpenWeatherMapOneCallTimemachine(OpenWeatherMapOneCallBase):
-    data: list[OpenWeatherMapCurrentData]
