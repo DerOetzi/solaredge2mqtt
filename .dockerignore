@@ -145,6 +145,7 @@ setup.cfg
 setup.py
 doc
 versioneer.py
+freeze_version.py
 Dockerfile
 .dockerignore
 MANIFEST.in
