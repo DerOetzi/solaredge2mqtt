@@ -14,8 +14,7 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.inspection import permutation_importance
-from sklearn.model_selection import (GridSearchCV, TimeSeriesSplit,
-                                     train_test_split)
+from sklearn.model_selection import GridSearchCV, TimeSeriesSplit, train_test_split
 from sklearn.pipeline import Pipeline
 
 from solaredge2mqtt.exceptions import InvalidDataException
@@ -24,8 +23,7 @@ from solaredge2mqtt.models import EnumModel, OpenWeatherMapForecastData
 from solaredge2mqtt.mqtt import MQTTClient
 from solaredge2mqtt.service.influxdb import InfluxDB, Point
 from solaredge2mqtt.service.weather import WeatherClient
-from solaredge2mqtt.settings import (LOCAL_TZ, ForecastSettings,
-                                     LocationSettings)
+from solaredge2mqtt.settings import LOCAL_TZ, ForecastSettings, LocationSettings
 
 
 class ForecasterType(EnumModel):
@@ -175,6 +173,7 @@ class Forecast:
         ]
 
         data = DataFrame(estimation_data_list)
+        data["time"] = data["time"].astype(f"datetime64[ns, {LOCAL_TZ}]")
 
         for typed, forecaster in self.forecasters.items():
             predicted_data = await forecaster.predict(data)
