@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from functools import lru_cache
 from os import environ, listdir, path
-from time import localtime, strftime
 from typing import Generator
+from tzlocal import get_localzone_name
 
 from pydantic import BaseModel, Field, SecretStr
 
@@ -16,7 +16,7 @@ SECONDS_PER_HOUR = 3600
 SECONDS_PER_YEAR = SECONDS_PER_DAY * 365
 SECONDS_PER_2_YEARS = SECONDS_PER_YEAR * 2
 
-LOCAL_TZ = strftime("%Z", localtime())
+LOCAL_TZ = get_localzone_name()
 
 
 class ModbusSettings(BaseModel):
