@@ -1,38 +1,44 @@
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import ClassVar, TYPE_CHECKING
 
 from influxdb_client import Point
 from pydantic import Field, computed_field
 
 from solaredge2mqtt.logging import logger
 from solaredge2mqtt.models.base import Solaredge2MQTTBaseModel
-from solaredge2mqtt.models.modbus import (SunSpecBattery, SunSpecInverter,
-                                          SunSpecMeter)
+from solaredge2mqtt.models.modbus import SunSpecBattery, SunSpecInverter, SunSpecMeter
+
+if TYPE_CHECKING:
+    from solaredge2mqtt.settings import PriceSettings
 
 
 class InverterPowerflow(Solaredge2MQTTBaseModel):
     power: int
     dc_power: int
-    battery_factor: float = Field(exclude=True)
+    battery_discharge: int = Field(exclude=True)
 
-    def __init__(
-        self,
+    @staticmethod
+    def from_modbus(
         inverter_data: SunSpecInverter,
         battery: BatteryPowerflow,
-    ):
+    ) -> InverterPowerflow:
         power = int(inverter_data.ac.power.actual)
         dc_power = int(inverter_data.dc.power)
-        battery_factor = 0.0
 
-        if power > 0 and battery.discharge > 0:
-            battery_factor = battery.discharge / dc_power
-
-        super().__init__(
+        return InverterPowerflow(
             power=power,
             dc_power=dc_power,
-            battery_factor=battery_factor,
+            battery_discharge=battery.discharge,
         )
+
+    @property
+    def battery_factor(self) -> float:
+        factor = 0.0
+        if self.power > 0 and self.battery_discharge > 0:
+            factor = self.battery_discharge / self.dc_power
+
+        return factor
 
     @computed_field
     @property
@@ -78,13 +84,14 @@ class InverterPowerflow(Solaredge2MQTTBaseModel):
 class GridPowerflow(Solaredge2MQTTBaseModel):
     power: int
 
-    def __init__(self, meters_data: dict[str, SunSpecMeter]):
+    @staticmethod
+    def from_modbus(meters_data: dict[str, SunSpecMeter]) -> GridPowerflow:
         grid = 0
         for meter in meters_data.values():
             if "Import" in meter.info.option and "Export" in meter.info.option:
                 grid += meter.power.actual
 
-        super().__init__(power=grid)
+        return GridPowerflow(power=grid)
 
     @computed_field
     @property
@@ -112,12 +119,13 @@ class GridPowerflow(Solaredge2MQTTBaseModel):
 class BatteryPowerflow(Solaredge2MQTTBaseModel):
     power: int
 
-    def __init__(self, batteries_data: dict[str, SunSpecBattery]):
+    @staticmethod
+    def from_modbus(batteries_data: dict[str, SunSpecBattery]) -> BatteryPowerflow:
         batteries_power = 0
         for battery in batteries_data.values():
             batteries_power += battery.power
 
-        super().__init__(power=batteries_power)
+        return BatteryPowerflow(power=batteries_power)
 
     @computed_field
     @property
@@ -223,15 +231,15 @@ class Powerflow(Solaredge2MQTTBaseModel):
 
     last_powerflow: ClassVar[Powerflow] = None
 
-    def __init__(
-        self,
+    @staticmethod
+    def from_modbus(
         inverter_data: SunSpecInverter,
         meters_data: dict[str, SunSpecMeter],
         batteries_data: dict[str, SunSpecBattery],
         evcharger: int = 0,
-    ):
-        grid = GridPowerflow(meters_data)
-        battery = BatteryPowerflow(batteries_data)
+    ) -> Powerflow:
+        grid = GridPowerflow.from_modbus(meters_data)
+        battery = BatteryPowerflow.from_modbus(batteries_data)
 
         if inverter_data.ac.power.actual > 0:
             pv_production = int(inverter_data.dc.power + battery.power)
@@ -240,11 +248,11 @@ class Powerflow(Solaredge2MQTTBaseModel):
         else:
             pv_production = 0
 
-        inverter = InverterPowerflow(inverter_data, battery)
+        inverter = InverterPowerflow.from_modbus(inverter_data, battery)
 
         consumer = ConsumerPowerflow(inverter, grid, evcharger)
 
-        super().__init__(
+        return Powerflow(
             pv_production=pv_production,
             inverter=inverter,
             grid=grid,
@@ -297,5 +305,24 @@ class Powerflow(Solaredge2MQTTBaseModel):
         point = Point(measurement)
         for key, value in self.model_dump_influxdb().items():
             point.field(key, value)
+
+        return point
+
+    def prepare_point_energy(
+        self, measurement: str = "energy", prices: PriceSettings = None
+    ) -> Point:
+        point = Point(measurement)
+        for key, value in self.model_dump_influxdb().items():
+            energy = value / 1000
+            point.field(key, energy)
+            if prices is not None:
+                if key == "consumer_used_production":
+                    point.field("money_saved", energy * prices.price_in)
+                    point.field("money_price_in", prices.price_in)
+                elif key == "grid_delivery":
+                    point.field("money_delivered", energy * prices.price_out)
+                    point.field("money_price_out", prices.price_out)
+                elif key == "grid_consumption":
+                    point.field("money_consumed", energy * prices.price_out)
 
         return point

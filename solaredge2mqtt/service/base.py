@@ -57,7 +57,9 @@ class BaseLoops:
             except ConfigurationException as ex:
                 logger.warning(f"{ex.component}: {ex.message}")
 
-        powerflow = Powerflow(inverter_data, meters_data, batteries_data, evcharger)
+        powerflow = Powerflow.from_modbus(
+            inverter_data, meters_data, batteries_data, evcharger
+        )
         if not powerflow.is_valid:
             logger.info(powerflow)
             raise InvalidDataException("Invalid powerflow data")
