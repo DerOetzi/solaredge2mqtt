@@ -32,8 +32,6 @@ power
     |> map(fn: (r) => ({r with _time: date.truncate(t: date.sub(from: r._time, d: 1s), unit: 1h)}))
     |> to(bucket: bucket)
 
-needed = ["pv_production", "consumer_used_production", "grid_delivery"]
-
 energy = power
     |> aggregateWindow(
         every: 1h,
@@ -49,7 +47,7 @@ energy = power
 energy
     |> filter(fn: (r) => r._field == "consumer_used_production")
     |> map(fn: (r) => ({r with _value: r._value * {{PRICE_IN}}}))
-    |> set(key: "_field", value: "money_savings")
+    |> set(key: "_field", value: "money_saved")
     |> to(bucket: bucket)
     |> map(fn: (r) => ({r with _value: {{PRICE_IN}}}))
     |> set(key: "_field", value: "money_price_in")
@@ -58,11 +56,19 @@ energy
 energy
     |> filter(fn: (r) => r._field == "grid_delivery")
     |> map(fn: (r) => ({r with _value: r._value * {{PRICE_OUT}}}))
-    |> set(key: "_field", value: "money_earnings")
+    |> set(key: "_field", value: "money_delivered")
     |> to(bucket: bucket)
     |> map(fn: (r) => ({r with _value: {{PRICE_OUT}}}))
     |> set(key: "_field", value: "money_price_out")
     |> to(bucket: bucket)
+
+energy
+    |> filter(fn: (r) => r._field == "grid_consumption")
+    |> map(fn: (r) => ({r with _value: r._value * {{PRICE_IN}}}))
+    |> set(key: "_field", value: "money_consumed")
+    |> to(bucket: bucket)
+
+
 
 battery =
     from(bucket: bucket)

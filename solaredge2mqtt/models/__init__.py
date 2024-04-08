@@ -13,7 +13,13 @@ from solaredge2mqtt.models.monitoring import (
     LogicalModule,
     LogicalString,
 )
-from solaredge2mqtt.models.powerflow import Powerflow
+from solaredge2mqtt.models.powerflow import (
+    BatteryPowerflow,
+    ConsumerPowerflow,
+    GridPowerflow,
+    InverterPowerflow,
+    Powerflow,
+)
 from solaredge2mqtt.models.wallbox import WallboxAPI
 from solaredge2mqtt.models.weather import (
     OpenWeatherMapBaseData,

@@ -76,10 +76,21 @@ class HistoricEnergy(HistoricBaseModel):
 
 
 class HistoricMoney(Solaredge2MQTTBaseModel):
-    earnings: float
-    savings: float
+    delivered: float
+    saved: float
+    consumed: float
     price_in: float = Field(exclude=True)
     price_out: float = Field(exclude=True)
+
+    @computed_field
+    @property
+    def balance_grid(self) -> float:
+        return round(self.delivered - self.consumed, 3)
+
+    @computed_field
+    @property
+    def balance_total(self) -> float:
+        return round(self.balance_grid + self.saved, 3)
 
 
 class HistoricInfo(Solaredge2MQTTBaseModel):
@@ -109,6 +120,8 @@ class HistoricPeriod(EnumModel):
     THIS_MONTH = "this_month", "1mo", HistoricQuery.ACTUAL
     LAST_MONTH = "last_month", "1mo", HistoricQuery.LAST
     THIS_YEAR = "this_year", "1y", HistoricQuery.ACTUAL
+    LAST_YEAR = "last_year", "1y", HistoricQuery.LAST
+    LIFETIME = "lifetime", "99y", HistoricQuery.ACTUAL
 
     def __init__(self, topic: str, unit: str, query: HistoricQuery) -> None:
         self._topic: str = topic

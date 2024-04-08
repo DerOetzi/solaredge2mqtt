@@ -102,6 +102,13 @@ class InfluxDB:
     def write_points(self, points: list[Point]) -> None:
         self.write_api.write(bucket=self.bucket_name, record=points)
 
+    async def write_points_async(self, points: list[Point]) -> None:
+        await self.init_client_async()
+        async with self.client_async:
+            await self.client_async.write_api().write(
+                bucket=self.bucket_name, record=points
+            )
+
     def write_success_callback(self, conf: tuple[str, str, str], data: str) -> None:
         logger.debug(f"InfluxDB batch written: {conf} {data}")
 
