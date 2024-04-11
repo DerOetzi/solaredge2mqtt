@@ -31,6 +31,9 @@ class HomeAssistantDiscovery:
         logger.trace(entities_info)
         for entity_info in entities_info:
             entity_type = entity_info.pop("type")
+            if entity_type != "sensor":
+                continue
+
             entity = HomeAssistantEntity(
                 device=device,
                 **entity_info,
