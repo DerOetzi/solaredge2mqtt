@@ -43,10 +43,13 @@ class MQTTClient(Client):
         payload: str | int | float | BaseModel,
         retain: bool = False,
         qos: int = 1,
+        topic_prefix: str = None,
+        exclude_none: bool = False,
     ) -> None:
         if self._connected:
+            topic = f"{topic_prefix or self.topic_prefix}/{topic}"
+
             if isinstance(payload, BaseModel):
-                payload = payload.model_dump_json()
-            await self.publish(
-                f"{self.topic_prefix}/{topic}", payload, qos=qos, retain=retain
-            )
+                payload = payload.model_dump_json(exclude_none=exclude_none)
+
+            await self.publish(topic, payload, qos=qos, retain=retain)

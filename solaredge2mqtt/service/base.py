@@ -80,14 +80,14 @@ class BaseLoops:
             battery=powerflow.battery,
         )
 
-        await self.mqtt.publish_to(inverter_data.mqtt_topic, inverter_data)
+        await self.mqtt.publish_to(inverter_data.mqtt_topic(), inverter_data)
         for key, component in {**meters_data, **batteries_data}.items():
             await self.mqtt.publish_to(
-                f"{component.mqtt_topic}/{key.lower()}", component
+                f"{component.mqtt_topic()}/{key.lower()}", component
             )
 
         if wallbox_data is not None:
-            await self.mqtt.publish_to(wallbox_data.mqtt_topic, wallbox_data)
+            await self.mqtt.publish_to(wallbox_data.mqtt_topic(), wallbox_data)
 
         await self.mqtt.publish_to("powerflow", powerflow)
 

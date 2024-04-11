@@ -132,6 +132,15 @@ class ForecastSettings(BaseModel):
         return self.enable
 
 
+class HomeAssistantSettings(BaseModel):
+    enable: bool = Field(False)
+    topic_prefix: str = Field("homeassistant")
+
+    @property
+    def is_configured(self) -> bool:
+        return self.enable
+
+
 class ServiceSettings(BaseModel):
     interval: int = Field(5)
     logging_level: LoggingLevelEnum = LoggingLevelEnum.INFO
@@ -150,6 +159,8 @@ class ServiceSettings(BaseModel):
     weather: WeatherSettings | None = None
 
     forecast: ForecastSettings | None = None
+
+    homeassistant: HomeAssistantSettings | None = None
 
     def __init__(self, **data: dict[str, any]):
         sources = [self._read_environment, self._read_dotenv, self._read_secrets]
@@ -205,6 +216,10 @@ class ServiceSettings(BaseModel):
             is_configured = False
 
         return is_configured
+
+    @property
+    def is_homeassistant_configured(self) -> bool:
+        return self.homeassistant is not None and self.homeassistant.is_configured
 
     def _parse_key_and_values(
         self, sources: list[callable], data: dict[str, any]

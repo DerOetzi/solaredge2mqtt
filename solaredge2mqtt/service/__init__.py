@@ -19,6 +19,7 @@ from solaredge2mqtt.logging import initialize_logging, logger
 from solaredge2mqtt.mqtt import MQTTClient
 from solaredge2mqtt.service.base import BaseLoops
 from solaredge2mqtt.service.forecast import Forecast
+from solaredge2mqtt.service.homeassistant import HomeAssistantDiscovery
 from solaredge2mqtt.service.influxdb import InfluxDB
 from solaredge2mqtt.service.monitoring import MonitoringSite
 from solaredge2mqtt.service.weather import WeatherClient
@@ -80,6 +81,12 @@ class Service:
             else None
         )
 
+        self.homeassistant: HomeAssistantDiscovery | None = (
+            HomeAssistantDiscovery(self.settings, self.mqtt)
+            if self.settings.is_homeassistant_configured
+            else None
+        )
+
     def cancel(self):
         logger.info("Stopping SolarEdge2MQTT service...")
         self.cancel_request.set()
@@ -102,6 +109,9 @@ class Service:
             try:
                 async with self.mqtt:
                     await self.mqtt.publish_status_online()
+
+                    if self.settings.is_homeassistant_configured:
+                        await self.homeassistant.publish_discovery()
 
                     self.schedule_loop(
                         self.settings.interval, self.basics.powerflow_loop

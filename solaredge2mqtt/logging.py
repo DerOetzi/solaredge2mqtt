@@ -3,7 +3,7 @@ import sys
 
 from loguru import logger
 
-from solaredge2mqtt.models import EnumModel
+from solaredge2mqtt.models.base import EnumModel
 
 LOGGING_DEVICE_INFO = "{device} ({info.manufacturer} {info.model} {info.serialnumber})"
 
