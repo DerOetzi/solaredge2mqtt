@@ -111,6 +111,7 @@ class Service:
                     await self.mqtt.publish_status_online()
 
                     if self.settings.is_homeassistant_configured:
+                        logger.info("Home Assistant discovery enabled")
                         await self.homeassistant.publish_discovery()
 
                     self.schedule_loop(
