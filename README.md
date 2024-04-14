@@ -1,4 +1,5 @@
 # SolarEdge 2 MQTT Service
+
 [![License](https://img.shields.io/github/license/DerOetzi/solaredge2mqtt)](https://github.com/DerOetzi/solaredge2mqtt/blob/main/LICENSE) [![Release](https://img.shields.io/github/v/release/DerOetzi/solaredge2mqtt)](https://github.com/DerOetzi/solaredge2mqtt/releases/latest) [![Build Status](https://img.shields.io/github/actions/workflow/status/DerOetzi/solaredge2mqtt/build_project.yml?branch=main)](https://github.com/DerOetzi/solaredge2mqtt/actions/workflows/build_project.yml) [![PyPI version](https://img.shields.io/pypi/v/solaredge2mqtt.svg)](https://pypi.org/project/solaredge2mqtt/) [![Discord Chat](https://img.shields.io/discord/1196540254686032014)](https://discord.gg/QXfghc93pY)
 
 The SolarEdge2MQTT service facilitates the retrieval of power data from SolarEdge inverters and its publication to an MQTT broker. Ideal for integrating SolarEdge inverters into home automation systems, this service supports real-time monitoring of power flow and additional parameters via Modbus.
@@ -7,7 +8,7 @@ Users can optionally collect panel energy production data directly from the Sola
 
 It also enables the monitoring of SolarEdge Wallbox via the REST API and supports saving all values into InfluxDB for advanced visualization.
 
-*Please note: The SolarEdge2MQTT service is in its early development stages. Although operational for reading and publishing data from a SolarEdge inverter, active development may introduce changes to features, potential removals, or bugs. Users are advised to proceed with caution. As an open-source project, contributions are highly encouraged.*
+_Please note: The SolarEdge2MQTT service is in its early development stages. Although operational for reading and publishing data from a SolarEdge inverter, active development may introduce changes to features, potential removals, or bugs. Users are advised to proceed with caution. As an open-source project, contributions are highly encouraged._
 
 ## Contact and Feedback
 
@@ -27,57 +28,58 @@ Configure the service using environment variables. The available options are lis
 
 - **SE2MQTT_INTERVAL**: The frequency (in seconds) of data retrieval requests. Default is every 5 seconds.
 - **SE2MQTT_LOGGING_LEVEL**: Adjust the verbosity of logs. Options include DEBUG, INFO, WARNING, ERROR, and CRITICAL.
-- **SE2MQTT_LOCATION__LATITUDE** and **SE2MQTT_LOCATION__LONGITUDE**: Specify your location to enable weather and forecast services. These settings are essential for accurate environmental data and PV production forecasts.
+- **SE2MQTT_LOCATION\_\_LATITUDE** and **SE2MQTT_LOCATION\_\_LONGITUDE**: Specify your location to enable weather and forecast services. These settings are essential for accurate environmental data and PV production forecasts.
 
 ### Modbus configuration
 
-- **SE2MQTT_MODBUS__HOST**: The IP address of your SolarEdge inverter.
-- **SE2MQTT_MODBUS__PORT**: The port on which your inverter's Modbus is accessible. Default is 1502.
-- **SE2MQTT_MODBUS__TIMEOUT**: The timeout (in seconds) for Modbus connections. A lower value makes the system more responsive but may lead to incomplete data in environments with poor network conditions.
-- **SE2MQTT_MODBUS__UNIT**: The unit address for Modbus communication. Default is 1.
+- **SE2MQTT_MODBUS\_\_HOST**: The IP address of your SolarEdge inverter.
+- **SE2MQTT_MODBUS\_\_PORT**: The port on which your inverter's Modbus is accessible. Default is 1502.
+- **SE2MQTT_MODBUS\_\_TIMEOUT**: The timeout (in seconds) for Modbus connections. A lower value makes the system more responsive but may lead to incomplete data in environments with poor network conditions.
+- **SE2MQTT_MODBUS\_\_UNIT**: The unit address for Modbus communication. Default is 1.
 
 ### MQTT configuration
 
-- **SE2MQTT_MQTT__CLIENT_ID**: Identifier for the MQTT client, defaults to 'solaredge2mqtt'.
-- **SE2MQTT_MQTT__BROKER**: The IP address of your MQTT broker.
-- **SE2MQTT_MQTT__PORT**: The port your MQTT broker listens on. Default is 1883.
-- **SE2MQTT_MQTT__USERNAME** and **SE2MQTT_MQTT__PASSWORD**: Credentials for connecting to your MQTT broker. It's recommended to use secrets for the password if deploying with Docker.
-- **SE2MQTT_MQTT__TOPIC_PREFIX**: The prefix used for MQTT topics. Defaults to 'solaredge'.
+- **SE2MQTT_MQTT\_\_CLIENT_ID**: Identifier for the MQTT client, defaults to 'solaredge2mqtt'.
+- **SE2MQTT_MQTT\_\_BROKER**: The IP address of your MQTT broker.
+- **SE2MQTT_MQTT\_\_PORT**: The port your MQTT broker listens on. Default is 1883.
+- **SE2MQTT_MQTT\_\_USERNAME** and **SE2MQTT_MQTT\_\_PASSWORD**: Credentials for connecting to your MQTT broker. It's recommended to use secrets for the password if deploying with Docker.
+- **SE2MQTT_MQTT\_\_TOPIC_PREFIX**: The prefix used for MQTT topics. Defaults to 'solaredge'.
 
 ### Monitoring
 
 To enable panel energy value retrieval from the SolarEdge monitoring platform, you must configure:
 
-- **SE2MQTT_MONITORING__SITE_ID**: Your site ID as registered on the SolarEdge platform.
-- **SE2MQTT_MONITORING__USERNAME**: Your username for the SolarEdge monitoring platform.
-- **SE2MQTT_MONITORING__PASSWORD**: Your password. Ensure to use Docker secrets or a secure method to protect this information.
+- **SE2MQTT_MONITORING\_\_SITE_ID**: Your site ID as registered on the SolarEdge platform.
+- **SE2MQTT_MONITORING\_\_USERNAME**: Your username for the SolarEdge monitoring platform.
+- **SE2MQTT_MONITORING\_\_PASSWORD**: Your password. Ensure to use Docker secrets or a secure method to protect this information.
 
 ### Wallbox
 
 For monitoring SolarEdge Wallbox, provide:
 
-- **SE2MQTT_WALLBOX__HOST**: The IP address of your Wallbox.
-- **SE2MQTT_WALLBOX__PASSWORD**: The admin password for Wallbox web UI access.
-- **SE2MQTT_WALLBOX__SERIAL**: The serial number of your Wallbox.
+- **SE2MQTT_WALLBOX\_\_HOST**: The IP address of your Wallbox.
+- **SE2MQTT_WALLBOX\_\_PASSWORD**: The admin password for Wallbox web UI access.
+- **SE2MQTT_WALLBOX\_\_SERIAL**: The serial number of your Wallbox.
 
 ### InfluxDB
 
 Configure your InfluxDB settings with these environment variables to store monitoring data effectively:
 
-- **SE2MQTT_INFLUXDB__HOST**: Specify the host of your InfluxDB instance (e.g., http://localhost). Default is None.
-- **SE2MQTT_INFLUXDB__PORT**: The port number on which your InfluxDB instance is running. The default value is 8086.
-- **SE2MQTT_INFLUXDB__TOKEN**: Your access token for InfluxDB. It is imperative to use this token securely, especially when deploying with Docker. The token requires full access since the service will be managing necessary buckets and tasks. Default is None.
-- **SE2MQTT_INFLUXDB__ORG**: The ID of your organization within InfluxDB. Default is None.
-- **SE2MQTT_INFLUXDB__BUCKET**: The name of the bucket where the data will be saved. Default bucket name is solaredge.
-- **SE2MQTT_INFLUXDB__RETENTION_RAW**: The retention policy for raw data in hours. This setting defines how long the raw power values are stored in InfluxDB. Default is 25 hours.
-- **SE2MQTT_INFLUXDB__RETENTION**: The retention policy for aggregated data in seconds. This sets how long the aggregated data will be stored in InfluxDB, with the default being 2 years (63072000 seconds).
-These configurations allow you to tailor the InfluxDB storage for your SolarEdge monitoring data, ensuring that you have the flexibility to define how long the data should be retained both in raw and aggregated forms.
+- **SE2MQTT_INFLUXDB\_\_HOST**: Specify the host of your InfluxDB instance (e.g., http://localhost). Default is None.
+- **SE2MQTT_INFLUXDB\_\_PORT**: The port number on which your InfluxDB instance is running. The default value is 8086.
+- **SE2MQTT_INFLUXDB\_\_TOKEN**: Your access token for InfluxDB. It is imperative to use this token securely, especially when deploying with Docker. The token requires full access since the service will be managing necessary buckets and tasks. Default is None.
+- **SE2MQTT_INFLUXDB\_\_ORG**: The ID of your organization within InfluxDB. Default is None.
+- **SE2MQTT_INFLUXDB\_\_BUCKET**: The name of the bucket where the data will be saved. Default bucket name is solaredge.
+- **SE2MQTT_INFLUXDB\_\_RETENTION_RAW**: The retention policy for raw data in hours. This setting defines how long the raw power values are stored in InfluxDB. Default is 25 hours.
+- **SE2MQTT_INFLUXDB\_\_RETENTION**: The retention policy for aggregated data in seconds. This sets how long the aggregated data will be stored in InfluxDB, with the default being 2 years (63072000 seconds).
+  These configurations allow you to tailor the InfluxDB storage for your SolarEdge monitoring data, ensuring that you have the flexibility to define how long the data should be retained both in raw and aggregated forms.
 
 ### Price Configuration
+
 To calculate your savings and earnings, you can specify the amount you pay for consumption and the amount you receive for delivery per kilowatt-hour (kWh). Please note, this feature is only operational in conjunction with InfluxDB.
 
-- **SE2MQTT_PRICES__CONSUMPTION**: Set the price you pay per 1 kWh for energy received from the grid.
-- **SE2MQTT_PRICES__DELIVERY**: Set the price you receive per 1 kWh for energy delivered to the grid.
+- **SE2MQTT_PRICES\_\_CONSUMPTION**: Set the price you pay per 1 kWh for energy received from the grid.
+- **SE2MQTT_PRICES\_\_DELIVERY**: Set the price you receive per 1 kWh for energy delivered to the grid.
 
 These additional settings allow for a comprehensive analysis of your energy production and usage, enabling you not just to monitor energy flow but also understand the financial aspects of your energy generation and consumption.
 
@@ -85,21 +87,25 @@ These additional settings allow for a comprehensive analysis of your energy prod
 
 Leverage real-time weather data in your SolarEdge2MQTT service by integrating with OpenWeatherMap. This feature enriches your service with accurate environmental conditions, which can be essential for detailed energy production analysis.
 
-- **SE2MQTT_WEATHER__API_KEY**: Securely set your OpenWeatherMap OneCall API key here. For enhanced security, it's recommended to use this key as a secret within Docker environments.
-- **SE2MQTT_WEATHER__LANGUAGE**: Customize the language for weather data retrieved from the API. The default setting is English (en).
+- **SE2MQTT_WEATHER\_\_API_KEY**: Securely set your OpenWeatherMap OneCall API key here. For enhanced security, it's recommended to use this key as a secret within Docker environments.
+- **SE2MQTT_WEATHER\_\_LANGUAGE**: Customize the language for weather data retrieved from the API. The default setting is English (en).
 
-To access current weather data, ensure you have an OpenWeatherMap account, an API key, and a subscription to the One-Call API. Visit [OpenWeatherMap](https://openweathermap.org/) for more information on obtaining these prerequisites.
+To access current weather data, ensure you have an OpenWeatherMap account, an API key, and a [subscription](https://home.openweathermap.org/subscriptions) to the One-Call API. Visit [OpenWeatherMap](https://openweathermap.org/) for more information on obtaining these prerequisites.
 
 ### Forecast
 
 The SolarEdge2MQTT service features an integrated machine learning component designed to forecast PV production for the current and following day. For optimal functionality, confirm that your settings for [location](https://github.com/DerOetzi/solaredge2mqtt/blob/main/README.md#basic-configuration), [InfluxDB](https://github.com/DerOetzi/solaredge2mqtt/blob/main/README.md#influxdb) and [weather](https://github.com/DerOetzi/solaredge2mqtt/blob/main/README.md#weather) are correctly configured.
 
-- **SE2MQTT_FORECAST__ENABLE**: Activate the machine learning-based forecast feature by setting this to true. The default is false.
-- **SE2MQTT_FORECAST__HYPERPARAMETERTUNING**: Optimize forecast accuracy by enabling hyperparameter tuning. Note that this process is computationally intensive and may not be suitable for devices with limited processing power, such as Raspberry Pi. The default setting is false.
+- **SE2MQTT_FORECAST\_\_ENABLE**: Activate the machine learning-based forecast feature by setting this to true. The default is false.
+- **SE2MQTT_FORECAST\_\_HYPERPARAMETERTUNING**: Optimize forecast accuracy by enabling hyperparameter tuning. Note that this process is computationally intensive and may not be suitable for devices with limited processing power, such as Raspberry Pi. The default setting is false.
 
-*Your experience and feedback, especially regarding forecast accuracy and performance on low-powered devices, are highly valued. This continuous improvement effort aims to enhance the predictive capabilities of the SolarEdge2MQTT service for all users.*
+**Precondition for Forecasting**: Before a forecast can be made, a minimum of 60 hours of training data must be collected. These data serve as the basis for model training and are crucial for prediction accuracy. Ensure that the service has had sufficient time to collect data before expecting forecast activation.
 
-## Running the service 
+**Note on Training Data Collection**: If the service goes without recording production data for longer than an hour, it will be unable to save training data. It's essential to ensure consistent data recording to maintain the integrity of the training process and ensure accurate forecasting.
+
+_Your experience and feedback, especially regarding forecast accuracy and performance on low-powered devices, are highly valued. This continuous improvement effort aims to enhance the predictive capabilities of the SolarEdge2MQTT service for all users._
+
+## Running the service
 
 Each of these methods provides a different level of control and isolation, catering to various use cases from development and testing to full-scale production deployment.
 

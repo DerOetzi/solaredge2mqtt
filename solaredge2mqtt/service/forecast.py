@@ -106,7 +106,10 @@ class Forecast:
         production_data = self.influxdb.query_first("production")
 
         if production_data is None:
-            raise InvalidDataException("Missing production data for last 10 minutes")
+            raise InvalidDataException(
+                "Missing production data of last hour for forecast training."
+                + " Did the service write power information to InfluxDB?"
+            )
 
         trainings_data[ForecasterType.POWER.target_column] = round(
             production_data[ForecasterType.POWER.target_column]
@@ -154,7 +157,7 @@ class Forecast:
             raise InvalidDataException("Forecast model is not trained yet")
 
         if self.last_weather_forecast is None:
-            raise InvalidDataException("Missing weather forecast for forecast")
+            raise InvalidDataException("Missing weather forecast for production forecast")
 
         estimation_data_list = [
             {
@@ -285,10 +288,14 @@ class Forecaster:
 
     def train(self, data: DataFrame) -> None:
         data_count = len(data)
-        if data_count < 60:
-            raise InvalidDataException("Not enough data to train the model")
+        logger.info(
+            f"Training model {self.typed} with {data_count} hours of data points"
+        )
 
-        logger.info(f"Training model {self.typed} with {data_count} data points")
+        if data_count < 60:
+            raise InvalidDataException(
+                "Forecast needs at least 60 hours of data at least to start training",
+            )
 
         self.training_completed.clear()
         start_time = time.time()
