@@ -7,6 +7,7 @@
 
 import asyncio as aio
 import signal
+import platform
 from time import time
 from typing import Callable
 
@@ -88,6 +89,9 @@ class Service:
     async def main_loop(self):
         logger.info("Starting SolarEdge2MQTT service...")
         logger.info("Version: {version}", version=__version__)
+        logger.info(
+            f"Operationg system: {platform.platform()} ({platform.system()}/{platform.machine()})"
+        )
         logger.debug(self.settings)
         logger.info("Timezone: {timezone}", timezone=LOCAL_TZ)
 
