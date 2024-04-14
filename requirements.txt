@@ -6,7 +6,7 @@ influxdb-client==1.41.0
 pyjwt==2.8.0
 aiomqtt==2.0.1
 numpy==1.26.4
-pandas==2.2.1
+pandas==2.2.2
 scikit-learn==1.4.1.post1
 scipy==1.13.0rc1
 aiohttp==3.9.4
