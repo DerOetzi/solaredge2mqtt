@@ -42,10 +42,20 @@ class WeatherClient(HTTPClient):
             logger.trace(result)
 
             if result is None:
-                raise InvalidDataException("Unable to read weather data")
+                raise InvalidDataException(
+                    "Unable to read weather data from OpenWeatherMap"
+                )
 
             weather = OpenWeatherMapOneCall(**result)
 
             return weather
         except HTTPError as error:
-            raise InvalidDataException("Unable to read weather data") from error
+            status_code = error.response.status_code
+            if status_code == 401:
+                error_msg = (
+                    "Invalid OpenWeatherMap API key or no subscription to OneCall-API"
+                )
+            else:
+                error_msg = "Unable to read weather data from OpenWeatherMap (HTTP {status_code})"
+
+            raise InvalidDataException(error_msg) from error
