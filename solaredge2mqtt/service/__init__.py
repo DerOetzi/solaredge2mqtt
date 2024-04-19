@@ -14,6 +14,7 @@ from typing import Callable
 from aiomqtt import MqttError
 
 from solaredge2mqtt import __version__
+from solaredge2mqtt.eventbus import EventBus
 from solaredge2mqtt.exceptions import ConfigurationException, InvalidDataException
 from solaredge2mqtt.logging import initialize_logging, logger
 from solaredge2mqtt.mqtt import MQTTClient
@@ -44,7 +45,9 @@ class Service:
         initialize_logging(self.settings.logging_level)
         logger.debug(self.settings)
 
-        self.mqtt = MQTTClient(self.settings.mqtt)
+        self.event_bus = EventBus()
+
+        self.mqtt = MQTTClient(self.settings.mqtt, self.event_bus)
 
         self.cancel_request = aio.Event()
         self.loops: set[aio.Task] = set()
@@ -55,16 +58,16 @@ class Service:
             else None
         )
 
-        self.basics = BaseLoops(self.settings, self.mqtt, self.influxdb)
+        self.basics = BaseLoops(self.settings, self.event_bus, self.influxdb)
 
         self.monitoring: MonitoringSite | None = (
-            MonitoringSite(self.settings.monitoring, self.mqtt)
+            MonitoringSite(self.settings.monitoring, self.event_bus)
             if self.settings.is_monitoring_configured
             else None
         )
 
         self.weather: WeatherClient | None = (
-            WeatherClient(self.settings, self.mqtt)
+            WeatherClient(self.settings, self.event_bus)
             if self.settings.is_weather_configured
             else None
         )
@@ -73,9 +76,8 @@ class Service:
             Forecast(
                 self.settings.forecast,
                 self.settings.location,
-                self.mqtt,
+                self.event_bus,
                 self.influxdb,
-                self.weather,
             )
             if self.settings.is_forecast_configured
             else None
@@ -118,11 +120,11 @@ class Service:
                         self.settings.interval, self.basics.powerflow_loop
                     )
 
+                    await self.schedule_weather_loops()
+
                     self.schedule_influxdb_loops()
 
                     self.schedule_monitoring_loop()
-
-                    await self.schedule_weather_loops()
 
                     await aio.gather(*self.loops)
 
@@ -149,20 +151,20 @@ class Service:
             if self.settings.is_forecast_configured:
                 loop_handles.append(self.forecast.training_loop)
 
-            self.schedule_loop(600, loop_handles)
+            self.schedule_loop(600, loop_handles, 10)
 
     async def schedule_weather_loops(self):
         if self.settings.is_weather_configured:
             self.schedule_loop(600, self.weather.loop)
 
             if self.settings.is_forecast_configured:
-                self.schedule_loop(600, self.forecast.forecast_loop, True)
+                self.schedule_loop(600, self.forecast.forecast_loop, 300)
 
     def schedule_loop(
         self,
         interval_in_seconds: int,
         handles: Callable | list[Callable],
-        delay_start: bool = False,
+        delay_start: int = 0,
         args: list[any] = None,
     ):
         loop = aio.create_task(
@@ -175,14 +177,13 @@ class Service:
         self,
         interval_in_seconds: int,
         handles: Callable | list[Callable],
-        delay_start: bool = False,
+        delay_start: int = 0,
         args: list[any] = None,
     ):
         if not isinstance(handles, list):
             handles = [handles]
 
-        if delay_start:
-            await aio.sleep(interval_in_seconds)
+        await aio.sleep(delay_start)
 
         while not self.cancel_request.is_set():
             execution_time = 0

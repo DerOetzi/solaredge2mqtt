@@ -1,5 +1,6 @@
 from requests.exceptions import HTTPError
 
+from solaredge2mqtt.eventbus import EventBus
 from solaredge2mqtt.exceptions import ConfigurationException, InvalidDataException
 from solaredge2mqtt.logging import logger
 from solaredge2mqtt.models import (
@@ -8,7 +9,7 @@ from solaredge2mqtt.models import (
     LogicalModule,
     LogicalString,
 )
-from solaredge2mqtt.mqtt import MQTTClient
+from solaredge2mqtt.mqtt import MQTTPublishEvent
 from solaredge2mqtt.service.http import HTTPClient
 from solaredge2mqtt.settings import MonitoringSettings
 
@@ -17,11 +18,11 @@ LOGICAL_URL = "https://monitoring.solaredge.com/solaredge-apigw/api/sites/{site_
 
 
 class MonitoringSite(HTTPClient):
-    def __init__(self, settings: MonitoringSettings, mqtt: MQTTClient) -> None:
+    def __init__(self, settings: MonitoringSettings, event_bus: EventBus) -> None:
         super().__init__("Monitoring Site")
         self.settings = settings
 
-        self.mqtt = mqtt
+        self.event_bus = event_bus
 
     async def loop(self):
         modules = self.get_module_energies()
@@ -43,11 +44,14 @@ class MonitoringSite(HTTPClient):
             count_modules=count_modules,
         )
 
-        await self.mqtt.publish_to("monitoring/pv_energy_today", energy_total)
+        await MQTTPublishEvent.emit(
+            self.event_bus, topic="monitoring/pv_energy_today", payload=energy_total
+        )
         for module in modules:
-            await self.mqtt.publish_to(
-                f"monitoring/module/{module.info.serialnumber}",
-                module,
+            await MQTTPublishEvent.emit(
+                self.event_bus,
+                topic=f"monitoring/module/{module.info.serialnumber}",
+                payload=module,
             )
 
     def login(self) -> None:
@@ -66,7 +70,7 @@ class MonitoringSite(HTTPClient):
             logger.info("Login to monitoring site successful")
         except HTTPError as error:
             raise ConfigurationException(
-                "Monitoring","Unable to login to monitoring account"
+                "Monitoring", "Unable to login to monitoring account"
             ) from error
 
     def get_module_energies(self) -> list[LogicalInverter] | None:

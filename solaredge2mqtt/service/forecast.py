@@ -17,12 +17,13 @@ from sklearn.inspection import permutation_importance
 from sklearn.model_selection import GridSearchCV, TimeSeriesSplit, train_test_split
 from sklearn.pipeline import Pipeline
 
+from solaredge2mqtt.eventbus import EventBus
 from solaredge2mqtt.exceptions import InvalidDataException
 from solaredge2mqtt.logging import logger
 from solaredge2mqtt.models import EnumModel, OpenWeatherMapForecastData
-from solaredge2mqtt.mqtt import MQTTClient
+from solaredge2mqtt.mqtt import MQTTPublishEvent
 from solaredge2mqtt.service.influxdb import InfluxDB, Point
-from solaredge2mqtt.service.weather import WeatherClient
+from solaredge2mqtt.service.weather import WeatherUpdateEvent
 from solaredge2mqtt.settings import LOCAL_TZ, ForecastSettings, LocationSettings
 
 
@@ -53,15 +54,13 @@ class Forecast:
         self,
         settings: ForecastSettings,
         location: LocationSettings,
-        mqtt: MQTTClient,
+        event_bus: EventBus,
         influxdb: InfluxDB,
-        weather: WeatherClient,
     ) -> None:
         self.settings = settings
         self.location = location
-        self.mqtt = mqtt
+        self.event_bus = event_bus
         self.influxdb = influxdb
-        self.weather = weather
 
         self.forecasters: dict[ForecasterType, Forecaster] = {
             typed: Forecaster(typed, location, settings.hyperparametertuning)
@@ -69,6 +68,9 @@ class Forecast:
         }
 
         self.last_weather_forecast: list[OpenWeatherMapForecastData] | None = None
+        self.last_hour_forecast: dict[int, OpenWeatherMapForecastData] | None = None
+
+        self.event_bus.subscribe(WeatherUpdateEvent, self.weather_update)
 
     async def training_loop(self):
         now = datetime.now().astimezone()
@@ -82,23 +84,43 @@ class Forecast:
         self.write_new_training_data_to_influxdb(training_data)
 
         if (
-            rounded_minutes == 10
+            rounded_minutes == 20
             or not self.forecasters[ForecasterType.ENERGY].is_trained
             or not self.forecasters[ForecasterType.POWER].is_trained
         ):
             await self.train()
 
+    async def weather_update(self, event: WeatherUpdateEvent) -> None:
+        self.last_weather_forecast = event.weather.hourly
+
+        if self.last_hour_forecast is None:
+            self.last_hour_forecast = {}
+
+        self.last_hour_forecast[event.weather.hourly[0].hour] = event.weather.hourly[0]
+
+        now = datetime.now().astimezone()
+        last_hour = now - timedelta(hours=1)
+
+        for delete_hour in range(0, 24):
+            if delete_hour in [now.hour, last_hour.hour]:
+                continue
+
+            self.last_hour_forecast.pop(delete_hour, None)
+
+        logger.info(self.last_hour_forecast)
+
     def get_weather_training(
         self, forecast_time: datetime
     ) -> dict[str, str | float | int | None]:
-        if (
-            self.last_weather_forecast is None
-            or forecast_time.hour != self.last_weather_forecast[0].hour
-        ):
-            logger.info("Retrieve weather forecast for training of production forecast")
-            self.last_weather_forecast = self.weather.get_weather().hourly
+        if self.last_hour_forecast is None:
+            raise InvalidDataException("Weather forecast is not available yet")
 
-        return self.last_weather_forecast[0].model_dump_estimation_data()
+        if forecast_time.hour not in self.last_hour_forecast:
+            raise InvalidDataException(
+                "Weather forecast for last hour not available yet"
+            )
+
+        return self.last_hour_forecast[forecast_time.hour].model_dump_estimation_data()
 
     def add_last_hour_pv_production(
         self, trainings_data
@@ -157,7 +179,9 @@ class Forecast:
             raise InvalidDataException("Forecast model is not trained yet")
 
         if self.last_weather_forecast is None:
-            raise InvalidDataException("Missing weather forecast for production forecast")
+            raise InvalidDataException(
+                "Missing weather forecast for production forecast"
+            )
 
         estimation_data_list = [
             {
@@ -239,8 +263,10 @@ class Forecast:
     ) -> None:
         data = hours[["time", typed.target_column]]
         data = self._replace_time_with_iso(data)
-        await self.mqtt.publish_to(
-            f"forecast/{typed.target_column}/hourly", data.to_json(orient="records")
+        await MQTTPublishEvent.emit(
+            self.event_bus,
+            topic=f"forecast/{typed.target_column}/hourly",
+            payload=data.to_json(orient="records"),
         )
 
     @staticmethod
