@@ -6,23 +6,24 @@ from solaredge2mqtt.models import (
     HistoricQuery,
     Powerflow,
 )
-from solaredge2mqtt.mqtt import MQTTClient
+from solaredge2mqtt.mqtt import MQTTPublishEvent
 from solaredge2mqtt.service.influxdb import InfluxDB
 from solaredge2mqtt.service.modbus import Modbus
 from solaredge2mqtt.service.wallbox import WallboxClient
 from solaredge2mqtt.settings import ServiceSettings
+from solaredge2mqtt.eventbus import EventBus
 
 
 class BaseLoops:
     def __init__(
         self,
         settings: ServiceSettings,
-        mqtt: MQTTClient,
+        event_bus: EventBus,
         influxdb: InfluxDB | None = None,
     ):
         self.settings = settings
 
-        self.mqtt = mqtt
+        self.event_bus = event_bus
 
         self.influxdb = influxdb
 
@@ -80,16 +81,25 @@ class BaseLoops:
             battery=powerflow.battery,
         )
 
-        await self.mqtt.publish_to(inverter_data.mqtt_topic, inverter_data)
+        await MQTTPublishEvent.emit(
+            self.event_bus, topic=inverter_data.mqtt_topic(), payload=inverter_data
+        )
+
         for key, component in {**meters_data, **batteries_data}.items():
-            await self.mqtt.publish_to(
-                f"{component.mqtt_topic}/{key.lower()}", component
+            await MQTTPublishEvent.emit(
+                self.event_bus,
+                topic=f"{component.mqtt_topic()}/{key.lower()}",
+                payload=component,
             )
 
         if wallbox_data is not None:
-            await self.mqtt.publish_to(wallbox_data.mqtt_topic, wallbox_data)
+            await MQTTPublishEvent.emit(
+                self.event_bus, topic=wallbox_data.mqtt_topic(), payload=wallbox_data
+            )
 
-        await self.mqtt.publish_to("powerflow", powerflow)
+        await MQTTPublishEvent.emit(
+            self.event_bus, topic="powerflow", payload=powerflow
+        )
 
         if self.influxdb is not None:
             points = [powerflow.prepare_point()]
@@ -120,4 +130,6 @@ class BaseLoops:
                 energy=energy,
             )
 
-            await self.mqtt.publish_to(f"energy/{period.topic}", energy)
+            await MQTTPublishEvent.emit(
+                self.event_bus, topic=f"energy/{period.topic}", payload=energy
+            )
