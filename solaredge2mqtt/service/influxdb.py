@@ -20,7 +20,7 @@ class InfluxDB:
         self.prices: PriceSettings = prices
 
         self.client: InfluxDBClient = InfluxDBClient(
-            url=f"{settings.host}:{settings.port}",
+            url=settings.url,
             token=settings.token.get_secret_value(),
             org=settings.org,
         )
@@ -151,7 +151,7 @@ class InfluxDB:
 
     async def init_client_async(self) -> None:
         self.client_async = InfluxDBClientAsync(
-            url=f"{self.settings.host}:{self.settings.port}",
+            url=self.settings.url,
             token=self.settings.token.get_secret_value(),
             org=self.settings.org,
         )
