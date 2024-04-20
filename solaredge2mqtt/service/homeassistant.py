@@ -1,15 +1,16 @@
+from solaredge2mqtt.eventbus import EventBus
 from solaredge2mqtt.exceptions import InvalidDataException
 from solaredge2mqtt.logging import logger
 from solaredge2mqtt.models.homeassistant import HomeAssistantDevice, HomeAssistantEntity
-from solaredge2mqtt.mqtt import MQTTClient
+from solaredge2mqtt.mqtt import MQTTPublishEvent
 from solaredge2mqtt.service.modbus import Modbus
 from solaredge2mqtt.settings import ServiceSettings
 
 
 class HomeAssistantDiscovery:
-    def __init__(self, service_settings: ServiceSettings, mqtt: MQTTClient) -> None:
+    def __init__(self, service_settings: ServiceSettings, event_bus: EventBus) -> None:
         self.settings = service_settings
-        self.mqtt = mqtt
+        self.event_bus = event_bus
 
     async def publish_discovery(self) -> None:
         modbus = Modbus(self.settings.modbus)
@@ -41,12 +42,10 @@ class HomeAssistantDiscovery:
             topic = f"{entity_type}/{entity.unique_id}/config"
             logger.debug(entity)
 
-            await self.mqtt.publish_to(
-                topic,
-                entity,
+            await MQTTPublishEvent.emit(
+                self.event_bus,
+                topic=topic,
+                payload=entity,
                 topic_prefix=self.settings.homeassistant.topic_prefix,
                 exclude_none=True,
             )
-
-    def _uid(self, *args: list[str | int]) -> str:
-        return "_".join([str(arg) for arg in args])

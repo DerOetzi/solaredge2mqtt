@@ -72,24 +72,6 @@ class Forecast:
 
         self.event_bus.subscribe(WeatherUpdateEvent, self.weather_update)
 
-    async def training_loop(self):
-        now = datetime.now().astimezone()
-        rounded_minutes = (now.minute // 10) * 10
-        last_hour = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)
-
-        training_data = self.get_weather_training(last_hour)
-        training_data["time"] = last_hour
-        training_data = self.add_last_hour_pv_production(training_data)
-
-        self.write_new_training_data_to_influxdb(training_data)
-
-        if (
-            rounded_minutes == 20
-            or not self.forecasters[ForecasterType.ENERGY].is_trained
-            or not self.forecasters[ForecasterType.POWER].is_trained
-        ):
-            await self.train()
-
     async def weather_update(self, event: WeatherUpdateEvent) -> None:
         self.last_weather_forecast = event.weather.hourly
 
@@ -109,18 +91,22 @@ class Forecast:
 
         logger.info(self.last_hour_forecast)
 
-    def get_weather_training(
-        self, forecast_time: datetime
-    ) -> dict[str, str | float | int | None]:
-        if self.last_hour_forecast is None:
-            raise InvalidDataException("Weather forecast is not available yet")
+        if last_hour.hour in self.last_hour_forecast:
+            await self.write_new_training_data(self.last_hour_forecast[last_hour.hour])
 
-        if forecast_time.hour not in self.last_hour_forecast:
-            raise InvalidDataException(
-                "Weather forecast for last hour not available yet"
-            )
+    async def write_new_training_data(
+        self, last_hour_weather_forecast: OpenWeatherMapForecastData
+    ) -> None:
+        now = datetime.now().astimezone()
+        last_hour = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)
 
-        return self.last_hour_forecast[forecast_time.hour].model_dump_estimation_data()
+        training_data = last_hour_weather_forecast.model_dump_estimation_data()
+        training_data["time"] = last_hour
+        training_data = self.add_last_hour_pv_production(training_data)
+        self.write_new_training_data_to_influxdb(training_data)
+
+        if (now.minute // 10) * 10 == 20:
+            await self.train()
 
     def add_last_hour_pv_production(
         self, trainings_data
@@ -149,7 +135,7 @@ class Forecast:
 
         point.time(trainings_data["time"].astimezone(timezone.utc))
 
-        logger.info("Write new training data to influxdb")
+        logger.info("Write new forecast training data to influxdb")
         logger.debug(trainings_data)
         self.influxdb.write_point(point)
 
@@ -176,7 +162,7 @@ class Forecast:
             not self.forecasters[ForecasterType.ENERGY].is_trained
             or not self.forecasters[ForecasterType.POWER].is_trained
         ):
-            raise InvalidDataException("Forecast model is not trained yet")
+            await self.train()
 
         if self.last_weather_forecast is None:
             raise InvalidDataException(

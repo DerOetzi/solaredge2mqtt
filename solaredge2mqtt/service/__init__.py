@@ -84,7 +84,7 @@ class Service:
         )
 
         self.homeassistant: HomeAssistantDiscovery | None = (
-            HomeAssistantDiscovery(self.settings, self.mqtt)
+            HomeAssistantDiscovery(self.settings, self.event_bus)
             if self.settings.is_homeassistant_configured
             else None
         )
@@ -148,10 +148,7 @@ class Service:
     def schedule_influxdb_loops(self):
         if self.settings.is_influxdb_configured:
             loop_handles = [self.influxdb.loop, self.basics.energy_loop]
-            if self.settings.is_forecast_configured:
-                loop_handles.append(self.forecast.training_loop)
-
-            self.schedule_loop(600, loop_handles, 10)
+            self.schedule_loop(600, loop_handles)
 
     async def schedule_weather_loops(self):
         if self.settings.is_weather_configured:
