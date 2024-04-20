@@ -4,9 +4,12 @@ from influxdb_client import Point
 from pydantic import Field
 from solaredge_modbus import BATTERY_STATUS_MAP, C_SUNSPEC_DID_MAP, INVERTER_STATUS_MAP
 
+
 from solaredge2mqtt.logging import logger
+from solaredge2mqtt.models.homeassistant import HomeAssistantEntityType as EntityType
 from solaredge2mqtt.models.base import (
     Component,
+    ComponentEvent,
     ComponentValueGroup,
     Solaredge2MQTTBaseModel,
 )
@@ -38,9 +41,9 @@ class SunSpecInfo(Solaredge2MQTTBaseModel):
 
         super().__init__(**values)
 
-    def homeassistant_device_info(self) -> dict[str, any]:
+    def homeassistant_device_info(self, name: str) -> dict[str, any]:
         return {
-            "name": self.model,
+            "name": f"SolarEdge {name}",
             "manufacturer": self.manufacturer,
             "model": self.model,
             "hw_version": self.version,
@@ -73,8 +76,8 @@ class SunSpecComponent(Component):
 
     @classmethod
     # pylint: disable=arguments-differ
-    def model_json_schema(cls) -> dict[str, any]:
-        schema = super().model_json_schema()
+    def model_json_schema(cls, mode: str = "serialization") -> dict[str, any]:
+        schema = super().model_json_schema(mode=mode)
         schema["properties"].pop("info", None)
         return schema
 
@@ -82,118 +85,13 @@ class SunSpecComponent(Component):
         return self.info.homeassistant_device_info()
 
 
-class SunSpecACCurrent(ComponentValueGroup):
-    actual: float = Field(title="actual", unit="A")
-    l1: float = Field(title="L1", unit="A")
-    l2: float | None = Field(None, title="L2", unit="A")
-    l3: float | None = Field(None, title="L3", unit="A")
-
-    def __init__(self, data: dict[str, str | int]):
-        values = {"actual": self.scale_value(data, "current")}
-
-        for phase in ["l1", "l2", "l3"]:
-            if f"{phase}_current" in data:
-                values[phase] = self.scale_value(
-                    data, f"{phase}_current", "current_scale"
-                )
-
-        super().__init__(**values)
-
-
-class SunSpecACVoltage(ComponentValueGroup):
-    l1: float | None = Field(None, title="L1", unit="V")
-    l2: float | None = Field(None, title="L2", unit="V")
-    l3: float | None = Field(None, title="L3", unit="V")
-    l1n: float | None = Field(None, title="L1N", unit="V")
-    l2n: float | None = Field(None, title="L2N", unit="V")
-    l3n: float | None = Field(None, title="L3N", unit="V")
-
-    def __init__(self, data: dict[str, str | int]):
-        values = {}
-        for phase in ["l1", "l2", "l3"]:
-            if f"{phase}_voltage" in data:
-                values[phase] = self.scale_value(
-                    data, f"{phase}_voltage", "voltage_scale"
-                )
-
-            if f"{phase}n_voltage" in data:
-                values[f"{phase}n"] = self.scale_value(
-                    data, f"{phase}n_voltage", "voltage_scale"
-                )
-
-        super().__init__(**values)
-
-
-class SunSpecACPower(ComponentValueGroup):
-    actual: float = Field(title="actual", unit="W")
-    reactive: float = Field(title="reactive", unit="W")
-    apparent: float = Field(title="apparent", unit="W")
-    factor: float = Field(title="power factor")
-
-    def __init__(self, data: dict[str, str | int], power_key: str):
-        actual = self.scale_value(data, power_key)
-        reactive = self.scale_value(data, "power_reactive")
-        apparent = self.scale_value(data, "power_apparent")
-        factor = self.scale_value(data, "power_factor")
-        super().__init__(
-            actual=actual, reactive=reactive, apparent=apparent, factor=factor
-        )
-
-
-class SunSpecAC(ComponentValueGroup):
-    current: SunSpecACCurrent = Field(title="Current")
-    voltage: SunSpecACVoltage = Field(title="Voltage")
-    power: SunSpecACPower = Field(title="Power")
-    frequency: float = Field(title="Grid frequency")
-
-    def __init__(self, data: dict[str, str | int]):
-        current = SunSpecACCurrent(data)
-        voltage = SunSpecACVoltage(data)
-        power = SunSpecACPower(data, "power_ac")
-        frequency = self.scale_value(data, "frequency")
-
-        super().__init__(
-            current=current, voltage=voltage, power=power, frequency=frequency
-        )
-
-
-class SunSpecEnergy(ComponentValueGroup):
-    totalexport: float
-    totalimport: float
-
-    def __init__(self, data: dict[str, str | int]):
-        super().__init__(
-            totalexport=self.scale_value(
-                data, "export_energy_active", "energy_active_scale"
-            ),
-            totalimport=self.scale_value(
-                data, "import_energy_active", "energy_active_scale"
-            ),
-        )
-
-
-class SunSpecDC(ComponentValueGroup):
-    current: float = Field(title="Current", unit="A")
-    voltage: float = Field(title="Voltage", unit="V")
-    power: float = Field(title="Power", unit="W")
-
-    def __init__(self, data: dict[str, str | int]):
-        super().__init__(
-            current=self.scale_value(data, "current_dc"),
-            voltage=self.scale_value(data, "voltage_dc"),
-            power=self.scale_value(data, "power_dc"),
-        )
-
-
 class SunSpecInverter(SunSpecComponent):
     COMPONENT = "inverter"
 
     ac: SunSpecAC = Field(title="AC")
     dc: SunSpecDC = Field(title="DC")
-    energytotal: float = Field(
-        title="Energy total", unit="Wh", ha_state_class="total_increasing"
-    )
-    status: str = Field(title="Inverter status", ha_type="text")
+    energytotal: float = Field(**EntityType.ENERGY_WH.field("Energy total"))
+    status: str = Field(title="Inverter status")
 
     def __init__(self, data: dict[str, str | int]):
         ac = SunSpecAC(data)
@@ -203,15 +101,18 @@ class SunSpecInverter(SunSpecComponent):
 
         super().__init__(data, ac=ac, dc=dc, energytotal=energytotal, status=status)
 
+    def homeassistant_device_info(self) -> dict[str, any]:
+        return self.info.homeassistant_device_info("Inverter")
+
 
 class SunSpecMeter(SunSpecComponent):
     COMPONENT = "meter"
 
-    current: SunSpecACCurrent
-    voltage: SunSpecACVoltage
-    power: SunSpecACPower
-    energy: SunSpecEnergy
-    frequency: float
+    current: SunSpecACCurrent = Field(title="Current")
+    voltage: SunSpecACVoltage = Field(title="Voltage")
+    power: SunSpecACPower = Field(title="Power")
+    energy: SunSpecEnergy = Field(title="Energy")
+    frequency: float = Field(**EntityType.FREQUENCY_HZ.field("Grid frequency"))
 
     def __init__(self, data: dict[str, str | int]):
         current = SunSpecACCurrent(data)
@@ -229,16 +130,19 @@ class SunSpecMeter(SunSpecComponent):
             frequency=frequency,
         )
 
+    def homeassistant_device_info_with_name(self, name: str) -> dict[str, any]:
+        return self.info.homeassistant_device_info(name)
+
 
 class SunSpecBattery(SunSpecComponent):
     COMPONENT = "battery"
 
-    status: str
-    current: float
-    voltage: float
-    power: float
-    state_of_charge: float
-    state_of_health: float
+    status: str = Field(title="Battery status")
+    current: float = Field(**EntityType.CURRENT_A.field("current"))
+    voltage: float = Field(**EntityType.VOLTAGE_V.field("voltage"))
+    power: float = Field(**EntityType.POWER_W.field("power"))
+    state_of_charge: float = Field(**EntityType.BATTERY.field("state of charge"))
+    state_of_health: float = Field(**EntityType.BATTERY.field("state of health"))
 
     def __init__(self, data: dict[str, str | int]):
         status = BATTERY_STATUS_MAP[data["status"]]
@@ -281,3 +185,121 @@ class SunSpecBattery(SunSpecComponent):
         point.field("state_of_health", self.state_of_health)
 
         return point
+
+    def homeassistant_device_info_with_name(self, name: str) -> dict[str, any]:
+        return self.info.homeassistant_device_info(name)
+
+
+class SunSpecACCurrent(ComponentValueGroup):
+    actual: float = Field(**EntityType.CURRENT_A.field("actual"))
+    l1: float = Field(**EntityType.CURRENT_A.field("L1"))
+    l2: float | None = Field(None, **EntityType.CURRENT_A.field("L2"))
+    l3: float | None = Field(None, **EntityType.CURRENT_A.field("L3"))
+
+    def __init__(self, data: dict[str, str | int]):
+        values = {"actual": self.scale_value(data, "current")}
+
+        for phase in ["l1", "l2", "l3"]:
+            if f"{phase}_current" in data:
+                values[phase] = self.scale_value(
+                    data, f"{phase}_current", "current_scale"
+                )
+
+        super().__init__(**values)
+
+
+class SunSpecACVoltage(ComponentValueGroup):
+    l1: float | None = Field(None, **EntityType.VOLTAGE_V.field("L1"))
+    l2: float | None = Field(None, **EntityType.VOLTAGE_V.field("L2"))
+    l3: float | None = Field(None, **EntityType.VOLTAGE_V.field("L3"))
+    l1n: float | None = Field(None, **EntityType.VOLTAGE_V.field("L1N"))
+    l2n: float | None = Field(None, **EntityType.VOLTAGE_V.field("L2N"))
+    l3n: float | None = Field(None, **EntityType.VOLTAGE_V.field("L3N"))
+
+    def __init__(self, data: dict[str, str | int]):
+        values = {}
+        for phase in ["l1", "l2", "l3"]:
+            if f"{phase}_voltage" in data:
+                values[phase] = self.scale_value(
+                    data, f"{phase}_voltage", "voltage_scale"
+                )
+
+            if f"{phase}n_voltage" in data:
+                values[f"{phase}n"] = self.scale_value(
+                    data, f"{phase}n_voltage", "voltage_scale"
+                )
+
+        super().__init__(**values)
+
+
+class SunSpecACPower(ComponentValueGroup):
+    actual: float = Field(**EntityType.POWER_W.field("actual"))
+    reactive: float = Field(**EntityType.REACTIVE_POWER.field("reactive"))
+    apparent: float = Field(**EntityType.APPARENT_POWER.field("apparent"))
+    factor: float = Field(**EntityType.POWER_FACTOR.field("power factor"))
+
+    def __init__(self, data: dict[str, str | int], power_key: str):
+        actual = self.scale_value(data, power_key)
+        reactive = self.scale_value(data, "power_reactive")
+        apparent = self.scale_value(data, "power_apparent")
+        factor = self.scale_value(data, "power_factor")
+        super().__init__(
+            actual=actual, reactive=reactive, apparent=apparent, factor=factor
+        )
+
+
+class SunSpecAC(ComponentValueGroup):
+    current: SunSpecACCurrent = Field(title="Current")
+    voltage: SunSpecACVoltage = Field(title="Voltage")
+    power: SunSpecACPower = Field(title="Power")
+    frequency: float = Field(**EntityType.FREQUENCY_HZ.field("Grid frequency"))
+
+    def __init__(self, data: dict[str, str | int]):
+        current = SunSpecACCurrent(data)
+        voltage = SunSpecACVoltage(data)
+        power = SunSpecACPower(data, "power_ac")
+        frequency = self.scale_value(data, "frequency")
+
+        super().__init__(
+            current=current, voltage=voltage, power=power, frequency=frequency
+        )
+
+
+class SunSpecEnergy(ComponentValueGroup):
+    totalexport: float = Field(**EntityType.ENERGY_WH.field("Export"))
+    totalimport: float = Field(**EntityType.ENERGY_WH.field("Import"))
+
+    def __init__(self, data: dict[str, str | int]):
+        super().__init__(
+            totalexport=self.scale_value(
+                data, "export_energy_active", "energy_active_scale"
+            ),
+            totalimport=self.scale_value(
+                data, "import_energy_active", "energy_active_scale"
+            ),
+        )
+
+
+class SunSpecDC(ComponentValueGroup):
+    current: float = Field(**EntityType.CURRENT_A.field("current"))
+    voltage: float = Field(**EntityType.VOLTAGE_V.field("voltage"))
+    power: float = Field(**EntityType.POWER_W.field("power"))
+
+    def __init__(self, data: dict[str, str | int]):
+        super().__init__(
+            current=self.scale_value(data, "current_dc"),
+            voltage=self.scale_value(data, "voltage_dc"),
+            power=self.scale_value(data, "power_dc"),
+        )
+
+
+class ModbusInverterReadEvent(ComponentEvent):
+    pass
+
+
+class ModbusMetersReadEvent(ComponentEvent):
+    pass
+
+
+class ModbusBatteriesReadEvent(ComponentEvent):
+    pass

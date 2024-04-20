@@ -3,9 +3,17 @@ import json
 from pymodbus.exceptions import ModbusException
 from solaredge_modbus import Inverter
 
+from solaredge2mqtt.eventbus import EventBus
 from solaredge2mqtt.exceptions import InvalidDataException
 from solaredge2mqtt.logging import LOGGING_DEVICE_INFO, logger
-from solaredge2mqtt.models import SunSpecBattery, SunSpecInverter, SunSpecMeter
+from solaredge2mqtt.models import (
+    ModbusBatteriesReadEvent,
+    ModbusInverterReadEvent,
+    ModbusMetersReadEvent,
+    SunSpecBattery,
+    SunSpecInverter,
+    SunSpecMeter,
+)
 from solaredge2mqtt.settings import ModbusSettings
 
 SunSpecRawData = dict[str, str | int]
@@ -14,7 +22,7 @@ SunSpecRawData = dict[str, str | int]
 class Modbus:
     inverter: Inverter
 
-    def __init__(self, settings: ModbusSettings):
+    def __init__(self, settings: ModbusSettings, event_bus: EventBus):
         self.inverter = Inverter(
             host=settings.host,
             port=settings.port,
@@ -27,6 +35,8 @@ class Modbus:
             host=settings.host,
             port=settings.port,
         )
+
+        self.event_bus = event_bus
 
     async def loop(
         self,
@@ -50,6 +60,12 @@ class Modbus:
             batteries_data = self._map_batteries(batteries_raw)
         except (ModbusException, KeyError) as error:
             raise InvalidDataException("Invalid modbus data") from error
+
+        await self.event_bus.emit(ModbusInverterReadEvent(inverter_data))
+        if meters_data:
+            await self.event_bus.emit(ModbusMetersReadEvent(meters_data))
+        if batteries_data:
+            await self.event_bus.emit(ModbusBatteriesReadEvent(batteries_data))
 
         return inverter_data, meters_data, batteries_data
 

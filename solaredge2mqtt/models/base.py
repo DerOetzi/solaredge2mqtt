@@ -8,6 +8,8 @@ from typing import ClassVar
 import jsonref
 from pydantic import BaseModel, model_serializer
 
+from solaredge2mqtt import __version__
+
 
 class EnumModel(Enum):
     def __new__(cls, *args):
@@ -85,25 +87,36 @@ class Solaredge2MQTTBaseModel(BaseModel):
                         prop["allOf"][0]["properties"], new_jsonpath, new_name
                     )
                 )
+            elif "anyOf" in prop and "properties" in prop["anyOf"][0]:
+                items.extend(
+                    cls._walk_schema_for_homeassistant_entities(
+                        prop["anyOf"][0]["properties"], new_jsonpath, new_name
+                    )
+                )
             else:
                 entity: dict = {"name": new_name, "jsonpath": new_jsonpath}
 
-                if "unit" in prop:
-                    entity["unit_of_measurement"] = prop["unit"]
-
-                entity["type"] = prop.get("ha_type", "sensor")
-
-                if entity["type"] == "sensor":
-                    entity["state_class"] = prop.get("ha_state_class", "measurement")
-
-                items.append(entity)
+                if "ha_type" in prop:
+                    entity["ha_type"] = prop["ha_type"]
+                    entity["icon"] = prop["icon"]
+                    items.append(entity)
 
         return items
+
+    def _default_homeassistant_device_info(self, name: str) -> dict[str, any]:
+        return {
+            "name": f"SolarEdge2MQTT {name}",
+            "manufacturer": "DerOetzi",
+            "model": "SolarEdge2MQTT",
+            "sw_version": __version__,
+        }
 
     @classmethod
     def homeassistant_entities_info(cls) -> list[dict]:
         return cls._walk_schema_for_homeassistant_entities(
-            jsonref.replace_refs(cls.model_json_schema())["properties"]
+            jsonref.replace_refs(cls.model_json_schema(mode="serialization"))[
+                "properties"
+            ]
         )
 
 
@@ -126,7 +139,7 @@ class ComponentValueGroup(Solaredge2MQTTBaseModel):
 
 class Component(ComponentValueGroup):
     COMPONENT: ClassVar[str] = "unknown"
-    SOURCE: ClassVar[str] = "unknown"
+    SOURCE: ClassVar[str | None] = None
 
     @property
     def influxdb_tags(self) -> dict[str, str]:
@@ -135,6 +148,107 @@ class Component(ComponentValueGroup):
             "source": self.SOURCE,
         }
 
+    def mqtt_topic(self) -> str:
+        if self.SOURCE:
+            topic = f"{self.SOURCE}/{self.COMPONENT}"
+        else:
+            topic = self.COMPONENT
+
+        return topic
+
+    def __str__(self) -> str:
+        if self.SOURCE:
+            name = f"{self.SOURCE}: {self.COMPONENT}"
+        else:
+            name = self.COMPONENT
+
+        return name
+
+
+class BaseEvent:
+    AWAIT = False
+
     @classmethod
-    def mqtt_topic(cls) -> str:
-        return f"{cls.SOURCE}/{cls.COMPONENT}"
+    def event_key(cls) -> str:
+        return cls.__name__.lower()
+
+
+class ComponentEvent(BaseEvent):
+    def __init__(self, component: Component):
+        self._component = component
+
+    @property
+    def component(self) -> Component:
+        return self._component
+
+    def __str__(self) -> str:
+        return str(self._component)
+
+
+class MQTTPublishEvent(BaseEvent):
+    AWAIT = True
+    def __init__(
+        self,
+        topic: str,
+        payload: str | int | float | BaseModel,
+        retain: bool = False,
+        qos: int = 0,
+        topic_prefix: str | None = None,
+        exclude_none: bool = False,
+    ):
+        self._topic: str = topic
+        self._payload: str | int | float | BaseModel = payload
+        self._retain: bool = retain
+        self._qos: int = qos
+        self._topic_prefix: str | None = topic_prefix
+        self._exclude_none: bool = exclude_none
+
+    @property
+    def topic(self) -> str:
+        return self._topic
+
+    @property
+    def payload(self) -> str | int | float | BaseModel:
+        return self._payload
+
+    @property
+    def retain(self) -> bool:
+        return self._retain
+
+    @property
+    def qos(self) -> int:
+        return self._qos
+
+    @property
+    def topic_prefix(self) -> str | None:
+        return self._topic_prefix
+
+    @property
+    def exclude_none(self) -> bool:
+        return self._exclude_none
+
+
+class MQTTReceivedEvent(BaseEvent):
+    def __init__(self, topic: str, payload: str):
+        self._topic: str = topic
+        self._payload: str = payload
+
+    @property
+    def topic(self) -> str:
+        return self._topic
+
+    @property
+    def payload(self) -> str:
+        return self._payload
+
+
+class IntervalBaseTriggerEvent(BaseEvent):
+    pass
+
+
+class Interval10MinTriggerEvent(IntervalBaseTriggerEvent):
+    pass
+
+
+class InfluxDBAggregatedEvent(BaseEvent):
+    pass

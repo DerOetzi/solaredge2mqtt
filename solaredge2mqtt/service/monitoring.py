@@ -8,8 +8,9 @@ from solaredge2mqtt.models import (
     LogicalInverter,
     LogicalModule,
     LogicalString,
+    MQTTPublishEvent,
 )
-from solaredge2mqtt.mqtt import MQTTPublishEvent
+from solaredge2mqtt.models.base import Interval10MinTriggerEvent
 from solaredge2mqtt.service.http import HTTPClient
 from solaredge2mqtt.settings import MonitoringSettings
 
@@ -23,8 +24,12 @@ class MonitoringSite(HTTPClient):
         self.settings = settings
 
         self.event_bus = event_bus
+        self._subscribe_events()
 
-    async def loop(self):
+    def _subscribe_events(self) -> None:
+        self.event_bus.subscribe(Interval10MinTriggerEvent, self.loop)
+
+    async def loop(self, _):
         modules = self.get_module_energies()
 
         if modules is None:
@@ -44,14 +49,16 @@ class MonitoringSite(HTTPClient):
             count_modules=count_modules,
         )
 
-        await MQTTPublishEvent.emit(
-            self.event_bus, topic="monitoring/pv_energy_today", payload=energy_total
+        await self.event_bus.emit(
+            MQTTPublishEvent("monitoring/pv_energy_today", energy_total)
         )
+
         for module in modules:
-            await MQTTPublishEvent.emit(
-                self.event_bus,
-                topic=f"monitoring/module/{module.info.serialnumber}",
-                payload=module,
+            await self.event_bus.emit(
+                MQTTPublishEvent(
+                    f"monitoring/module/{module.info.serialnumber}",
+                    module,
+                )
             )
 
     def login(self) -> None:
@@ -101,6 +108,9 @@ class MonitoringSite(HTTPClient):
     def _get_logical(self) -> dict | None:
         result = None
         try:
+            if "CSRF-TOKEN" not in self.session.cookies:
+                self.login()
+
             result = self._get(
                 LOGICAL_URL.format(site_id=self.settings.site_id),
                 headers={

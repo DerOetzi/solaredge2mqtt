@@ -8,7 +8,7 @@ import ephem
 from astral import LocationInfo
 from astral.sun import azimuth, elevation, sun
 from numpy import cos, percentile, pi, sin
-from pandas import DataFrame, Series, to_datetime
+from pandas import DataFrame, Series
 from sklearn import clone
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
@@ -20,10 +20,16 @@ from sklearn.pipeline import Pipeline
 from solaredge2mqtt.eventbus import EventBus
 from solaredge2mqtt.exceptions import InvalidDataException
 from solaredge2mqtt.logging import logger
-from solaredge2mqtt.models import EnumModel, OpenWeatherMapForecastData
-from solaredge2mqtt.mqtt import MQTTPublishEvent
+from solaredge2mqtt.models import (
+    EnumModel,
+    ForecastEvent,
+    MQTTPublishEvent,
+    OpenWeatherMapForecastData,
+    WeatherUpdateEvent,
+)
+from solaredge2mqtt.models.base import Interval10MinTriggerEvent
+from solaredge2mqtt.models.forecast import Forecast
 from solaredge2mqtt.service.influxdb import InfluxDB, Point
-from solaredge2mqtt.service.weather import WeatherUpdateEvent
 from solaredge2mqtt.settings import LOCAL_TZ, ForecastSettings, LocationSettings
 
 
@@ -49,7 +55,7 @@ class ForecasterType(EnumModel):
         return prepared
 
 
-class Forecast:
+class ForecastService:
     def __init__(
         self,
         settings: ForecastSettings,
@@ -60,6 +66,8 @@ class Forecast:
         self.settings = settings
         self.location = location
         self.event_bus = event_bus
+        self._subscribe_events()
+
         self.influxdb = influxdb
 
         self.forecasters: dict[ForecasterType, Forecaster] = {
@@ -70,7 +78,9 @@ class Forecast:
         self.last_weather_forecast: list[OpenWeatherMapForecastData] | None = None
         self.last_hour_forecast: dict[int, OpenWeatherMapForecastData] | None = None
 
+    def _subscribe_events(self) -> None:
         self.event_bus.subscribe(WeatherUpdateEvent, self.weather_update)
+        self.event_bus.subscribe(Interval10MinTriggerEvent, self.forecast_loop)
 
     async def weather_update(self, event: WeatherUpdateEvent) -> None:
         self.last_weather_forecast = event.weather.hourly
@@ -89,7 +99,7 @@ class Forecast:
 
             self.last_hour_forecast.pop(delete_hour, None)
 
-        logger.info(self.last_hour_forecast)
+        logger.debug(self.last_hour_forecast)
 
         if last_hour.hour in self.last_hour_forecast:
             await self.write_new_training_data(self.last_hour_forecast[last_hour.hour])
@@ -147,17 +157,8 @@ class Forecast:
     def training(self, data: DataFrame) -> None:
         for forecaster in self.forecasters.values():
             forecaster.train(data)
-            # self.replay_priHediction(data, forecaster)
 
-    async def replay_prediction(self, data: DataFrame, forecaster: Forecaster) -> None:
-        """FOR DEVELOPMENT PURPOSE ONLY"""
-        logger.warning("Replaying prediction for development purpose")
-        data = await forecaster.predict(data)
-        data["time"] = data["_time"]
-        periods = self._calculate_periods_prediction(data, forecaster.typed)
-        self._write_periods_to_influxdb(periods, forecaster.typed)
-
-    async def forecast_loop(self):
+    async def forecast_loop(self, _):
         if (
             not self.forecasters[ForecasterType.ENERGY].is_trained
             or not self.forecasters[ForecasterType.POWER].is_trained
@@ -190,45 +191,9 @@ class Forecast:
 
         for typed, forecaster in self.forecasters.items():
             predicted_data = await forecaster.predict(data)
+            self._write_periods_to_influxdb(predicted_data, typed)
 
-            periods = self._calculate_periods_prediction(predicted_data, typed)
-            self._write_periods_to_influxdb(periods, typed)
-
-            hours = self._calculate_hourly_prediction(periods, typed)
-            logger.debug("Forecasted next hour: {hours}", hours=hours)
-            await self._publish_hours_to_mqtt(hours, typed)
-
-    def _calculate_periods_prediction(
-        self, data: DataFrame, typed: ForecasterType
-    ) -> DataFrame:
-        data["year"] = data["time"].dt.year
-        data["month"] = data["time"].dt.month
-        data["day"] = data["time"].dt.day
-        data["hour"] = data["time"].dt.hour
-
-        return data[["time", "year", "month", "day", "hour", typed.target_column]]
-
-    def _calculate_hourly_prediction(
-        self, data: DataFrame, typed: ForecasterType
-    ) -> DataFrame:
-
-        if typed == ForecasterType.ENERGY:
-            hourly = data.groupby(["year", "month", "day", "hour"], as_index=False)[
-                ForecasterType.ENERGY.target_column
-            ].sum()
-        elif typed == ForecasterType.POWER:
-            hourly = data.groupby(["year", "month", "day", "hour"], as_index=False)[
-                ForecasterType.POWER.target_column
-            ].mean()
-
-        hourly["time"] = hourly.apply(
-            lambda row: to_datetime(
-                f"{int(row['year'])}-{int(row['month'])}-{int(row['day'])}T{int(row['hour'])}:00:00"
-            ).tz_localize(LOCAL_TZ),
-            axis=1,
-        )
-
-        return hourly[["time", "year", "month", "day", "hour", typed.target_column]]
+        await self.publish_forecast()
 
     def _write_periods_to_influxdb(
         self, periods: DataFrame, typed: ForecasterType
@@ -244,22 +209,22 @@ class Forecast:
         logger.info("Write forecast data to influxdb")
         self.influxdb.write_points(points)
 
-    async def _publish_hours_to_mqtt(
-        self, hours: DataFrame, typed: ForecasterType
-    ) -> None:
-        data = hours[["time", typed.target_column]]
-        data = self._replace_time_with_iso(data)
-        await MQTTPublishEvent.emit(
-            self.event_bus,
-            topic=f"forecast/{typed.target_column}/hourly",
-            payload=data.to_json(orient="records"),
-        )
+    async def publish_forecast(self) -> None:
+        forecast_data = await self.influxdb.query_dataframe("forecast")
+        if not forecast_data.empty:
+            forecast_data["time"] = forecast_data["_time"].dt.tz_convert(LOCAL_TZ)
+            power_hours = {
+                row["time"]: row["power"] for idx, row in forecast_data.iterrows()
+            }
+            energy_hours = {
+                row["time"]: round(row["energy"] * 1000)
+                for idx, row in forecast_data.iterrows()
+            }
+            forecast = Forecast(power_period=power_hours, energy_period=energy_hours)
+            logger.debug(forecast)
 
-    @staticmethod
-    def _replace_time_with_iso(data: DataFrame) -> str:
-        data = data.copy()
-        data["time"] = data["time"].dt.strftime("%Y-%m-%dT%H:%M:%S%z")
-        return data
+            await self.event_bus.emit(MQTTPublishEvent(forecast.mqtt_topic(), forecast))
+            await self.event_bus.emit(ForecastEvent(forecast))
 
 
 class Forecaster:

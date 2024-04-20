@@ -6,8 +6,8 @@
 """
 
 import asyncio as aio
-import signal
 import platform
+import signal
 from time import time
 from typing import Callable
 
@@ -17,9 +17,13 @@ from solaredge2mqtt import __version__
 from solaredge2mqtt.eventbus import EventBus
 from solaredge2mqtt.exceptions import ConfigurationException, InvalidDataException
 from solaredge2mqtt.logging import initialize_logging, logger
+from solaredge2mqtt.models.base import (
+    Interval10MinTriggerEvent,
+    IntervalBaseTriggerEvent,
+)
 from solaredge2mqtt.mqtt import MQTTClient
 from solaredge2mqtt.service.base import BaseLoops
-from solaredge2mqtt.service.forecast import Forecast
+from solaredge2mqtt.service.forecast import ForecastService
 from solaredge2mqtt.service.homeassistant import HomeAssistantDiscovery
 from solaredge2mqtt.service.influxdb import InfluxDB
 from solaredge2mqtt.service.monitoring import MonitoringSite
@@ -53,7 +57,7 @@ class Service:
         self.loops: set[aio.Task] = set()
 
         self.influxdb: InfluxDB | None = (
-            InfluxDB(self.settings.influxdb, self.settings.prices)
+            InfluxDB(self.settings.influxdb, self.settings.prices, self.event_bus)
             if self.settings.is_influxdb_configured
             else None
         )
@@ -72,8 +76,8 @@ class Service:
             else None
         )
 
-        self.forecast: Forecast | None = (
-            Forecast(
+        self.forecast: ForecastService | None = (
+            ForecastService(
                 self.settings.forecast,
                 self.settings.location,
                 self.event_bus,
@@ -95,6 +99,8 @@ class Service:
         for loop in self.loops:
             loop.cancel()
 
+        self.event_bus.cancel_tasks()
+
     async def main_loop(self):
         logger.info("Starting SolarEdge2MQTT service...")
         logger.info("Version: {version}", version=__version__)
@@ -112,19 +118,11 @@ class Service:
                 async with self.mqtt:
                     await self.mqtt.publish_status_online()
 
-                    if self.settings.is_homeassistant_configured:
-                        logger.info("Home Assistant discovery enabled")
-                        await self.homeassistant.publish_discovery()
-
                     self.schedule_loop(
-                        self.settings.interval, self.basics.powerflow_loop
+                        self.settings.interval, self.interval_base_trigger
                     )
-
-                    await self.schedule_weather_loops()
-
-                    self.schedule_influxdb_loops()
-
-                    self.schedule_monitoring_loop()
+                    self.schedule_loop(600, self.interval_10_minute_trigger)
+                    # await self._start_mqtt_listener()
 
                     await aio.gather(*self.loops)
 
@@ -140,22 +138,23 @@ class Service:
                 for loop in self.loops:
                     loop.cancel()
 
-    def schedule_monitoring_loop(self):
-        if self.settings.is_monitoring_configured:
-            self.monitoring.login()
-            self.schedule_loop(300, self.monitoring.loop)
+    async def interval_base_trigger(self):
+        await self.event_bus.emit(IntervalBaseTriggerEvent())
 
-    def schedule_influxdb_loops(self):
-        if self.settings.is_influxdb_configured:
-            loop_handles = [self.influxdb.loop, self.basics.energy_loop]
-            self.schedule_loop(600, loop_handles)
+    async def interval_10_minute_trigger(self):
+        await self.event_bus.emit(Interval10MinTriggerEvent())
 
-    async def schedule_weather_loops(self):
-        if self.settings.is_weather_configured:
-            self.schedule_loop(600, self.weather.loop)
-
-            if self.settings.is_forecast_configured:
-                self.schedule_loop(600, self.forecast.forecast_loop, 300)
+    # async def _start_mqtt_listener(self):
+    #     mqtt_topics = [
+    #         event.topic
+    #         for event in self.event_bus.subcribed_events
+    #         if isinstance(event, MQTTReceivedEvent)
+    #     ]
+    #     await self.mqtt.subscribe_topics(mqtt_topics)
+    #     if mqtt_topics:
+    #         task = aio.create_task(self.mqtt.listen())
+    #         self.loops.add(task)
+    #         task.add_done_callback(self.loops.remove)
 
     def schedule_loop(
         self,
@@ -184,13 +183,10 @@ class Service:
 
         while not self.cancel_request.is_set():
             execution_time = 0
-            try:
-                start_time = time()
-                for handle in handles:
-                    await handle(*args or [])
-                execution_time = time() - start_time
-            except InvalidDataException as error:
-                logger.warning("{message}, skipping this loop", message=error.message)
+            start_time = time()
+            for handle in handles:
+                await handle(*args or [])
+            execution_time = time() - start_time
 
             if execution_time < interval_in_seconds:
                 await aio.sleep(interval_in_seconds - execution_time)

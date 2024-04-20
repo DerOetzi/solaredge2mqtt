@@ -95,6 +95,7 @@ class InfluxDBSettings(BaseModel):
 class PriceSettings(BaseModel):
     consumption: float = Field(None)
     delivery: float = Field(None)
+    currency: str = Field(None)
 
     @property
     def is_configured(self) -> bool:
@@ -102,11 +103,11 @@ class PriceSettings(BaseModel):
 
     @property
     def is_consumption_configured(self) -> bool:
-        return self.consumption is not None
+        return self.consumption is not None and self.currency is not None
 
     @property
     def is_delivery_configured(self) -> bool:
-        return self.delivery is not None
+        return self.delivery is not None and self.currency is not None
 
     @property
     def price_in(self) -> float:

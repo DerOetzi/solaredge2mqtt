@@ -1,29 +1,19 @@
-from typing import ClassVar
-
 from requests.exceptions import HTTPError
 
-from solaredge2mqtt.eventbus import BaseEvent, EventBus
+from solaredge2mqtt.eventbus import EventBus
 from solaredge2mqtt.exceptions import InvalidDataException
 from solaredge2mqtt.logging import logger
-from solaredge2mqtt.models import OpenWeatherMapOneCall
-from solaredge2mqtt.mqtt import MQTTPublishEvent
+from solaredge2mqtt.models import (
+    MQTTPublishEvent,
+    OpenWeatherMapOneCall,
+    WeatherUpdateEvent,
+)
+from solaredge2mqtt.models.base import Interval10MinTriggerEvent
 from solaredge2mqtt.service.http import HTTPClient
 from solaredge2mqtt.settings import ServiceSettings
 
 ONECALL_URL = "https://api.openweathermap.org/data/3.0/onecall"
 TIMEMACHINE_URL = "https://api.openweathermap.org/data/3.0/onecall/timemachine"
-
-
-class WeatherUpdateEvent(BaseEvent):
-    EVENT_TYPE: ClassVar[str] = "weather_update"
-    weather: OpenWeatherMapOneCall
-
-    @classmethod
-    async def emit(cls, event_bus: EventBus, **kwargs) -> None:
-        await event_bus.emit(cls(**kwargs))
-        await MQTTPublishEvent.emit(
-            event_bus, topic="weather/current", payload=kwargs["weather"].current
-        )
 
 
 class WeatherClient(HTTPClient):
@@ -34,10 +24,15 @@ class WeatherClient(HTTPClient):
         self.settings = settings.weather
 
         self.event_bus = event_bus
+        self._subscribe_events()
 
-    async def loop(self):
+    def _subscribe_events(self):
+        self.event_bus.subscribe(Interval10MinTriggerEvent, self.loop)
+
+    async def loop(self, _):
         weather = self.get_weather()
-        await WeatherUpdateEvent.emit(self.event_bus, weather=weather)
+        await self.event_bus.emit(WeatherUpdateEvent(weather))
+        await self.event_bus.emit(MQTTPublishEvent("weather/current", weather.current))
 
     def get_weather(self) -> OpenWeatherMapOneCall:
         try:

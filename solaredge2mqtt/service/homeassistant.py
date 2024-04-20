@@ -1,51 +1,136 @@
 from solaredge2mqtt.eventbus import EventBus
-from solaredge2mqtt.exceptions import InvalidDataException
 from solaredge2mqtt.logging import logger
-from solaredge2mqtt.models.homeassistant import HomeAssistantDevice, HomeAssistantEntity
-from solaredge2mqtt.mqtt import MQTTPublishEvent
-from solaredge2mqtt.service.modbus import Modbus
+from solaredge2mqtt.models import (
+    ForecastEvent,
+    HistoricPeriod,
+    HomeAssistantDevice,
+    HomeAssistantEntity,
+    HomeAssistantEntityType,
+    ModbusBatteriesReadEvent,
+    ModbusInverterReadEvent,
+    ModbusMetersReadEvent,
+    MQTTPublishEvent,
+    MQTTReceivedEvent,
+    PowerflowGeneratedEvent,
+    WallboxReadEvent,
+)
+from solaredge2mqtt.models.base import (
+    BaseEvent,
+    ComponentEvent,
+    Solaredge2MQTTBaseModel,
+)
 from solaredge2mqtt.settings import ServiceSettings
 
 
 class HomeAssistantDiscovery:
     def __init__(self, service_settings: ServiceSettings, event_bus: EventBus) -> None:
         self.settings = service_settings
+        self._send_entities: dict[str, HomeAssistantEntity] = {}
+        logger.info("Home Assistant discovery enabled")
+
+        self._status_topic = f"{self.settings.homeassistant.topic_prefix}/status"
+
         self.event_bus = event_bus
+        self._subscribe_events()
 
-    async def publish_discovery(self) -> None:
-        modbus = Modbus(self.settings.modbus)
-        inv_data, meters_data, batteries_data = await modbus.loop()
+    def _subscribe_events(self) -> None:
 
-        if any(data is None for data in [inv_data, meters_data, batteries_data]):
-            raise InvalidDataException("Invalid modbus data")
+        component_events: list[type[BaseEvent] | BaseEvent] = [
+            ModbusInverterReadEvent,
+            PowerflowGeneratedEvent,
+            WallboxReadEvent,
+            ForecastEvent,
+        ]
 
-        device_info = inv_data.homeassistant_device_info()
+        for period in HistoricPeriod:
+            if period.send_event:
+                component_events.append(period.send_event)
+
+        self.event_bus.subscribe(
+            component_events,
+            self.component_discovery,
+        )
+
+        self.event_bus.subscribe(
+            [ModbusBatteriesReadEvent, ModbusMetersReadEvent], self.components_discovery
+        )
+
+        self.event_bus.subscribe(
+            MQTTReceivedEvent,
+            self.homeassistant_status,
+        )
+
+    async def component_discovery(self, event: ComponentEvent) -> None:
+        self.event_bus.unsubscribe(event, self.component_discovery)
+        logger.info(f"Home Assistant discovery component: {event.component}")
+        await self.publish_component(event.component)
+
+    async def components_discovery(self, event: ComponentEvent) -> None:
+        self.event_bus.unsubscribe(event, self.components_discovery)
+        for name, component in event.component.items():
+            logger.info(f"Home Assistant discovery component: {component}")
+            await self.publish_component(component, name)
+
+    async def publish_component(
+        self, component: Solaredge2MQTTBaseModel, name: str = ""
+    ) -> None:
+        subtopic = f"/{name.lower()}" if name else ""
+
+        state_topic = (
+            f"{self.settings.mqtt.topic_prefix}/{component.mqtt_topic()}{subtopic}"
+        )
+
+        if name:
+            device_info = component.homeassistant_device_info_with_name(name)
+        else:
+            device_info = component.homeassistant_device_info()
+
         logger.trace(device_info)
         device = HomeAssistantDevice(
             client_id=self.settings.mqtt.client_id,
-            state_topic=f"{self.settings.mqtt.topic_prefix}/{inv_data.mqtt_topic()}",
+            state_topic=state_topic,
             **device_info,
         )
         logger.debug(device)
 
-        entities_info = inv_data.homeassistant_entities_info()
-        logger.trace(entities_info)
+        entities_info = component.homeassistant_entities_info()
         for entity_info in entities_info:
-            entity_type = entity_info.pop("type")
-            if entity_type != "sensor":
-                continue
+            if self.settings.is_prices_configured and entity_info["ha_type"] == str(
+                HomeAssistantEntityType.MONETARY
+            ):
+                entity_info["unit"] = self.settings.prices.currency
 
             entity = HomeAssistantEntity(
                 device=device,
                 **entity_info,
             )
-            topic = f"{entity_type}/{entity.unique_id}/config"
+            topic = (
+                f"{entity.ha_type.typed}/"
+                f"{state_topic.replace('/', '_')}/"
+                f"{entity.unique_id}/config"
+            )
             logger.debug(entity)
 
-            await MQTTPublishEvent.emit(
-                self.event_bus,
-                topic=topic,
-                payload=entity,
-                topic_prefix=self.settings.homeassistant.topic_prefix,
-                exclude_none=True,
+            self._send_entities[topic] = entity
+
+            await self.event_bus.emit(
+                MQTTPublishEvent(
+                    topic=topic,
+                    payload=entity,
+                    topic_prefix=self.settings.homeassistant.topic_prefix,
+                    exclude_none=True,
+                )
             )
+
+    async def homeassistant_status(self, event: MQTTReceivedEvent) -> None:
+        if event.topic == self._status_topic and event.payload == "online":
+            logger.info("Home Assistant status changed to online resend discovery")
+            for topic, entity in self._send_entities.items():
+                await self.event_bus.emit(
+                    MQTTPublishEvent(
+                        topic=topic,
+                        payload=entity,
+                        topic_prefix=self.settings.homeassistant.topic_prefix,
+                        exclude_none=True,
+                    )
+                )

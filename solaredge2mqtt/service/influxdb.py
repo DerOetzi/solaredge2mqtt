@@ -9,15 +9,29 @@ from influxdb_client.client.influxdb_client_async import (
 )
 from pandas import DataFrame
 
+from solaredge2mqtt.eventbus import EventBus
 from solaredge2mqtt.logging import logger
-from solaredge2mqtt.models import ForecastPeriod, HistoricPeriod
+from solaredge2mqtt.models import HistoricPeriod
+from solaredge2mqtt.models.base import (
+    InfluxDBAggregatedEvent,
+    Interval10MinTriggerEvent
+)
 from solaredge2mqtt.settings import LOCAL_TZ, InfluxDBSettings, PriceSettings
 
 
 class InfluxDB:
-    def __init__(self, settings: InfluxDBSettings, prices: PriceSettings) -> None:
+    def __init__(
+        self,
+        settings: InfluxDBSettings,
+        prices: PriceSettings,
+        event_bus: EventBus | None = None,
+    ) -> None:
         self.settings: InfluxDBSettings = settings
         self.prices: PriceSettings = prices
+
+        self.event_bus = event_bus
+        if self.event_bus:
+            self._subscribe_events()
 
         self.client: InfluxDBClient = InfluxDBClient(
             url=settings.url,
@@ -38,6 +52,9 @@ class InfluxDB:
         self.query_api_async: QueryApiAsync | None = None
 
         self.flux_cache: dict[str, str] = {}
+
+    def _subscribe_events(self) -> None:
+        self.event_bus.subscribe(Interval10MinTriggerEvent, self.loop)
 
     def initialize_buckets(self) -> None:
         buckets_api = self.client.buckets_api()
@@ -61,7 +78,7 @@ class InfluxDB:
                 bucket.retention_rules[0] = retention_rules
                 buckets_api.update_bucket(bucket=bucket)
 
-    async def loop(self) -> None:
+    async def loop(self, _) -> None:
         now = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0)
 
         logger.info("Aggregate powerflow and energy raw data")
@@ -78,6 +95,9 @@ class InfluxDB:
             retention_time,
             ["powerflow_raw", "battery_raw"],
         )
+
+        if self.event_bus:
+            await self.event_bus.emit(InfluxDBAggregatedEvent())
 
     def delete_from_measurements(
         self, start: datetime, stop: datetime, measurements: list[str]
@@ -119,7 +139,7 @@ class InfluxDB:
         logger.debug(data)
 
     def query_timeunit(
-        self, period: HistoricPeriod | ForecastPeriod, measurement: str
+        self, period: HistoricPeriod, measurement: str
     ) -> dict[str, any] | None:
         return self.query_first(
             period.query.query, {"UNIT": period.unit, "MEASUREMENT": measurement}

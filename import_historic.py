@@ -25,7 +25,8 @@ async def main():
     for i in range(1, STRINGS + 1):
         data[f"string{i}"] = data[f"string{i}"].fillna(0)
 
-    data["evcharger"] = data["evcharger"].fillna(0)
+    for key in ["evcharger", "inverter_consumption", "inverter_production"]:
+        data[key] = data[key].fillna(0)
 
     data.info()
 
@@ -53,7 +54,7 @@ async def main():
         dc_power = pv_production - battery.power
 
         inverter = InverterPowerflow(
-            power=round(row["inverter_production"]),
+            power=round(row["inverter_production"] - row["inverter_consumption"]),
             dc_power=round(dc_power),
             battery_discharge=battery.discharge,
         )

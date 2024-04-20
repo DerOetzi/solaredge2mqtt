@@ -5,10 +5,18 @@ from datetime import datetime
 from pydantic import Field, computed_field
 
 from solaredge2mqtt.logging import logger
-from solaredge2mqtt.models.base import EnumModel, Solaredge2MQTTBaseModel
+from solaredge2mqtt.models.base import (
+    Component,
+    ComponentEvent,
+    EnumModel,
+    Solaredge2MQTTBaseModel,
+)
+from solaredge2mqtt.models.homeassistant import HomeAssistantEntityType as EntityType
 
 
-class HistoricBaseModel(Solaredge2MQTTBaseModel):
+class HistoricBaseModel(Component):
+    SOURCE = "energy"
+
     info: HistoricInfo
 
     def __init__(self, data: dict, period: HistoricPeriod, **kwargs):
@@ -17,14 +25,20 @@ class HistoricBaseModel(Solaredge2MQTTBaseModel):
             **kwargs,
         )
 
+    def mqtt_topic(self) -> str:
+        return f"{self.SOURCE}/{self.info.period.topic}"
+
+    def __str__(self) -> str:
+        return f"{self.SOURCE}: {self.info.period}"
+
 
 class HistoricEnergy(HistoricBaseModel):
-    pv_production: float
-    inverter: InverterEnergy
-    grid: GridEnergy
-    battery: BatteryEnergy
-    consumer: ConsumerEnergy
-    money: HistoricMoney | None = Field(None)
+    pv_production: float = Field(**EntityType.ENERGY_KWH.field("PV production"))
+    inverter: InverterEnergy = Field(title="Inverter")
+    grid: GridEnergy = Field(title="Grid")
+    battery: BatteryEnergy = Field(title="Battery")
+    consumer: ConsumerEnergy = Field(title="Consumer")
+    money: HistoricMoney | None = Field(None, title="Money")
 
     def __init__(
         self,
@@ -64,30 +78,35 @@ class HistoricEnergy(HistoricBaseModel):
             ),
         )
 
-    @computed_field
+    @computed_field(title="Self consumption rate")
     @property
     def self_consumption_rates(self) -> SelfConsumptionRate:
         return SelfConsumptionRate(self)
 
-    @computed_field
+    @computed_field(title="Self sufficiency rate")
     @property
     def self_sufficiency_rates(self) -> SelfSufficiencyRate:
         return SelfSufficiencyRate(self)
 
+    def homeassistant_device_info(self) -> dict[str, any]:
+        return self._default_homeassistant_device_info(
+            f"Energy - {self.info.period.title}"
+        )
+
 
 class HistoricMoney(Solaredge2MQTTBaseModel):
-    delivered: float
-    saved: float
-    consumed: float
+    delivered: float = Field(**EntityType.MONETARY.field("Delivered"))
+    saved: float = Field(**EntityType.MONETARY.field("Saved"))
+    consumed: float = Field(**EntityType.MONETARY.field("Consumed"))
     price_in: float = Field(exclude=True)
     price_out: float = Field(exclude=True)
 
-    @computed_field
+    @computed_field(**EntityType.MONETARY.field("Balance grid"))
     @property
     def balance_grid(self) -> float:
         return round(self.delivered - self.consumed, 3)
 
-    @computed_field
+    @computed_field(**EntityType.MONETARY.field("Balance total"))
     @property
     def balance_total(self) -> float:
         return round(self.balance_grid + self.saved, 3)
@@ -111,26 +130,98 @@ class HistoricQuery(EnumModel):
         return self._query
 
 
-class HistoricPeriod(EnumModel):
-    LAST_HOUR = "last_hour", "1h", HistoricQuery.LAST
-    TODAY = "today", "1d", HistoricQuery.ACTUAL
-    YESTERDAY = "yesterday", "1d", HistoricQuery.LAST
-    THIS_WEEK = "this_week", "1w", HistoricQuery.ACTUAL
-    LAST_WEEK = "last_week", "1w", HistoricQuery.LAST
-    THIS_MONTH = "this_month", "1mo", HistoricQuery.ACTUAL
-    LAST_MONTH = "last_month", "1mo", HistoricQuery.LAST
-    THIS_YEAR = "this_year", "1y", HistoricQuery.ACTUAL
-    LAST_YEAR = "last_year", "1y", HistoricQuery.LAST
-    LIFETIME = "lifetime", "99y", HistoricQuery.ACTUAL
+class EnergyReadEvent(ComponentEvent):
+    def __str__(self) -> str:
+        return f"{self.component.SOURCE}: {self.component.period}"
 
-    def __init__(self, topic: str, unit: str, query: HistoricQuery) -> None:
+
+class EnergyReadLastHourEvent(EnergyReadEvent):
+    pass
+
+
+class EnergyReadTodayEvent(EnergyReadEvent):
+    pass
+
+
+class EnergyReadYesterdayEvent(EnergyReadEvent):
+    pass
+
+
+class EnergyReadThisMonthEvent(EnergyReadEvent):
+    pass
+
+
+class EnergyReadThisYearEvent(EnergyReadEvent):
+    pass
+
+
+class EnergyReadLifetimeEvent(EnergyReadEvent):
+    pass
+
+
+class HistoricPeriod(EnumModel):
+    LAST_HOUR = (
+        "last_hour",
+        "Last hour",
+        "1h",
+        HistoricQuery.LAST,
+        EnergyReadLastHourEvent,
+    )
+    TODAY = "today", "Today", "1d", HistoricQuery.ACTUAL, EnergyReadTodayEvent
+    YESTERDAY = (
+        "yesterday",
+        "Yesterday",
+        "1d",
+        HistoricQuery.LAST,
+        EnergyReadYesterdayEvent,
+    )
+    THIS_WEEK = "this_week", "This week", "1w", HistoricQuery.ACTUAL, None
+    LAST_WEEK = "last_week", "Last week", "1w", HistoricQuery.LAST, None
+    THIS_MONTH = (
+        "this_month",
+        "This month",
+        "1mo",
+        HistoricQuery.ACTUAL,
+        EnergyReadThisMonthEvent,
+    )
+    LAST_MONTH = "last_month", "Last month", "1mo", HistoricQuery.LAST, None
+    THIS_YEAR = (
+        "this_year",
+        "This year",
+        "1y",
+        HistoricQuery.ACTUAL,
+        EnergyReadThisYearEvent,
+    )
+    LAST_YEAR = "last_year", "Last year", "1y", HistoricQuery.LAST, None
+    LIFETIME = (
+        "lifetime",
+        "Lifetime",
+        "99y",
+        HistoricQuery.ACTUAL,
+        EnergyReadLifetimeEvent,
+    )
+
+    def __init__(
+        self,
+        topic: str,
+        title: str,
+        unit: str,
+        query: HistoricQuery,
+        send_event: type[EnergyReadEvent] | None = None,
+    ) -> None:
         self._topic: str = topic
+        self._title: str = title
         self._unit: str = unit
         self._query: HistoricQuery = query
+        self._send_event: type[EnergyReadEvent] | None = send_event
 
     @property
     def topic(self) -> str:
         return self._topic
+
+    @property
+    def title(self) -> str:
+        return self._title
 
     @property
     def unit(self) -> str:
@@ -140,42 +231,52 @@ class HistoricPeriod(EnumModel):
     def query(self) -> HistoricQuery:
         return self._query
 
+    @property
+    def send_event(self) -> type[EnergyReadEvent] | None:
+        return self._send_event
+
 
 class InverterEnergy(Solaredge2MQTTBaseModel):
-    production: float
-    consumption: float
-    dc_power: float
-    pv_production: float
-    battery_production: float
+    production: float = Field(**EntityType.ENERGY_KWH.field("Production"))
+    consumption: float = Field(**EntityType.ENERGY_KWH.field("Consumption"))
+    dc_power: float = Field(**EntityType.POWER_W.field("DC production"))
+    pv_production: float = Field(**EntityType.ENERGY_KWH.field("PV production"))
+    battery_production: float = Field(
+        **EntityType.ENERGY_KWH.field("Battery production")
+    )
 
 
 class GridEnergy(Solaredge2MQTTBaseModel):
-    delivery: float
-    consumption: float
+    delivery: float = Field(**EntityType.ENERGY_KWH.field("Delivery"))
+    consumption: float = Field(**EntityType.ENERGY_KWH.field("Consumption"))
 
 
 class BatteryEnergy(Solaredge2MQTTBaseModel):
-    charge: float
-    discharge: float
+    charge: float = Field(**EntityType.ENERGY_KWH.field("Charge"))
+    discharge: float = Field(**EntityType.ENERGY_KWH.field("Discharge"))
 
 
 class ConsumerEnergy(Solaredge2MQTTBaseModel):
-    house: float
-    evcharger: float
-    inverter: float
+    house: float = Field(**EntityType.ENERGY_KWH.field("House"))
+    evcharger: float = Field(**EntityType.ENERGY_KWH.field("EV-Charger"))
+    inverter: float = Field(**EntityType.ENERGY_KWH.field("Inverter"))
 
-    total: float
+    total: float = Field(**EntityType.ENERGY_KWH.field("Total"))
 
-    used_production: float
-    used_pv_production: float
-    used_battery_production: float
+    used_production: float = Field(**EntityType.ENERGY_KWH.field("Used production"))
+    used_pv_production: float = Field(
+        **EntityType.ENERGY_KWH.field("Used PV production")
+    )
+    used_battery_production: float = Field(
+        **EntityType.ENERGY_KWH.field("Used battery production")
+    )
 
 
 class SelfConsumptionRate(Solaredge2MQTTBaseModel):
-    grid: int
-    battery: int
-    pv: int
-    total: int
+    grid: int = Field(**EntityType.PERCENTAGE.field("Grid"))
+    battery: int = Field(**EntityType.PERCENTAGE.field("Battery"))
+    pv: int = Field(**EntityType.PERCENTAGE.field("PV"))
+    total: int = Field(**EntityType.PERCENTAGE.field("Total"))
 
     def __init__(self, energy: HistoricEnergy):
         if energy.inverter.production > 0:
@@ -206,10 +307,10 @@ class SelfConsumptionRate(Solaredge2MQTTBaseModel):
 
 
 class SelfSufficiencyRate(Solaredge2MQTTBaseModel):
-    grid: int
-    battery: int
-    pv: int
-    total: int
+    grid: int = Field(**EntityType.PERCENTAGE.field("Grid"))
+    battery: int = Field(**EntityType.PERCENTAGE.field("Battery"))
+    pv: int = Field(**EntityType.PERCENTAGE.field("PV"))
+    total: int = Field(**EntityType.PERCENTAGE.field("Total"))
 
     def __init__(self, energy: HistoricEnergy):
         if energy.consumer.total > 0:
