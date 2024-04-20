@@ -73,6 +73,14 @@ class InfluxDBSettings(BaseModel):
     retention_raw: int = Field(25)
 
     @property
+    def url(self) -> str:
+        url = f"{self.host}:{self.port}"
+        if not str(self.host).startswith(("http://", "https://")):
+            url = f"http://{url}"
+
+        return url
+
+    @property
     def is_configured(self) -> bool:
         return all(
             [
