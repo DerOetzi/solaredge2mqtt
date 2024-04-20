@@ -82,7 +82,7 @@ jobs:
           packages-dir: dist/
 
       - name: Publish assets to github
-        if: ${{github.event_name == 'release'}}
+        if: ${{github.event_name == 'release' && matrix.python-version == '3.11'}}
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ github.token }}
