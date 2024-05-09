@@ -4,8 +4,8 @@ import asyncio
 from typing import Callable
 
 from solaredge2mqtt.exceptions import InvalidDataException
-from solaredge2mqtt.models.base import BaseEvent
-from solaredge2mqtt.logging import logger
+from solaredge2mqtt.core.logging import logger
+from solaredge2mqtt.core.events.events import BaseEvent
 
 
 class EventBus:

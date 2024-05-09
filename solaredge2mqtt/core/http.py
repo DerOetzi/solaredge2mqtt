@@ -5,7 +5,7 @@ from requests import session
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from requests.exceptions import Timeout, HTTPError
 
-from solaredge2mqtt.logging import logger
+from solaredge2mqtt.core.logging import logger
 
 
 class HTTPClient:

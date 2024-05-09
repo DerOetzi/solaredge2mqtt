@@ -4,15 +4,15 @@ from influxdb_client import Point
 from pydantic import Field
 from solaredge_modbus import BATTERY_STATUS_MAP, C_SUNSPEC_DID_MAP, INVERTER_STATUS_MAP
 
-
-from solaredge2mqtt.logging import logger
-from solaredge2mqtt.models.homeassistant import HomeAssistantEntityType as EntityType
+from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.models.base import (
     Component,
     ComponentEvent,
+    ComponentsEvent,
     ComponentValueGroup,
     Solaredge2MQTTBaseModel,
 )
+from solaredge2mqtt.models.homeassistant import HomeAssistantEntityType as EntityType
 
 
 class SunSpecInfo(Solaredge2MQTTBaseModel):
@@ -297,9 +297,9 @@ class ModbusInverterReadEvent(ComponentEvent):
     pass
 
 
-class ModbusMetersReadEvent(ComponentEvent):
+class ModbusMetersReadEvent(ComponentsEvent):
     pass
 
 
-class ModbusBatteriesReadEvent(ComponentEvent):
+class ModbusBatteriesReadEvent(ComponentsEvent):
     pass

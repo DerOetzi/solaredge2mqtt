@@ -5,12 +5,12 @@ import urllib3
 from pydantic import BaseModel, Field
 from requests.exceptions import HTTPError
 
-from solaredge2mqtt.eventbus import EventBus
+from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.exceptions import ConfigurationException, InvalidDataException
-from solaredge2mqtt.logging import logger
+from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.models import WallboxAPI, WallboxReadEvent
-from solaredge2mqtt.settings import WallboxSettings
-from solaredge2mqtt.service.http import HTTPClient
+from solaredge2mqtt.core.settings.models import WallboxSettings
+from solaredge2mqtt.core.http import HTTPClient
 
 urllib3.disable_warnings()
 

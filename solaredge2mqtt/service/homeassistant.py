@@ -1,6 +1,14 @@
-from solaredge2mqtt.eventbus import EventBus
-from solaredge2mqtt.logging import logger
+from solaredge2mqtt.core.mqtt.events import (
+    MQTTPublishEvent,
+    MQTTReceivedEvent,
+    MQTTSubscribeEvent,
+)
+from solaredge2mqtt.core.events import EventBus
+from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.models import (
+    Component,
+    ComponentEvent,
+    ComponentsEvent,
     ForecastEvent,
     HistoricPeriod,
     HomeAssistantDevice,
@@ -9,17 +17,10 @@ from solaredge2mqtt.models import (
     ModbusBatteriesReadEvent,
     ModbusInverterReadEvent,
     ModbusMetersReadEvent,
-    MQTTPublishEvent,
-    MQTTReceivedEvent,
     PowerflowGeneratedEvent,
     WallboxReadEvent,
 )
-from solaredge2mqtt.models.base import (
-    BaseEvent,
-    ComponentEvent,
-    Solaredge2MQTTBaseModel,
-)
-from solaredge2mqtt.settings import ServiceSettings
+from solaredge2mqtt.core.settings import ServiceSettings
 
 
 class HomeAssistantDiscovery:
@@ -35,11 +36,11 @@ class HomeAssistantDiscovery:
 
     def _subscribe_events(self) -> None:
 
-        component_events: list[type[BaseEvent] | BaseEvent] = [
+        component_events: list[type[ComponentEvent] | type[ComponentEvent]] = [
+            ForecastEvent,
             ModbusInverterReadEvent,
             PowerflowGeneratedEvent,
             WallboxReadEvent,
-            ForecastEvent,
         ]
 
         for period in HistoricPeriod:
@@ -52,7 +53,7 @@ class HomeAssistantDiscovery:
         )
 
         self.event_bus.subscribe(
-            [ModbusBatteriesReadEvent, ModbusMetersReadEvent], self.components_discovery
+            [ModbusMetersReadEvent, ModbusBatteriesReadEvent], self.components_discovery
         )
 
         self.event_bus.subscribe(
@@ -60,20 +61,21 @@ class HomeAssistantDiscovery:
             self.homeassistant_status,
         )
 
+    async def async_init(self) -> None:
+        await self.event_bus.emit(MQTTSubscribeEvent(self._status_topic))
+
     async def component_discovery(self, event: ComponentEvent) -> None:
         self.event_bus.unsubscribe(event, self.component_discovery)
         logger.info(f"Home Assistant discovery component: {event.component}")
         await self.publish_component(event.component)
 
-    async def components_discovery(self, event: ComponentEvent) -> None:
+    async def components_discovery(self, event: ComponentsEvent) -> None:
         self.event_bus.unsubscribe(event, self.components_discovery)
-        for name, component in event.component.items():
+        for name, component in event.components.items():
             logger.info(f"Home Assistant discovery component: {component}")
             await self.publish_component(component, name)
 
-    async def publish_component(
-        self, component: Solaredge2MQTTBaseModel, name: str = ""
-    ) -> None:
+    async def publish_component(self, component: Component, name: str = "") -> None:
         subtopic = f"/{name.lower()}" if name else ""
 
         state_topic = (

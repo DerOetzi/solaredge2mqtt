@@ -61,6 +61,15 @@ For monitoring SolarEdge Wallbox, provide:
 - **SE2MQTT_WALLBOX\_\_PASSWORD**: The admin password for Wallbox web UI access.
 - **SE2MQTT_WALLBOX\_\_SERIAL**: The serial number of your Wallbox.
 
+### Home Assistant Auto Discovery
+
+If you want Home Assistant to auto discover the data SolarEdge2MQTT provides, you can enable this here.
+
+- **SE2MQTT_HOMEASSISTANT\_\_ENABLE**: Set to true to enable the auto discovery
+- **SE2MQTT_HOMEASSISTANT\_\_TOPIC_PREFIX**: By default Home Assistant MQTT integration listens to subtopics of homeassistant
+
+_If you want to remove things, just disable the feature, then restart SolarEdge2MQTT first and after it restart Home Assistant,_
+
 ### InfluxDB
 
 Configure your InfluxDB settings with these environment variables to store monitoring data effectively:

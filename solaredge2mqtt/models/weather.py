@@ -4,8 +4,9 @@ from datetime import datetime
 
 from pydantic import Field, field_serializer, model_serializer
 
-from solaredge2mqtt.models.base import BaseEvent, Solaredge2MQTTBaseModel
+from solaredge2mqtt.models.base import Solaredge2MQTTBaseModel
 
+from solaredge2mqtt.core.events.events import BaseEvent
 
 class OpenWeatherMapCondition(Solaredge2MQTTBaseModel):
     id: int

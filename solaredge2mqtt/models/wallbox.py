@@ -5,7 +5,7 @@ from solaredge2mqtt.models.base import (
     Component,
     Solaredge2MQTTBaseModel,
 )
-from solaredge2mqtt.models import HomeAssistantEntityType as EntityType
+from solaredge2mqtt.models.homeassistant import HomeAssistantEntityType as EntityType
 
 
 class WallboxInfo(Solaredge2MQTTBaseModel):
@@ -39,7 +39,7 @@ class WallboxAPI(Component):
     SOURCE = "api"
 
     info: WallboxInfo
-    power: float = Field(**EntityType.POWER_KW.field("Power"))
+    power: float = Field(**EntityType.POWER_W.field("Power"))
     state: str = Field(title="State")
     vehicle_plugged: bool = Field(**EntityType.PLUG.field("Vehicle plugged"))
     max_current: float = Field(**EntityType.CURRENT_A.field("Max current"))

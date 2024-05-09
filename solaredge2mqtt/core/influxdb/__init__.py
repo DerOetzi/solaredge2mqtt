@@ -9,14 +9,12 @@ from influxdb_client.client.influxdb_client_async import (
 )
 from pandas import DataFrame
 
-from solaredge2mqtt.eventbus import EventBus
-from solaredge2mqtt.logging import logger
-from solaredge2mqtt.models import HistoricPeriod
-from solaredge2mqtt.models.base import (
-    InfluxDBAggregatedEvent,
-    Interval10MinTriggerEvent
-)
-from solaredge2mqtt.settings import LOCAL_TZ, InfluxDBSettings, PriceSettings
+from solaredge2mqtt.core.events import EventBus
+from solaredge2mqtt.core.influxdb.events import InfluxDBAggregatedEvent
+from solaredge2mqtt.core.influxdb.settings import InfluxDBSettings
+from solaredge2mqtt.core.logging import logger
+from solaredge2mqtt.models import HistoricPeriod, Interval10MinTriggerEvent
+from solaredge2mqtt.core.settings.models import LOCAL_TZ, PriceSettings
 
 
 class InfluxDB:
@@ -182,7 +180,7 @@ class InfluxDB:
     ) -> str:
         if query_name not in self.flux_cache:
             flux = pkg_resources.resource_string(
-                __name__, f"../flux/{query_name}.flux"
+                __name__, f"./flux/{query_name}.flux"
             ).decode("utf-8")
             flux = (
                 flux.replace("{{BUCKET_AGGREGATED}}", self.bucket_name)

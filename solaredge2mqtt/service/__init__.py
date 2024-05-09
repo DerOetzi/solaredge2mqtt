@@ -14,21 +14,19 @@ from typing import Callable
 from aiomqtt import MqttError
 
 from solaredge2mqtt import __version__
-from solaredge2mqtt.eventbus import EventBus
-from solaredge2mqtt.exceptions import ConfigurationException, InvalidDataException
-from solaredge2mqtt.logging import initialize_logging, logger
-from solaredge2mqtt.models.base import (
-    Interval10MinTriggerEvent,
-    IntervalBaseTriggerEvent,
-)
-from solaredge2mqtt.mqtt import MQTTClient
+from solaredge2mqtt.core.events import EventBus
+from solaredge2mqtt.core.influxdb import InfluxDB
+from solaredge2mqtt.core.logging import initialize_logging, logger
+from solaredge2mqtt.core.mqtt import MQTTClient
+from solaredge2mqtt.core.settings import service_settings
+from solaredge2mqtt.core.settings.models import LOCAL_TZ
+from solaredge2mqtt.exceptions import ConfigurationException
+from solaredge2mqtt.models import Interval10MinTriggerEvent, IntervalBaseTriggerEvent
 from solaredge2mqtt.service.base import BaseLoops
 from solaredge2mqtt.service.forecast import ForecastService
 from solaredge2mqtt.service.homeassistant import HomeAssistantDiscovery
-from solaredge2mqtt.service.influxdb import InfluxDB
 from solaredge2mqtt.service.monitoring import MonitoringSite
 from solaredge2mqtt.service.weather import WeatherClient
-from solaredge2mqtt.settings import LOCAL_TZ, service_settings
 
 
 def run():
@@ -118,11 +116,14 @@ class Service:
                 async with self.mqtt:
                     await self.mqtt.publish_status_online()
 
+                    if self.settings.is_homeassistant_configured:
+                        await self.homeassistant.async_init()
+
+                    self._start_mqtt_listener()
                     self.schedule_loop(
                         self.settings.interval, self.interval_base_trigger
                     )
                     self.schedule_loop(600, self.interval_10_minute_trigger)
-                    # await self._start_mqtt_listener()
 
                     await aio.gather(*self.loops)
 
@@ -144,17 +145,10 @@ class Service:
     async def interval_10_minute_trigger(self):
         await self.event_bus.emit(Interval10MinTriggerEvent())
 
-    # async def _start_mqtt_listener(self):
-    #     mqtt_topics = [
-    #         event.topic
-    #         for event in self.event_bus.subcribed_events
-    #         if isinstance(event, MQTTReceivedEvent)
-    #     ]
-    #     await self.mqtt.subscribe_topics(mqtt_topics)
-    #     if mqtt_topics:
-    #         task = aio.create_task(self.mqtt.listen())
-    #         self.loops.add(task)
-    #         task.add_done_callback(self.loops.remove)
+    def _start_mqtt_listener(self):
+        task = aio.create_task(self.mqtt.listen())
+        self.loops.add(task)
+        task.add_done_callback(self.loops.remove)
 
     def schedule_loop(
         self,

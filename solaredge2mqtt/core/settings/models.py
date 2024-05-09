@@ -1,20 +1,16 @@
-from __future__ import annotations
-
-from functools import lru_cache
 from os import environ, listdir, path
 from typing import Generator
-from tzlocal import get_localzone_name
 
 from pydantic import BaseModel, Field, SecretStr
+from tzlocal import get_localzone_name
 
-from solaredge2mqtt.logging import LoggingLevelEnum, logger
+from solaredge2mqtt.core.influxdb.settings import InfluxDBSettings
+from solaredge2mqtt.core.logging import logger
+from solaredge2mqtt.core.logging.models import LoggingLevelEnum
+from solaredge2mqtt.core.mqtt.settings import MQTTSettings
 
 DOCKER_SECRETS_DIR = "/run/secrets"
 
-SECONDS_PER_DAY = 86400
-SECONDS_PER_HOUR = 3600
-SECONDS_PER_YEAR = SECONDS_PER_DAY * 365
-SECONDS_PER_2_YEARS = SECONDS_PER_YEAR * 2
 
 LOCAL_TZ = get_localzone_name()
 
@@ -24,15 +20,6 @@ class ModbusSettings(BaseModel):
     port: int = Field(1502)
     timeout: int = Field(1)
     unit: int = Field(1)
-
-
-class MQTTSettings(BaseModel):
-    client_id: str = Field("solaredge2mqtt")
-    broker: str
-    port: int = Field(1883)
-    username: str
-    password: SecretStr
-    topic_prefix: str = Field("solaredge")
 
 
 class MonitoringSettings(BaseModel):
@@ -60,35 +47,6 @@ class WallboxSettings(BaseModel):
     def is_configured(self) -> bool:
         return all(
             [self.host is not None, self.password is not None, self.serial is not None]
-        )
-
-
-class InfluxDBSettings(BaseModel):
-    host: str = Field(None)
-    port: int = Field(8086)
-    token: SecretStr = Field(None)
-    org: str = Field(None)
-    bucket: str = Field("solaredge")
-    retention: int = Field(SECONDS_PER_2_YEARS)
-    retention_raw: int = Field(25)
-
-    @property
-    def url(self) -> str:
-        url = f"{self.host}:{self.port}"
-        if not str(self.host).startswith(("http://", "https://")):
-            url = f"http://{url}"
-
-        return url
-
-    @property
-    def is_configured(self) -> bool:
-        return all(
-            [
-                self.host is not None,
-                self.port is not None,
-                self.token is not None,
-                self.org is not None,
-            ]
         )
 
 
@@ -278,8 +236,3 @@ class ServiceSettings(BaseModel):
     @staticmethod
     def _has_prefix(key: str) -> bool:
         return key.lower().startswith("se2mqtt_")
-
-
-@lru_cache()
-def service_settings() -> ServiceSettings:
-    return ServiceSettings()

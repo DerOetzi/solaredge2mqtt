@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import Field, computed_field
 
-from solaredge2mqtt.logging import logger
+from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.models.base import (
     Component,
     ComponentEvent,

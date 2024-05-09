@@ -1,9 +1,6 @@
 import logging
-import sys
 
-from loguru import logger
-
-from solaredge2mqtt.models.base import EnumModel
+from solaredge2mqtt.models import EnumModel
 
 LOGGING_DEVICE_INFO = "{device} ({info.manufacturer} {info.model} {info.serialnumber})"
 
@@ -27,7 +24,3 @@ class LoggingLevelEnum(EnumModel):
     @property
     def level(self) -> int:
         return self._level
-
-
-def initialize_logging(logging_level: LoggingLevelEnum) -> None:
-    logger.configure(handlers=[{"sink": sys.stdout, "level": logging_level.level}])

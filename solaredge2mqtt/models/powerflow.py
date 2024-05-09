@@ -6,7 +6,7 @@ from influxdb_client import Point
 from pydantic import Field, computed_field
 from pydantic.json_schema import SkipJsonSchema
 
-from solaredge2mqtt.logging import logger
+from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.models.base import (
     Component,
     ComponentEvent,
@@ -16,7 +16,7 @@ from solaredge2mqtt.models.homeassistant import HomeAssistantEntityType as Entit
 from solaredge2mqtt.models.modbus import SunSpecBattery, SunSpecInverter, SunSpecMeter
 
 if TYPE_CHECKING:
-    from solaredge2mqtt.settings import PriceSettings
+    from solaredge2mqtt.core.settings import PriceSettings
 
 
 class Powerflow(Component):

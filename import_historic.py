@@ -9,8 +9,8 @@ from solaredge2mqtt.models import (
     InverterPowerflow,
     Powerflow,
 )
-from solaredge2mqtt.service.influxdb import InfluxDB, Point
-from solaredge2mqtt.settings import LOCAL_TZ, service_settings
+from solaredge2mqtt.core.influxdb import InfluxDB, Point
+from solaredge2mqtt.core.settings import LOCAL_TZ, service_settings
 
 settings = service_settings()
 STRINGS = 2

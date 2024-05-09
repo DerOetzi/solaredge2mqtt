@@ -1,12 +1,14 @@
-import json
-
 from aiomqtt import Client, Will
 from pydantic import BaseModel
 
-from solaredge2mqtt.eventbus import EventBus
-from solaredge2mqtt.logging import logger
-from solaredge2mqtt.models import MQTTPublishEvent, MQTTReceivedEvent
-from solaredge2mqtt.settings import MQTTSettings
+from solaredge2mqtt.core.events import EventBus
+from solaredge2mqtt.core.logging import logger
+from solaredge2mqtt.core.mqtt.events import (
+    MQTTPublishEvent,
+    MQTTReceivedEvent,
+    MQTTSubscribeEvent,
+)
+from solaredge2mqtt.core.mqtt.settings import MQTTSettings
 
 
 class MQTTClient(Client):
@@ -26,6 +28,8 @@ class MQTTClient(Client):
             topic=f"{self.topic_prefix}/status", payload="offline", qos=1, retain=True
         )
 
+        self._subscribed_topics = set()
+
         self.event_bus = event_bus
         self._subscribe_events()
 
@@ -40,18 +44,26 @@ class MQTTClient(Client):
 
     def _subscribe_events(self) -> None:
         self.event_bus.subscribe(MQTTPublishEvent, self.event_listener)
+        self.event_bus.subscribe(MQTTSubscribeEvent, self._subscribe_topic)
+
+    async def _subscribe_topic(self, event: MQTTSubscribeEvent) -> None:
+        if event.topic not in self._subscribed_topics:
+            logger.info(f"Subscribing to topic: {event.topic}")
+            self._subscribed_topics.add(event.topic)
+            await self.subscribe(event.topic)
 
     async def listen(self) -> None:
-        logger.info("MQTT listen on subscribed topics")
-        async for message in self.messages:
-            logger.debug(
-                "MQTT message topic: {message.topic}={message.payload}",
-                message=message,
-            )
-            payload = json.loads(message.payload.decode())
-            await self.event_bus.emit(
-                MQTTReceivedEvent(topic=str(message.topic), payload=payload)
-            )
+        if self._subscribed_topics:
+            logger.info("MQTT listen on subscribed topics")
+            async for message in self.messages:
+                logger.debug(
+                    "MQTT message topic: {message.topic}={message.payload}",
+                    message=message,
+                )
+                payload = message.payload.decode()
+                await self.event_bus.emit(
+                    MQTTReceivedEvent(str(message.topic), payload)
+                )
 
     async def publish_status_online(self) -> None:
         await self.publish_to("status", "online", True)
