@@ -4,20 +4,23 @@ from pymodbus.exceptions import ModbusException
 from solaredge_modbus import Inverter
 
 from solaredge2mqtt.core.events import EventBus
-from solaredge2mqtt.exceptions import InvalidDataException
+from solaredge2mqtt.core.exceptions import InvalidDataException
 from solaredge2mqtt.core.logging import logger
-from solaredge2mqtt.core.logging.models import LOGGING_DEVICE_INFO
-from solaredge2mqtt.models import (
+from solaredge2mqtt.services.modbus.events import (
     ModbusBatteriesReadEvent,
     ModbusInverterReadEvent,
     ModbusMetersReadEvent,
+)
+from solaredge2mqtt.services.modbus.models import (
     SunSpecBattery,
     SunSpecInverter,
     SunSpecMeter,
 )
-from solaredge2mqtt.core.settings.models import ModbusSettings
+from solaredge2mqtt.services.modbus.settings import ModbusSettings
 
 SunSpecRawData = dict[str, str | int]
+
+LOGGING_DEVICE_INFO = "{device} ({info.manufacturer} {info.model} {info.serialnumber})"
 
 
 class Modbus:
@@ -39,7 +42,7 @@ class Modbus:
 
         self.event_bus = event_bus
 
-    async def loop(
+    async def get_data(
         self,
     ) -> (
         tuple[

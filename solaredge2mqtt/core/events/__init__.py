@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import Callable
 
-from solaredge2mqtt.exceptions import InvalidDataException
+from solaredge2mqtt.core.exceptions import InvalidDataException
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.events.events import BaseEvent
 
@@ -46,18 +46,21 @@ class EventBus:
                 self._subscribed_events.pop(event_key, None)
 
     async def emit(self, event: BaseEvent) -> None:
-        event_key = event.event_key()
-        logger.trace(f"Event emitted: {event_key}")
+        try:
+            event_key = event.event_key()
+            logger.trace(f"Event emitted: {event_key}")
 
-        if event_key in self._listeners:
-            if event.AWAIT:
-                await self._notify_listeners(event, self._listeners[event_key])
-            else:
-                task = asyncio.create_task(
-                    self._notify_listeners(event, self._listeners[event_key])
-                )
-                self._tasks.add(task)
-                task.add_done_callback(self._tasks.remove)
+            if event_key in self._listeners:
+                if event.AWAIT:
+                    await self._notify_listeners(event, self._listeners[event_key])
+                else:
+                    task = asyncio.create_task(
+                        self._notify_listeners(event, self._listeners[event_key])
+                    )
+                    self._tasks.add(task)
+                    task.add_done_callback(self._tasks.remove)
+        except asyncio.CancelledError:
+            pass
 
     async def _notify_listeners(
         self, event: BaseEvent, listeners: list[Callable]

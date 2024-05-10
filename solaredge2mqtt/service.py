@@ -12,21 +12,24 @@ from time import time
 from typing import Callable
 
 from aiomqtt import MqttError
+from tzlocal import get_localzone_name
 
 from solaredge2mqtt import __version__
 from solaredge2mqtt.core.events import EventBus
+from solaredge2mqtt.core.exceptions import ConfigurationException
 from solaredge2mqtt.core.influxdb import InfluxDB
 from solaredge2mqtt.core.logging import initialize_logging, logger
 from solaredge2mqtt.core.mqtt import MQTTClient
 from solaredge2mqtt.core.settings import service_settings
-from solaredge2mqtt.core.settings.models import LOCAL_TZ
-from solaredge2mqtt.exceptions import ConfigurationException
-from solaredge2mqtt.models import Interval10MinTriggerEvent, IntervalBaseTriggerEvent
-from solaredge2mqtt.service.base import BaseLoops
-from solaredge2mqtt.service.forecast import ForecastService
-from solaredge2mqtt.service.homeassistant import HomeAssistantDiscovery
-from solaredge2mqtt.service.monitoring import MonitoringSite
-from solaredge2mqtt.service.weather import WeatherClient
+from solaredge2mqtt.core.timer import Timer
+from solaredge2mqtt.services.energy import EnergyService
+from solaredge2mqtt.services.forecast import ForecastService
+from solaredge2mqtt.services.homeassistant import HomeAssistantDiscovery
+from solaredge2mqtt.services.monitoring import MonitoringSite
+from solaredge2mqtt.services.powerflow import PowerflowService
+from solaredge2mqtt.services.weather import WeatherClient
+
+LOCAL_TZ = get_localzone_name()
 
 
 def run():
@@ -48,6 +51,7 @@ class Service:
         logger.debug(self.settings)
 
         self.event_bus = EventBus()
+        self.timer = Timer(self.event_bus, self.settings.interval)
 
         self.mqtt = MQTTClient(self.settings.mqtt, self.event_bus)
 
@@ -60,7 +64,13 @@ class Service:
             else None
         )
 
-        self.basics = BaseLoops(self.settings, self.event_bus, self.influxdb)
+        self.energy: EnergyService | None = (
+            EnergyService(self.event_bus, self.influxdb)
+            if self.settings.is_influxdb_configured
+            else None
+        )
+
+        self.powerflow = PowerflowService(self.settings, self.event_bus, self.influxdb)
 
         self.monitoring: MonitoringSite | None = (
             MonitoringSite(self.settings.monitoring, self.event_bus)
@@ -94,10 +104,9 @@ class Service:
     def cancel(self):
         logger.info("Stopping SolarEdge2MQTT service...")
         self.cancel_request.set()
+        self.event_bus.cancel_tasks()
         for loop in self.loops:
             loop.cancel()
-
-        self.event_bus.cancel_tasks()
 
     async def main_loop(self):
         logger.info("Starting SolarEdge2MQTT service...")
@@ -116,14 +125,11 @@ class Service:
                 async with self.mqtt:
                     await self.mqtt.publish_status_online()
 
-                    if self.settings.is_homeassistant_configured:
-                        await self.homeassistant.async_init()
+                    # if self.settings.is_homeassistant_configured:
+                    #    await self.homeassistant.async_init()
 
                     self._start_mqtt_listener()
-                    self.schedule_loop(
-                        self.settings.interval, self.interval_base_trigger
-                    )
-                    self.schedule_loop(600, self.interval_10_minute_trigger)
+                    self.schedule_loop(1, self.timer.loop)
 
                     await aio.gather(*self.loops)
 
@@ -138,12 +144,6 @@ class Service:
             finally:
                 for loop in self.loops:
                     loop.cancel()
-
-    async def interval_base_trigger(self):
-        await self.event_bus.emit(IntervalBaseTriggerEvent())
-
-    async def interval_10_minute_trigger(self):
-        await self.event_bus.emit(Interval10MinTriggerEvent())
 
     def _start_mqtt_listener(self):
         task = aio.create_task(self.mqtt.listen())

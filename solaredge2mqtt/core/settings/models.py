@@ -1,111 +1,26 @@
 from os import environ, listdir, path
 from typing import Generator
 
-from pydantic import BaseModel, Field, SecretStr
-from tzlocal import get_localzone_name
+from pydantic import BaseModel, Field
 
 from solaredge2mqtt.core.influxdb.settings import InfluxDBSettings
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.logging.models import LoggingLevelEnum
 from solaredge2mqtt.core.mqtt.settings import MQTTSettings
+from solaredge2mqtt.services.energy.settings import PriceSettings
+from solaredge2mqtt.services.forecast.settings import ForecastSettings
+from solaredge2mqtt.services.homeassistant.settings import HomeAssistantSettings
+from solaredge2mqtt.services.modbus.settings import ModbusSettings
+from solaredge2mqtt.services.monitoring.settings import MonitoringSettings
+from solaredge2mqtt.services.wallbox.settings import WallboxSettings
+from solaredge2mqtt.services.weather.settings import WeatherSettings
 
 DOCKER_SECRETS_DIR = "/run/secrets"
-
-
-LOCAL_TZ = get_localzone_name()
-
-
-class ModbusSettings(BaseModel):
-    host: str
-    port: int = Field(1502)
-    timeout: int = Field(1)
-    unit: int = Field(1)
-
-
-class MonitoringSettings(BaseModel):
-    site_id: str = Field(None)
-    username: str = Field(None)
-    password: SecretStr = Field(None)
-
-    @property
-    def is_configured(self) -> bool:
-        return all(
-            [
-                self.site_id is not None,
-                self.username is not None,
-                self.password is not None,
-            ]
-        )
-
-
-class WallboxSettings(BaseModel):
-    host: str = Field(None)
-    password: SecretStr = Field(None)
-    serial: str = Field(None)
-
-    @property
-    def is_configured(self) -> bool:
-        return all(
-            [self.host is not None, self.password is not None, self.serial is not None]
-        )
-
-
-class PriceSettings(BaseModel):
-    consumption: float = Field(None)
-    delivery: float = Field(None)
-    currency: str = Field(None)
-
-    @property
-    def is_configured(self) -> bool:
-        return self.is_consumption_configured or self.is_delivery_configured
-
-    @property
-    def is_consumption_configured(self) -> bool:
-        return self.consumption is not None and self.currency is not None
-
-    @property
-    def is_delivery_configured(self) -> bool:
-        return self.delivery is not None and self.currency is not None
-
-    @property
-    def price_in(self) -> float:
-        return self.consumption or 0.0
-
-    @property
-    def price_out(self) -> float:
-        return self.delivery or 0.0
 
 
 class LocationSettings(BaseModel):
     latitude: float
     longitude: float
-
-
-class WeatherSettings(BaseModel):
-    api_key: SecretStr | None = Field(None)
-    language: str = Field("en")
-
-    @property
-    def is_configured(self) -> bool:
-        return self.api_key is not None
-
-
-class ForecastSettings(BaseModel):
-    enable: bool = Field(False)
-    hyperparametertuning: bool = Field(False)
-
-    @property
-    def is_configured(self) -> bool:
-        return self.enable
-
-
-class HomeAssistantSettings(BaseModel):
-    enable: bool = Field(False)
-    topic_prefix: str = Field("homeassistant")
-
-    @property
-    def is_configured(self) -> bool:
-        return self.enable
 
 
 class ServiceSettings(BaseModel):

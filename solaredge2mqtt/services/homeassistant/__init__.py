@@ -1,26 +1,33 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from solaredge2mqtt.core.events import EventBus
+from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import (
     MQTTPublishEvent,
     MQTTReceivedEvent,
     MQTTSubscribeEvent,
 )
-from solaredge2mqtt.core.events import EventBus
-from solaredge2mqtt.core.logging import logger
-from solaredge2mqtt.models import (
-    Component,
-    ComponentEvent,
-    ComponentsEvent,
-    ForecastEvent,
-    HistoricPeriod,
+from solaredge2mqtt.services.energy.events import EnergyReadEvent
+from solaredge2mqtt.services.events import ComponentEvent, ComponentsEvent
+from solaredge2mqtt.services.forecast.events import ForecastEvent
+from solaredge2mqtt.services.homeassistant.models import (
     HomeAssistantDevice,
     HomeAssistantEntity,
     HomeAssistantEntityType,
+)
+from solaredge2mqtt.services.modbus.events import (
     ModbusBatteriesReadEvent,
     ModbusInverterReadEvent,
     ModbusMetersReadEvent,
-    PowerflowGeneratedEvent,
-    WallboxReadEvent,
 )
-from solaredge2mqtt.core.settings import ServiceSettings
+from solaredge2mqtt.services.models import Component
+from solaredge2mqtt.services.powerflow.events import PowerflowGeneratedEvent
+from solaredge2mqtt.services.wallbox.events import WallboxReadEvent
+
+if TYPE_CHECKING:
+    from solaredge2mqtt.core.settings import ServiceSettings
 
 
 class HomeAssistantDiscovery:
@@ -31,24 +38,20 @@ class HomeAssistantDiscovery:
 
         self._status_topic = f"{self.settings.homeassistant.topic_prefix}/status"
 
+        self._seen_energy_periods: set[str] = set()
+
         self.event_bus = event_bus
         self._subscribe_events()
 
     def _subscribe_events(self) -> None:
-
-        component_events: list[type[ComponentEvent] | type[ComponentEvent]] = [
-            ForecastEvent,
-            ModbusInverterReadEvent,
-            PowerflowGeneratedEvent,
-            WallboxReadEvent,
-        ]
-
-        for period in HistoricPeriod:
-            if period.send_event:
-                component_events.append(period.send_event)
-
         self.event_bus.subscribe(
-            component_events,
+            [
+                ForecastEvent,
+                EnergyReadEvent,
+                ModbusInverterReadEvent,
+                PowerflowGeneratedEvent,
+                WallboxReadEvent,
+            ],
             self.component_discovery,
         )
 
@@ -65,9 +68,19 @@ class HomeAssistantDiscovery:
         await self.event_bus.emit(MQTTSubscribeEvent(self._status_topic))
 
     async def component_discovery(self, event: ComponentEvent) -> None:
-        self.event_bus.unsubscribe(event, self.component_discovery)
-        logger.info(f"Home Assistant discovery component: {event.component}")
-        await self.publish_component(event.component)
+        publish = True
+        if isinstance(event, EnergyReadEvent):
+            period = event.component.info.period
+            publish = (
+                period.auto_discovery and period.topic not in self._seen_energy_periods
+            )
+            self._seen_energy_periods.add(period.topic)
+        else:
+            self.event_bus.unsubscribe(event, self.component_discovery)
+
+        if publish:
+            logger.info(f"Home Assistant discovery component: {event.component}")
+            await self.publish_component(event.component)
 
     async def components_discovery(self, event: ComponentsEvent) -> None:
         self.event_bus.unsubscribe(event, self.components_discovery)

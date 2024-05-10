@@ -1,18 +1,18 @@
 from requests.exceptions import HTTPError
 
-from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.core.events import EventBus
-from solaredge2mqtt.exceptions import ConfigurationException, InvalidDataException
+from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
 from solaredge2mqtt.core.logging import logger
-from solaredge2mqtt.models import (
-    Interval10MinTriggerEvent,
+from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
+from solaredge2mqtt.core.timer.events import Interval10MinTriggerEvent
+from solaredge2mqtt.services.http import HTTPClient
+from solaredge2mqtt.services.monitoring.models import (
     LogicalInfo,
     LogicalInverter,
     LogicalModule,
     LogicalString,
 )
-from solaredge2mqtt.core.http import HTTPClient
-from solaredge2mqtt.core.settings.models import MonitoringSettings
+from solaredge2mqtt.services.monitoring.settings import MonitoringSettings
 
 LOGIN_URL = "https://monitoring.solaredge.com/solaredge-apigw/api/login"
 LOGICAL_URL = "https://monitoring.solaredge.com/solaredge-apigw/api/sites/{site_id}/layout/logical"
@@ -27,9 +27,9 @@ class MonitoringSite(HTTPClient):
         self._subscribe_events()
 
     def _subscribe_events(self) -> None:
-        self.event_bus.subscribe(Interval10MinTriggerEvent, self.loop)
+        self.event_bus.subscribe(Interval10MinTriggerEvent, self.get_data)
 
-    async def loop(self, _):
+    async def get_data(self, _):
         modules = self.get_module_energies()
 
         if modules is None:

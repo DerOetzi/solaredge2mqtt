@@ -1,11 +1,10 @@
 from pydantic import Field, field_serializer
 
-from solaredge2mqtt.models.base import (
-    ComponentEvent,
-    Component,
-    Solaredge2MQTTBaseModel,
+from solaredge2mqtt.core.models import Solaredge2MQTTBaseModel
+from solaredge2mqtt.services.homeassistant.models import (
+    HomeAssistantEntityType as EntityType,
 )
-from solaredge2mqtt.models.homeassistant import HomeAssistantEntityType as EntityType
+from solaredge2mqtt.services.models import Component
 
 
 class WallboxInfo(Solaredge2MQTTBaseModel):
@@ -72,7 +71,3 @@ class WallboxAPI(Component):
     @field_serializer("vehicle_plugged")
     def serialize_vehicle_plugged(self, value: bool) -> str:
         return "true" if value else "false"
-
-
-class WallboxReadEvent(ComponentEvent):
-    pass

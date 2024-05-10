@@ -1,23 +1,23 @@
-from solaredge2mqtt.core.influxdb import InfluxDB
-from solaredge2mqtt.core.influxdb.events import InfluxDBAggregatedEvent
-from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 from solaredge2mqtt.core.events import EventBus
-from solaredge2mqtt.exceptions import ConfigurationException, InvalidDataException
+from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
+from solaredge2mqtt.core.influxdb import InfluxDB
 from solaredge2mqtt.core.logging import logger
-from solaredge2mqtt.models import (
-    HistoricEnergy,
-    HistoricPeriod,
-    HistoricQuery,
-    IntervalBaseTriggerEvent,
-    Powerflow,
-    PowerflowGeneratedEvent,
-)
-from solaredge2mqtt.service.modbus import Modbus
-from solaredge2mqtt.service.wallbox import WallboxClient
-from solaredge2mqtt.core.settings import ServiceSettings
+from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
+from solaredge2mqtt.core.timer.events import IntervalBaseTriggerEvent
+from solaredge2mqtt.services.modbus import Modbus
+from solaredge2mqtt.services.powerflow.events import PowerflowGeneratedEvent
+from solaredge2mqtt.services.powerflow.models import Powerflow
+from solaredge2mqtt.services.wallbox import WallboxClient
+
+if TYPE_CHECKING:
+    from solaredge2mqtt.core.settings.models import ServiceSettings
 
 
-class BaseLoops:
+class PowerflowService:
+
     def __init__(
         self,
         settings: ServiceSettings,
@@ -25,9 +25,6 @@ class BaseLoops:
         influxdb: InfluxDB | None = None,
     ):
         self.settings = settings
-
-        self.event_bus = event_bus
-        self._subscribe_events()
 
         self.influxdb = influxdb
 
@@ -39,12 +36,14 @@ class BaseLoops:
             else None
         )
 
-    def _subscribe_events(self) -> None:
-        self.event_bus.subscribe(IntervalBaseTriggerEvent, self.powerflow_loop)
-        self.event_bus.subscribe(InfluxDBAggregatedEvent, self.energy_loop)
+        self.event_bus = event_bus
+        self._subscribe_events()
 
-    async def powerflow_loop(self, _) -> None:
-        inverter_data, meters_data, batteries_data = await self.modbus.loop()
+    def _subscribe_events(self) -> None:
+        self.event_bus.subscribe(IntervalBaseTriggerEvent, self.calculate_powerflow)
+
+    async def calculate_powerflow(self, _) -> None:
+        inverter_data, meters_data, batteries_data = await self.modbus.get_data()
 
         if any(data is None for data in [inverter_data, meters_data, batteries_data]):
             raise InvalidDataException("Invalid modbus data")
@@ -58,7 +57,7 @@ class BaseLoops:
         wallbox_data = None
         if self.settings.is_wallbox_configured:
             try:
-                wallbox_data = await self.wallbox.loop()
+                wallbox_data = await self.wallbox.get_data()
                 logger.trace(
                     "Wallbox: {wallbox_data.power} W", wallbox_data=wallbox_data
                 )
@@ -117,29 +116,3 @@ class BaseLoops:
                 points.append(battery.prepare_point())
 
             self.influxdb.write_points(points)
-
-    async def energy_loop(self, _):
-        for period in HistoricPeriod:
-            record = self.influxdb.query_timeunit(period, "energy")
-            if record is None:
-                if period.query == HistoricQuery.LAST:
-                    logger.info(
-                        "No data found for {period}, skipping this loop", period=period
-                    )
-                else:
-                    raise InvalidDataException(f"No energy data for {period}")
-
-                continue
-
-            energy = HistoricEnergy(record, period)
-
-            logger.info(
-                "Read from influxdb {period} energy: {energy.pv_production} kWh",
-                period=period,
-                energy=energy,
-            )
-
-            if period.send_event:
-                await self.event_bus.emit(period.send_event(energy))
-
-            await self.event_bus.emit(MQTTPublishEvent(energy.mqtt_topic(), energy))

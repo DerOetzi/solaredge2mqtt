@@ -6,11 +6,12 @@ from pydantic import BaseModel, Field
 from requests.exceptions import HTTPError
 
 from solaredge2mqtt.core.events import EventBus
-from solaredge2mqtt.exceptions import ConfigurationException, InvalidDataException
+from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
+from solaredge2mqtt.services.http import HTTPClient
 from solaredge2mqtt.core.logging import logger
-from solaredge2mqtt.models import WallboxAPI, WallboxReadEvent
-from solaredge2mqtt.core.settings.models import WallboxSettings
-from solaredge2mqtt.core.http import HTTPClient
+from solaredge2mqtt.services.wallbox.events import WallboxReadEvent
+from solaredge2mqtt.services.wallbox.models import WallboxAPI
+from solaredge2mqtt.services.wallbox.settings import WallboxSettings
 
 urllib3.disable_warnings()
 
@@ -49,7 +50,7 @@ class WallboxClient(HTTPClient):
         self.event_bus = event_bus
         self.authorization: AuthorizationTokens | None = None
 
-    async def loop(self) -> WallboxAPI | None:
+    async def get_data(self) -> WallboxAPI | None:
         wallbox = None
         try:
             self._get_access()

@@ -5,13 +5,11 @@ from datetime import datetime
 from pydantic import Field, computed_field
 
 from solaredge2mqtt.core.logging import logger
-from solaredge2mqtt.models.base import (
-    Component,
-    ComponentEvent,
-    EnumModel,
-    Solaredge2MQTTBaseModel,
+from solaredge2mqtt.core.models import EnumModel, Solaredge2MQTTBaseModel
+from solaredge2mqtt.services.homeassistant.models import (
+    HomeAssistantEntityType as EntityType,
 )
-from solaredge2mqtt.models.homeassistant import HomeAssistantEntityType as EntityType
+from solaredge2mqtt.services.models import Component
 
 
 class HistoricBaseModel(Component):
@@ -130,75 +128,46 @@ class HistoricQuery(EnumModel):
         return self._query
 
 
-class EnergyReadEvent(ComponentEvent):
-    def __str__(self) -> str:
-        return f"{self.component.SOURCE}: {self.component.period}"
-
-
-class EnergyReadLastHourEvent(EnergyReadEvent):
-    pass
-
-
-class EnergyReadTodayEvent(EnergyReadEvent):
-    pass
-
-
-class EnergyReadYesterdayEvent(EnergyReadEvent):
-    pass
-
-
-class EnergyReadThisMonthEvent(EnergyReadEvent):
-    pass
-
-
-class EnergyReadThisYearEvent(EnergyReadEvent):
-    pass
-
-
-class EnergyReadLifetimeEvent(EnergyReadEvent):
-    pass
-
-
 class HistoricPeriod(EnumModel):
     LAST_HOUR = (
         "last_hour",
         "Last hour",
         "1h",
         HistoricQuery.LAST,
-        EnergyReadLastHourEvent,
+        True,
     )
-    TODAY = "today", "Today", "1d", HistoricQuery.ACTUAL, EnergyReadTodayEvent
+    TODAY = "today", "Today", "1d", HistoricQuery.ACTUAL, True
     YESTERDAY = (
         "yesterday",
         "Yesterday",
         "1d",
         HistoricQuery.LAST,
-        EnergyReadYesterdayEvent,
+        True,
     )
-    THIS_WEEK = "this_week", "This week", "1w", HistoricQuery.ACTUAL, None
-    LAST_WEEK = "last_week", "Last week", "1w", HistoricQuery.LAST, None
+    THIS_WEEK = "this_week", "This week", "1w", HistoricQuery.ACTUAL, False
+    LAST_WEEK = "last_week", "Last week", "1w", HistoricQuery.LAST, False
     THIS_MONTH = (
         "this_month",
         "This month",
         "1mo",
         HistoricQuery.ACTUAL,
-        EnergyReadThisMonthEvent,
+        True,
     )
-    LAST_MONTH = "last_month", "Last month", "1mo", HistoricQuery.LAST, None
+    LAST_MONTH = "last_month", "Last month", "1mo", HistoricQuery.LAST, False
     THIS_YEAR = (
         "this_year",
         "This year",
         "1y",
         HistoricQuery.ACTUAL,
-        EnergyReadThisYearEvent,
+        True,
     )
-    LAST_YEAR = "last_year", "Last year", "1y", HistoricQuery.LAST, None
+    LAST_YEAR = "last_year", "Last year", "1y", HistoricQuery.LAST, False
     LIFETIME = (
         "lifetime",
         "Lifetime",
         "99y",
         HistoricQuery.ACTUAL,
-        EnergyReadLifetimeEvent,
+        True,
     )
 
     def __init__(
@@ -207,13 +176,13 @@ class HistoricPeriod(EnumModel):
         title: str,
         unit: str,
         query: HistoricQuery,
-        send_event: type[EnergyReadEvent] | None = None,
+        auto_discovery: bool,
     ) -> None:
         self._topic: str = topic
         self._title: str = title
         self._unit: str = unit
         self._query: HistoricQuery = query
-        self._send_event: type[EnergyReadEvent] | None = send_event
+        self._auto_discovery: bool = auto_discovery
 
     @property
     def topic(self) -> str:
@@ -232,8 +201,8 @@ class HistoricPeriod(EnumModel):
         return self._query
 
     @property
-    def send_event(self) -> type[EnergyReadEvent] | None:
-        return self._send_event
+    def auto_discovery(self) -> bool:
+        return self._auto_discovery
 
 
 class InverterEnergy(Solaredge2MQTTBaseModel):

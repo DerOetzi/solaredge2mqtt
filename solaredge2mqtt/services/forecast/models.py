@@ -2,8 +2,33 @@ from datetime import datetime
 
 from pydantic import computed_field
 
-from solaredge2mqtt.models.base import Component, ComponentEvent
-from solaredge2mqtt.models.homeassistant import HomeAssistantEntityType as EntityType
+from solaredge2mqtt.core.models import EnumModel
+from solaredge2mqtt.services.homeassistant.models import (
+    HomeAssistantEntityType as EntityType,
+)
+from solaredge2mqtt.services.models import Component
+
+
+class ForecasterType(EnumModel):
+    ENERGY = "energy"
+    POWER = "power"
+
+    def __init__(self, target_column: str) -> None:
+        self._target_column: str = target_column
+
+    @property
+    def target_column(self) -> str:
+        return self._target_column
+
+    def prepare_value(self, value: float | int) -> float | int:
+        if value <= 0:
+            prepared = 0
+        elif self.target_column == "energy":
+            prepared = round(value / 1000, 3)
+        else:
+            prepared = int(round(value))
+
+        return prepared
 
 
 class Forecast(Component):
@@ -62,7 +87,3 @@ class Forecast(Component):
 
     def homeassistant_device_info(self) -> dict[str, any]:
         return self._default_homeassistant_device_info("Forecast")
-
-
-class ForecastEvent(ComponentEvent):
-    pass

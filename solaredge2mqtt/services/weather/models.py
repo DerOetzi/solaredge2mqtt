@@ -4,15 +4,19 @@ from datetime import datetime
 
 from pydantic import Field, field_serializer, model_serializer
 
-from solaredge2mqtt.models.base import Solaredge2MQTTBaseModel
+from solaredge2mqtt.core.models import Solaredge2MQTTBaseModel
 
-from solaredge2mqtt.core.events.events import BaseEvent
 
-class OpenWeatherMapCondition(Solaredge2MQTTBaseModel):
-    id: int
-    main: str
-    description: str
-    icon: str = Field(exclude=True)
+class OpenWeatherMapOneCallBase(Solaredge2MQTTBaseModel):
+    lat: float
+    lon: float
+    timezone: str
+    timezone_offset: int
+
+
+class OpenWeatherMapOneCall(OpenWeatherMapOneCallBase):
+    current: OpenWeatherMapCurrentData
+    hourly: list[OpenWeatherMapForecastData]
 
 
 class OpenWeatherMapRain(Solaredge2MQTTBaseModel):
@@ -90,22 +94,8 @@ class OpenWeatherMapForecastData(OpenWeatherMapBaseData):
     pop: float
 
 
-class OpenWeatherMapOneCallBase(Solaredge2MQTTBaseModel):
-    lat: float
-    lon: float
-    timezone: str
-    timezone_offset: int
-
-
-class OpenWeatherMapOneCall(OpenWeatherMapOneCallBase):
-    current: OpenWeatherMapCurrentData
-    hourly: list[OpenWeatherMapForecastData]
-
-
-class WeatherUpdateEvent(BaseEvent):
-    def __init__(self, weather: OpenWeatherMapOneCall) -> None:
-        self._weather = weather
-
-    @property
-    def weather(self) -> OpenWeatherMapOneCall:
-        return self._weather
+class OpenWeatherMapCondition(Solaredge2MQTTBaseModel):
+    id: int
+    main: str
+    description: str
+    icon: str = Field(exclude=True)

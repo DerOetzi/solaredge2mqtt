@@ -1,16 +1,20 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from requests.exceptions import HTTPError
 
-from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.core.events import EventBus
-from solaredge2mqtt.exceptions import InvalidDataException
+from solaredge2mqtt.core.exceptions import InvalidDataException
+from solaredge2mqtt.services.http import HTTPClient
 from solaredge2mqtt.core.logging import logger
-from solaredge2mqtt.models import (
-    Interval10MinTriggerEvent,
-    OpenWeatherMapOneCall,
-    WeatherUpdateEvent,
-)
-from solaredge2mqtt.core.http import HTTPClient
-from solaredge2mqtt.core.settings import ServiceSettings
+from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
+from solaredge2mqtt.core.timer.events import Interval10MinTriggerEvent
+from solaredge2mqtt.services.weather.events import WeatherUpdateEvent
+from solaredge2mqtt.services.weather.models import OpenWeatherMapOneCall
+
+if TYPE_CHECKING:
+    from solaredge2mqtt.core.settings import ServiceSettings
 
 ONECALL_URL = "https://api.openweathermap.org/data/3.0/onecall"
 TIMEMACHINE_URL = "https://api.openweathermap.org/data/3.0/onecall/timemachine"

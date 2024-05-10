@@ -1,16 +1,13 @@
 from __future__ import annotations
 
-import logging
 from collections.abc import MutableMapping
 from datetime import datetime
 from enum import Enum
-from typing import ClassVar
 
 import jsonref
 from pydantic import BaseModel, model_serializer
 
 from solaredge2mqtt import __version__
-from solaredge2mqtt.core.events.events import BaseEvent
 
 
 class EnumModel(Enum):
@@ -41,9 +38,6 @@ class EnumModel(Enum):
     @model_serializer
     def serialize(self) -> any:
         return self.value
-
-
-
 
 
 class Solaredge2MQTTBaseModel(BaseModel):
@@ -125,78 +119,4 @@ class Solaredge2MQTTBaseModel(BaseModel):
         )
 
 
-class ComponentValueGroup(Solaredge2MQTTBaseModel):
-    @staticmethod
-    def scale_value(
-        data: dict[str, str | int],
-        value_key: str,
-        scale_key: str | None = None,
-        digits: int = 2,
-    ) -> float:
-        if scale_key is None:
-            scale_key = f"{value_key}_scale"
 
-        value = int(data[value_key])
-        scale = int(data[scale_key])
-
-        return round(value * 10**scale, digits)
-
-
-class Component(ComponentValueGroup):
-    COMPONENT: ClassVar[str] = "unknown"
-    SOURCE: ClassVar[str | None] = None
-
-    @property
-    def influxdb_tags(self) -> dict[str, str]:
-        return {
-            "component": self.COMPONENT,
-            "source": self.SOURCE,
-        }
-
-    def mqtt_topic(self) -> str:
-        if self.SOURCE:
-            topic = f"{self.SOURCE}/{self.COMPONENT}"
-        else:
-            topic = self.COMPONENT
-
-        return topic
-
-    def __str__(self) -> str:
-        if self.SOURCE:
-            name = f"{self.SOURCE}: {self.COMPONENT}"
-        else:
-            name = self.COMPONENT
-
-        return name
-
-
-class ComponentEvent(BaseEvent):
-    def __init__(self, component: Component):
-        self._component = component
-
-    @property
-    def component(self) -> Component:
-        return self._component
-
-    def __str__(self) -> str:
-        return str(self._component)
-
-
-class ComponentsEvent(BaseEvent):
-    def __init__(self, components: dict[str, Component]):
-        self._components = components
-
-    @property
-    def components(self) -> dict[str, Component]:
-        return self._components
-
-    def __str__(self) -> str:
-        return str(self._components)
-
-
-class IntervalBaseTriggerEvent(BaseEvent):
-    pass
-
-
-class Interval10MinTriggerEvent(IntervalBaseTriggerEvent):
-    pass

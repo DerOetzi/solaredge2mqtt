@@ -1,22 +1,22 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
 
 from influxdb_client import Point
 from pydantic import Field, computed_field
 from pydantic.json_schema import SkipJsonSchema
 
 from solaredge2mqtt.core.logging import logger
-from solaredge2mqtt.models.base import (
-    Component,
-    ComponentEvent,
-    Solaredge2MQTTBaseModel,
+from solaredge2mqtt.core.models import Solaredge2MQTTBaseModel
+from solaredge2mqtt.services.homeassistant.models import (
+    HomeAssistantEntityType as EntityType,
 )
-from solaredge2mqtt.models.homeassistant import HomeAssistantEntityType as EntityType
-from solaredge2mqtt.models.modbus import SunSpecBattery, SunSpecInverter, SunSpecMeter
-
-if TYPE_CHECKING:
-    from solaredge2mqtt.core.settings import PriceSettings
+from solaredge2mqtt.services.modbus.models import (
+    SunSpecBattery,
+    SunSpecInverter,
+    SunSpecMeter,
+)
+from solaredge2mqtt.services.models import Component
 
 
 class Powerflow(Component):
@@ -105,25 +105,6 @@ class Powerflow(Component):
         point = Point(measurement)
         for key, value in self.model_dump_influxdb().items():
             point.field(key, value)
-
-        return point
-
-    def prepare_point_energy(
-        self, measurement: str = "energy", prices: PriceSettings = None
-    ) -> Point:
-        point = Point(measurement)
-        for key, value in self.model_dump_influxdb().items():
-            energy = value / 1000
-            point.field(key, energy)
-            if prices is not None:
-                if key == "consumer_used_production":
-                    point.field("money_saved", energy * prices.price_in)
-                    point.field("money_price_in", prices.price_in)
-                elif key == "grid_delivery":
-                    point.field("money_delivered", energy * prices.price_out)
-                    point.field("money_price_out", prices.price_out)
-                elif key == "grid_consumption":
-                    point.field("money_consumed", energy * prices.price_out)
 
         return point
 
@@ -351,7 +332,3 @@ class ConsumerPowerflow(Solaredge2MQTTBaseModel):
             valid = True
 
         return valid
-
-
-class PowerflowGeneratedEvent(ComponentEvent):
-    pass

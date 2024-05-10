@@ -5,14 +5,11 @@ from pydantic import Field
 from solaredge_modbus import BATTERY_STATUS_MAP, C_SUNSPEC_DID_MAP, INVERTER_STATUS_MAP
 
 from solaredge2mqtt.core.logging import logger
-from solaredge2mqtt.models.base import (
-    Component,
-    ComponentEvent,
-    ComponentsEvent,
-    ComponentValueGroup,
-    Solaredge2MQTTBaseModel,
+from solaredge2mqtt.core.models import Solaredge2MQTTBaseModel
+from solaredge2mqtt.services.homeassistant.models import (
+    HomeAssistantEntityType as EntityType,
 )
-from solaredge2mqtt.models.homeassistant import HomeAssistantEntityType as EntityType
+from solaredge2mqtt.services.models import Component, ComponentValueGroup
 
 
 class SunSpecInfo(Solaredge2MQTTBaseModel):
@@ -291,15 +288,3 @@ class SunSpecDC(ComponentValueGroup):
             voltage=self.scale_value(data, "voltage_dc"),
             power=self.scale_value(data, "power_dc"),
         )
-
-
-class ModbusInverterReadEvent(ComponentEvent):
-    pass
-
-
-class ModbusMetersReadEvent(ComponentsEvent):
-    pass
-
-
-class ModbusBatteriesReadEvent(ComponentsEvent):
-    pass

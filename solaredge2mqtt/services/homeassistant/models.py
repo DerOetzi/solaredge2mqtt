@@ -3,7 +3,7 @@ import hashlib
 
 from pydantic import BaseModel, Field, computed_field
 
-from solaredge2mqtt.models.base import EnumModel
+from solaredge2mqtt.core.models import EnumModel
 
 
 class HomeAssistantBaseModel(BaseModel):

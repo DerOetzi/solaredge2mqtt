@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING
 
 import pkg_resources
 from influxdb_client import BucketRetentionRules, InfluxDBClient, Point
@@ -8,13 +11,20 @@ from influxdb_client.client.influxdb_client_async import (
     QueryApiAsync,
 )
 from pandas import DataFrame
+from tzlocal import get_localzone_name
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.influxdb.events import InfluxDBAggregatedEvent
 from solaredge2mqtt.core.influxdb.settings import InfluxDBSettings
 from solaredge2mqtt.core.logging import logger
-from solaredge2mqtt.models import HistoricPeriod, Interval10MinTriggerEvent
-from solaredge2mqtt.core.settings.models import LOCAL_TZ, PriceSettings
+from solaredge2mqtt.core.timer.events import Interval10MinTriggerEvent
+
+if TYPE_CHECKING:
+    from solaredge2mqtt.services.energy.models import HistoricPeriod
+    from solaredge2mqtt.services.energy.settings import PriceSettings
+
+
+LOCAL_TZ = get_localzone_name()
 
 
 class InfluxDB:
