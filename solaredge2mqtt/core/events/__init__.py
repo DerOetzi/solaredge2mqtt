@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 from typing import Callable
 
+from aiomqtt import MqttError
+
 from solaredge2mqtt.core.exceptions import InvalidDataException
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.events.events import BaseEvent
@@ -65,9 +67,18 @@ class EventBus:
     async def _notify_listeners(
         self, event: BaseEvent, listeners: list[Callable]
     ) -> None:
-        await asyncio.gather(
-            *[self._notify_listener(listener, event) for listener in listeners]
+        results = await asyncio.gather(
+            *[self._notify_listener(listener, event) for listener in listeners],
+            return_exceptions=True,
         )
+
+        for result in results:
+            if isinstance(result, InvalidDataException):
+                logger.warning("{message}, skipping this loop", message=result.message)
+            elif isinstance(result, MqttError):
+                raise result
+            elif isinstance(result, Exception):
+                logger.exception(result)
 
     async def _notify_listener(self, listener: Callable, event: BaseEvent) -> None:
         try:
@@ -77,4 +88,7 @@ class EventBus:
 
     def cancel_tasks(self):
         for task in self._tasks:
-            task.cancel()
+            try:
+                task.cancel()
+            finally:
+                pass

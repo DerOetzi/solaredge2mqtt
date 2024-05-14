@@ -121,29 +121,43 @@ class Service:
             self.influxdb.initialize_buckets()
 
         while not self.cancel_request.is_set():
+            async with self.mqtt:
+                await self.mqtt.publish_status_online()
+
+                if self.settings.is_homeassistant_configured:
+                    await self.homeassistant.async_init()
+
+                self._start_mqtt_listener()
+                self.schedule_loop(1, self.timer.loop)
+
+                results = await aio.gather(*self.loops, return_exceptions=True)
+
+                for result in results:
+                    if isinstance(result, MqttError):
+                        logger.error("MQTT error, reconnecting in 5 seconds...")
+                        await aio.sleep(5)
+                    elif isinstance(result, aio.exceptions.CancelledError):
+                        logger.debug("Loops cancelled")
+                        return
+
+                await self.finalize()
+
+    async def finalize(self):
+        try:
+            await self.mqtt.publish_status_offline()
+        except MqttError:
+            pass
+
+        try:
+            self.event_bus.cancel_tasks()
+        finally:
+            pass
+
+        for loop in self.loops:
             try:
-                async with self.mqtt:
-                    await self.mqtt.publish_status_online()
-
-                    # if self.settings.is_homeassistant_configured:
-                    #    await self.homeassistant.async_init()
-
-                    self._start_mqtt_listener()
-                    self.schedule_loop(1, self.timer.loop)
-
-                    await aio.gather(*self.loops)
-
-                    await self.mqtt.publish_status_offline()
-
-            except MqttError:
-                logger.error("MQTT error, reconnecting in 5 seconds...")
-                await aio.sleep(5)
-            except aio.exceptions.CancelledError:
-                logger.debug("Loops cancelled")
-                return
+                loop.cancel()
             finally:
-                for loop in self.loops:
-                    loop.cancel()
+                pass
 
     def _start_mqtt_listener(self):
         task = aio.create_task(self.mqtt.listen())
