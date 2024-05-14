@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from influxdb_client import Point
 from pydantic import Field, computed_field
@@ -17,6 +17,9 @@ from solaredge2mqtt.services.modbus.models import (
     SunSpecMeter,
 )
 from solaredge2mqtt.services.models import Component
+
+if TYPE_CHECKING:
+    from solaredge2mqtt.services.energy.settings import PriceSettings
 
 
 class Powerflow(Component):
@@ -105,6 +108,25 @@ class Powerflow(Component):
         point = Point(measurement)
         for key, value in self.model_dump_influxdb().items():
             point.field(key, value)
+
+        return point
+
+    def prepare_point_energy(
+        self, measurement: str = "energy", prices: PriceSettings = None
+    ) -> Point:
+        point = Point(measurement)
+        for key, value in self.model_dump_influxdb().items():
+            energy = value / 1000
+            point.field(key, energy)
+            if prices is not None:
+                if key == "consumer_used_production":
+                    point.field("money_saved", energy * prices.price_in)
+                    point.field("money_price_in", prices.price_in)
+                elif key == "grid_delivery":
+                    point.field("money_delivered", energy * prices.price_out)
+                    point.field("money_price_out", prices.price_out)
+                elif key == "grid_consumption":
+                    point.field("money_consumed", energy * prices.price_in)
 
         return point
 
