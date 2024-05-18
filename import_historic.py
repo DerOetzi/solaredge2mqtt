@@ -1,19 +1,23 @@
 import asyncio
 from datetime import timezone
-from pandas import read_csv, to_datetime
 
-from solaredge2mqtt.models import (
+from pandas import read_csv, to_datetime
+from tzlocal import get_localzone_name
+
+from solaredge2mqtt.core.influxdb import InfluxDB, Point
+from solaredge2mqtt.core.settings import service_settings
+from solaredge2mqtt.services.powerflow.models import (
     BatteryPowerflow,
     ConsumerPowerflow,
     GridPowerflow,
     InverterPowerflow,
     Powerflow,
 )
-from solaredge2mqtt.service.influxdb import InfluxDB, Point
-from solaredge2mqtt.settings import LOCAL_TZ, service_settings
 
 settings = service_settings()
 STRINGS = 2
+
+LOCAL_TZ = get_localzone_name()
 
 
 async def main():
@@ -52,8 +56,10 @@ async def main():
 
         dc_power = pv_production - battery.power
 
+        inverter_power = round(row["inverter_production"] - row["inverter_consumption"])
+
         inverter = InverterPowerflow(
-            power=round(row["inverter_production"]),
+            power=inverter_power,
             dc_power=round(dc_power),
             battery_discharge=battery.discharge,
         )
@@ -91,8 +97,12 @@ async def main():
         points.append(point)
 
         if "battery_soc" in columns:
+            battery_soc = row["battery_soc"]
+            if battery_soc < 100:
+                battery_soc += 0.01
+
             point = Point("battery_import")
-            point.field("state_of_charge", round(row["battery_soc"], 2))
+            point.field("state_of_charge", round(battery_soc, 2))
             point.time(row["time"].astimezone(timezone.utc))
             point.tag("agg_type", "mean")
             points.append(point)

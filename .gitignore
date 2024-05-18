@@ -160,5 +160,6 @@ cython_debug/
 #.idea/
 
 test.py
+data.csv
 
 docker/container/

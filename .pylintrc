@@ -7,3 +7,6 @@ disable=C0114,C0115,C0116,W9011,W9015
 
 [Parameter_documentation]
 accept-no-return-doc=no
+
+[TYPECHECK]
+ignored-classes=pydantic.fields.FieldInfo
