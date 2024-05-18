@@ -39,9 +39,12 @@ def run():
         loop.add_signal_handler(signal.SIGINT, service.cancel)
         loop.add_signal_handler(signal.SIGTERM, service.cancel)
         loop.run_until_complete(service.main_loop())
-        loop.close()
     except ConfigurationException:
         logger.error("Configuration error")
+    except aio.exceptions.CancelledError:
+        logger.debug("Service cancelled")
+    finally:
+        loop.close()
 
 
 class Service:
@@ -104,9 +107,8 @@ class Service:
     def cancel(self):
         logger.info("Stopping SolarEdge2MQTT service...")
         self.cancel_request.set()
-        self.event_bus.cancel_tasks()
-        for loop in self.loops:
-            loop.cancel()
+        for tasks in aio.all_tasks():
+            tasks.cancel()
 
     async def main_loop(self):
         logger.info("Starting SolarEdge2MQTT service...")
@@ -121,25 +123,24 @@ class Service:
             self.influxdb.initialize_buckets()
 
         while not self.cancel_request.is_set():
-            async with self.mqtt:
-                await self.mqtt.publish_status_online()
+            try:
+                async with self.mqtt:
+                    await self.mqtt.publish_status_online()
 
-                if self.settings.is_homeassistant_configured:
-                    await self.homeassistant.async_init()
+                    if self.settings.is_homeassistant_configured:
+                        await self.homeassistant.async_init()
 
-                self._start_mqtt_listener()
-                self.schedule_loop(1, self.timer.loop)
+                    self._start_mqtt_listener()
+                    self.schedule_loop(1, self.timer.loop)
 
-                results = await aio.gather(*self.loops, return_exceptions=True)
-
-                for result in results:
-                    if isinstance(result, MqttError):
-                        logger.error("MQTT error, reconnecting in 5 seconds...")
-                        await aio.sleep(5)
-                    elif isinstance(result, aio.exceptions.CancelledError):
-                        logger.debug("Loops cancelled")
-                        return
-
+                    await aio.gather(*self.loops)
+            except MqttError:
+                logger.error("MQTT error, reconnecting in 5 seconds...")
+                await aio.sleep(5)
+            except aio.exceptions.CancelledError:
+                logger.debug("Loops cancelled")
+                return
+            finally:
                 await self.finalize()
 
     async def finalize(self):
@@ -153,9 +154,9 @@ class Service:
         finally:
             pass
 
-        for loop in self.loops:
+        for task in self.loops:
             try:
-                loop.cancel()
+                task.cancel()
             finally:
                 pass
 

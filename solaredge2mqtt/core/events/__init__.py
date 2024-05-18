@@ -67,18 +67,14 @@ class EventBus:
     async def _notify_listeners(
         self, event: BaseEvent, listeners: list[Callable]
     ) -> None:
-        results = await asyncio.gather(
-            *[self._notify_listener(listener, event) for listener in listeners],
-            return_exceptions=True,
-        )
-
-        for result in results:
-            if isinstance(result, InvalidDataException):
-                logger.warning("{message}, skipping this loop", message=result.message)
-            elif isinstance(result, MqttError):
-                raise result
-            elif isinstance(result, Exception):
-                logger.exception(result)
+        try:
+            await asyncio.gather(
+                *[self._notify_listener(listener, event) for listener in listeners]
+            )
+        except MqttError as error:
+            raise error
+        except asyncio.CancelledError:
+            pass
 
     async def _notify_listener(self, listener: Callable, event: BaseEvent) -> None:
         try:
