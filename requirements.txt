@@ -6,11 +6,11 @@ ephem==4.1.5
 influxdb-client==1.43.0
 jsonref==1.1.0
 loguru==0.7.2
-numpy==1.26.4
+numpy==2.0.0
 pandas==2.2.2
-pydantic==2.7.1
+pydantic==2.7.4
 pyjwt==2.8.0
-requests==2.32.2
+requests==2.32.3
 scikit-learn==1.4.2
 scipy==1.13.1
 solaredge_modbus==0.8.0

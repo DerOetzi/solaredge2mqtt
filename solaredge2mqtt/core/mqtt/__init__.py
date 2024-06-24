@@ -36,10 +36,8 @@ class MQTTClient(Client):
         super().__init__(
             self.broker,
             self.port,
-            username=settings.username,
-            password=settings.password.get_secret_value(),
-            identifier=settings.client_id,
             will=will,
+            **settings.kargs,
         )
 
     def _subscribe_events(self) -> None:

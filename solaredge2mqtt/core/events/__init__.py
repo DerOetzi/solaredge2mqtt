@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import Callable
 
-from aiomqtt import MqttError
+from aiomqtt import MqttCodeError
 
 from solaredge2mqtt.core.exceptions import InvalidDataException
 from solaredge2mqtt.core.logging import logger
@@ -71,7 +71,7 @@ class EventBus:
             await asyncio.gather(
                 *[self._notify_listener(listener, event) for listener in listeners]
             )
-        except MqttError as error:
+        except MqttCodeError as error:
             raise error
         except asyncio.CancelledError:
             pass
