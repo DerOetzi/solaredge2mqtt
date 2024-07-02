@@ -1,6 +1,6 @@
 aiocsv==1.3.2
 aiohttp==3.9.5
-aiomqtt==2.1.0
+aiomqtt==2.2.0
 astral==3.2
 ephem==4.1.5
 influxdb-client==1.44.0
