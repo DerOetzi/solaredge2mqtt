@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import Callable
 
-from aiomqtt import MqttCodeError
+from aiomqtt import MqttCodeError, MqttError
 
 from solaredge2mqtt.core.exceptions import InvalidDataException
 from solaredge2mqtt.core.logging import logger
@@ -47,6 +47,12 @@ class EventBus:
                 self._listeners.pop(event_key, None)
                 self._subscribed_events.pop(event_key, None)
 
+    def unsubscribe_all(self, event: type[BaseEvent]) -> None:
+        event_key = event.event_key()
+        if event_key in self._listeners:
+            self._listeners.pop(event_key, None)
+            self._subscribed_events.pop(event_key, None)
+
     async def emit(self, event: BaseEvent) -> None:
         try:
             event_key = event.event_key()
@@ -61,6 +67,8 @@ class EventBus:
                     )
                     self._tasks.add(task)
                     task.add_done_callback(self._tasks.remove)
+        except MqttCodeError as error:
+            raise error
         except asyncio.CancelledError:
             pass
 

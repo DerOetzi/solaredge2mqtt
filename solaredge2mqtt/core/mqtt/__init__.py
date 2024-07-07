@@ -41,6 +41,9 @@ class MQTTClient(Client):
         )
 
     def _subscribe_events(self) -> None:
+        self.event_bus.unsubscribe_all(MQTTPublishEvent)
+        self.event_bus.unsubscribe_all(MQTTSubscribeEvent)
+
         self.event_bus.subscribe(MQTTPublishEvent, self.event_listener)
         self.event_bus.subscribe(MQTTSubscribeEvent, self._subscribe_topic)
 
