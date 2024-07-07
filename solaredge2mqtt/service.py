@@ -56,7 +56,7 @@ class Service:
         self.event_bus = EventBus()
         self.timer = Timer(self.event_bus, self.settings.interval)
 
-        self.mqtt = MQTTClient(self.settings.mqtt, self.event_bus)
+        self.mqtt: MQTTClient | None = None
 
         self.cancel_request = aio.Event()
         self.loops: set[aio.Task] = set()
@@ -124,6 +124,8 @@ class Service:
 
         while not self.cancel_request.is_set():
             try:
+                self.mqtt = MQTTClient(self.settings.mqtt, self.event_bus)
+
                 async with self.mqtt:
                     await self.mqtt.publish_status_online()
 
@@ -136,12 +138,13 @@ class Service:
                     await aio.gather(*self.loops)
             except MqttError:
                 logger.error("MQTT error, reconnecting in 5 seconds...")
-                await aio.sleep(5)
             except aio.exceptions.CancelledError:
                 logger.debug("Loops cancelled")
-                return
             finally:
                 await self.finalize()
+
+            if not self.cancel_request.is_set():
+                await aio.sleep(5)
 
     async def finalize(self):
         try:
