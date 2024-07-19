@@ -1,10 +1,13 @@
+from datetime import datetime, timezone
+import json
 from requests.exceptions import HTTPError
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
+from solaredge2mqtt.core.influxdb import InfluxDB, Point
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
-from solaredge2mqtt.core.timer.events import Interval10MinTriggerEvent
+from solaredge2mqtt.core.timer.events import Interval15MinTriggerEvent
 from solaredge2mqtt.services.http import HTTPClient
 from solaredge2mqtt.services.monitoring.models import (
     LogicalInfo,
@@ -16,72 +19,40 @@ from solaredge2mqtt.services.monitoring.settings import MonitoringSettings
 
 LOGIN_URL = "https://monitoring.solaredge.com/solaredge-apigw/api/login"
 LOGICAL_URL = "https://monitoring.solaredge.com/solaredge-apigw/api/sites/{site_id}/layout/logical"
+POWER_PUBLIC_URL = "https://monitoring.solaredge.com/solaredge-web/p/playbackData"
 
 
 class MonitoringSite(HTTPClient):
-    def __init__(self, settings: MonitoringSettings, event_bus: EventBus) -> None:
+    def __init__(
+        self,
+        settings: MonitoringSettings,
+        event_bus: EventBus,
+        influxdb: InfluxDB | None,
+    ) -> None:
         super().__init__("Monitoring Site")
         self.settings = settings
+
+        self.influxdb: InfluxDB | None = influxdb
 
         self.event_bus = event_bus
         self._subscribe_events()
 
     def _subscribe_events(self) -> None:
-        self.event_bus.subscribe(Interval10MinTriggerEvent, self.get_data)
+        self.event_bus.subscribe(Interval15MinTriggerEvent, self.get_data)
 
     async def get_data(self, _):
-        modules = self.get_module_energies()
+        energies = self.get_modules_energy()
+        powers = self.get_modules_power()
 
-        if modules is None:
-            logger.warning("Invalid monitoring data, skipping this loop")
-            return
+        modules = self.merge_modules(energies, powers)
 
         energy_total = 0
         count_modules = 0
-        for module in modules:
-            if module.energy is not None:
-                count_modules += 1
-                energy_total += module.energy
 
-        logger.info(
-            "Read from monitoring total energy: {energy_total} kWh from {count_modules} modules",
-            energy_total=energy_total / 1000,
-            count_modules=count_modules,
-        )
+        await self.save_to_influxdb(modules)
+        await self.publish_mqtt(modules, energy_total, count_modules)
 
-        await self.event_bus.emit(
-            MQTTPublishEvent("monitoring/pv_energy_today", energy_total)
-        )
-
-        for module in modules:
-            await self.event_bus.emit(
-                MQTTPublishEvent(
-                    f"monitoring/module/{module.info.serialnumber}",
-                    module,
-                )
-            )
-
-    def login(self) -> None:
-        try:
-            self._post(
-                LOGIN_URL,
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-                data={
-                    "j_username": self.settings.username,
-                    "j_password": self.settings.password.get_secret_value(),
-                },
-                timeout=10,
-                expect_json=False,
-            )
-
-            logger.info("Login to monitoring site successful")
-        except HTTPError as error:
-            raise ConfigurationException(
-                "Monitoring", "Unable to login to monitoring account"
-            ) from error
-
-    def get_module_energies(self) -> list[LogicalInverter] | None:
-        modules = None
+    def get_modules_energy(self) -> dict[str, LogicalModule]:
         logical = self._get_logical()
 
         if logical is None:
@@ -93,7 +64,7 @@ class MonitoringSite(HTTPClient):
             logical["logicalTree"]["children"], logical["reportersData"]
         )
 
-        modules = []
+        modules = {}
 
         for inverter in inverters:
             logger.debug(
@@ -101,7 +72,7 @@ class MonitoringSite(HTTPClient):
             )
             for string in inverter.strings:
                 for module in string.modules:
-                    modules.append(module)
+                    modules[module.info.identifier] = module
 
         return modules
 
@@ -133,8 +104,8 @@ class MonitoringSite(HTTPClient):
                 inverter = LogicalInverter(
                     info=info,
                     energy=(
-                        reporters_data[info["id"]]["unscaledEnergy"]
-                        if info["id"] in reporters_data
+                        reporters_data[info["identifier"]]["unscaledEnergy"]
+                        if info["identifier"] in reporters_data
                         else None
                     ),
                 )
@@ -154,8 +125,8 @@ class MonitoringSite(HTTPClient):
             string = LogicalString(
                 info=info,
                 energy=(
-                    reporters_data[info["id"]]["unscaledEnergy"]
-                    if info["id"] in reporters_data
+                    reporters_data[info["identifier"]]["unscaledEnergy"]
+                    if info["identifier"] in reporters_data
                     else None
                 ),
             )
@@ -170,10 +141,144 @@ class MonitoringSite(HTTPClient):
             panel = LogicalModule(
                 info=info,
                 energy=(
-                    reporters_data[info["id"]]["unscaledEnergy"]
-                    if info["id"] in reporters_data
+                    reporters_data[info["identifier"]]["unscaledEnergy"]
+                    if info["identifier"] in reporters_data
                     else None
                 ),
             )
 
             string.modules.append(panel)
+
+    def get_modules_power(self) -> dict[str, dict[datetime, float]]:
+        playback = self._get_playback()
+
+        if playback is None:
+            raise InvalidDataException(
+                "Unable to read playback data from monitoring site"
+            )
+
+        modules = {}
+
+        for date_str, reporters_data in playback["reportersData"].items():
+            date = datetime.strptime(date_str, "%a %b %d %H:%M:%S GMT %Y").astimezone()
+
+            for entries in reporters_data.values():
+                for entry in entries:
+                    key = entry["key"]
+                    if key not in modules:
+                        modules[key] = {}
+
+                    modules[key][date] = float(entry["value"])
+
+        logger.debug(modules)
+
+        return modules
+
+    def _get_playback(self) -> dict | None:
+        result = None
+        try:
+            if "CSRF-TOKEN" not in self.session.cookies:
+                self.login()
+
+            playback_data = self._post(
+                POWER_PUBLIC_URL,
+                data={
+                    "fieldId": self.settings.site_id,
+                    "timeUnit": 4,
+                    "CSRF": self.session.cookies["CSRF-TOKEN"],
+                },
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "X-CSRF-TOKEN": self.session.cookies["CSRF-TOKEN"],
+                },
+                timeout=10,
+                expect_json=False,
+            )
+
+            response = (
+                playback_data.replace("'", '"')
+                .replace("Array", "")
+                .replace("key", '"key"')
+                .replace("value", '"value"')
+                .replace("timeUnit", '"timeUnit"')
+                .replace("fieldData", '"fieldData"')
+                .replace("reportersData", '"reportersData"')
+            )
+
+            result = json.loads(response)
+        except HTTPError as error:
+            raise InvalidDataException("Unable to read logical layout") from error
+
+        return result
+
+    def login(self) -> None:
+        try:
+            self._post(
+                LOGIN_URL,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                data={
+                    "j_username": self.settings.username,
+                    "j_password": self.settings.password.get_secret_value(),
+                },
+                timeout=10,
+                expect_json=False,
+            )
+
+            logger.info("Login to monitoring site successful")
+        except HTTPError as error:
+            raise ConfigurationException(
+                "Monitoring", "Unable to login to monitoring account"
+            ) from error
+
+    @staticmethod
+    def merge_modules(
+        energies: dict[str, LogicalModule], powers: dict[str, dict[datetime, float]]
+    ) -> dict[str, LogicalModule]:
+        modules = {}
+
+        for sid, module in energies.items():
+            if sid in powers:
+                module.power = powers[sid]
+
+            modules[sid] = module
+
+        return modules
+
+    async def save_to_influxdb(self, modules):
+        if self.influxdb is not None:
+            points = []
+            for module in modules.values():
+                if module.power is not None:
+                    for date, module_power in module.power.items():
+                        point = Point("modules")
+                        point.field("power", module_power)
+                        point.time(date.astimezone(timezone.utc))
+                        point.tag("serialnumber", module.info.serialnumber)
+                        point.tag("name", module.info.name)
+                        point.tag("identifier", module.info.identifier)
+                        points.append(point)
+
+            await self.influxdb.write_points_async(points)
+
+    async def publish_mqtt(self, modules, energy_total, count_modules):
+        for module in modules.values():
+            if module.energy is not None:
+                count_modules += 1
+                energy_total += module.energy
+
+            await self.event_bus.emit(
+                MQTTPublishEvent(
+                    f"monitoring/module/{module.info.serialnumber}",
+                    module,
+                )
+            )
+
+        logger.info(
+            "Read from monitoring total energy: {energy_total} kWh from {count_modules} modules",
+            energy_total=energy_total / 1000,
+            count_modules=count_modules,
+        )
+
+        await self.event_bus.emit(
+            MQTTPublishEvent("monitoring/pv_energy_today", energy_total)
+        )

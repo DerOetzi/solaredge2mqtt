@@ -1,10 +1,11 @@
 from __future__ import annotations
+from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class LogicalInfo(BaseModel):
-    id: str
+    identifier: str
     serialnumber: str | None
     name: str
     type: str
@@ -12,7 +13,7 @@ class LogicalInfo(BaseModel):
     @staticmethod
     def map(data: dict[str, str | int]) -> dict[str, str]:
         return {
-            "id": str(data["id"]),
+            "identifier": str(data["id"]),
             "serialnumber": data["serialNumber"],
             "name": data["name"],
             "type": data["type"],
@@ -33,4 +34,5 @@ class LogicalString(BaseModel):
 
 class LogicalModule(BaseModel):
     info: LogicalInfo
-    energy: float | None
+    energy: float | None = Field(None)
+    power: dict[datetime, float] | None = Field(None)

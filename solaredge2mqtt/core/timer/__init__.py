@@ -3,6 +3,9 @@ from datetime import datetime
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.timer.events import (
     Interval10MinTriggerEvent,
+    Interval15MinTriggerEvent,
+    Interval1MinTriggerEvent,
+    Interval5MinTriggerEvent,
     IntervalBaseTriggerEvent,
 )
 
@@ -18,5 +21,14 @@ class Timer:
         if timestamp % self.base_interval == 0:
             await self.event_bus.emit(IntervalBaseTriggerEvent())
 
+        if timestamp % 60 == 0:
+            await self.event_bus.emit(Interval1MinTriggerEvent())
+
+        if timestamp % 300 == 0:
+            await self.event_bus.emit(Interval5MinTriggerEvent())
+
         if timestamp % 600 == 0:
             await self.event_bus.emit(Interval10MinTriggerEvent())
+
+        if timestamp % 900 == 0:
+            await self.event_bus.emit(Interval15MinTriggerEvent)

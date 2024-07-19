@@ -3,7 +3,7 @@ from typing import Callable
 
 from requests import session
 from requests.exceptions import ConnectionError as RequestsConnectionError
-from requests.exceptions import Timeout, HTTPError
+from requests.exceptions import HTTPError, Timeout
 
 from solaredge2mqtt.core.logging import logger
 
