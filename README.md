@@ -4,7 +4,7 @@
 
 The SolarEdge2MQTT service facilitates the retrieval of power data from SolarEdge inverters and its publication to an MQTT broker. Ideal for integrating SolarEdge inverters into home automation systems, this service supports real-time monitoring of power flow and additional parameters via Modbus.
 
-Users can optionally collect panel energy production data directly from the SolarEdge monitoring site, without employing the API, by leveraging their monitoring platform account.
+Users can optionally collect panel energy production and power data directly from the SolarEdge monitoring site, without employing the API, by leveraging their monitoring platform account.
 
 It also enables the monitoring of SolarEdge Wallbox via the REST API and supports saving all values into InfluxDB for advanced visualization.
 
@@ -47,7 +47,7 @@ Configure the service using environment variables. The available options are lis
 
 ### Monitoring
 
-To enable panel energy value retrieval from the SolarEdge monitoring platform, you must configure:
+To enable panel energy and power value retrieval from the SolarEdge monitoring platform, you must configure:
 
 - **SE2MQTT_MONITORING\_\_SITE_ID**: Your site ID as registered on the SolarEdge platform.
 - **SE2MQTT_MONITORING\_\_USERNAME**: Your username for the SolarEdge monitoring platform.

@@ -76,7 +76,7 @@ class Service:
         self.powerflow = PowerflowService(self.settings, self.event_bus, self.influxdb)
 
         self.monitoring: MonitoringSite | None = (
-            MonitoringSite(self.settings.monitoring, self.event_bus)
+            MonitoringSite(self.settings.monitoring, self.event_bus, self.influxdb)
             if self.settings.is_monitoring_configured
             else None
         )
