@@ -1,7 +1,7 @@
 from __future__ import annotations
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 class LogicalInfo(BaseModel):
@@ -36,3 +36,13 @@ class LogicalModule(BaseModel):
     info: LogicalInfo
     energy: float | None = Field(None)
     power: dict[datetime, float] | None = Field(None)
+
+    @computed_field
+    @property
+    def power_today(self) -> dict[str, float] | None:
+        power_today = None
+
+        if self.power:
+            power_today = {k.strftime("%H:%M"): v for k, v in self.power.items()}
+
+        return power_today
