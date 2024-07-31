@@ -52,7 +52,7 @@ class HomeAssistantEntityType(EnumModel):
     POWER_FACTOR = "power_factor", "sensor", "power_factor", "measurement", "%"
     POWER_KW = "power_kw", "sensor", "power", "measurement", "kW"
     POWER_W = "power_w", "sensor", "power", "measurement", "W"
-    REACTIVE_POWER = "reactive_power", "sensor", "reactive_power", "measurement", "VAr"
+    REACTIVE_POWER = "reactive_power", "sensor", "reactive_power", "measurement", "var"
     VOLTAGE_V = "voltage_v", "sensor", "voltage", "measurement", "V"
 
     def __init__(
