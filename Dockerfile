@@ -11,7 +11,9 @@ COPY requirements.txt .
 RUN python3 -m venv /venv && \
     . /venv/bin/activate && \
     pip install --upgrade pip && \
-    pip wheel https://github.com/scikit-learn/scikit-learn/archive/refs/heads/main.zip && \
+    pip wheel \
+    --no-cache-dir \
+    --extra-index-url https://www.piwheels.org/simple https://github.com/scikit-learn/scikit-learn/archive/refs/heads/main.zip && \
     pip install \
     --no-cache-dir \
     --extra-index-url https://www.piwheels.org/simple \
