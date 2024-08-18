@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from influxdb_client import Point
 from pydantic import Field
-from solaredge_modbus import BATTERY_STATUS_MAP, C_SUNSPEC_DID_MAP, INVERTER_STATUS_MAP
+from solaredge_modbus import C_SUNSPEC_DID_MAP, INVERTER_STATUS_MAP
 
 from solaredge2mqtt.core.exceptions import InvalidDataException
 from solaredge2mqtt.core.logging import logger
@@ -132,6 +132,18 @@ class SunSpecMeter(SunSpecComponent):
         return self.info.homeassistant_device_info(name)
 
 
+BATTERY_STATUS_MAP = {
+    0: "Off",
+    1: "Standby",
+    2: "Init",
+    3: "Charge",
+    4: "Discharge",
+    5: "Fault",
+    6: "Idle",
+    10: "Power Saving",
+}
+
+
 class SunSpecBattery(SunSpecComponent):
     COMPONENT = "battery"
 
@@ -146,7 +158,7 @@ class SunSpecBattery(SunSpecComponent):
         if "status" not in data:
             raise InvalidDataException("Missing battery status")
 
-        if data["status"] not in range(0, len(BATTERY_STATUS_MAP)):
+        if data["status"] not in BATTERY_STATUS_MAP:
             raise InvalidDataException(f"Invalid battery status: {data['status']}")
 
         status = BATTERY_STATUS_MAP[data["status"]]

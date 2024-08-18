@@ -150,9 +150,10 @@ class Modbus:
             battery_data = SunSpecBattery(battery_raw)
             logger.debug(battery_data)
             logger.info(
-                LOGGING_DEVICE_INFO + ": {power} W, {state_of_charge} %",
+                LOGGING_DEVICE_INFO + ": {status}, {power} W, {state_of_charge} %",
                 device=battery_key,
                 info=battery_data.info,
+                status=battery_data.status,
                 power=battery_data.power,
                 state_of_charge=battery_data.state_of_charge,
             )
