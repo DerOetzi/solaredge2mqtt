@@ -135,11 +135,12 @@ class SunSpecMeter(SunSpecComponent):
 BATTERY_STATUS_MAP = {
     0: "Off",
     1: "Standby",
-    2: "Init",
+    2: "Initializing",
     3: "Charge",
     4: "Discharge",
     5: "Fault",
-    6: "Idle",
+    6: "Preserve Charge",
+    7: "Idle",
     10: "Power Saving",
 }
 
