@@ -2,13 +2,16 @@ from __future__ import annotations
 
 from influxdb_client import Point
 from pydantic import Field
-from solaredge_modbus import C_SUNSPEC_DID_MAP, INVERTER_STATUS_MAP
 
-from solaredge2mqtt.core.exceptions import InvalidDataException
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.models import Solaredge2MQTTBaseModel
 from solaredge2mqtt.services.homeassistant.models import (
     HomeAssistantEntityType as EntityType,
+)
+from solaredge2mqtt.services.modbus.sunspec import (
+    BATTERY_STATUS_MAP,
+    C_SUNSPEC_DID_MAP,
+    INVERTER_STATUS_MAP,
 )
 from solaredge2mqtt.services.models import Component, ComponentValueGroup
 
@@ -29,8 +32,8 @@ class SunSpecInfo(Solaredge2MQTTBaseModel):
             "serialnumber": data["c_serialnumber"],
         }
 
-        if str(data["c_sunspec_did"]) in C_SUNSPEC_DID_MAP:
-            values["sunspec_type"] = C_SUNSPEC_DID_MAP[str(data["c_sunspec_did"])]
+        if data["c_sunspec_did"] in C_SUNSPEC_DID_MAP:
+            values["sunspec_type"] = C_SUNSPEC_DID_MAP[data["c_sunspec_did"]]
         else:
             values["sunspec_type"] = "Unknown"
 
@@ -89,15 +92,32 @@ class SunSpecInverter(SunSpecComponent):
     ac: SunSpecAC = Field(title="AC")
     dc: SunSpecDC = Field(title="DC")
     energytotal: float = Field(**EntityType.ENERGY_WH.field("Energy total"))
-    status: str = Field(title="Inverter status")
+    temperature: float = Field(**EntityType.TEMP_C.field("Temperature"))
+    status_text: str = Field(**EntityType.STATUS.field("Status text"))
+    status: int = Field(**EntityType.STATUS.field("status"))
 
     def __init__(self, data: dict[str, str | int]):
         ac = SunSpecAC(data)
         dc = SunSpecDC(data)
         energytotal = self.scale_value(data, "energy_total")
-        status = INVERTER_STATUS_MAP[data["status"]]
 
-        super().__init__(data, ac=ac, dc=dc, energytotal=energytotal, status=status)
+        status = data["status"]
+        if status in INVERTER_STATUS_MAP:
+            status_text = INVERTER_STATUS_MAP[status]
+        else:
+            status_text = "Unknown"
+
+        temperature = self.scale_value(data, "temperature")
+
+        super().__init__(
+            data,
+            ac=ac,
+            dc=dc,
+            energytotal=energytotal,
+            temperature=temperature,
+            status=status,
+            status_text=status_text,
+        )
 
     def homeassistant_device_info(self) -> dict[str, any]:
         return self.info.homeassistant_device_info("Inverter")
@@ -132,23 +152,11 @@ class SunSpecMeter(SunSpecComponent):
         return self.info.homeassistant_device_info(name)
 
 
-BATTERY_STATUS_MAP = {
-    0: "Off",
-    1: "Standby",
-    2: "Initializing",
-    3: "Charge",
-    4: "Discharge",
-    5: "Fault",
-    6: "Preserve Charge",
-    7: "Idle",
-    10: "Power Saving",
-}
-
-
 class SunSpecBattery(SunSpecComponent):
     COMPONENT = "battery"
 
-    status: str = Field(title="Battery status")
+    status: int = Field(**EntityType.STATUS.field("Status"))
+    status_text: str = Field(**EntityType.STATUS.field("Status text"))
     current: float = Field(**EntityType.CURRENT_A.field("current"))
     voltage: float = Field(**EntityType.VOLTAGE_V.field("voltage"))
     power: float = Field(**EntityType.POWER_W.field("power"))
@@ -156,13 +164,12 @@ class SunSpecBattery(SunSpecComponent):
     state_of_health: float = Field(**EntityType.BATTERY.field("state of health"))
 
     def __init__(self, data: dict[str, str | int]) -> None:
-        if "status" not in data:
-            raise InvalidDataException("Missing battery status")
+        status = data["status"]
+        if status in BATTERY_STATUS_MAP:
+            status_text = BATTERY_STATUS_MAP[data["status"]]
+        else:
+            status_text = "Unknown"
 
-        if data["status"] not in BATTERY_STATUS_MAP:
-            raise InvalidDataException(f"Invalid battery status: {data['status']}")
-
-        status = BATTERY_STATUS_MAP[data["status"]]
         current = round(data["instantaneous_current"], 2)
         voltage = round(data["instantaneous_voltage"], 2)
         power = round(data["instantaneous_power"], 2)
@@ -172,6 +179,7 @@ class SunSpecBattery(SunSpecComponent):
         super().__init__(
             data,
             status=status,
+            status_text=status_text,
             current=current,
             voltage=voltage,
             power=power,
