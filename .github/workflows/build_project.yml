@@ -10,7 +10,7 @@ on:
 env:
   REGISTRY_GITHUB: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  PACKAGE_BRANCHES: '["main", "forecast", "homeassistant-auto-discovery"]'
+  PACKAGE_BRANCHES: '["main", "replace_solaredge_modbus"]'
 
 jobs:
   variables:
