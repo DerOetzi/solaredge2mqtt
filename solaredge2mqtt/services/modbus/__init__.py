@@ -122,7 +122,7 @@ class Modbus:
 
             if register_slice in self._block_unreadable:
                 if datetime.now() - self._block_unreadable[register_slice] < timedelta(
-                    minutes=2
+                    seconds=30
                 ):
                     logger.debug(
                         f"Skip unreadable registers beginning at {slice_start}"
