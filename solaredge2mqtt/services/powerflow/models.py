@@ -214,7 +214,7 @@ class GridPowerflow(Solaredge2MQTTBaseModel):
             if "Import" in meter.info.option and "Export" in meter.info.option:
                 grid += meter.power.actual
 
-        return GridPowerflow(power=grid)
+        return GridPowerflow(power=round(grid))
 
     @computed_field(
         **EntityType.POWER_W.field("Consumption", "transmission-tower-import")
