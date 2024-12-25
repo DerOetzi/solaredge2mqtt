@@ -46,13 +46,15 @@ class HomeAssistantEntityType(EnumModel):
     ENERGY_KWH = "energy_kwh", "sensor", "energy", "total_increasing", "kWh"
     ENERGY_WH = "energy_wh", "sensor", "energy", "total_increasing", "Wh"
     FREQUENCY_HZ = "frequency_hz", "sensor", "frequency", "measurement", "Hz"
-    MONETARY = "monetary", "sensor", "monetary", None, None
+    MONETARY = "monetary", "sensor", "monetary", "total_increasing", None
     PERCENTAGE = "percentage", "sensor", None, "measurement", "%"
     PLUG = "plug", "binary_sensor", "plug", None, None
     POWER_FACTOR = "power_factor", "sensor", "power_factor", "measurement", "%"
     POWER_KW = "power_kw", "sensor", "power", "measurement", "kW"
     POWER_W = "power_w", "sensor", "power", "measurement", "W"
     REACTIVE_POWER = "reactive_power", "sensor", "reactive_power", "measurement", "VAr"
+    STATUS = "status", "sensor", None, None, None
+    TEMP_C = "temp_c", "sensor", "temperature", "measurement", "°C"
     VOLTAGE_V = "voltage_v", "sensor", "voltage", "measurement", "V"
 
     def __init__(
