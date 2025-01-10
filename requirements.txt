@@ -12,6 +12,6 @@ pydantic==2.8.2
 pyjwt==2.9.0
 pymodbus==3.7.2
 requests==2.32.3
-scikit-learn==1.4.2
+scikit-learn==1.6.1
 scipy==1.14.0
 tzlocal==5.2
