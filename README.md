@@ -1,14 +1,12 @@
 # SolarEdge 2 MQTT Service
 
-[![License](https://img.shields.io/github/license/DerOetzi/solaredge2mqtt)](https://github.com/DerOetzi/solaredge2mqtt/blob/main/LICENSE) [![Release](https://img.shields.io/github/v/release/DerOetzi/solaredge2mqtt)](https://github.com/DerOetzi/solaredge2mqtt/releases/latest) [![Build Status](https://img.shields.io/github/actions/workflow/status/DerOetzi/solaredge2mqtt/build_project.yml?branch=main)](https://github.com/DerOetzi/solaredge2mqtt/actions/workflows/build_project.yml) [![PyPI version](https://img.shields.io/pypi/v/solaredge2mqtt.svg)](https://pypi.org/project/solaredge2mqtt/) [![Discord Chat](https://img.shields.io/discord/1196540254686032014)](https://discord.gg/QXfghc93pY)
+[![License](https://img.shields.io/github/license/DerOetzi/solaredge2mqtt)](https://github.com/DerOetzi/solaredge2mqtt/blob/main/LICENSE) [![Release](https://img.shields.io/github/v/release/DerOetzi/solaredge2mqtt)](https://github.com/DerOetzi/solaredge2mqtt/releases/latest) [![Build Status](https://img.shields.io/github/actions/workflow/status/DerOetzi/solaredge2mqtt/build_project.yml?branch=main)](https://github.com/DerOetzi/solaredge2mqtt/actions/workflows/build_project.yml) [![PyPI version](https://img.shields.io/pypi/v/solaredge2mqtt.svg)](https://pypi.org/project/solaredge2mqtt/) [![Discord Chat](https://img.shields.io/discord/1196540254686032014)](https://discord.gg/QXfghc93pY) [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-donate-yellow)][buymecoffee-link]
 
 The SolarEdge2MQTT service facilitates the retrieval of power data from SolarEdge inverters and its publication to an MQTT broker. Ideal for integrating SolarEdge inverters into home automation systems, this service supports real-time monitoring of power flow and additional parameters via Modbus.
 
 Users can optionally collect panel energy production and power data directly from the SolarEdge monitoring site, without employing the API, by leveraging their monitoring platform account.
 
 It also enables the monitoring of SolarEdge Wallbox via the REST API and supports saving all values into InfluxDB for advanced visualization.
-
-_Please note: The SolarEdge2MQTT service is in its early development stages. Although operational for reading and publishing data from a SolarEdge inverter, active development may introduce changes to features, potential removals, or bugs. Users are advised to proceed with caution. As an open-source project, contributions are highly encouraged._
 
 ## Contact and Feedback
 
@@ -17,6 +15,12 @@ For inquiries, feel free to reach out on Discord.
 [![Discord Banner](https://discordapp.com/api/guilds/1196540254686032014/widget.png?style=banner2)](https://discord.gg/QXfghc93pY)
 
 We highly value your input. Share your ideas, suggestions, or issues by opening an [issue](https://github.com/DerOetzi/solaredge2mqtt/issues). Your feedback is eagerly awaited.
+
+## Support
+
+If you like this project, I would appreciate a small contribution.
+
+[![BuyMeCoffee][buymecoffee-shield]][buymecoffee-link]
 
 ## Configuration
 
@@ -155,3 +159,6 @@ For a more advanced deployment, especially when integrating with other services 
 4. **Execution**: Run `docker-compose up -d` to start the service in detached mode. This command reads your `docker-compose.yml` and `.env` file, setting up your SolarEdge2MQTT service along with any other specified services.
 
 Stopping the Service: When you need to stop the service, use `docker-compose down` to gracefully stop and remove the containers defined in your Docker Compose file.
+
+[buymecoffee-link]: https://www.buymeacoffee.com/deroetzik
+[buymecoffee-shield]: https://www.buymeacoffee.com/assets/img/custom_images/yellow_img.png

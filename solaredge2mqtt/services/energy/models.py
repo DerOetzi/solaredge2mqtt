@@ -153,7 +153,7 @@ class HistoricPeriod(EnumModel):
         HistoricQuery.ACTUAL,
         True,
     )
-    LAST_MONTH = "last_month", "Last month", "1mo", HistoricQuery.LAST, False
+    LAST_MONTH = "last_month", "Last month", "1mo", HistoricQuery.LAST, True
     THIS_YEAR = (
         "this_year",
         "This year",
@@ -161,7 +161,7 @@ class HistoricPeriod(EnumModel):
         HistoricQuery.ACTUAL,
         True,
     )
-    LAST_YEAR = "last_year", "Last year", "1y", HistoricQuery.LAST, False
+    LAST_YEAR = "last_year", "Last year", "1y", HistoricQuery.LAST, True
     LIFETIME = (
         "lifetime",
         "Lifetime",
