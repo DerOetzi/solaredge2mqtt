@@ -32,7 +32,7 @@ class SunSpecInfo(Solaredge2MQTTBaseModel):
             "serialnumber": data["c_serialnumber"],
         }
 
-        if data["c_sunspec_did"] in C_SUNSPEC_DID_MAP:
+        if "c_sunspec_did" in data and data["c_sunspec_did"] in C_SUNSPEC_DID_MAP:
             values["sunspec_type"] = C_SUNSPEC_DID_MAP[data["c_sunspec_did"]]
         else:
             values["sunspec_type"] = "Unknown"
@@ -56,10 +56,6 @@ class SunSpecComponent(Component):
     SOURCE = "modbus"
 
     info: SunSpecInfo
-
-    def __init__(self, data: dict[str, str | int], **kwargs):
-        info = SunSpecInfo(data)
-        super().__init__(info=info, **kwargs)
 
     def model_dump_influxdb(self, exclude: list[str] | None = None) -> dict[str, any]:
         return super().model_dump_influxdb(["info", *exclude] if exclude else ["info"])
@@ -96,7 +92,7 @@ class SunSpecInverter(SunSpecComponent):
     status_text: str = Field(**EntityType.STATUS.field("Status text"))
     status: int = Field(**EntityType.STATUS.field("status"))
 
-    def __init__(self, data: dict[str, str | int]):
+    def __init__(self, info: SunSpecInfo, data: dict[str, str | int]):
         ac = SunSpecAC(data)
         dc = SunSpecDC(data)
         energytotal = self.scale_value(data, "energy_total")
@@ -110,7 +106,7 @@ class SunSpecInverter(SunSpecComponent):
         temperature = self.scale_value(data, "temperature")
 
         super().__init__(
-            data,
+            info=info,
             ac=ac,
             dc=dc,
             energytotal=energytotal,
@@ -132,7 +128,7 @@ class SunSpecMeter(SunSpecComponent):
     energy: SunSpecEnergy = Field(title="Energy")
     frequency: float = Field(**EntityType.FREQUENCY_HZ.field("Grid frequency"))
 
-    def __init__(self, data: dict[str, str | int]):
+    def __init__(self, info: SunSpecInfo, data: dict[str, str | int]):
         current = SunSpecACCurrent(data)
         voltage = SunSpecACVoltage(data)
         power = SunSpecACPower(data, "power")
@@ -140,7 +136,7 @@ class SunSpecMeter(SunSpecComponent):
         frequency = self.scale_value(data, "frequency")
 
         super().__init__(
-            data,
+            info=info,
             current=current,
             voltage=voltage,
             power=power,
@@ -163,7 +159,7 @@ class SunSpecBattery(SunSpecComponent):
     state_of_charge: float = Field(**EntityType.BATTERY.field("state of charge"))
     state_of_health: float = Field(**EntityType.BATTERY.field("state of health"))
 
-    def __init__(self, data: dict[str, str | int]) -> None:
+    def __init__(self, info: SunSpecInfo, data: dict[str, str | int]) -> None:
         status = data["status"]
         if status in BATTERY_STATUS_MAP:
             status_text = BATTERY_STATUS_MAP[data["status"]]
@@ -177,7 +173,7 @@ class SunSpecBattery(SunSpecComponent):
         state_of_health = round(data["soh"], 2)
 
         super().__init__(
-            data,
+            info=info,
             status=status,
             status_text=status_text,
             current=current,
@@ -217,7 +213,7 @@ class SunSpecBattery(SunSpecComponent):
 
 class SunSpecACCurrent(ComponentValueGroup):
     actual: float = Field(**EntityType.CURRENT_A.field("actual"))
-    l1: float = Field(**EntityType.CURRENT_A.field("L1"))
+    l1: float | None = Field(None, **EntityType.CURRENT_A.field("L1"))
     l2: float | None = Field(None, **EntityType.CURRENT_A.field("L2"))
     l3: float | None = Field(None, **EntityType.CURRENT_A.field("L3"))
 

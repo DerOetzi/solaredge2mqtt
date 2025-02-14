@@ -132,6 +132,8 @@ class Service:
                     if self.settings.is_homeassistant_configured:
                         await self.homeassistant.async_init()
 
+                    await self.powerflow.modbus.async_init()
+
                     self._start_mqtt_listener()
                     self.schedule_loop(1, self.timer.loop)
 
