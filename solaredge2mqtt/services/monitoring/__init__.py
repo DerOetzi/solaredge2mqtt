@@ -1,10 +1,11 @@
-from datetime import datetime, timezone
 import json
+from datetime import datetime, timezone
+
 from requests.exceptions import HTTPError
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
-from solaredge2mqtt.core.influxdb import InfluxDB, Point
+from solaredge2mqtt.core.influxdb import InfluxDBAsync, Point
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.core.timer.events import Interval15MinTriggerEvent
@@ -27,12 +28,12 @@ class MonitoringSite(HTTPClient):
         self,
         settings: MonitoringSettings,
         event_bus: EventBus,
-        influxdb: InfluxDB | None,
+        influxdb: InfluxDBAsync | None,
     ) -> None:
         super().__init__("Monitoring Site")
         self.settings = settings
 
-        self.influxdb: InfluxDB | None = influxdb
+        self.influxdb: InfluxDBAsync | None = influxdb
 
         self.event_bus = event_bus
         self._subscribe_events()
@@ -258,7 +259,7 @@ class MonitoringSite(HTTPClient):
                         point.tag("identifier", module.info.identifier)
                         points.append(point)
 
-            await self.influxdb.write_points_async(points)
+            await self.influxdb.write_points(points)
 
     async def publish_mqtt(self, modules, energy_total, count_modules):
         for module in modules.values():

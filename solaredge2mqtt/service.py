@@ -17,7 +17,7 @@ from tzlocal import get_localzone_name
 from solaredge2mqtt import __version__
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import ConfigurationException
-from solaredge2mqtt.core.influxdb import InfluxDB
+from solaredge2mqtt.core.influxdb import InfluxDBAsync
 from solaredge2mqtt.core.logging import initialize_logging, logger
 from solaredge2mqtt.core.mqtt import MQTTClient
 from solaredge2mqtt.core.settings import service_settings
@@ -61,8 +61,8 @@ class Service:
         self.cancel_request = aio.Event()
         self.loops: set[aio.Task] = set()
 
-        self.influxdb: InfluxDB | None = (
-            InfluxDB(self.settings.influxdb, self.settings.prices, self.event_bus)
+        self.influxdb: InfluxDBAsync | None = (
+            InfluxDBAsync(self.settings.influxdb, self.settings.prices, self.event_bus)
             if self.settings.is_influxdb_configured
             else None
         )
@@ -120,7 +120,7 @@ class Service:
         logger.info("Timezone: {timezone}", timezone=LOCAL_TZ)
 
         if self.settings.is_influxdb_configured:
-            self.influxdb.initialize_buckets()
+            await self.influxdb.async_init()
 
         while not self.cancel_request.is_set():
             try:

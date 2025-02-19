@@ -18,7 +18,7 @@ from tzlocal import get_localzone_name
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import InvalidDataException
-from solaredge2mqtt.core.influxdb import InfluxDB, Point
+from solaredge2mqtt.core.influxdb import InfluxDBAsync, Point
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.core.timer.events import Interval10MinTriggerEvent
@@ -47,7 +47,7 @@ class ForecastService:
         settings: ForecastSettings,
         location: LocationSettings,
         event_bus: EventBus,
-        influxdb: InfluxDB,
+        influxdb: InfluxDBAsync,
     ) -> None:
         self.settings = settings
         self.location = location
@@ -98,16 +98,16 @@ class ForecastService:
 
         training_data = last_hour_weather_forecast.model_dump_estimation_data()
         training_data["time"] = last_hour
-        training_data = self.add_last_hour_pv_production(training_data)
-        self.write_new_training_data_to_influxdb(training_data)
+        training_data = await self.add_last_hour_pv_production(training_data)
+        await self.write_new_training_data_to_influxdb(training_data)
 
         if (now.minute // 10) * 10 == 20:
             await self.train()
 
-    def add_last_hour_pv_production(
+    async def add_last_hour_pv_production(
         self, trainings_data
     ) -> dict[str, str | float | int | None]:
-        production_data = self.influxdb.query_first("production")
+        production_data = await self.influxdb.query_first("production")
 
         if production_data is None:
             raise InvalidDataException(
@@ -123,7 +123,7 @@ class ForecastService:
         )
         return trainings_data
 
-    def write_new_training_data_to_influxdb(self, trainings_data):
+    async def write_new_training_data_to_influxdb(self, trainings_data):
         point = Point("forecast_training")
         for key, value in trainings_data.items():
             if isinstance(value, (int, float, str, bool)):
@@ -133,7 +133,7 @@ class ForecastService:
 
         logger.info("Write new forecast training data to influxdb")
         logger.debug(trainings_data)
-        self.influxdb.write_point(point)
+        await self.influxdb.write_point(point)
 
     async def train(self) -> None:
         data = await self.influxdb.query_dataframe("training_data")
@@ -177,11 +177,11 @@ class ForecastService:
 
         for typed, forecaster in self.forecasters.items():
             predicted_data = await forecaster.predict(data)
-            self._write_periods_to_influxdb(predicted_data, typed)
+            await self._write_periods_to_influxdb(predicted_data, typed)
 
         await self.publish_forecast()
 
-    def _write_periods_to_influxdb(
+    async def _write_periods_to_influxdb(
         self, periods: DataFrame, typed: ForecasterType
     ) -> None:
         points = []
@@ -193,7 +193,7 @@ class ForecastService:
             points.append(point)
 
         logger.info("Write forecast data to influxdb")
-        self.influxdb.write_points(points)
+        await self.influxdb.write_points(points)
 
     async def publish_forecast(self) -> None:
         forecast_data = await self.influxdb.query_dataframe("forecast")

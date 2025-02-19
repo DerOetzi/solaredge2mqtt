@@ -1,9 +1,10 @@
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
-from solaredge2mqtt.core.influxdb import InfluxDB
+from solaredge2mqtt.core.influxdb import InfluxDBAsync
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.core.timer.events import IntervalBaseTriggerEvent
@@ -23,7 +24,7 @@ class PowerflowService:
         self,
         settings: ServiceSettings,
         event_bus: EventBus,
-        influxdb: InfluxDB | None = None,
+        influxdb: InfluxDBAsync | None = None,
     ):
         self.settings = settings
 
@@ -77,7 +78,7 @@ class PowerflowService:
             logger.debug(powerflow)
             raise InvalidDataException("Value change not valid, skipping this loop")
 
-        self.write_to_influxdb(batteries_data, powerflow)
+        await self.write_to_influxdb(batteries_data, powerflow)
 
         logger.debug(powerflow)
         logger.info(
@@ -112,7 +113,7 @@ class PowerflowService:
 
         await self.event_bus.emit(PowerflowGeneratedEvent(powerflow))
 
-    def write_to_influxdb(
+    async def write_to_influxdb(
         self, batteries_data: dict[str, SunSpecBattery], powerflow: Powerflow
     ):
         if self.influxdb is not None:
@@ -121,4 +122,4 @@ class PowerflowService:
             for battery in batteries_data.values():
                 points.append(battery.prepare_point())
 
-            self.influxdb.write_points(points)
+            await self.influxdb.write_points(points)

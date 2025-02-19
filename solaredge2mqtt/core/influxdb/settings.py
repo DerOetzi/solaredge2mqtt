@@ -24,6 +24,14 @@ class InfluxDBSettings(BaseModel):
         return url
 
     @property
+    def client_params(self) -> dict[str, any]:
+        return {
+            "url": self.url,
+            "token": self.token.get_secret_value(),
+            "org": self.org,
+        }
+
+    @property
     def is_configured(self) -> bool:
         return all(
             [

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import InvalidDataException
-from solaredge2mqtt.core.influxdb import InfluxDB
+from solaredge2mqtt.core.influxdb import InfluxDBAsync
 from solaredge2mqtt.core.influxdb.events import InfluxDBAggregatedEvent
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
@@ -20,7 +20,7 @@ class EnergyService:
     def __init__(
         self,
         event_bus: EventBus,
-        influxdb: InfluxDB,
+        influxdb: InfluxDBAsync,
     ):
         self.influxdb = influxdb
 
@@ -32,7 +32,7 @@ class EnergyService:
 
     async def read_historic_energy(self, _) -> None:
         for period in HistoricPeriod:
-            record = self.influxdb.query_timeunit(period, "energy")
+            record = await self.influxdb.query_timeunit(period, "energy")
             if record is None:
                 if period.query == HistoricQuery.LAST:
                     logger.info(
