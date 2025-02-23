@@ -1,6 +1,7 @@
 import json
 from datetime import datetime, timezone
 
+from aiohttp import ClientResponseError
 from requests.exceptions import HTTPError
 
 from solaredge2mqtt.core.events import EventBus
@@ -9,7 +10,7 @@ from solaredge2mqtt.core.influxdb import InfluxDBAsync, Point
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.core.timer.events import Interval15MinTriggerEvent
-from solaredge2mqtt.services.http import HTTPClient
+from solaredge2mqtt.services.http_async import HTTPClientAsync
 from solaredge2mqtt.services.monitoring.models import (
     LogicalInfo,
     LogicalInverter,
@@ -23,7 +24,7 @@ LOGICAL_URL = "https://monitoring.solaredge.com/solaredge-apigw/api/sites/{site_
 POWER_PUBLIC_URL = "https://monitoring.solaredge.com/solaredge-web/p/playbackData"
 
 
-class MonitoringSite(HTTPClient):
+class MonitoringSite(HTTPClientAsync):
     def __init__(
         self,
         settings: MonitoringSettings,
@@ -42,8 +43,8 @@ class MonitoringSite(HTTPClient):
         self.event_bus.subscribe(Interval15MinTriggerEvent, self.get_data)
 
     async def get_data(self, _):
-        energies = self.get_modules_energy()
-        powers = self.get_modules_power()
+        energies = await self.get_modules_energy()
+        powers = await self.get_modules_power()
 
         modules = self.merge_modules(energies, powers)
 
@@ -53,8 +54,8 @@ class MonitoringSite(HTTPClient):
         await self.save_to_influxdb(modules)
         await self.publish_mqtt(modules, energy_total, count_modules)
 
-    def get_modules_energy(self) -> dict[str, LogicalModule]:
-        logical = self._get_logical()
+    async def get_modules_energy(self) -> dict[str, LogicalModule]:
+        logical = await self._get_logical()
 
         if logical is None:
             raise InvalidDataException(
@@ -77,21 +78,21 @@ class MonitoringSite(HTTPClient):
 
         return modules
 
-    def _get_logical(self) -> dict | None:
+    async def _get_logical(self) -> dict | None:
         result = None
         try:
-            if "CSRF-TOKEN" not in self.session.cookies:
-                self.login()
+            if not self.cookie_exists("CSRF-TOKEN"):
+                await self.login()
 
-            result = self._get(
+            result = await self._get(
                 LOGICAL_URL.format(site_id=self.settings.site_id),
                 headers={
                     "Content-Type": "application/x-www-form-urlencoded",
-                    "X-CSRF-TOKEN": self.session.cookies["CSRF-TOKEN"],
+                    "X-CSRF-TOKEN": self.get_cookie("CSRF-TOKEN"),
                 },
                 timeout=10,
             )
-        except HTTPError as error:
+        except ClientResponseError as error:
             raise InvalidDataException("Unable to read logical layout") from error
 
         return result
@@ -150,8 +151,8 @@ class MonitoringSite(HTTPClient):
 
             string.modules.append(panel)
 
-    def get_modules_power(self) -> dict[str, dict[datetime, float]]:
-        playback = self._get_playback()
+    async def get_modules_power(self) -> dict[str, dict[datetime, float]]:
+        playback = await self._get_playback()
 
         if playback is None:
             raise InvalidDataException(
@@ -175,22 +176,22 @@ class MonitoringSite(HTTPClient):
 
         return modules
 
-    def _get_playback(self) -> dict | None:
+    async def _get_playback(self) -> dict | None:
         result = None
         try:
-            if "CSRF-TOKEN" not in self.session.cookies:
-                self.login()
+            if not self.cookie_exists("CSRF-TOKEN"):
+                await self.login()
 
-            playback_data = self._post(
+            playback_data = await self._post(
                 POWER_PUBLIC_URL,
                 data={
                     "fieldId": self.settings.site_id,
                     "timeUnit": 4,
-                    "CSRF": self.session.cookies["CSRF-TOKEN"],
+                    "CSRF": self.get_cookie("CSRF-TOKEN"),
                 },
                 headers={
                     "Content-Type": "application/x-www-form-urlencoded",
-                    "X-CSRF-TOKEN": self.session.cookies["CSRF-TOKEN"],
+                    "X-CSRF-TOKEN": self.get_cookie("CSRF-TOKEN"),
                 },
                 timeout=10,
                 expect_json=False,
@@ -212,9 +213,9 @@ class MonitoringSite(HTTPClient):
 
         return result
 
-    def login(self) -> None:
+    async def login(self) -> None:
         try:
-            self._post(
+            await self._post(
                 LOGIN_URL,
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
                 data={
@@ -226,7 +227,7 @@ class MonitoringSite(HTTPClient):
             )
 
             logger.info("Login to monitoring site successful")
-        except HTTPError as error:
+        except ClientResponseError as error:
             raise ConfigurationException(
                 "Monitoring", "Unable to login to monitoring account"
             ) from error

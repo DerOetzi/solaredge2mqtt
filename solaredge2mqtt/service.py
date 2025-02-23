@@ -39,6 +39,7 @@ def run():
         loop.add_signal_handler(signal.SIGINT, service.cancel)
         loop.add_signal_handler(signal.SIGTERM, service.cancel)
         loop.run_until_complete(service.main_loop())
+        loop.run_until_complete(service.close())
     except ConfigurationException:
         logger.error("Configuration error")
     except aio.exceptions.CancelledError:
@@ -132,7 +133,10 @@ class Service:
                     if self.settings.is_homeassistant_configured:
                         await self.homeassistant.async_init()
 
-                    await self.powerflow.modbus.async_init()
+                    await self.powerflow.async_init()
+
+                    if self.settings.is_monitoring_configured:
+                        await self.monitoring.async_init()
 
                     self._start_mqtt_listener()
                     self.schedule_loop(1, self.timer.loop)
@@ -206,3 +210,11 @@ class Service:
                 await aio.sleep(interval_in_seconds - execution_time)
             else:
                 await aio.sleep(interval_in_seconds)
+
+    async def close(self):
+        if self.influxdb:
+            await self.influxdb.close()
+        if self.powerflow:
+            await self.powerflow.close()
+        if self.monitoring:
+            await self.monitoring.close()

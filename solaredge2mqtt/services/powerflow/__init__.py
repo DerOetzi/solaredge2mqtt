@@ -44,6 +44,11 @@ class PowerflowService:
     def _subscribe_events(self) -> None:
         self.event_bus.subscribe(IntervalBaseTriggerEvent, self.calculate_powerflow)
 
+    async def async_init(self) -> None:
+        await self.modbus.async_init()
+        if self.settings.is_wallbox_configured:
+            await self.wallbox.async_init()
+
     async def calculate_powerflow(self, _) -> None:
         inverter_data, meters_data, batteries_data = await self.modbus.get_data()
 
@@ -123,3 +128,7 @@ class PowerflowService:
                 points.append(battery.prepare_point())
 
             await self.influxdb.write_points(points)
+
+    async def close(self) -> None:
+        if self.settings.is_wallbox_configured:
+            await self.wallbox.close()

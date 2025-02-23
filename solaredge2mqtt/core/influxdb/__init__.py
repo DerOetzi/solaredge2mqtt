@@ -183,3 +183,8 @@ class InfluxDBAsync:
         logger.trace(query)
 
         return query
+
+    async def close(self) -> None:
+        if self.client_async:
+            await self.client_async.close()
+            self.client_async = None

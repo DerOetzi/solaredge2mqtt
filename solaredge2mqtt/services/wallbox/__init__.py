@@ -1,19 +1,18 @@
+import asyncio
 import time
 
+import aiohttp
 import jwt
-import urllib3
+from aiohttp.client_exceptions import ClientResponseError
 from pydantic import BaseModel, Field
-from requests.exceptions import HTTPError
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
-from solaredge2mqtt.services.http import HTTPClient
 from solaredge2mqtt.core.logging import logger
+from solaredge2mqtt.services.http_async import HTTPClientAsync
 from solaredge2mqtt.services.wallbox.events import WallboxReadEvent
 from solaredge2mqtt.services.wallbox.models import WallboxAPI
 from solaredge2mqtt.services.wallbox.settings import WallboxSettings
-
-urllib3.disable_warnings()
 
 LOGIN_URL = "https://{host}:8443/v2/jwt/login"
 REFRESH_URL = "https://{host}:8443/v2/jwt/refresh"
@@ -37,25 +36,24 @@ class AuthorizationTokens(BaseModel):
         return payload["exp"]
 
 
-class WallboxClient(HTTPClient):
+class WallboxClient(HTTPClientAsync):
     def __init__(self, settings: WallboxSettings, event_bus: EventBus):
         super().__init__("Wallbox API")
         self.settings = settings
+        self.event_bus = event_bus
+        self.authorization: AuthorizationTokens | None = None
 
         logger.info(
             "Using Wallbox charger: {host}",
             host=settings.host,
         )
 
-        self.event_bus = event_bus
-        self.authorization: AuthorizationTokens | None = None
-
     async def get_data(self) -> WallboxAPI | None:
         wallbox = None
         try:
-            self._get_access()
+            await self._get_access()
 
-            response = self._get(
+            response = await self._get(
                 WALLBOX_URL.format(
                     host=self.settings.host, serial=self.settings.serial
                 ),
@@ -74,53 +72,50 @@ class WallboxClient(HTTPClient):
             )
 
             await self.event_bus.emit(WallboxReadEvent(wallbox))
-        except HTTPError as error:
+        except ClientResponseError as error:
             raise InvalidDataException(f"Cannot read Wallbox data: {error}") from error
 
         return wallbox
 
-    def _get_access(self) -> None:
+    async def _get_access(self) -> None:
         current_timestamp = int(time.time())
 
         if self.authorization is None:
-            self.login()
+            await self.login()
         elif self.authorization.access_token_expires < current_timestamp + 60:
-            # Token is about to expire within 60 seconds
             if self.authorization.refresh_token_expires < current_timestamp + 60:
-                # Refresh token is about to expire within 60 seconds as well new login
-                self.login()
+                await self.login()
             else:
-                self._refresh_token()
+                await self._refresh_token()
         else:
             logger.debug("Wallbox access token still valid")
 
-    def login(self):
+    async def login(self):
         try:
             logger.info("Logging in to Wallbox charger...")
             self.authorization = None
-            response = self._post(
+            response = await self._post(
                 LOGIN_URL.format(host=self.settings.host),
-                {
+                json={
                     "password": self.settings.password.get_secret_value(),
                     "username": "admin",
                 },
                 verify=False,
             )
-            logger.trace(response)
 
             if response is None:
                 raise ConfigurationException("wallbox", "Invalid Wallbox login")
 
             self.authorization = AuthorizationTokens(**response)
             logger.info("Logged in to EV charger")
-        except HTTPError as error:
+        except ClientResponseError as error:
             raise ConfigurationException(
                 "wallbox", "Unable to login to EV charger"
             ) from error
 
-    def _refresh_token(self):
+    async def _refresh_token(self):
         logger.info("Refreshing access token Wallbox...")
-        response = self._post(
+        response = await self._post(
             REFRESH_URL.format(host=self.settings.host),
             headers={"Authorization": f"Bearer {self.authorization.refresh_token}"},
             verify=False,
