@@ -135,9 +135,6 @@ class Service:
 
                     await self.powerflow.async_init()
 
-                    if self.settings.is_monitoring_configured:
-                        await self.monitoring.async_init()
-
                     self._start_mqtt_listener()
                     self.schedule_loop(1, self.timer.loop)
 
@@ -218,3 +215,5 @@ class Service:
             await self.powerflow.close()
         if self.monitoring:
             await self.monitoring.close()
+        if self.weather:
+            await self.weather.close()

@@ -46,8 +46,6 @@ class PowerflowService:
 
     async def async_init(self) -> None:
         await self.modbus.async_init()
-        if self.settings.is_wallbox_configured:
-            await self.wallbox.async_init()
 
     async def calculate_powerflow(self, _) -> None:
         inverter_data, meters_data, batteries_data = await self.modbus.get_data()

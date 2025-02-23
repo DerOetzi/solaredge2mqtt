@@ -12,8 +12,9 @@ class HTTPClientAsync:
         self.session: aiohttp.ClientSession | None = None
 
     async def async_init(self) -> None:
-        cookie_jar = aiohttp.CookieJar(unsafe=True)
-        self.session = aiohttp.ClientSession(cookie_jar=cookie_jar)
+        if not self.session:
+            cookie_jar = aiohttp.CookieJar(unsafe=True)
+            self.session = aiohttp.ClientSession(cookie_jar=cookie_jar)
 
     async def _handle_response(
         self, response: aiohttp.ClientResponse, expect_json: bool = True
@@ -35,6 +36,8 @@ class HTTPClientAsync:
         login: Callable | None = None,
     ) -> dict | None:
         try:
+            await self.async_init()
+
             async with self.session.get(
                 url, params=params, headers=headers, timeout=timeout, ssl=verify
             ) as response:
@@ -58,6 +61,8 @@ class HTTPClientAsync:
         login: Callable | None = None,
     ) -> dict | str | None:
         try:
+            await self.async_init()
+
             async with self.session.post(
                 url, json=json, data=data, headers=headers, timeout=timeout, ssl=verify
             ) as response:
@@ -82,9 +87,10 @@ class HTTPClientAsync:
 
     def get_cookie(self, cookie_name: str) -> str | None:
         value: str | None = None
-        for cookie in self.session.cookie_jar:
-            if cookie.key == cookie_name:
-                value = cookie.value
-                break
+        if self.session:
+            for cookie in self.session.cookie_jar:
+                if cookie.key == cookie_name:
+                    value = cookie.value
+                    break
 
         return value
