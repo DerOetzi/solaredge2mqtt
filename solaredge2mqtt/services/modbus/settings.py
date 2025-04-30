@@ -6,3 +6,4 @@ class ModbusSettings(BaseModel):
     port: int = Field(1502)
     timeout: int = Field(1)
     unit: int = Field(1)
+    check_grid_status: bool = Field(False)

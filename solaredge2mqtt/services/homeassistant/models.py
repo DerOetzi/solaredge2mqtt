@@ -46,6 +46,7 @@ class HomeAssistantEntityType(EnumModel):
     ENERGY_KWH = "energy_kwh", "sensor", "energy", "total_increasing", "kWh"
     ENERGY_WH = "energy_wh", "sensor", "energy", "total_increasing", "Wh"
     FREQUENCY_HZ = "frequency_hz", "sensor", "frequency", "measurement", "Hz"
+    GRID_STATUS = "grid_status", "binary_sensor", "grid_status", None, None
     MONETARY = "monetary", "sensor", "monetary", "total_increasing", None
     PERCENTAGE = "percentage", "sensor", None, "measurement", "%"
     PLUG = "plug", "binary_sensor", "plug", None, None

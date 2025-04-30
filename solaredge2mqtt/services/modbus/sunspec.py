@@ -726,3 +726,6 @@ class SunSpecInverterRegister(SunSpecRegister):
         63234,
         SunSpecValueType.FLOAT32,
     )
+
+class SunSpecGridStatusRegister(SunSpecRegister):
+    GRID_STATUS = "grid_status", 40113, SunSpecValueType.UINT32, True

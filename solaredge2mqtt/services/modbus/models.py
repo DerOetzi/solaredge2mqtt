@@ -91,6 +91,9 @@ class SunSpecInverter(SunSpecComponent):
     temperature: float = Field(**EntityType.TEMP_C.field("Temperature"))
     status_text: str = Field(**EntityType.STATUS.field("Status text"))
     status: int = Field(**EntityType.STATUS.field("status"))
+    grid_status: bool | None = Field(
+        None, **EntityType.GRID_STATUS.field("Grid status")
+    )
 
     def __init__(self, info: SunSpecInfo, data: dict[str, str | int]):
         ac = SunSpecAC(data)
@@ -105,6 +108,10 @@ class SunSpecInverter(SunSpecComponent):
 
         temperature = self.scale_value(data, "temperature")
 
+        grid_status = None
+        if "grid_status" in data:
+            grid_status = not data["grid_status"]
+
         super().__init__(
             info=info,
             ac=ac,
@@ -113,6 +120,7 @@ class SunSpecInverter(SunSpecComponent):
             temperature=temperature,
             status=status,
             status_text=status_text,
+            grid_status=grid_status,
         )
 
     def homeassistant_device_info(self) -> dict[str, any]:
