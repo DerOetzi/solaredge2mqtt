@@ -26,6 +26,7 @@ from solaredge2mqtt.services.modbus.sunspec import (
     SunSpecBatteryInfoRegister,
     SunSpecBatteryOffset,
     SunSpecBatteryRegister,
+    SunSpecGridStatusRegister,
     SunSpecInverterInfoRegister,
     SunSpecInverterRegister,
     SunSpecMeterInfoRegister,
@@ -34,7 +35,6 @@ from solaredge2mqtt.services.modbus.sunspec import (
     SunSpecPayload,
     SunSpecRegister,
     SunSpecRequestRegisterBundle,
-    SunSpecValueType,
 )
 
 LOGGING_DEVICE_INFO = "{device} ({info.manufacturer} {info.model} {info.serialnumber})"
@@ -163,6 +163,13 @@ class Modbus:
             inverter_raw = await self._read_from_modbus(
                 SunSpecInverterRegister.request_bundles()
             )
+
+            if self.settings.check_grid_status:
+                grid_status_raw = await self._read_from_modbus(
+                    SunSpecGridStatusRegister.request_bundles()
+                )
+                inverter_raw = {**inverter_raw, **grid_status_raw}
+
             meters_raw = {}
             batteries_raw = {}
 
@@ -232,15 +239,18 @@ class Modbus:
 
         inverter_data = SunSpecInverter(self._device_info["inverter"], inverter_raw)
         logger.debug(inverter_data)
+
         logger.info(
             LOGGING_DEVICE_INFO
-            + ": {status}, AC {power_ac} W, DC {power_dc} W, {energytotal} kWh",
+            + ": {status}, AC {power_ac} W, DC {power_dc} W, {energytotal} kWh, "
+            + "Grid status {grid_status}, ",
             device="Inverter",
             info=inverter_data.info,
             status=inverter_data.status,
             power_ac=inverter_data.ac.power.actual,
             power_dc=inverter_data.dc.power,
             energytotal=round(inverter_data.energytotal / 1000, 2),
+            grid_status=inverter_data.grid_status,
         )
 
         return inverter_data

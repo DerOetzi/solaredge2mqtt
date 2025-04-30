@@ -5,11 +5,10 @@ from typing import TYPE_CHECKING
 
 import pkg_resources
 from influxdb_client import BucketRetentionRules, InfluxDBClient, Point
-from influxdb_client.client.exceptions import InfluxDBError
-from influxdb_client.client.influxdb_client_async import (
-    InfluxDBClientAsync,
-    QueryApiAsync,
-)
+from influxdb_client.client.bucket_api import BucketsApi
+from influxdb_client.client.delete_api import DeleteApi
+from influxdb_client.client.influxdb_client_async import InfluxDBClientAsync
+from influxdb_client.client.query_api_async import QueryApiAsync
 from pandas import DataFrame
 from tzlocal import get_localzone_name
 
@@ -23,11 +22,10 @@ if TYPE_CHECKING:
     from solaredge2mqtt.services.energy.models import HistoricPeriod
     from solaredge2mqtt.services.energy.settings import PriceSettings
 
-
 LOCAL_TZ = get_localzone_name()
 
 
-class InfluxDB:
+class InfluxDBAsync:
     def __init__(
         self,
         settings: InfluxDBSettings,
@@ -41,39 +39,28 @@ class InfluxDB:
         if self.event_bus:
             self._subscribe_events()
 
-        self.client: InfluxDBClient = InfluxDBClient(
-            url=settings.url,
-            token=settings.token.get_secret_value(),
-            org=settings.org,
-        )
-
-        self.write_api = self.client.write_api(
-            success_callback=self.write_success_callback,
-            error_callback=self.write_error_callback,
-            retry_callback=self.write_error_callback,
-        )
-
-        self.query_api = self.client.query_api()
-        self.delete_api = self.client.delete_api()
-
         self.client_async: InfluxDBClientAsync | None = None
-        self.query_api_async: QueryApiAsync | None = None
+        self.client_sync: InfluxDBClient = InfluxDBClient(**self.settings.client_params)
 
         self.flux_cache: dict[str, str] = {}
 
     def _subscribe_events(self) -> None:
         self.event_bus.subscribe(Interval10MinTriggerEvent, self.loop)
 
+    async def async_init(self) -> None:
+        self.client_async = InfluxDBClientAsync(**self.settings.client_params)
+
+        self.initialize_buckets()
+
     def initialize_buckets(self) -> None:
-        buckets_api = self.client.buckets_api()
-        bucket = buckets_api.find_bucket_by_name(self.bucket_name)
+        bucket = self.buckets_api.find_bucket_by_name(self.bucket_name)
         retention_rules = BucketRetentionRules(
             type="expire", every_seconds=self.settings.retention
         )
 
         if bucket is None:
             logger.info(f"Creating bucket '{self.bucket_name}'")
-            buckets_api.create_bucket(
+            self.buckets_api.create_bucket(
                 bucket_name=self.bucket_name, retention_rules=retention_rules
             )
         else:
@@ -84,7 +71,11 @@ class InfluxDB:
                     + f"to {self.settings.retention} seconds."
                 )
                 bucket.retention_rules[0] = retention_rules
-                buckets_api.update_bucket(bucket=bucket)
+                self.buckets_api.update_bucket(bucket=bucket)
+
+    @property
+    def buckets_api(self) -> BucketsApi:
+        return self.client_sync.buckets_api()
 
     async def loop(self, _) -> None:
         now = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0)
@@ -94,11 +85,11 @@ class InfluxDB:
             "aggregate",
             {"PRICE_IN": self.prices.price_in, "PRICE_OUT": self.prices.price_out},
         )
-        self.query_api.query(aggregate_query)
+        await self.query_api.query(aggregate_query)
 
         logger.info("Apply retention on raw data")
         retention_time = now - timedelta(hours=self.settings.retention_raw)
-        self.delete_from_measurements(
+        await self.delete_from_measurements(
             datetime(1970, 1, 1, tzinfo=timezone.utc),
             retention_time,
             ["powerflow_raw", "battery_raw"],
@@ -107,13 +98,17 @@ class InfluxDB:
         if self.event_bus:
             await self.event_bus.emit(InfluxDBAggregatedEvent())
 
-    def delete_from_measurements(
+    @property
+    def query_api(self) -> QueryApiAsync:
+        return self.client_async.query_api()
+
+    async def delete_from_measurements(
         self, start: datetime, stop: datetime, measurements: list[str]
     ) -> None:
         for measurement in measurements:
-            self.delete_from_measurement(start, stop, measurement)
+            await self.delete_from_measurement(start, stop, measurement)
 
-    def delete_from_measurement(
+    async def delete_from_measurement(
         self, start: datetime, stop: datetime, measurement: str
     ) -> None:
         self.delete_api.delete(
@@ -121,49 +116,39 @@ class InfluxDB:
         )
 
     @property
+    def delete_api(self) -> DeleteApi:
+        return self.client_sync.delete_api()
+
+    @property
     def bucket_name(self) -> str:
         return f"{self.settings.bucket}"
 
-    def write_point(self, point: Point) -> None:
-        self.write_points([point])
+    async def write_point(self, point: Point) -> None:
+        await self.write_points([point])
 
-    def write_points(self, points: list[Point]) -> None:
-        self.write_api.write(bucket=self.bucket_name, record=points)
+    async def write_points(self, points: list[Point]) -> None:
+        await self.client_async.write_api().write(
+            bucket=self.bucket_name, record=points
+        )
 
-    async def write_points_async(self, points: list[Point]) -> None:
-        await self.init_client_async()
-        async with self.client_async:
-            await self.client_async.write_api().write(
-                bucket=self.bucket_name, record=points
-            )
-
-    def write_success_callback(self, conf: tuple[str, str, str], data: str) -> None:
-        logger.debug(f"InfluxDB batch written: {conf} {data}")
-
-    def write_error_callback(
-        self, conf: tuple[str, str, str], data: str, error: InfluxDBError
-    ) -> None:
-        logger.error(f"InfluxDB error while writting: {conf} {error}")
-        logger.debug(data)
-
-    def query_timeunit(
+    async def query_timeunit(
         self, period: HistoricPeriod, measurement: str
     ) -> dict[str, any] | None:
-        return self.query_first(
+        return await self.query_first(
             period.query.query, {"UNIT": period.unit, "MEASUREMENT": measurement}
         )
 
-    def query_first(
+    async def query_first(
         self, query_name: str, additional_replacements: dict[str, any] | None = None
     ) -> dict[str, any] | None:
-        result = self.query(query_name, additional_replacements)
+        result = await self.query(query_name, additional_replacements)
         return result[0] if len(result) > 0 else None
 
-    def query(
+    async def query(
         self, query_name: str, additional_replacements: dict[str, any] | None = None
     ) -> list[dict[str, any]]:
 
-        tables = self.query_api.query(
+        tables = await self.query_api.query(
             self._get_flux_query(query_name, additional_replacements)
         )
         return [record.values for table in tables for record in table.records]
@@ -171,19 +156,9 @@ class InfluxDB:
     async def query_dataframe(
         self, query_name: str, additional_replacements: dict[str, any] | None = None
     ) -> DataFrame:
-        await self.init_client_async()
-        async with self.client_async:
-            return await self.query_api_async.query_data_frame(
-                self._get_flux_query(query_name, additional_replacements)
-            )
-
-    async def init_client_async(self) -> None:
-        self.client_async = InfluxDBClientAsync(
-            url=self.settings.url,
-            token=self.settings.token.get_secret_value(),
-            org=self.settings.org,
+        return await self.query_api.query_data_frame(
+            self._get_flux_query(query_name, additional_replacements)
         )
-        self.query_api_async = self.client_async.query_api()
 
     def _get_flux_query(
         self, query_name: str, additional_replacements: dict[str, any] | None = None
@@ -208,3 +183,8 @@ class InfluxDB:
         logger.trace(query)
 
         return query
+
+    async def close(self) -> None:
+        if self.client_async:
+            await self.client_async.close()
+            self.client_async = None

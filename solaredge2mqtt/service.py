@@ -17,7 +17,7 @@ from tzlocal import get_localzone_name
 from solaredge2mqtt import __version__
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import ConfigurationException
-from solaredge2mqtt.core.influxdb import InfluxDB
+from solaredge2mqtt.core.influxdb import InfluxDBAsync
 from solaredge2mqtt.core.logging import initialize_logging, logger
 from solaredge2mqtt.core.mqtt import MQTTClient
 from solaredge2mqtt.core.settings import service_settings
@@ -39,6 +39,7 @@ def run():
         loop.add_signal_handler(signal.SIGINT, service.cancel)
         loop.add_signal_handler(signal.SIGTERM, service.cancel)
         loop.run_until_complete(service.main_loop())
+        loop.run_until_complete(service.close())
     except ConfigurationException:
         logger.error("Configuration error")
     except aio.exceptions.CancelledError:
@@ -61,8 +62,8 @@ class Service:
         self.cancel_request = aio.Event()
         self.loops: set[aio.Task] = set()
 
-        self.influxdb: InfluxDB | None = (
-            InfluxDB(self.settings.influxdb, self.settings.prices, self.event_bus)
+        self.influxdb: InfluxDBAsync | None = (
+            InfluxDBAsync(self.settings.influxdb, self.settings.prices, self.event_bus)
             if self.settings.is_influxdb_configured
             else None
         )
@@ -120,7 +121,7 @@ class Service:
         logger.info("Timezone: {timezone}", timezone=LOCAL_TZ)
 
         if self.settings.is_influxdb_configured:
-            self.influxdb.initialize_buckets()
+            await self.influxdb.async_init()
 
         while not self.cancel_request.is_set():
             try:
@@ -132,7 +133,7 @@ class Service:
                     if self.settings.is_homeassistant_configured:
                         await self.homeassistant.async_init()
 
-                    await self.powerflow.modbus.async_init()
+                    await self.powerflow.async_init()
 
                     self._start_mqtt_listener()
                     self.schedule_loop(1, self.timer.loop)
@@ -206,3 +207,13 @@ class Service:
                 await aio.sleep(interval_in_seconds - execution_time)
             else:
                 await aio.sleep(interval_in_seconds)
+
+    async def close(self):
+        if self.influxdb:
+            await self.influxdb.close()
+        if self.powerflow:
+            await self.powerflow.close()
+        if self.monitoring:
+            await self.monitoring.close()
+        if self.weather:
+            await self.weather.close()
