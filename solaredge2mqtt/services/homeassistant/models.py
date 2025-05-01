@@ -46,7 +46,7 @@ class HomeAssistantEntityType(EnumModel):
     ENERGY_KWH = "energy_kwh", "sensor", "energy", "total_increasing", "kWh"
     ENERGY_WH = "energy_wh", "sensor", "energy", "total_increasing", "Wh"
     FREQUENCY_HZ = "frequency_hz", "sensor", "frequency", "measurement", "Hz"
-    GRID_STATUS = "grid_status", "binary_sensor", "grid_status", None, None
+    GRID_STATUS = "grid_status", "binary_sensor", "power", None, None
     MONETARY = "monetary", "sensor", "monetary", "total_increasing", None
     PERCENTAGE = "percentage", "sensor", None, "measurement", "%"
     PLUG = "plug", "binary_sensor", "plug", None, None
@@ -146,13 +146,13 @@ class HomeAssistantEntity(HomeAssistantBaseModel):
 
     @computed_field
     @property
-    def payload_on(self) -> str | None:
-        return "true" if self.ha_type.typed == "binary_sensor" else None
+    def payload_on(self) -> bool | None:
+        return True if self.ha_type.typed == "binary_sensor" else None
 
     @computed_field
     @property
-    def payload_off(self) -> str | None:
-        return "false" if self.ha_type.typed == "binary_sensor" else None
+    def payload_off(self) -> bool | None:
+        return False if self.ha_type.typed == "binary_sensor" else None
 
     @computed_field
     @property
