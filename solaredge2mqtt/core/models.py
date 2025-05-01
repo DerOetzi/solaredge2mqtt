@@ -113,7 +113,7 @@ class Solaredge2MQTTBaseModel(BaseModel):
     @classmethod
     def homeassistant_entities_info(cls) -> list[dict]:
         return cls._walk_schema_for_homeassistant_entities(
-            jsonref.replace_refs(cls.model_json_schema(mode="serialization"))[
+            jsonref.replace_refs(cls.model_json_schema(mode="serialization"), merge_props=True)[
                 "properties"
             ]
         )
