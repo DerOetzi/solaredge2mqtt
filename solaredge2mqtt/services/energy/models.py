@@ -99,12 +99,12 @@ class HistoricMoney(Solaredge2MQTTBaseModel):
     price_in: float = Field(exclude=True)
     price_out: float = Field(exclude=True)
 
-    @computed_field(**EntityType.MONETARY.field("Balance grid"))
+    @computed_field(**EntityType.MONETARY_BALANCE.field("Balance grid"))
     @property
     def balance_grid(self) -> float:
         return round(self.delivered - self.consumed, 3)
 
-    @computed_field(**EntityType.MONETARY.field("Balance total"))
+    @computed_field(**EntityType.MONETARY_BALANCE.field("Balance total"))
     @property
     def balance_total(self) -> float:
         return round(self.balance_grid + self.saved, 3)

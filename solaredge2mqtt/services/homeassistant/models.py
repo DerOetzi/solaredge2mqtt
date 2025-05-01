@@ -47,13 +47,14 @@ class HomeAssistantEntityType(EnumModel):
     ENERGY_WH = "energy_wh", "sensor", "energy", "total_increasing", "Wh"
     FREQUENCY_HZ = "frequency_hz", "sensor", "frequency", "measurement", "Hz"
     GRID_STATUS = "grid_status", "binary_sensor", "power", None, None
-    MONETARY = "monetary", "sensor", "monetary", "total_increasing", None
+    MONETARY = "monetary", "sensor", "monetary", "total", None
+    MONETARY_BALANCE = "monetary_balance", "sensor", "monetary", None, None
     PERCENTAGE = "percentage", "sensor", None, "measurement", "%"
     PLUG = "plug", "binary_sensor", "plug", None, None
     POWER_FACTOR = "power_factor", "sensor", "power_factor", "measurement", "%"
     POWER_KW = "power_kw", "sensor", "power", "measurement", "kW"
     POWER_W = "power_w", "sensor", "power", "measurement", "W"
-    REACTIVE_POWER = "reactive_power", "sensor", "reactive_power", "measurement", "VAr"
+    REACTIVE_POWER = "reactive_power", "sensor", "reactive_power", "measurement", "var"
     STATUS = "status", "sensor", None, None, None
     TEMP_C = "temp_c", "sensor", "temperature", "measurement", "°C"
     VOLTAGE_V = "voltage_v", "sensor", "voltage", "measurement", "V"
