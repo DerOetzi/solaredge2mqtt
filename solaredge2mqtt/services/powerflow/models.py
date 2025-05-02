@@ -9,13 +9,11 @@ from pydantic.json_schema import SkipJsonSchema
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.models import Solaredge2MQTTBaseModel
 from solaredge2mqtt.services.homeassistant.models import (
-    HomeAssistantEntityType as EntityType,
+    HomeAssistantSensorType as HASensor,
 )
-from solaredge2mqtt.services.modbus.models import (
-    SunSpecBattery,
-    SunSpecInverter,
-    SunSpecMeter,
-)
+from solaredge2mqtt.services.modbus.models.battery import ModbusBattery
+from solaredge2mqtt.services.modbus.models.inverter import ModbusInverter
+from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
 from solaredge2mqtt.services.models import Component
 
 if TYPE_CHECKING:
@@ -26,7 +24,7 @@ class Powerflow(Component):
     COMPONENT = "powerflow"
     SOURCE = None
 
-    pv_production: int = Field(0, **EntityType.POWER_W.field("PV production"))
+    pv_production: int = Field(0, **HASensor.POWER_W.field("PV production"))
     inverter: InverterPowerflow = Field(title="Inverter")
     grid: GridPowerflow = Field(title="Grid")
     battery: BatteryPowerflow = Field(title="Battery")
@@ -36,9 +34,9 @@ class Powerflow(Component):
 
     @staticmethod
     def from_modbus(
-        inverter_data: SunSpecInverter,
-        meters_data: dict[str, SunSpecMeter],
-        batteries_data: dict[str, SunSpecBattery],
+        inverter_data: ModbusInverter,
+        meters_data: dict[str, ModbusMeter],
+        batteries_data: dict[str, ModbusBattery],
         evcharger: int = 0,
     ) -> Powerflow:
         grid = GridPowerflow.from_modbus(meters_data)
@@ -136,12 +134,13 @@ class Powerflow(Component):
 
 class InverterPowerflow(Solaredge2MQTTBaseModel):
     power: SkipJsonSchema[int]
-    dc_power: int = Field(**EntityType.POWER_W.field("Power DC", "solar-power"))
+    dc_power: int = Field(
+        **HASensor.POWER_W.field("Power DC", "solar-power"))
     battery_discharge: SkipJsonSchema[int] = Field(exclude=True)
 
     @staticmethod
     def from_modbus(
-        inverter_data: SunSpecInverter,
+        inverter_data: ModbusInverter,
         battery: BatteryPowerflow,
     ) -> InverterPowerflow:
         power = int(inverter_data.ac.power.actual)
@@ -161,28 +160,29 @@ class InverterPowerflow(Solaredge2MQTTBaseModel):
 
         return factor
 
-    @computed_field(**EntityType.POWER_W.field("Consumption"))
+    @computed_field(**HASensor.POWER_W.field("Consumption"))
     @property
     def consumption(self) -> int:
         return abs(self.power) if self.power < 0 else 0
 
-    @computed_field(**EntityType.POWER_W.field("Production"))
+    @computed_field(**HASensor.POWER_W.field("Production"))
     @property
     def production(self) -> int:
         return self.power if self.power > 0 else 0
 
     @computed_field(
-        **EntityType.POWER_W.field("Battery production", "home-battery-outline")
+        **HASensor.POWER_W.field("Battery production", "home-battery-outline")
     )
     @property
     def battery_production(self) -> int:
         battery_production = 0
         if self.production > 0 and self.battery_factor > 0:
-            battery_production = int(round(self.production * self.battery_factor))
+            battery_production = int(
+                round(self.production * self.battery_factor))
             battery_production = min(battery_production, self.production)
         return battery_production
 
-    @computed_field(**EntityType.POWER_W.field("PV production", "sun-angle-outline"))
+    @computed_field(**HASensor.POWER_W.field("PV production", "sun-angle-outline"))
     @property
     def pv_production(self) -> int:
         return self.production - self.battery_production
@@ -208,7 +208,7 @@ class GridPowerflow(Solaredge2MQTTBaseModel):
     power: SkipJsonSchema[int]
 
     @staticmethod
-    def from_modbus(meters_data: dict[str, SunSpecMeter]) -> GridPowerflow:
+    def from_modbus(meters_data: dict[str, ModbusMeter]) -> GridPowerflow:
         grid = 0
         for meter in meters_data.values():
             if "Import" in meter.info.option and "Export" in meter.info.option:
@@ -217,13 +217,13 @@ class GridPowerflow(Solaredge2MQTTBaseModel):
         return GridPowerflow(power=round(grid))
 
     @computed_field(
-        **EntityType.POWER_W.field("Consumption", "transmission-tower-import")
+        **HASensor.POWER_W.field("Consumption", "transmission-tower-import")
     )
     @property
     def consumption(self) -> int:
         return abs(self.power) if self.power < 0 else 0
 
-    @computed_field(**EntityType.POWER_W.field("Delivery", "transmission-tower-export"))
+    @computed_field(**HASensor.POWER_W.field("Delivery", "transmission-tower-export"))
     @property
     def delivery(self) -> int:
         return self.power if self.power > 0 else 0
@@ -245,19 +245,19 @@ class BatteryPowerflow(Solaredge2MQTTBaseModel):
     power: SkipJsonSchema[int]
 
     @staticmethod
-    def from_modbus(batteries_data: dict[str, SunSpecBattery]) -> BatteryPowerflow:
+    def from_modbus(batteries_data: dict[str, ModbusBattery]) -> BatteryPowerflow:
         batteries_power = 0
         for battery in batteries_data.values():
             batteries_power += battery.power
 
         return BatteryPowerflow(power=batteries_power)
 
-    @computed_field(**EntityType.POWER_W.field("Charge", "battery-plus-outline"))
+    @computed_field(**HASensor.POWER_W.field("Charge", "battery-plus-outline"))
     @property
     def charge(self) -> int:
         return self.power if self.power > 0 else 0
 
-    @computed_field(**EntityType.POWER_W.field("Discharge", "battery-minus-outline"))
+    @computed_field(**HASensor.POWER_W.field("Discharge", "battery-minus-outline"))
     @property
     def discharge(self) -> int:
         return abs(self.power) if self.power < 0 else 0
@@ -277,14 +277,16 @@ class BatteryPowerflow(Solaredge2MQTTBaseModel):
 
 class ConsumerPowerflow(Solaredge2MQTTBaseModel):
     house: int = Field(
-        **EntityType.POWER_W.field("House", "home-lightning-bolt-outline")
+        **HASensor.POWER_W.field("House", "home-lightning-bolt-outline")
     )
 
-    evcharger: int = Field(0, **EntityType.POWER_W.field("EV-Charger", "ev-station"))
+    evcharger: int = Field(
+        0, **HASensor.POWER_W.field("EV-Charger", "ev-station"))
 
-    inverter: int = Field(**EntityType.POWER_W.field("Inverter"))
+    inverter: int = Field(**HASensor.POWER_W.field("Inverter"))
 
-    used_production: int = Field(0, **EntityType.POWER_W.field("Used production"))
+    used_production: int = Field(
+        0, **HASensor.POWER_W.field("Used production"))
 
     battery_factor: SkipJsonSchema[float] = Field(exclude=True)
 
@@ -308,24 +310,25 @@ class ConsumerPowerflow(Solaredge2MQTTBaseModel):
             battery_factor=battery_factor,
         )
 
-    @computed_field(**EntityType.POWER_W.field("Total"))
+    @computed_field(**HASensor.POWER_W.field("Total"))
     @property
     def total(self) -> int:
         return self.house + self.evcharger + self.inverter
 
     @computed_field(
-        **EntityType.POWER_W.field("Used consumption"),
+        **HASensor.POWER_W.field("Used consumption"),
     )
     @property
     def used_battery_production(self) -> int:
         battery_production = 0
         if self.used_production > 0 and self.battery_factor > 0:
-            battery_production = int(round(self.used_production * self.battery_factor))
+            battery_production = int(
+                round(self.used_production * self.battery_factor))
             battery_production = min(battery_production, self.used_production)
         return battery_production
 
     @computed_field(
-        **EntityType.POWER_W.field("Used PV production"),
+        **HASensor.POWER_W.field("Used PV production"),
     )
     @property
     def used_pv_production(self) -> int:

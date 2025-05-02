@@ -31,11 +31,12 @@ class Component(ComponentValueGroup):
             "source": self.SOURCE,
         }
 
-    def mqtt_topic(self) -> str:
-        if self.SOURCE:
-            topic = f"{self.SOURCE}/{self.COMPONENT}"
+    @classmethod
+    def mqtt_topic(cls) -> str:
+        if cls.SOURCE:
+            topic = f"{cls.SOURCE}/{cls.COMPONENT}"
         else:
-            topic = self.COMPONENT
+            topic = cls.COMPONENT
 
         return topic
 

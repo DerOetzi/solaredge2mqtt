@@ -63,7 +63,8 @@ class Service:
         self.loops: set[aio.Task] = set()
 
         self.influxdb: InfluxDBAsync | None = (
-            InfluxDBAsync(self.settings.influxdb, self.settings.prices, self.event_bus)
+            InfluxDBAsync(self.settings.influxdb,
+                          self.settings.prices, self.event_bus)
             if self.settings.is_influxdb_configured
             else None
         )
@@ -74,10 +75,12 @@ class Service:
             else None
         )
 
-        self.powerflow = PowerflowService(self.settings, self.event_bus, self.influxdb)
+        self.powerflow = PowerflowService(
+            self.settings, self.event_bus, self.influxdb)
 
         self.monitoring: MonitoringSite | None = (
-            MonitoringSite(self.settings.monitoring, self.event_bus, self.influxdb)
+            MonitoringSite(self.settings.monitoring,
+                           self.event_bus, self.influxdb)
             if self.settings.is_monitoring_configured
             else None
         )
@@ -168,6 +171,10 @@ class Service:
 
     def _start_mqtt_listener(self):
         task = aio.create_task(self.mqtt.listen())
+        self.loops.add(task)
+        task.add_done_callback(self.loops.remove)
+
+        task = aio.create_task(self.mqtt.process_queue())
         self.loops.add(task)
         task.add_done_callback(self.loops.remove)
 

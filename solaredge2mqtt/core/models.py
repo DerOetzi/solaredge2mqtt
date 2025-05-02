@@ -40,6 +40,54 @@ class EnumModel(Enum):
         return self.value
 
 
+class BaseInputField(BaseModel):
+    model_config = {
+        "extra": "forbid"
+    }
+
+
+class BaseInputFieldEnumModel(EnumModel):
+    def __init__(self, key: str, input_model: type[BaseInputField]):
+        self._key: str = key
+        self._input_model: type[BaseInputField] = input_model
+
+    @property
+    def key(self) -> str:
+        return self._key
+
+    @property
+    def input_model(self) -> type[BaseInputField]:
+        return self._input_model
+
+
+class BaseField(EnumModel):
+    def __init__(self, key: str, input_field: BaseInputFieldEnumModel | None = None):
+        self._key: str = key
+        self._input_field: BaseInputFieldEnumModel | None = input_field
+
+    def field(self, title: str | None,
+              json_schema_extra: dict[str, any] | None = None,
+              input_field: BaseInputFieldEnumModel | None = None) -> dict[str, any]:
+
+        if json_schema_extra is None:
+            json_schema_extra = {}
+
+        input_field = input_field or self._input_field
+
+        if input_field:
+            json_schema_extra = {
+                "input_field": input_field.key,
+                **json_schema_extra,
+            }
+        else:
+            json_schema_extra = {
+                "input_field": None,
+                **json_schema_extra,
+            }
+
+        return {"title": title, "json_schema_extra": json_schema_extra}
+
+
 class Solaredge2MQTTBaseModel(BaseModel):
     def model_dump_influxdb(self, exclude: list[str] | None = None) -> dict[str, any]:
         return self._flatten_dict(self.model_dump(exclude=exclude, exclude_none=True))
@@ -61,47 +109,6 @@ class Solaredge2MQTTBaseModel(BaseModel):
                 items.append((new_key, v))
         return dict(items)
 
-    @classmethod
-    def _walk_schema_for_homeassistant_entities(
-        cls,
-        properties: dict[str, dict],
-        parent_jsonpath: str | None = None,
-        parent_name: str | None = None,
-    ) -> list[dict]:
-        items: list[dict] = []
-        for key, prop in properties.items():
-            new_jsonpath = parent_jsonpath + "." + key if parent_jsonpath else key
-            new_name = (
-                parent_name + " " + prop["title"] if parent_name else prop["title"]
-            )
-            if "properties" in prop:
-                items.extend(
-                    cls._walk_schema_for_homeassistant_entities(
-                        prop["properties"], new_jsonpath, new_name
-                    )
-                )
-            elif "allOf" in prop:
-                items.extend(
-                    cls._walk_schema_for_homeassistant_entities(
-                        prop["allOf"][0]["properties"], new_jsonpath, new_name
-                    )
-                )
-            elif "anyOf" in prop and "properties" in prop["anyOf"][0]:
-                items.extend(
-                    cls._walk_schema_for_homeassistant_entities(
-                        prop["anyOf"][0]["properties"], new_jsonpath, new_name
-                    )
-                )
-            else:
-                entity: dict = {"name": new_name, "jsonpath": new_jsonpath}
-
-                if "ha_type" in prop:
-                    entity["ha_type"] = prop["ha_type"]
-                    entity["icon"] = prop["icon"]
-                    items.append(entity)
-
-        return items
-
     def _default_homeassistant_device_info(self, name: str) -> dict[str, any]:
         return {
             "name": f"SolarEdge2MQTT {name}",
@@ -111,12 +118,59 @@ class Solaredge2MQTTBaseModel(BaseModel):
         }
 
     @classmethod
-    def homeassistant_entities_info(cls) -> list[dict]:
-        return cls._walk_schema_for_homeassistant_entities(
+    def parse_schema(cls, property_parser: callable | None = None) -> list[dict]:
+        return cls._walk_schema(
             jsonref.replace_refs(cls.model_json_schema(mode="serialization"), merge_props=True)[
                 "properties"
-            ]
+            ], property_parser or cls.property_parser
+
         )
 
+    @classmethod
+    def _walk_schema(
+        cls,
+        properties: dict[str, dict],
+        property_parser: callable,
+        parent_name: str | None = None,
+        parent_path: list[str] = []
+    ) -> list[dict]:
+        items: list[dict] = []
+        for key, prop in properties.items():
+            new_path = [*parent_path, key]
+            new_name = (
+                parent_name + " " +
+                prop["title"] if parent_name else prop["title"]
+            )
+            if "properties" in prop:
+                items.extend(
+                    cls._walk_schema(
+                        prop["properties"], property_parser, new_name, new_path
+                    )
+                )
+            elif "allOf" in prop:
+                items.extend(
+                    cls._walk_schema(
+                        prop["allOf"][0]["properties"], property_parser, new_name, new_path
+                    )
+                )
+            elif "anyOf" in prop and "properties" in prop["anyOf"][0]:
+                items.extend(
+                    cls._walk_schema(
+                        prop["anyOf"][0]["properties"], property_parser, new_name, new_path
+                    )
+                )
+            else:
+                item = property_parser(prop, new_name, new_path)
+                if item:
+                    items.append(item)
 
+        return items
 
+    @staticmethod
+    def property_parser(prop: dict[str, any], name: str, path: list[str]) -> dict | None:
+        if "input_field" in prop:
+            return {
+                "name": name,
+                "path": path,
+                "input_field": prop["input_field"],
+            }

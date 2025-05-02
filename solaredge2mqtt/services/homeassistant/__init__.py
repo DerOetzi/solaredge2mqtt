@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import jsonref
+
 from typing import TYPE_CHECKING
 
 from solaredge2mqtt.core.events import EventBus
@@ -13,9 +15,14 @@ from solaredge2mqtt.services.energy.events import EnergyReadEvent
 from solaredge2mqtt.services.events import ComponentEvent, ComponentsEvent
 from solaredge2mqtt.services.forecast.events import ForecastEvent
 from solaredge2mqtt.services.homeassistant.models import (
+    HomeAssistantBinarySensorType,
     HomeAssistantDevice,
     HomeAssistantEntity,
-    HomeAssistantEntityType,
+    HomeAssistantNumberType,
+    HomeAssistantSensorType,
+    HomeAssistantStatus,
+    HomeAssistantStatusInput,
+    HomeAssistantType,
 )
 from solaredge2mqtt.services.modbus.events import (
     ModbusBatteriesReadEvent,
@@ -65,7 +72,7 @@ class HomeAssistantDiscovery:
         )
 
     async def async_init(self) -> None:
-        await self.event_bus.emit(MQTTSubscribeEvent(self._status_topic))
+        await self.event_bus.emit(MQTTSubscribeEvent(self._status_topic, HomeAssistantStatusInput))
 
     async def component_discovery(self, event: ComponentEvent) -> None:
         publish = True
@@ -79,7 +86,8 @@ class HomeAssistantDiscovery:
             self.event_bus.unsubscribe(event, self.component_discovery)
 
         if publish:
-            logger.info(f"Home Assistant discovery component: {event.component}")
+            logger.info(
+                f"Home Assistant discovery component: {event.component}")
             await self.publish_component(event.component)
 
     async def components_discovery(self, event: ComponentsEvent) -> None:
@@ -108,11 +116,9 @@ class HomeAssistantDiscovery:
         )
         logger.debug(device)
 
-        entities_info = component.homeassistant_entities_info()
+        entities_info = component.parse_schema(self.property_parser)
         for entity_info in entities_info:
-            if self.settings.is_prices_configured and entity_info["ha_type"] == str(
-                HomeAssistantEntityType.MONETARY
-            ):
+            if self.settings.is_prices_configured and entity_info["ha_type"] == HomeAssistantSensorType.MONETARY:
                 entity_info["unit"] = self.settings.prices.currency
 
             entity = HomeAssistantEntity(
@@ -138,14 +144,47 @@ class HomeAssistantDiscovery:
             )
 
     async def homeassistant_status(self, event: MQTTReceivedEvent) -> None:
-        if event.topic == self._status_topic and event.payload == "online":
-            logger.info("Home Assistant status changed to online resend discovery")
-            for topic, entity in self._send_entities.items():
-                await self.event_bus.emit(
-                    MQTTPublishEvent(
-                        topic=topic,
-                        payload=entity,
-                        topic_prefix=self.settings.homeassistant.topic_prefix,
-                        exclude_none=True,
+        if event.topic == self._status_topic:
+            status = event.input.status
+            if status == HomeAssistantStatus.ONLINE:
+                logger.info(
+                    "Home Assistant status changed to online resend discovery")
+                for topic, entity in self._send_entities.items():
+                    await self.event_bus.emit(
+                        MQTTPublishEvent(
+                            topic=topic,
+                            payload=entity,
+                            topic_prefix=self.settings.homeassistant.topic_prefix,
+                            exclude_none=True,
+                        )
                     )
-                )
+
+    @staticmethod
+    def property_parser(prop, name: str, path: list[str]) -> dict | None:
+        entity: dict | None = None
+
+        if "ha_type" in prop:
+            entity = {"name": name,
+                      "path": path}
+
+            ha_type = prop["ha_type"]
+            entity["icon"] = prop["icon"]
+
+            typed = HomeAssistantType.from_string(
+                prop["ha_typed"]
+            )
+
+            if typed == HomeAssistantType.BINARY_SENSOR:
+                entity["ha_type"] = HomeAssistantBinarySensorType.from_string(
+                    ha_type)
+            elif typed == HomeAssistantType.NUMBER:
+                entity["ha_type"] = HomeAssistantNumberType.from_string(
+                    ha_type)
+            elif typed == HomeAssistantType.SENSOR:
+                entity["ha_type"] = HomeAssistantSensorType.from_string(
+                    ha_type)
+
+            for field in typed.additional_fields:
+                entity[field] = prop.get(field, None)
+
+        return entity

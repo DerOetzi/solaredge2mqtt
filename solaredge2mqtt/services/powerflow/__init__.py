@@ -9,7 +9,7 @@ from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.core.timer.events import IntervalBaseTriggerEvent
 from solaredge2mqtt.services.modbus import Modbus
-from solaredge2mqtt.services.modbus.models import SunSpecBattery
+from solaredge2mqtt.services.modbus.models.battery import ModbusBattery
 from solaredge2mqtt.services.powerflow.events import PowerflowGeneratedEvent
 from solaredge2mqtt.services.powerflow.models import Powerflow
 from solaredge2mqtt.services.wallbox import WallboxClient
@@ -30,7 +30,7 @@ class PowerflowService:
 
         self.influxdb = influxdb
 
-        self.modbus = Modbus(self.settings.modbus, event_bus)
+        self.modbus = Modbus(self.settings, event_bus)
 
         self.wallbox = (
             WallboxClient(self.settings.wallbox, event_bus)
@@ -42,7 +42,8 @@ class PowerflowService:
         self._subscribe_events()
 
     def _subscribe_events(self) -> None:
-        self.event_bus.subscribe(IntervalBaseTriggerEvent, self.calculate_powerflow)
+        self.event_bus.subscribe(
+            IntervalBaseTriggerEvent, self.calculate_powerflow)
 
     async def async_init(self) -> None:
         await self.modbus.async_init()
@@ -79,7 +80,8 @@ class PowerflowService:
 
         if Powerflow.is_not_valid_with_last(powerflow):
             logger.debug(powerflow)
-            raise InvalidDataException("Value change not valid, skipping this loop")
+            raise InvalidDataException(
+                "Value change not valid, skipping this loop")
 
         await self.write_to_influxdb(batteries_data, powerflow)
 
@@ -117,7 +119,7 @@ class PowerflowService:
         await self.event_bus.emit(PowerflowGeneratedEvent(powerflow))
 
     async def write_to_influxdb(
-        self, batteries_data: dict[str, SunSpecBattery], powerflow: Powerflow
+        self, batteries_data: dict[str, ModbusBattery], powerflow: Powerflow
     ):
         if self.influxdb is not None:
             points = [powerflow.prepare_point()]
