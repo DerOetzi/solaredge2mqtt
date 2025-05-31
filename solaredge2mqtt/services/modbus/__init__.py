@@ -164,20 +164,20 @@ class Modbus:
         meters_data = None
         batteries_data = None
 
-        # try:
-        #     inverter_raw, meters_raw, batteries_raw = await self._get_raw_data()
+        try:
+            inverter_raw, meters_raw, batteries_raw = await self._get_raw_data("leader", self.settings.unit)
 
-        #     inverter_data = self._map_inverter(inverter_raw)
-        #     meters_data = self._map_meters(meters_raw)
-        #     batteries_data = self._map_batteries(batteries_raw)
-        # except KeyError as error:
-        #     raise InvalidDataException("Invalid modbus data") from error
+            inverter_data = self._map_inverter("leader", inverter_raw)
+            meters_data = self._map_meters("leader", meters_raw)
+            batteries_data = self._map_batteries("leader", batteries_raw)
+        except KeyError as error:
+            raise InvalidDataException("Invalid modbus data") from error
 
-        # await self.event_bus.emit(ModbusInverterReadEvent(inverter_data))
-        # if meters_data:
-        #     await self.event_bus.emit(ModbusMetersReadEvent(meters_data))
-        # if batteries_data:
-        #     await self.event_bus.emit(ModbusBatteriesReadEvent(batteries_data))
+        await self.event_bus.emit(ModbusInverterReadEvent(inverter_data))
+        if meters_data:
+            await self.event_bus.emit(ModbusMetersReadEvent(meters_data))
+        if batteries_data:
+            await self.event_bus.emit(ModbusBatteriesReadEvent(batteries_data))
 
         return inverter_data, meters_data, batteries_data
 
@@ -269,7 +269,7 @@ class Modbus:
                         result.registers, data)
 
                 if not self._initialized:
-                    logger.debug(
+                    logger.trace(
                         f"Checked {register_or_bundle.length} registers from {address_start} successfully"
                     )
 
@@ -285,14 +285,14 @@ class Modbus:
             logger.info(f"Block unreadable register beginning at {register}")
             self._block_unreadable.add(register)
 
-    def _map_inverter(self, inverter_raw: SunSpecPayload) -> ModbusInverter:
+    def _map_inverter(self, unit_key: str, inverter_raw: SunSpecPayload) -> ModbusInverter:
         logger.debug(
             "Inverter raw:\n{raw}",
             raw=json.dumps(inverter_raw, indent=4),
         )
 
         inverter_data = ModbusInverter(
-            self._device_info["inverter"], inverter_raw)
+            self._device_info[unit_key]["inverter"], inverter_raw)
         logger.debug(inverter_data)
 
         logger.info(
@@ -311,7 +311,7 @@ class Modbus:
         return inverter_data
 
     def _map_meters(
-        self, meters_raw: dict[str, SunSpecPayload]
+        self, unit_key: str, meters_raw: dict[str, SunSpecPayload]
     ) -> dict[str, ModbusMeter]:
         meters = {}
         for meter_key, meter_raw in meters_raw.items():
@@ -321,7 +321,8 @@ class Modbus:
                 raw=json.dumps(meter_raw, indent=4),
             )
 
-            meter_data = ModbusMeter(self._device_info[meter_key], meter_raw)
+            meter_data = ModbusMeter(
+                self._device_info[unit_key][meter_key], meter_raw)
             logger.debug(meter_data)
             logger.info(
                 LOGGING_DEVICE_INFO +
@@ -338,7 +339,7 @@ class Modbus:
         return meters
 
     def _map_batteries(
-        self, batteries_raw: dict[str, SunSpecPayload]
+        self, unit_key: str, batteries_raw: dict[str, SunSpecPayload]
     ) -> dict[str, ModbusBattery]:
         batteries = {}
         for battery_key, battery_raw in batteries_raw.items():
@@ -349,7 +350,7 @@ class Modbus:
             )
 
             battery_data = ModbusBattery(
-                self._device_info[battery_key], battery_raw)
+                self._device_info[unit_key][battery_key], battery_raw)
             logger.debug(battery_data)
             logger.info(
                 LOGGING_DEVICE_INFO +
