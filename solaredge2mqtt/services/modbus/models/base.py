@@ -1,6 +1,27 @@
-from solaredge2mqtt.core.models import Solaredge2MQTTBaseModel
+from __future__ import annotations
+
+from solaredge2mqtt.core.models import EnumModel, Solaredge2MQTTBaseModel
 from solaredge2mqtt.services.modbus.sunspec.values import C_SUNSPEC_DID_MAP
 from solaredge2mqtt.services.models import Component
+
+
+class ModbusUnitRole(EnumModel):
+    LEADER = "leader"
+    FOLLOWER = "follower"
+    CUMULATED = "cumulated"
+
+    def __init__(self, role: str):
+        self._role: str = role
+
+    @property
+    def role(self) -> str:
+        return self._role
+
+
+class ModbusUnitInfo(Solaredge2MQTTBaseModel):
+    unit: int
+    key: str
+    role: ModbusUnitRole
 
 
 class ModbusDeviceInfo(Solaredge2MQTTBaseModel):
@@ -10,14 +31,18 @@ class ModbusDeviceInfo(Solaredge2MQTTBaseModel):
     sunspec_type: str
     version: str
     serialnumber: str
+    unit: ModbusUnitInfo | None = None
 
-    def __init__(self, data: dict[str, str | int]) -> dict[str, str]:
+    def __init__(self, data: dict[str, str | int]):
         values = {
             "manufacturer": data["c_manufacturer"],
             "model": data["c_model"],
             "version": data["c_version"],
-            "serialnumber": data["c_serialnumber"],
+            "serialnumber": data["c_serialnumber"]
         }
+
+        if "unit" in data:
+            values["unit"] = data["unit"]
 
         if "c_sunspec_did" in data and data["c_sunspec_did"] in C_SUNSPEC_DID_MAP:
             values["sunspec_type"] = C_SUNSPEC_DID_MAP[data["c_sunspec_did"]]
@@ -30,13 +55,26 @@ class ModbusDeviceInfo(Solaredge2MQTTBaseModel):
         super().__init__(**values)
 
     def homeassistant_device_info(self, name: str) -> dict[str, any]:
-        return {
+        info = {
             "name": f"SolarEdge {name}",
             "manufacturer": self.manufacturer,
             "model": self.model,
             "hw_version": self.version,
-            "serial_number": self.serialnumber,
+            "serial_number": self.serialnumber
         }
+
+        if self.unit:
+            info["unit_key"] = self.unit.key
+
+        return info
+
+    @property
+    def has_unit(self) -> bool:
+        return self.unit is not None
+
+    def unit_key(self, suffix: str = "") -> str:
+        return f"{self.unit.key}{suffix}" if self.has_unit else ""
+
 
 class ModbusComponent(Component):
     SOURCE = "modbus"
@@ -66,3 +104,21 @@ class ModbusComponent(Component):
 
     def homeassistant_device_info(self) -> dict[str, any]:
         return self.info.homeassistant_device_info()
+
+    def mqtt_topic(self, has_followers: bool = False) -> str:
+        return self.generate_topic_prefix(self.info.unit.key if has_followers else None)
+
+    @classmethod
+    def generate_topic_prefix(cls, unit_key: str | None = None) -> str:
+        topic_parts = [cls.SOURCE]
+
+        if unit_key:
+            topic_parts.append(unit_key)
+
+        topic_parts.append(cls.COMPONENT)
+
+        return "/".join(topic_parts)
+
+    @property
+    def has_unit(self) -> bool:
+        return self.info.has_unit

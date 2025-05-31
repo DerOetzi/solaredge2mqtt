@@ -3,17 +3,20 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, ClassVar
 
 from influxdb_client import Point
+from numpy import invert
 from pydantic import Field, computed_field
 from pydantic.json_schema import SkipJsonSchema
 
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.models import Solaredge2MQTTBaseModel
-from solaredge2mqtt.services.homeassistant.models import (
-    HomeAssistantSensorType as HASensor,
-)
+from solaredge2mqtt.services.homeassistant.models import \
+    HomeAssistantSensorType as HASensor
+from solaredge2mqtt.services.modbus.models.base import (ModbusUnitInfo,
+                                                        ModbusUnitRole)
 from solaredge2mqtt.services.modbus.models.battery import ModbusBattery
 from solaredge2mqtt.services.modbus.models.inverter import ModbusInverter
 from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
+from solaredge2mqtt.services.modbus.models.unit import ModbusUnit
 from solaredge2mqtt.services.models import Component
 
 if TYPE_CHECKING:
@@ -23,6 +26,8 @@ if TYPE_CHECKING:
 class Powerflow(Component):
     COMPONENT = "powerflow"
     SOURCE = None
+
+    unit: ModbusUnitInfo | None = Field(None, title="Unit Info")
 
     pv_production: int = Field(0, **HASensor.POWER_W.field("PV production"))
     inverter: InverterPowerflow = Field(title="Inverter")
@@ -34,13 +39,13 @@ class Powerflow(Component):
 
     @staticmethod
     def from_modbus(
-        inverter_data: ModbusInverter,
-        meters_data: dict[str, ModbusMeter],
-        batteries_data: dict[str, ModbusBattery],
+        unit: ModbusUnit,
         evcharger: int = 0,
     ) -> Powerflow:
-        grid = GridPowerflow.from_modbus(meters_data)
-        battery = BatteryPowerflow.from_modbus(batteries_data)
+        inverter_data = unit.inverter
+
+        grid = GridPowerflow.from_modbus(unit.meters)
+        battery = BatteryPowerflow.from_modbus(unit.batteries)
 
         if inverter_data.ac.power.actual > 0:
             pv_production = int(inverter_data.dc.power + battery.power)
@@ -54,6 +59,44 @@ class Powerflow(Component):
         consumer = ConsumerPowerflow(inverter, grid, evcharger)
 
         return Powerflow(
+            unit=unit.info,
+            pv_production=pv_production,
+            inverter=inverter,
+            grid=grid,
+            battery=battery,
+            consumer=consumer,
+        )
+
+    @staticmethod
+    def cumulated_powerflow(powerflows: dict[str, Powerflow]) -> Powerflow:
+        unit = ModbusUnitInfo(
+            key="cumulated",
+            unit=0,
+            role=ModbusUnitRole.CUMULATED,
+        )
+
+        inverter = InverterPowerflow(
+            power=sum(p.inverter.power for p in powerflows.values()),
+            dc_power=sum(p.inverter.dc_power for p in powerflows.values()),
+            battery_discharge=sum(
+                p.inverter.battery_discharge for p in powerflows.values()),
+        )
+
+        grid = GridPowerflow(
+            power=sum(p.grid.power for p in powerflows.values()))
+        battery = BatteryPowerflow(
+            power=sum(p.battery.power for p in powerflows.values()))
+
+        consumer = ConsumerPowerflow(
+            inverter=inverter,
+            grid=grid,
+            evcharger=sum(p.consumer.evcharger for p in powerflows.values()),
+        )
+
+        pv_production = sum(p.pv_production for p in powerflows.values())
+
+        return Powerflow(
+            unit=unit,
             pv_production=pv_production,
             inverter=inverter,
             grid=grid,
@@ -74,6 +117,7 @@ class Powerflow(Component):
             logger.warning(
                 "Consumer used production + grid delivery is not equal to inverter production"
             )
+            valid = True
         else:
             valid = all(
                 [
@@ -104,8 +148,11 @@ class Powerflow(Component):
 
     def prepare_point(self, measurement: str = "powerflow_raw") -> Point:
         point = Point(measurement)
-        for key, value in self.model_dump_influxdb().items():
+        for key, value in self.model_dump_influxdb(exclude=["unit"]).items():
             point.field(key, value)
+
+        if self.has_unit:
+            point.tag("unit", self.unit.key)
 
         return point
 
@@ -128,8 +175,25 @@ class Powerflow(Component):
 
         return point
 
+    @property
+    def has_unit(self) -> bool:
+        return self.unit is not None
+
+    def mqtt_topic(self) -> str:
+        topic = super().mqtt_topic()
+
+        if self.has_unit:
+            topic += f"/{self.unit.key.lower()}"
+
+        return topic
+
     def homeassistant_device_info(self) -> dict[str, any]:
-        return self._default_homeassistant_device_info("Powerflow")
+        name = "Powerflow"
+
+        if self.has_unit:
+            name += f" {self.unit.key}"
+
+        return self._default_homeassistant_device_info(name)
 
 
 class InverterPowerflow(Solaredge2MQTTBaseModel):

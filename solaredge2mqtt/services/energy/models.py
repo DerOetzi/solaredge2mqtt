@@ -20,12 +20,23 @@ class HistoricBaseModel(Component):
     def __init__(self, data: dict, period: HistoricPeriod, **kwargs):
         super().__init__(
             info=HistoricInfo(
-                period=period, start=data["_start"], stop=data["_stop"]),
+                unit=data.get("unit", None),
+                period=period,
+                start=data["_start"],
+                stop=data["_stop"]
+            ),
             **kwargs,
         )
 
     def mqtt_topic(self) -> str:
-        return f"{self.SOURCE}/{self.info.period.topic}"
+        parts = [self.SOURCE]
+
+        if self.info.unit:
+            parts.append(self.info.unit)
+
+        parts.append(self.info.period.topic)
+
+        return "/".join(parts)
 
     def __str__(self) -> str:
         return f"{self.SOURCE}: {self.info.period}"
@@ -88,9 +99,20 @@ class HistoricEnergy(HistoricBaseModel):
     def self_sufficiency_rates(self) -> SelfSufficiencyRate:
         return SelfSufficiencyRate(self)
 
+    @property
+    def has_unit(self) -> bool:
+        return self.unit is not None
+
     def homeassistant_device_info(self) -> dict[str, any]:
+        parts = ["Energy"]
+
+        if self.info.unit:
+            parts.append(self.info.unit)
+
+        parts.append(self.info.period.title)
+
         return self._default_homeassistant_device_info(
-            f"Energy - {self.info.period.title}"
+            " - ".join(parts),
         )
 
 
@@ -113,6 +135,7 @@ class HistoricMoney(Solaredge2MQTTBaseModel):
 
 
 class HistoricInfo(Solaredge2MQTTBaseModel):
+    unit: str | None = Field(None)
     period: HistoricPeriod
     start: datetime
     stop: datetime

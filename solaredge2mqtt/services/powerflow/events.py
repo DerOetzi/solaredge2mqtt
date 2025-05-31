@@ -1,5 +1,5 @@
-from solaredge2mqtt.services.events import ComponentEvent
+from solaredge2mqtt.services.events import ComponentsEvent
 
 
-class PowerflowGeneratedEvent(ComponentEvent):
+class PowerflowGeneratedEvent(ComponentsEvent):
     pass

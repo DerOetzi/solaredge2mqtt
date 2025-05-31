@@ -16,7 +16,7 @@ from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.influxdb.events import InfluxDBAggregatedEvent
 from solaredge2mqtt.core.influxdb.settings import InfluxDBSettings
 from solaredge2mqtt.core.logging import logger
-from solaredge2mqtt.core.timer.events import Interval10MinTriggerEvent
+from solaredge2mqtt.core.timer.events import Interval1MinTriggerEvent
 
 if TYPE_CHECKING:
     from solaredge2mqtt.services.energy.models import HistoricPeriod
@@ -40,12 +40,13 @@ class InfluxDBAsync:
             self._subscribe_events()
 
         self.client_async: InfluxDBClientAsync | None = None
-        self.client_sync: InfluxDBClient = InfluxDBClient(**self.settings.client_params)
+        self.client_sync: InfluxDBClient = InfluxDBClient(
+            **self.settings.client_params)
 
         self.flux_cache: dict[str, str] = {}
 
     def _subscribe_events(self) -> None:
-        self.event_bus.subscribe(Interval10MinTriggerEvent, self.loop)
+        self.event_bus.subscribe(Interval1MinTriggerEvent, self.loop)
 
     async def async_init(self) -> None:
         self.client_async = InfluxDBClientAsync(**self.settings.client_params)
@@ -78,7 +79,8 @@ class InfluxDBAsync:
         return self.client_sync.buckets_api()
 
     async def loop(self, _) -> None:
-        now = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0)
+        now = datetime.now(tz=timezone.utc).replace(
+            minute=0, second=0, microsecond=0)
 
         logger.info("Aggregate powerflow and energy raw data")
         aggregate_query = self._get_flux_query(
@@ -135,7 +137,8 @@ class InfluxDBAsync:
         self, period: HistoricPeriod, measurement: str
     ) -> dict[str, any] | None:
         return await self.query_first(
-            period.query.query, {"UNIT": period.unit, "MEASUREMENT": measurement}
+            period.query.query, {"UNIT": period.unit,
+                                 "MEASUREMENT": measurement}
         )
 
     async def query_first(

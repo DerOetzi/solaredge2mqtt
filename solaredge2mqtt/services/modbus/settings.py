@@ -3,6 +3,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field, model_validator
 
 from solaredge2mqtt.core.models import EnumModel
+from solaredge2mqtt.services.modbus.models.base import ModbusUnitRole
 
 
 class AdvancedControlsSettings(EnumModel):
@@ -13,11 +14,9 @@ class AdvancedControlsSettings(EnumModel):
 
 class ModbusUnitSettings(BaseModel):
     unit: int = Field(1)
-    timeout: int = Field(1)
-    port: int = Field(1502)
-    host: str = Field(None)
     meter: list[bool] = Field(default_factory=list)
     battery: list[bool] = Field(default_factory=list)
+    role: ModbusUnitRole = Field(ModbusUnitRole.LEADER, read_only=True)
 
     @model_validator(mode='before')
     @classmethod
@@ -28,27 +27,61 @@ class ModbusUnitSettings(BaseModel):
         return values
 
     @staticmethod
-    def _fill_defaults_array(key: str, values: dict, length: int) -> dict:
+    def _fill_defaults_array(key: str, values: dict, length: int, default: str = "true") -> dict:
         if key not in values or not isinstance(values[key], list):
-            values[key] = ["true"] * length
+            values[key] = [default] * length
         else:
-            values[key] = [
-                "true" if not isinstance(
-                    value, str) or value.lower() == "true" else "false"
-                for value in values[key][:length]
-            ]
+            for i, value in enumerate(values[key][:length]):
+                if isinstance(value, str):
+                    values[key][i] = value.lower() == "true"
+                elif isinstance(value, bool):
+                    values[key][i] = value
+                else:
+                    values[key][i] = default.lower() == "true"
 
             if len(values[key]) < length:
-                values[key].extend(["true"] * (length - len(values[key])))
+                values[key].extend([default] * (length - len(values[key])))
 
         return values
 
 
 class ModbusSettings(ModbusUnitSettings):
+    host: str = Field(None)
+    port: int = Field(1502)
+
+    timeout: int = Field(1)
+
     check_grid_status: bool = Field(False)
     advanced_power_controls: AdvancedControlsSettings = Field(
         AdvancedControlsSettings.DISABLED)
 
+    follower: list[ModbusUnitSettings] = Field(default_factory=list)
+
+    @model_validator(mode='before')
+    @classmethod
+    def fill_defaults(cls, values: dict) -> dict:
+        values = super().fill_defaults(values)
+
+        for i, slave_values in enumerate(values.get("follower", [])):
+            slave_values["role"] = ModbusUnitRole.FOLLOWER
+            slave_values = super()._fill_defaults_array("meter", slave_values, 3, "false")
+            slave_values = super()._fill_defaults_array("battery", slave_values, 2, "false")
+            values["follower"][i] = slave_values
+
+        return values
+
     @property
     def advanced_power_controls_enabled(self) -> bool:
         return self.advanced_power_controls == AdvancedControlsSettings.ENABLED
+
+    @property
+    def units(self) -> dict[str, ModbusUnitSettings]:
+        units = {"leader": self}
+        for i, follower in enumerate(self.follower):
+            units[f"follower{i}"] = follower
+
+        return units
+
+    @property
+    def has_followers(self) -> bool:
+        return len(self.follower) > 0
