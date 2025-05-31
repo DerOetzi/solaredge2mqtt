@@ -40,7 +40,10 @@ Configure the service using environment variables. The available options are lis
 - **SE2MQTT_MODBUS\_\_PORT**: The port on which your inverter's Modbus is accessible. Default is 1502.
 - **SE2MQTT_MODBUS\_\_TIMEOUT**: The timeout (in seconds) for Modbus connections. A lower value makes the system more responsive but may lead to incomplete data in environments with poor network conditions.
 - **SE2MQTT_MODBUS\_\_UNIT**: The unit address for Modbus communication. Default is 1.
-- **SE2MQTT_MODBUS\_\_CHECK_GRID_STATUS**: Check whether system is on grid (not available without extra hardware). Default is false.
+- **SE2MQTT_MODBUS\_\_METER{0,1,2}**: Enable or disable detection of meters. Default: is true
+- **SE2MQTT_MODBUS\_\_BATTERY{0,1}**: Enable or disable detection of batteries. Default: is true
+- **SE2MQTT_MODBUS\_\_CHECK_GRID_STATUS**: Check whether system is on grid (not available without extra hardware like Export+Import meter). Default is false.
+
 
 ### MQTT configuration
 
