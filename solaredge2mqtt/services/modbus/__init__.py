@@ -145,8 +145,10 @@ class Modbus:
         )
 
         async with self.client:
-            logger.info("Reading modbus registers")
-            await self._get_raw_data()
+            for unit_key, unit_settings in self.settings.units.items():
+                logger.info(
+                    f"Checking modbus registers from unit: {unit_key}",)
+                await self._get_raw_data(unit_key, unit_settings.unit)
 
     async def get_data(
         self,
@@ -162,44 +164,46 @@ class Modbus:
         meters_data = None
         batteries_data = None
 
-        try:
-            inverter_raw, meters_raw, batteries_raw = await self._get_raw_data()
+        # try:
+        #     inverter_raw, meters_raw, batteries_raw = await self._get_raw_data()
 
-            inverter_data = self._map_inverter(inverter_raw)
-            meters_data = self._map_meters(meters_raw)
-            batteries_data = self._map_batteries(batteries_raw)
-        except KeyError as error:
-            raise InvalidDataException("Invalid modbus data") from error
+        #     inverter_data = self._map_inverter(inverter_raw)
+        #     meters_data = self._map_meters(meters_raw)
+        #     batteries_data = self._map_batteries(batteries_raw)
+        # except KeyError as error:
+        #     raise InvalidDataException("Invalid modbus data") from error
 
-        await self.event_bus.emit(ModbusInverterReadEvent(inverter_data))
-        if meters_data:
-            await self.event_bus.emit(ModbusMetersReadEvent(meters_data))
-        if batteries_data:
-            await self.event_bus.emit(ModbusBatteriesReadEvent(batteries_data))
+        # await self.event_bus.emit(ModbusInverterReadEvent(inverter_data))
+        # if meters_data:
+        #     await self.event_bus.emit(ModbusMetersReadEvent(meters_data))
+        # if batteries_data:
+        #     await self.event_bus.emit(ModbusBatteriesReadEvent(batteries_data))
 
         return inverter_data, meters_data, batteries_data
 
     async def _get_raw_data(
         self,
+        unit_key: str,
+        unit: int
     ) -> tuple[SunSpecPayload, dict[str, SunSpecPayload], dict[str, SunSpecPayload]]:
 
         async with self.client:
             inverter_raw = await self._read_from_modbus(
                 SunSpecInverterRegister.request_bundles(),
-                self.settings.unit,
+                unit,
             )
 
             if self.settings.check_grid_status:
                 grid_status_raw = await self._read_from_modbus(
                     SunSpecGridStatusRegister.request_bundles(),
-                    self.settings.unit,
+                    unit,
                 )
                 inverter_raw = {**inverter_raw, **grid_status_raw}
 
             if self.settings.advanced_power_controls_enabled:
                 advanced_power_control_raw = await self._read_from_modbus(
                     SunSpecPowerControlRegister.request_bundles(),
-                    self.settings.unit,
+                    unit,
                 )
                 inverter_raw = {
                     **inverter_raw,
@@ -212,18 +216,18 @@ class Modbus:
             batteries_raw = {}
 
             for meter in SunSpecMeterOffset:
-                if meter.identifier in self._device_info:
+                if meter.identifier in self._device_info[unit_key]:
                     meters_raw[meter.identifier] = await self._read_from_modbus(
                         SunSpecMeterRegister.request_bundles(),
-                        self.settings.unit,
+                        unit,
                         offset=meter.offset
                     )
 
             for battery in SunSpecBatteryOffset:
-                if battery.identifier in self._device_info:
+                if battery.identifier in self._device_info[unit_key]:
                     batteries_raw[battery.identifier] = await self._read_from_modbus(
                         SunSpecBatteryRegister.request_bundles(),
-                        self.settings.unit,
+                        unit,
                         offset=battery.offset
                     )
 
@@ -263,6 +267,11 @@ class Modbus:
                 else:
                     data = register_or_bundle.decode_response(
                         result.registers, data)
+
+                if not self._initialized:
+                    logger.debug(
+                        f"Checked {register_or_bundle.length} registers from {address_start} successfully"
+                    )
 
             except ModbusException as error:
                 logger.debug(f"Modbus read exception: {error}")
