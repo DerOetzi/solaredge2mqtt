@@ -33,7 +33,7 @@ class MQTTClient(Client):
             topic=f"{self.topic_prefix}/status", payload="offline", qos=1, retain=True
         )
 
-        self._subscribed_topics: dict[str, BaseInputField] = {}
+        self._subscribed_topics: dict[str, type[BaseInputField]] = {}
 
         self._received_message_queue: Queue[Message] = Queue(maxsize=10)
 
