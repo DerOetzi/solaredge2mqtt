@@ -193,6 +193,10 @@ class SunSpecOffset(EnumModel):
         self._offset = offset
 
     @property
+    def idx(self) -> int:
+        return int(self._identifier[-1])
+
+    @property
     def identifier(self) -> str:
         return self._identifier
 

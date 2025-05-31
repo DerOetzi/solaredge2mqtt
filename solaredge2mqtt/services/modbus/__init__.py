@@ -48,6 +48,8 @@ class Modbus:
             port=self.settings.port,
         )
 
+        logger.debug(f"Modbus settings: {self.settings}")
+
         self.event_bus = event_bus
 
         self._block_unreadable: set[int] = set()
@@ -99,7 +101,8 @@ class Modbus:
 
             for meter in SunSpecMeterOffset:
                 if (
-                    meter.identifier in inverter_raw
+                    self.settings.meter[meter.idx]
+                    and meter.identifier in inverter_raw
                     and inverter_raw[meter.identifier] > 0
                 ):
                     await self.read_device_info(
@@ -108,7 +111,8 @@ class Modbus:
 
             for battery in SunSpecBatteryOffset:
                 if (
-                    battery.identifier in inverter_raw
+                    self.settings.battery[battery.idx]
+                    and battery.identifier in inverter_raw
                     and inverter_raw[battery.identifier] != 255
                 ):
                     await self.read_device_info(

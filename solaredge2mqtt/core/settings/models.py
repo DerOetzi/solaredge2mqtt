@@ -45,7 +45,8 @@ class ServiceSettings(BaseModel):
     homeassistant: HomeAssistantSettings | None = None
 
     def __init__(self, **data: dict[str, any]):
-        sources = [self._read_environment, self._read_dotenv, self._read_secrets]
+        sources = [self._read_environment,
+                   self._read_dotenv, self._read_secrets]
         data = self._parse_key_and_values(sources, data)
         super().__init__(**data)
 
@@ -108,19 +109,42 @@ class ServiceSettings(BaseModel):
     ) -> dict[str, any]:
         for source in sources:
             for key, value in source():
-                key = key.lower().strip()[8:]  # remove prefix
-                subkeys = key.split("__")  # get nested structure
-                context = data
-                for subkey in subkeys[:-1]:
-                    if subkey not in context:
-                        context[subkey] = {}
-                    context = context[subkey]
-
-                context[subkeys[-1]] = (
-                    value.strip()
-                )  # Missing possibility to set nested json values
+                key = key.lower().strip()[8:]
+                subkeys = key.split("__")
+                self.insert_nested_key(
+                    data, subkeys, value.strip())
 
         return data
+
+    @classmethod
+    def insert_nested_key(cls, container: dict, keys: list[str], value: any) -> None:
+        key = keys[0]
+        for i in range(len(key) - 1, -1, -1):
+            if not key[i].isdigit():
+                break
+        prefix, idx = key[:i + 1], key[i + 1:]
+        if idx.isdigit():
+            key, idx = prefix, int(idx)
+            if key not in container or not isinstance(container[key], list):
+                container[key] = []
+            while len(container[key]) <= idx:
+                container[key].append({})
+            next_container = container[key][idx]
+        else:
+            if key not in container or not isinstance(container[key], dict):
+                container[key] = {}
+            next_container = container[key]
+
+        if len(keys) == 1:
+            if isinstance(next_container, dict):
+                if isinstance(container[key], list):
+                    container[key][idx] = value
+                else:
+                    container[key] = value
+            else:
+                container[key] = value
+        else:
+            cls.insert_nested_key(next_container, keys[1:], value)
 
     @classmethod
     def _read_environment(cls) -> Generator[tuple[str, str], any, any]:
