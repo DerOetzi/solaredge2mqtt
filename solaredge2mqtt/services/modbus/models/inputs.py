@@ -1,5 +1,5 @@
-from tkinter import ACTIVE
 from pydantic import Field
+
 from solaredge2mqtt.core.models import BaseInputField, BaseInputFieldEnumModel
 
 

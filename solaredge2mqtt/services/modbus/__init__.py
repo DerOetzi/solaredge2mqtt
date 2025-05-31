@@ -286,7 +286,7 @@ class Modbus:
 
     def _map_meters(
         self, meters_raw: dict[str, SunSpecPayload]
-    ) -> dict[str, ModbusInverter]:
+    ) -> dict[str, ModbusMeter]:
         meters = {}
         for meter_key, meter_raw in meters_raw.items():
             logger.debug(
@@ -313,7 +313,7 @@ class Modbus:
 
     def _map_batteries(
         self, batteries_raw: dict[str, SunSpecPayload]
-    ) -> dict[str, ModbusInverter]:
+    ) -> dict[str, ModbusBattery]:
         batteries = {}
         for battery_key, battery_raw in batteries_raw.items():
             logger.debug(
