@@ -91,7 +91,7 @@ class Modbus:
                 "Not readable registers: {registers}", registers=self._block_unreadable
             )
 
-        await self._control.async_init()
+        # await self._control.async_init()
 
     async def detect_devices(self):
         async with self.client:
