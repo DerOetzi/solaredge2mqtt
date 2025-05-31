@@ -48,14 +48,14 @@ class Modbus:
             port=self.settings.port,
         )
 
-        logger.debug(f"Modbus settings: {self.settings}")
+        logger.info(f"Modbus settings: {self.settings}")
 
         self.event_bus = event_bus
 
         self._block_unreadable: set[int] = set()
 
         self._initialized = False
-        self._device_info: dict[str, ModbusDeviceInfo] = {}
+        self._device_info: dict[str, dict[str, ModbusDeviceInfo]] = {}
 
         self.client: AsyncModbusTcpClient | None = None
 
@@ -95,38 +95,45 @@ class Modbus:
 
     async def detect_devices(self):
         async with self.client:
-            inverter_raw = await self.read_device_info(
-                SunSpecInverterInfoRegister, "inverter"
-            )
+            for unit_key, unit_settings in self.settings.units.items():
+                logger.info(f"Detecting devices for unit: {unit_key}")
 
-            for meter in SunSpecMeterOffset:
-                if (
-                    self.settings.meter[meter.idx]
-                    and meter.identifier in inverter_raw
-                    and inverter_raw[meter.identifier] > 0
-                ):
-                    await self.read_device_info(
-                        SunSpecMeterInfoRegister, meter.identifier, meter.offset
-                    )
+                self._device_info[unit_key] = {}
 
-            for battery in SunSpecBatteryOffset:
-                if (
-                    self.settings.battery[battery.idx]
-                    and battery.identifier in inverter_raw
-                    and inverter_raw[battery.identifier] != 255
-                ):
-                    await self.read_device_info(
-                        SunSpecBatteryInfoRegister, battery.identifier, battery.offset
-                    )
+                inverter_raw = await self.read_device_info(
+                    SunSpecInverterInfoRegister, unit_key, "inverter", unit_settings.unit
+                )
+
+                for meter in SunSpecMeterOffset:
+                    if (
+                        unit_settings.meter[meter.idx]
+                        and meter.identifier in inverter_raw
+                        and inverter_raw[meter.identifier] > 0
+                    ):
+                        await self.read_device_info(
+                            SunSpecMeterInfoRegister, unit_key, meter.identifier, unit_settings.unit, meter.offset
+                        )
+
+                for battery in SunSpecBatteryOffset:
+                    if (
+                        unit_settings.battery[battery.idx]
+                        and battery.identifier in inverter_raw
+                        and inverter_raw[battery.identifier] != 255
+                    ):
+                        await self.read_device_info(
+                            SunSpecBatteryInfoRegister, unit_key, battery.identifier, unit_settings.unit, battery.offset
+                        )
 
     async def read_device_info(
-        self, registers: SunSpecRegister, key: str, offset: int = 0
+        self, registers: SunSpecRegister, unit_key: str, key: str, unit: int, offset: int = 0
     ) -> SunSpecPayload:
-        raw_data = await self._read_from_modbus(registers, offset)
+        raw_data = await self._read_from_modbus(registers,
+                                                unit,
+                                                offset)
         info = ModbusDeviceInfo(raw_data)
         logger.info(
             f"Found {key} {info.manufacturer} {info.model} {info.serialnumber}")
-        self._device_info[key] = info
+        self._device_info[unit_key][key] = info
         return raw_data
 
     async def check_readable_registers(self):
@@ -178,18 +185,21 @@ class Modbus:
 
         async with self.client:
             inverter_raw = await self._read_from_modbus(
-                SunSpecInverterRegister.request_bundles()
+                SunSpecInverterRegister.request_bundles(),
+                self.settings.unit,
             )
 
             if self.settings.check_grid_status:
                 grid_status_raw = await self._read_from_modbus(
-                    SunSpecGridStatusRegister.request_bundles()
+                    SunSpecGridStatusRegister.request_bundles(),
+                    self.settings.unit,
                 )
                 inverter_raw = {**inverter_raw, **grid_status_raw}
 
             if self.settings.advanced_power_controls_enabled:
                 advanced_power_control_raw = await self._read_from_modbus(
-                    SunSpecPowerControlRegister.request_bundles()
+                    SunSpecPowerControlRegister.request_bundles(),
+                    self.settings.unit,
                 )
                 inverter_raw = {
                     **inverter_raw,
@@ -204,13 +214,17 @@ class Modbus:
             for meter in SunSpecMeterOffset:
                 if meter.identifier in self._device_info:
                     meters_raw[meter.identifier] = await self._read_from_modbus(
-                        SunSpecMeterRegister.request_bundles(), offset=meter.offset
+                        SunSpecMeterRegister.request_bundles(),
+                        self.settings.unit,
+                        offset=meter.offset
                     )
 
             for battery in SunSpecBatteryOffset:
                 if battery.identifier in self._device_info:
                     batteries_raw[battery.identifier] = await self._read_from_modbus(
-                        SunSpecBatteryRegister.request_bundles(), offset=battery.offset
+                        SunSpecBatteryRegister.request_bundles(),
+                        self.settings.unit,
+                        offset=battery.offset
                     )
 
         return inverter_raw, meters_raw, batteries_raw
@@ -218,6 +232,7 @@ class Modbus:
     async def _read_from_modbus(
         self,
         registers_or_bundles: SunSpecRegister | list[SunSpecRequestRegisterBundle],
+        unit: int,
         offset: int = 0,
     ) -> SunSpecPayload:
         data = {}
@@ -236,7 +251,7 @@ class Modbus:
 
             try:
                 result = await self.client.read_holding_registers(
-                    slave=self.settings.unit,
+                    slave=unit,
                     address=address_start,
                     count=register_or_bundle.length,
                 )
