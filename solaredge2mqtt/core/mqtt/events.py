@@ -1,8 +1,7 @@
-import json
-
 from pydantic import BaseModel
 
 from solaredge2mqtt.core.events.events import BaseEvent
+from solaredge2mqtt.core.models import BaseInputField
 
 
 class MQTTPublishEvent(BaseEvent):
@@ -50,29 +49,30 @@ class MQTTPublishEvent(BaseEvent):
 
 
 class MQTTReceivedEvent(BaseEvent):
-    def __init__(self, topic: str, payload: str):
+    def __init__(self, topic: str, input: BaseInputField):
         self._topic: str = topic
-        self._payload: str = payload
+        self._input: BaseInputField = input
 
     @property
     def topic(self) -> str:
         return self._topic
 
     @property
-    def payload(self) -> str:
-        return self._payload
-
-    @property
-    def json(self) -> dict | str | int | float:
-        return json.loads(self.payload)
+    def input(self) -> BaseInputField:
+        return self._input
 
 
 class MQTTSubscribeEvent(BaseEvent):
     AWAIT = True
 
-    def __init__(self, topic: str):
+    def __init__(self, topic: str, model: type[BaseInputField]):
         self._topic: str = topic
+        self._model: type[BaseInputField] = model
 
     @property
     def topic(self) -> str:
         return self._topic
+
+    @property
+    def model(self) -> type[BaseInputField]:
+        return self._model

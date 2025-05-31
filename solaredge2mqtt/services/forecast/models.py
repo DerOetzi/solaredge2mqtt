@@ -4,7 +4,7 @@ from pydantic import computed_field
 
 from solaredge2mqtt.core.models import EnumModel
 from solaredge2mqtt.services.homeassistant.models import (
-    HomeAssistantEntityType as EntityType,
+    HomeAssistantSensorType as HASensor,
 )
 from solaredge2mqtt.services.models import Component
 
@@ -37,21 +37,21 @@ class Forecast(Component):
     power_period: dict[datetime, int]
     energy_period: dict[datetime, int]
 
-    @computed_field(**EntityType.ENERGY_WH.field("Energy production today"))
+    @computed_field(**HASensor.ENERGY_WH.field("Energy production today"))
     @property
     def energy_today(self) -> int:
         return sum(self._energy_today)
 
-    @computed_field(**EntityType.ENERGY_WH.field("Energy production remaining today"))
+    @computed_field(**HASensor.ENERGY_WH.field("Energy production remaining today"))
     @property
     def energy_today_remaining(self) -> int:
-        return sum(self._energy_today[self._current_hour() :])
+        return sum(self._energy_today[self._current_hour():])
 
-    @computed_field(**EntityType.ENERGY_WH.field("Energy production current hour"))
+    @computed_field(**HASensor.ENERGY_WH.field("Energy production current hour"))
     def energy_current_hour(self) -> int:
         return self._energy_today[self._current_hour()]
 
-    @computed_field(**EntityType.ENERGY_WH.field("Energy production next hour"))
+    @computed_field(**HASensor.ENERGY_WH.field("Energy production next hour"))
     def energy_next_hour(self) -> int:
         if self._current_hour() == 23:
             energy_next_hour = self._energy_tomorrow[0]
@@ -60,7 +60,7 @@ class Forecast(Component):
 
         return energy_next_hour
 
-    @computed_field(**EntityType.ENERGY_WH.field("Energy production tomorrow"))
+    @computed_field(**HASensor.ENERGY_WH.field("Energy production tomorrow"))
     @property
     def energy_tomorrow(self) -> int:
         return sum(self._energy_tomorrow)

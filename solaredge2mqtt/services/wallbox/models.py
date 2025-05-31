@@ -2,7 +2,8 @@ from pydantic import Field, field_serializer
 
 from solaredge2mqtt.core.models import Solaredge2MQTTBaseModel
 from solaredge2mqtt.services.homeassistant.models import (
-    HomeAssistantEntityType as EntityType,
+    HomeAssistantSensorType as HASensor,
+    HomeAssistantBinarySensorType as HABinarySensor
 )
 from solaredge2mqtt.services.models import Component
 
@@ -38,10 +39,11 @@ class WallboxAPI(Component):
     SOURCE = "api"
 
     info: WallboxInfo
-    power: float = Field(**EntityType.POWER_W.field("Power"))
+    power: float = Field(**HASensor.POWER_W.field("Power"))
     state: str = Field(title="State")
-    vehicle_plugged: bool = Field(**EntityType.PLUG.field("Vehicle plugged"))
-    max_current: float = Field(**EntityType.CURRENT_A.field("Max current"))
+    vehicle_plugged: bool = Field(
+        **HABinarySensor.PLUG.field("Vehicle plugged"))
+    max_current: float = Field(**HASensor.CURRENT_A.field("Max current"))
 
     def __init__(self, data: dict[str, str | int]):
         info = WallboxInfo(data)

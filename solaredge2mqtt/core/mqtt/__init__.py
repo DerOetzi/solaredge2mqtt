@@ -1,13 +1,18 @@
-from aiomqtt import Client, Will
-from pydantic import BaseModel
+import json
+
+from asyncio import Queue, QueueFull
+from aiomqtt import Client, Will, Message
+from pydantic import BaseModel, ValidationError
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.logging import logger
+from solaredge2mqtt.core.models import BaseInputField
 from solaredge2mqtt.core.mqtt.events import (
     MQTTPublishEvent,
     MQTTReceivedEvent,
     MQTTSubscribeEvent,
 )
+from solaredge2mqtt.core.mqtt.models import MAX_MQTT_PAYLOAD_SIZE
 from solaredge2mqtt.core.mqtt.settings import MQTTSettings
 
 
@@ -28,7 +33,9 @@ class MQTTClient(Client):
             topic=f"{self.topic_prefix}/status", payload="offline", qos=1, retain=True
         )
 
-        self._subscribed_topics = set()
+        self._subscribed_topics: dict[str, BaseInputField] = {}
+
+        self._received_message_queue: Queue[Message] = Queue(maxsize=10)
 
         self.event_bus = event_bus
         self._subscribe_events()
@@ -50,21 +57,66 @@ class MQTTClient(Client):
     async def _subscribe_topic(self, event: MQTTSubscribeEvent) -> None:
         if event.topic not in self._subscribed_topics:
             logger.info(f"Subscribing to topic: {event.topic}")
-            self._subscribed_topics.add(event.topic)
+            self._subscribed_topics[event.topic] = event.model
             await self.subscribe(event.topic)
 
     async def listen(self) -> None:
         if self._subscribed_topics:
-            logger.info("MQTT listen on subscribed topics")
             async for message in self.messages:
-                logger.debug(
-                    "MQTT message topic: {message.topic}={message.payload}",
-                    message=message,
-                )
-                payload = message.payload.decode()
-                await self.event_bus.emit(
-                    MQTTReceivedEvent(str(message.topic), payload)
-                )
+                topic = str(message.topic)
+                if topic not in self._subscribed_topics:
+                    logger.warning(
+                        f"Received message on unsubscribed topic: {topic}"
+                    )
+                    continue
+                if len(message.payload) > MAX_MQTT_PAYLOAD_SIZE:
+                    logger.warning(
+                        f"Payload too large on topic: {topic} ({len(message.payload)} bytes)"
+                    )
+                    continue
+                try:
+                    self._received_message_queue.put_nowait(message)
+                except QueueFull:
+                    logger.warning(
+                        "MQTT processing queue full – dropping message")
+
+    async def process_queue(self) -> None:
+        if self._subscribed_topics:
+            while True:
+                message = await self._received_message_queue.get()
+                try:
+                    await self._handle_message(message)
+                except Exception as ex:
+                    logger.error(f"Error while processing MQTT message: {ex}")
+
+    async def _handle_message(self, message: Message) -> None:
+        topic = str(message.topic)
+        try:
+            model = self._subscribed_topics.get(topic)
+            if not model:
+                logger.warning(
+                    f"Received message for unexpected topic: {topic}")
+                return
+
+            payload = message.payload.decode()
+
+            try:
+                input_raw = json.loads(payload)
+            except json.JSONDecodeError:
+                input_raw = json.loads(json.dumps(payload))
+
+            if isinstance(input_raw, dict):
+                input = model(**input_raw)
+            else:
+                input = model(input_raw)
+
+            await self.event_bus.emit(
+                MQTTReceivedEvent(topic, input)
+            )
+        except (ValidationError, json.JSONDecodeError, TypeError) as ex:
+            logger.warning(
+                f"Received invalid message on topic: {topic}, error: {ex}"
+            )
 
     async def publish_status_online(self) -> None:
         await self.publish_to("status", "online", True)

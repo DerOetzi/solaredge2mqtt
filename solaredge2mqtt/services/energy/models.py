@@ -7,7 +7,7 @@ from pydantic import Field, computed_field
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.models import EnumModel, Solaredge2MQTTBaseModel
 from solaredge2mqtt.services.homeassistant.models import (
-    HomeAssistantEntityType as EntityType,
+    HomeAssistantSensorType as HASensor,
 )
 from solaredge2mqtt.services.models import Component
 
@@ -19,7 +19,8 @@ class HistoricBaseModel(Component):
 
     def __init__(self, data: dict, period: HistoricPeriod, **kwargs):
         super().__init__(
-            info=HistoricInfo(period=period, start=data["_start"], stop=data["_stop"]),
+            info=HistoricInfo(
+                period=period, start=data["_start"], stop=data["_stop"]),
             **kwargs,
         )
 
@@ -31,7 +32,8 @@ class HistoricBaseModel(Component):
 
 
 class HistoricEnergy(HistoricBaseModel):
-    pv_production: float = Field(**EntityType.ENERGY_KWH.field("PV production"))
+    pv_production: float = Field(
+        **HASensor.ENERGY_KWH.field("PV production"))
     inverter: InverterEnergy = Field(title="Inverter")
     grid: GridEnergy = Field(title="Grid")
     battery: BatteryEnergy = Field(title="Battery")
@@ -93,18 +95,18 @@ class HistoricEnergy(HistoricBaseModel):
 
 
 class HistoricMoney(Solaredge2MQTTBaseModel):
-    delivered: float = Field(**EntityType.MONETARY.field("Delivered"))
-    saved: float = Field(**EntityType.MONETARY.field("Saved"))
-    consumed: float = Field(**EntityType.MONETARY.field("Consumed"))
+    delivered: float = Field(**HASensor.MONETARY.field("Delivered"))
+    saved: float = Field(**HASensor.MONETARY.field("Saved"))
+    consumed: float = Field(**HASensor.MONETARY.field("Consumed"))
     price_in: float = Field(exclude=True)
     price_out: float = Field(exclude=True)
 
-    @computed_field(**EntityType.MONETARY_BALANCE.field("Balance grid"))
+    @computed_field(**HASensor.MONETARY_BALANCE.field("Balance grid"))
     @property
     def balance_grid(self) -> float:
         return round(self.delivered - self.consumed, 3)
 
-    @computed_field(**EntityType.MONETARY_BALANCE.field("Balance total"))
+    @computed_field(**HASensor.MONETARY_BALANCE.field("Balance total"))
     @property
     def balance_total(self) -> float:
         return round(self.balance_grid + self.saved, 3)
@@ -206,46 +208,48 @@ class HistoricPeriod(EnumModel):
 
 
 class InverterEnergy(Solaredge2MQTTBaseModel):
-    production: float = Field(**EntityType.ENERGY_KWH.field("Production"))
-    consumption: float = Field(**EntityType.ENERGY_KWH.field("Consumption"))
-    dc_power: float = Field(**EntityType.POWER_W.field("DC production"))
-    pv_production: float = Field(**EntityType.ENERGY_KWH.field("PV production"))
+    production: float = Field(**HASensor.ENERGY_KWH.field("Production"))
+    consumption: float = Field(**HASensor.ENERGY_KWH.field("Consumption"))
+    dc_power: float = Field(**HASensor.POWER_W.field("DC production"))
+    pv_production: float = Field(
+        **HASensor.ENERGY_KWH.field("PV production"))
     battery_production: float = Field(
-        **EntityType.ENERGY_KWH.field("Battery production")
+        **HASensor.ENERGY_KWH.field("Battery production")
     )
 
 
 class GridEnergy(Solaredge2MQTTBaseModel):
-    delivery: float = Field(**EntityType.ENERGY_KWH.field("Delivery"))
-    consumption: float = Field(**EntityType.ENERGY_KWH.field("Consumption"))
+    delivery: float = Field(**HASensor.ENERGY_KWH.field("Delivery"))
+    consumption: float = Field(**HASensor.ENERGY_KWH.field("Consumption"))
 
 
 class BatteryEnergy(Solaredge2MQTTBaseModel):
-    charge: float = Field(**EntityType.ENERGY_KWH.field("Charge"))
-    discharge: float = Field(**EntityType.ENERGY_KWH.field("Discharge"))
+    charge: float = Field(**HASensor.ENERGY_KWH.field("Charge"))
+    discharge: float = Field(**HASensor.ENERGY_KWH.field("Discharge"))
 
 
 class ConsumerEnergy(Solaredge2MQTTBaseModel):
-    house: float = Field(**EntityType.ENERGY_KWH.field("House"))
-    evcharger: float = Field(**EntityType.ENERGY_KWH.field("EV-Charger"))
-    inverter: float = Field(**EntityType.ENERGY_KWH.field("Inverter"))
+    house: float = Field(**HASensor.ENERGY_KWH.field("House"))
+    evcharger: float = Field(**HASensor.ENERGY_KWH.field("EV-Charger"))
+    inverter: float = Field(**HASensor.ENERGY_KWH.field("Inverter"))
 
-    total: float = Field(**EntityType.ENERGY_KWH.field("Total"))
+    total: float = Field(**HASensor.ENERGY_KWH.field("Total"))
 
-    used_production: float = Field(**EntityType.ENERGY_KWH.field("Used production"))
+    used_production: float = Field(
+        **HASensor.ENERGY_KWH.field("Used production"))
     used_pv_production: float = Field(
-        **EntityType.ENERGY_KWH.field("Used PV production")
+        **HASensor.ENERGY_KWH.field("Used PV production")
     )
     used_battery_production: float = Field(
-        **EntityType.ENERGY_KWH.field("Used battery production")
+        **HASensor.ENERGY_KWH.field("Used battery production")
     )
 
 
 class SelfConsumptionRate(Solaredge2MQTTBaseModel):
-    grid: int = Field(**EntityType.PERCENTAGE.field("Grid"))
-    battery: int = Field(**EntityType.PERCENTAGE.field("Battery"))
-    pv: int = Field(**EntityType.PERCENTAGE.field("PV"))
-    total: int = Field(**EntityType.PERCENTAGE.field("Total"))
+    grid: int = Field(**HASensor.PERCENTAGE.field("Grid"))
+    battery: int = Field(**HASensor.PERCENTAGE.field("Battery"))
+    pv: int = Field(**HASensor.PERCENTAGE.field("PV"))
+    total: int = Field(**HASensor.PERCENTAGE.field("Total"))
 
     def __init__(self, energy: HistoricEnergy):
         if energy.inverter.production > 0:
@@ -276,10 +280,10 @@ class SelfConsumptionRate(Solaredge2MQTTBaseModel):
 
 
 class SelfSufficiencyRate(Solaredge2MQTTBaseModel):
-    grid: int = Field(**EntityType.PERCENTAGE.field("Grid"))
-    battery: int = Field(**EntityType.PERCENTAGE.field("Battery"))
-    pv: int = Field(**EntityType.PERCENTAGE.field("PV"))
-    total: int = Field(**EntityType.PERCENTAGE.field("Total"))
+    grid: int = Field(**HASensor.PERCENTAGE.field("Grid"))
+    battery: int = Field(**HASensor.PERCENTAGE.field("Battery"))
+    pv: int = Field(**HASensor.PERCENTAGE.field("PV"))
+    total: int = Field(**HASensor.PERCENTAGE.field("Total"))
 
     def __init__(self, energy: HistoricEnergy):
         if energy.consumer.total > 0:
