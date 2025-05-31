@@ -296,7 +296,7 @@ class HomeAssistantEntity(HomeAssistantBaseModel):
     def icon(self) -> str | None:
         return f"mdi:{self._icon}" if self._icon else None
 
-    def model_dump_json(self, **kwargs) -> dict[str, any]:
+    def model_dump_json(self, **kwargs) -> str:
         dumped_model = super().model_dump(**kwargs)
         dumped_model = {**dumped_model, **self._additional_fields}
         return json.dumps(dumped_model)
