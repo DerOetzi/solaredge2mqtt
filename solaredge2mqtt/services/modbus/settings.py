@@ -3,6 +3,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field, model_validator
 
 from solaredge2mqtt.core.models import EnumModel
+from solaredge2mqtt.services.modbus.models.base import ModbusUnitRole
 
 
 class AdvancedControlsSettings(EnumModel):
@@ -15,6 +16,7 @@ class ModbusUnitSettings(BaseModel):
     unit: int = Field(1)
     meter: list[bool] = Field(default_factory=list)
     battery: list[bool] = Field(default_factory=list)
+    role: ModbusUnitRole = Field(ModbusUnitRole.LEADER, read_only=True)
 
     @model_validator(mode='before')
     @classmethod
@@ -61,6 +63,7 @@ class ModbusSettings(ModbusUnitSettings):
         values = super().fill_defaults(values)
 
         for i, slave_values in enumerate(values.get("follower", [])):
+            slave_values["role"] = ModbusUnitRole.FOLLOWER
             slave_values = super()._fill_defaults_array("meter", slave_values, 3, "false")
             slave_values = super()._fill_defaults_array("battery", slave_values, 2, "false")
             values["follower"][i] = slave_values

@@ -20,6 +20,8 @@ from solaredge2mqtt.services.modbus.models.base import ModbusDeviceInfo
 from solaredge2mqtt.services.modbus.models.battery import ModbusBattery
 from solaredge2mqtt.services.modbus.models.inverter import ModbusInverter
 from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
+from solaredge2mqtt.services.modbus.models.unit import ModbusUnit
+from solaredge2mqtt.services.modbus.settings import ModbusUnitSettings
 from solaredge2mqtt.services.modbus.sunspec.base import (
     SunSpecRegister, SunSpecRequestRegisterBundle)
 from solaredge2mqtt.services.modbus.sunspec.battery import (
@@ -101,7 +103,7 @@ class Modbus:
                 self._device_info[unit_key] = {}
 
                 inverter_raw = await self.read_device_info(
-                    SunSpecInverterInfoRegister, unit_key, "inverter", unit_settings.unit
+                    SunSpecInverterInfoRegister, unit_key, "inverter", unit_settings
                 )
 
                 for meter in SunSpecMeterOffset:
@@ -111,7 +113,7 @@ class Modbus:
                         and inverter_raw[meter.identifier] > 0
                     ):
                         await self.read_device_info(
-                            SunSpecMeterInfoRegister, unit_key, meter.identifier, unit_settings.unit, meter.offset
+                            SunSpecMeterInfoRegister, unit_key, meter.identifier, unit_settings, meter.offset
                         )
 
                 for battery in SunSpecBatteryOffset:
@@ -121,15 +123,22 @@ class Modbus:
                         and inverter_raw[battery.identifier] != 255
                     ):
                         await self.read_device_info(
-                            SunSpecBatteryInfoRegister, unit_key, battery.identifier, unit_settings.unit, battery.offset
+                            SunSpecBatteryInfoRegister, unit_key, battery.identifier, unit_settings, battery.offset
                         )
 
     async def read_device_info(
-        self, registers: SunSpecRegister, unit_key: str, key: str, unit: int, offset: int = 0
+        self, registers: SunSpecRegister, unit_key: str, key: str, unit_settings: ModbusUnitSettings, offset: int = 0
     ) -> SunSpecPayload:
         raw_data = await self._read_from_modbus(registers,
-                                                unit,
+                                                unit_settings.unit,
                                                 offset)
+
+        raw_data["unit"] = {
+            "unit": unit_settings.unit,
+            "key": unit_key,
+            "role": unit_settings.role
+        }
+
         info = ModbusDeviceInfo(raw_data)
         logger.info(
             f"Found {key} {info.manufacturer} {info.model} {info.serialnumber}")
@@ -152,34 +161,34 @@ class Modbus:
 
     async def get_data(
         self,
-    ) -> (
-        tuple[
-            ModbusInverter | None,
-            dict[str, ModbusMeter] | None,
-            dict[str, ModbusBattery | None],
-        ]
-        | None
-    ):
-        inverter_data = None
-        meters_data = None
-        batteries_data = None
+    ) -> ModbusUnit:
+        units: dict[str, ModbusUnit] = {}
 
         try:
-            inverter_raw, meters_raw, batteries_raw = await self._get_raw_data("leader", self.settings.unit)
+            for unit_key, unit_settings in self.settings.units.items():
+                inverter_raw, meters_raw, batteries_raw = await self._get_raw_data(unit_key, unit_settings.unit)
 
-            inverter_data = self._map_inverter("leader", inverter_raw)
-            meters_data = self._map_meters("leader", meters_raw)
-            batteries_data = self._map_batteries("leader", batteries_raw)
+                inverter_data = self._map_inverter(unit_key, inverter_raw)
+                meters_data = self._map_meters(unit_key, meters_raw)
+                batteries_data = self._map_batteries(unit_key, batteries_raw)
+
+                units[unit_key] = ModbusUnit(
+                    info=inverter_data.info.unit,
+                    inverter=inverter_data,
+                    meters_data=meters_data,
+                    batteries=batteries_data
+                )
+
         except KeyError as error:
             raise InvalidDataException("Invalid modbus data") from error
 
-        await self.event_bus.emit(ModbusInverterReadEvent(inverter_data))
-        if meters_data:
-            await self.event_bus.emit(ModbusMetersReadEvent(meters_data))
-        if batteries_data:
-            await self.event_bus.emit(ModbusBatteriesReadEvent(batteries_data))
+        # await self.event_bus.emit(ModbusInverterReadEvent(inverter_data))
+        # if meters_data:
+        #     await self.event_bus.emit(ModbusMetersReadEvent(meters_data))
+        # if batteries_data:
+        #     await self.event_bus.emit(ModbusBatteriesReadEvent(batteries_data))
 
-        return inverter_data, meters_data, batteries_data
+        return units
 
     async def _get_raw_data(
         self,
@@ -313,7 +322,7 @@ class Modbus:
     def _map_meters(
         self, unit_key: str, meters_raw: dict[str, SunSpecPayload]
     ) -> dict[str, ModbusMeter]:
-        meters = {}
+        meters: dict[str, ModbusMeter] = {}
         for meter_key, meter_raw in meters_raw.items():
             logger.debug(
                 "Meter {meter} raw:\n{raw}",

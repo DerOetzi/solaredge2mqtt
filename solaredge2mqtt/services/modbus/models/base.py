@@ -1,6 +1,26 @@
-from solaredge2mqtt.core.models import Solaredge2MQTTBaseModel
+from __future__ import annotations
+
+from solaredge2mqtt.core.models import EnumModel, Solaredge2MQTTBaseModel
 from solaredge2mqtt.services.modbus.sunspec.values import C_SUNSPEC_DID_MAP
 from solaredge2mqtt.services.models import Component
+
+
+class ModbusUnitRole(EnumModel):
+    LEADER = "leader"
+    FOLLOWER = "follower"
+
+    def __init__(self, role: str):
+        self._role: str = role
+
+    @property
+    def role(self) -> str:
+        return self._role
+
+
+class ModbusUnitInfo(Solaredge2MQTTBaseModel):
+    unit: int
+    key: str
+    role: ModbusUnitRole
 
 
 class ModbusDeviceInfo(Solaredge2MQTTBaseModel):
@@ -10,13 +30,15 @@ class ModbusDeviceInfo(Solaredge2MQTTBaseModel):
     sunspec_type: str
     version: str
     serialnumber: str
+    unit: ModbusUnitInfo
 
-    def __init__(self, data: dict[str, str | int]) -> dict[str, str]:
+    def __init__(self, data: dict[str, str | int]):
         values = {
             "manufacturer": data["c_manufacturer"],
             "model": data["c_model"],
             "version": data["c_version"],
             "serialnumber": data["c_serialnumber"],
+            "unit": data["unit"]
         }
 
         if "c_sunspec_did" in data and data["c_sunspec_did"] in C_SUNSPEC_DID_MAP:
@@ -37,6 +59,7 @@ class ModbusDeviceInfo(Solaredge2MQTTBaseModel):
             "hw_version": self.version,
             "serial_number": self.serialnumber,
         }
+
 
 class ModbusComponent(Component):
     SOURCE = "modbus"

@@ -74,6 +74,7 @@ class Powerflow(Component):
             logger.warning(
                 "Consumer used production + grid delivery is not equal to inverter production"
             )
+            valid = True
         else:
             valid = all(
                 [

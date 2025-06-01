@@ -49,10 +49,15 @@ class PowerflowService:
         await self.modbus.async_init()
 
     async def calculate_powerflow(self, _) -> None:
-        inverter_data, meters_data, batteries_data = await self.modbus.get_data()
+        units = await self.modbus.get_data()
 
-        if any(data is None for data in [inverter_data, meters_data, batteries_data]):
+        if "leader" not in units:
             raise InvalidDataException("Invalid modbus data")
+
+        leader = units["leader"]
+        inverter_data = leader.inverter
+        meters_data = leader.meters
+        batteries_data = leader.batteries
 
         for battery in batteries_data.values():
             if not battery.is_valid:
