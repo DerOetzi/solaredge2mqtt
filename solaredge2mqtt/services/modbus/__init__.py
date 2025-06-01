@@ -37,7 +37,7 @@ from solaredge2mqtt.services.modbus.sunspec.values import (SunSpecInputData,
 if TYPE_CHECKING:
     from solaredge2mqtt.core.settings.models import ServiceSettings
 
-LOGGING_DEVICE_INFO = "{device} ({info.manufacturer} {info.model} {info.serialnumber})"
+LOGGING_DEVICE_INFO = "{info.unit.key}:{device} ({info.manufacturer} {info.model} {info.serialnumber})"
 
 
 class Modbus:
