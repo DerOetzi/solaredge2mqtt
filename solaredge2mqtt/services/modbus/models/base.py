@@ -89,3 +89,17 @@ class ModbusComponent(Component):
 
     def homeassistant_device_info(self) -> dict[str, any]:
         return self.info.homeassistant_device_info()
+
+    def mqtt_topic(self, has_followers: bool = False) -> str:
+        return self.generate_topic_prefix(self.info.unit.key if has_followers else None)
+
+    @classmethod
+    def generate_topic_prefix(cls, unit_key: str | None = None) -> str:
+        topic_parts = [cls.SOURCE]
+
+        if unit_key:
+            topic_parts.append(unit_key)
+
+        topic_parts.append(cls.COMPONENT)
+
+        return "/".join(topic_parts)

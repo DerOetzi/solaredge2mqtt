@@ -175,7 +175,7 @@ class Modbus:
                 units[unit_key] = ModbusUnit(
                     info=inverter_data.info.unit,
                     inverter=inverter_data,
-                    meters_data=meters_data,
+                    meters=meters_data,
                     batteries=batteries_data
                 )
 

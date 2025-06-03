@@ -6,6 +6,7 @@ from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import MQTTReceivedEvent
 from solaredge2mqtt.services.modbus.events import ModbusWriteEvent
+from solaredge2mqtt.services.modbus.models.base import ModbusUnitRole
 from solaredge2mqtt.services.modbus.models.inputs import ModbusPowerControlInput
 from solaredge2mqtt.services.modbus.models.inverter import ModbusInverter
 from solaredge2mqtt.services.modbus.settings import AdvancedControlsSettings
@@ -19,7 +20,13 @@ if TYPE_CHECKING:
 class ModbusAdvancedControl:
     def __init__(self, service_settings: ServiceSettings, event_bus: EventBus):
         self.settings = service_settings.modbus
-        self.topic_prefix = f"{service_settings.mqtt.topic_prefix}/{ModbusInverter.mqtt_topic()}"
+
+        inverter_topic = (
+            ModbusInverter.generate_topic_prefix(str(ModbusUnitRole.LEADER))
+            if self.settings.has_followers
+            else ModbusInverter.generate_topic_prefix())
+
+        self.topic_prefix = f"{service_settings.mqtt.topic_prefix}/{inverter_topic}"
         self.event_bus = event_bus
 
         self._subscribe_events()

@@ -102,17 +102,19 @@ class PowerflowService:
             battery=powerflow.battery,
         )
 
-        await self.event_bus.emit(
-            MQTTPublishEvent(inverter_data.mqtt_topic(), inverter_data)
-        )
-
-        for key, component in {**meters_data, **batteries_data}.items():
+        for key, unit in units.items():
             await self.event_bus.emit(
-                MQTTPublishEvent(
-                    f"{component.mqtt_topic()}/{key.lower()}",
-                    component,
-                )
+                MQTTPublishEvent(unit.inverter.mqtt_topic(
+                    self.settings.modbus.has_followers), unit.inverter)
             )
+
+            for key, component in {**unit.meters, **unit.batteries}.items():
+                await self.event_bus.emit(
+                    MQTTPublishEvent(
+                        f"{component.mqtt_topic(self.settings.modbus.has_followers)}/{key.lower()}",
+                        component,
+                    )
+                )
 
         if wallbox_data is not None:
             await self.event_bus.emit(

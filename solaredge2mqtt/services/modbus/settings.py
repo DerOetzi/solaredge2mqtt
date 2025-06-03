@@ -81,3 +81,7 @@ class ModbusSettings(ModbusUnitSettings):
             units[f"follower{i}"] = follower
 
         return units
+
+    @property
+    def has_followers(self) -> bool:
+        return len(self.follower) > 0
