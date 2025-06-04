@@ -11,7 +11,7 @@ from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
 
 
 class ModbusUnit(Solaredge2MQTTBaseModel):
-    info: ModbusUnitInfo
+    info: ModbusUnitInfo | None
     inverter: ModbusInverter
     meters: dict[str, ModbusMeter] = Field(default_factory=dict)
     batteries: dict[str, ModbusBattery] = Field(default_factory=dict)

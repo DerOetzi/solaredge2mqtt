@@ -12,9 +12,7 @@ from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import InvalidDataException
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.services.modbus.control import ModbusAdvancedControl
-from solaredge2mqtt.services.modbus.events import (ModbusBatteriesReadEvent,
-                                                   ModbusInverterReadEvent,
-                                                   ModbusMetersReadEvent,
+from solaredge2mqtt.services.modbus.events import (ModbusUnitsReadEvent,
                                                    ModbusWriteEvent)
 from solaredge2mqtt.services.modbus.models.base import ModbusDeviceInfo
 from solaredge2mqtt.services.modbus.models.battery import ModbusBattery
@@ -37,7 +35,7 @@ from solaredge2mqtt.services.modbus.sunspec.values import (SunSpecInputData,
 if TYPE_CHECKING:
     from solaredge2mqtt.core.settings.models import ServiceSettings
 
-LOGGING_DEVICE_INFO = "{info.unit.key}:{device} ({info.manufacturer} {info.model} {info.serialnumber})"
+LOGGING_DEVICE_INFO = "{unit_key}{device} ({info.manufacturer} {info.model} {info.serialnumber})"
 
 
 class Modbus:
@@ -133,11 +131,12 @@ class Modbus:
                                                 unit_settings.unit,
                                                 offset)
 
-        raw_data["unit"] = {
-            "unit": unit_settings.unit,
-            "key": unit_key,
-            "role": unit_settings.role
-        }
+        if self.settings.has_followers:
+            raw_data["unit"] = {
+                "unit": unit_settings.unit,
+                "key": unit_key,
+                "role": unit_settings.role
+            }
 
         info = ModbusDeviceInfo(raw_data)
         logger.info(
@@ -182,11 +181,7 @@ class Modbus:
         except KeyError as error:
             raise InvalidDataException("Invalid modbus data") from error
 
-        # await self.event_bus.emit(ModbusInverterReadEvent(inverter_data))
-        # if meters_data:
-        #     await self.event_bus.emit(ModbusMetersReadEvent(meters_data))
-        # if batteries_data:
-        #     await self.event_bus.emit(ModbusBatteriesReadEvent(batteries_data))
+        await self.event_bus.emit(ModbusUnitsReadEvent(units))
 
         return units
 
@@ -308,7 +303,8 @@ class Modbus:
             LOGGING_DEVICE_INFO
             + ": {status}, AC {power_ac} W, DC {power_dc} W, {energytotal} kWh, "
             + "Grid status {grid_status}, ",
-            device="Inverter",
+            unit_key=inverter_data.info.unit_key(":"),
+            device="inverter",
             info=inverter_data.info,
             status=inverter_data.status,
             power_ac=inverter_data.ac.power.actual,
@@ -336,6 +332,7 @@ class Modbus:
             logger.info(
                 LOGGING_DEVICE_INFO +
                 ": {power} W, {consumption} kWh, {delivery} kWh",
+                unit_key=meter_data.info.unit_key(":"),
                 device=meter_key,
                 info=meter_data.info,
                 power=meter_data.power.actual,
@@ -364,6 +361,7 @@ class Modbus:
             logger.info(
                 LOGGING_DEVICE_INFO +
                 ": {status}, {power} W, {state_of_charge} %",
+                unit_key=battery_data.info.unit_key(":"),
                 device=battery_key,
                 info=battery_data.info,
                 status=battery_data.status,

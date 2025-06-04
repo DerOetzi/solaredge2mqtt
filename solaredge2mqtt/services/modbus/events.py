@@ -1,19 +1,16 @@
 from solaredge2mqtt.core.events.events import BaseEvent
-from solaredge2mqtt.services.events import ComponentEvent, ComponentsEvent
+from solaredge2mqtt.services.modbus.models.unit import ModbusUnit
 from solaredge2mqtt.services.modbus.sunspec.base import SunSpecRegister
 from solaredge2mqtt.services.modbus.sunspec.values import SunSpecInputData
 
 
-class ModbusInverterReadEvent(ComponentEvent):
-    pass
+class ModbusUnitsReadEvent(BaseEvent):
+    def __init__(self, units: dict[str, ModbusUnit]):
+        self._units = units
 
-
-class ModbusMetersReadEvent(ComponentsEvent):
-    pass
-
-
-class ModbusBatteriesReadEvent(ComponentsEvent):
-    pass
+    @property
+    def units(self) -> dict[str, ModbusUnit]:
+        return self._units
 
 
 class ModbusWriteEvent(BaseEvent):

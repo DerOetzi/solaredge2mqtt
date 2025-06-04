@@ -56,12 +56,19 @@ class HomeAssistantDevice(HomeAssistantBaseModel):
     serial_number: str | None = Field(None)
     sw_version: str | None = Field(None)
     via_device: str | None = Field(None)
+    unit_key: str | None = Field(None, exclude=True)
 
     @computed_field
     @property
     def identifiers(self) -> str:
+        identifiers = [self.name, self.manufacturer,
+                       self.model, self.serial_number]
+
+        if self.unit_key:
+            identifiers.append(self.unit_key)
+
         return self.hash_unique_id(
-            [self.name, self.manufacturer, self.model, self.serial_number]
+            identifiers
         )
 
 

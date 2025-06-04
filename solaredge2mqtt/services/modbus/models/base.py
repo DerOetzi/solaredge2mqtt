@@ -30,16 +30,18 @@ class ModbusDeviceInfo(Solaredge2MQTTBaseModel):
     sunspec_type: str
     version: str
     serialnumber: str
-    unit: ModbusUnitInfo
+    unit: ModbusUnitInfo | None = None
 
     def __init__(self, data: dict[str, str | int]):
         values = {
             "manufacturer": data["c_manufacturer"],
             "model": data["c_model"],
             "version": data["c_version"],
-            "serialnumber": data["c_serialnumber"],
-            "unit": data["unit"]
+            "serialnumber": data["c_serialnumber"]
         }
+
+        if "unit" in data:
+            values["unit"] = data["unit"]
 
         if "c_sunspec_did" in data and data["c_sunspec_did"] in C_SUNSPEC_DID_MAP:
             values["sunspec_type"] = C_SUNSPEC_DID_MAP[data["c_sunspec_did"]]
@@ -52,13 +54,21 @@ class ModbusDeviceInfo(Solaredge2MQTTBaseModel):
         super().__init__(**values)
 
     def homeassistant_device_info(self, name: str) -> dict[str, any]:
-        return {
+        info = {
             "name": f"SolarEdge {name}",
             "manufacturer": self.manufacturer,
             "model": self.model,
             "hw_version": self.version,
-            "serial_number": self.serialnumber,
+            "serial_number": self.serialnumber
         }
+
+        if self.unit:
+            info["unit_key"] = self.unit.key
+
+        return info
+
+    def unit_key(self, suffix: str = "") -> str:
+        return f"{self.unit.key}{suffix}" if self.unit else ""
 
 
 class ModbusComponent(Component):
