@@ -15,3 +15,6 @@ class ModbusUnit(Solaredge2MQTTBaseModel):
     inverter: ModbusInverter
     meters: dict[str, ModbusMeter] = Field(default_factory=dict)
     batteries: dict[str, ModbusBattery] = Field(default_factory=dict)
+
+    def has_unit_info(self) -> bool:
+        return self.info is not None

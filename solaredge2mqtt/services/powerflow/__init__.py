@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from numpy import power
+
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
 from solaredge2mqtt.core.influxdb import InfluxDBAsync
@@ -54,15 +56,10 @@ class PowerflowService:
         if "leader" not in units:
             raise InvalidDataException("Invalid modbus data")
 
-        leader = units["leader"]
-        inverter_data = leader.inverter
-        meters_data = leader.meters
-        batteries_data = leader.batteries
-
-        for battery in batteries_data.values():
-            if not battery.is_valid:
-                logger.debug(battery)
-                raise InvalidDataException("Invalid battery data")
+        # for battery in batteries_data.values():
+        #     if not battery.is_valid:
+        #         logger.debug(battery)
+        #         raise InvalidDataException("Invalid battery data")
 
         evcharger = 0
         wallbox_data = None
@@ -76,19 +73,33 @@ class PowerflowService:
             except ConfigurationException as ex:
                 logger.warning(f"{ex.component}: {ex.message}")
 
-        powerflow = Powerflow.from_modbus(
-            inverter_data, meters_data, batteries_data, evcharger
-        )
-        if not powerflow.is_valid:
-            logger.info(powerflow)
-            raise InvalidDataException("Invalid powerflow data")
+        powerflows: dict[str, Powerflow] = {}
 
-        if Powerflow.is_not_valid_with_last(powerflow):
-            logger.debug(powerflow)
-            raise InvalidDataException(
-                "Value change not valid, skipping this loop")
+        for unit_key, unit in units.items():
+            if unit_key == "leader":
+                powerflows[unit_key] = Powerflow.from_modbus(unit, evcharger)
+            else:
+                powerflows[unit_key] = Powerflow.from_modbus(unit)
 
-        await self.write_to_influxdb(batteries_data, powerflow)
+            logger.trace(powerflows[unit_key].model_dump_json())
+
+        if self.settings.modbus.has_followers:
+            powerflow = Powerflow.cumulated_powerflow(powerflows)
+        else:
+            powerflow = powerflows["leader"]
+
+        logger.debug(powerflow.model_dump_json())
+
+        # if not powerflow.is_valid:
+        #     logger.info(powerflow)
+        #     raise InvalidDataException("Invalid powerflow data")
+
+        # if Powerflow.is_not_valid_with_last(powerflow):
+        #     logger.debug(powerflow)
+        #     raise InvalidDataException(
+        #         "Value change not valid, skipping this loop")
+
+        # await self.write_to_influxdb(batteries_data, powerflow)
 
         logger.debug(powerflow)
         logger.info(
@@ -102,6 +113,13 @@ class PowerflowService:
             battery=powerflow.battery,
         )
 
+        await self.publish_modbus(units)
+
+        await self.publish_wallbox(wallbox_data)
+
+        await self.publish_powerflow(powerflows, powerflow)
+
+    async def publish_modbus(self, units):
         for key, unit in units.items():
             await self.event_bus.emit(
                 MQTTPublishEvent(unit.inverter.mqtt_topic(
@@ -116,12 +134,29 @@ class PowerflowService:
                     )
                 )
 
+    async def publish_wallbox(self, wallbox_data):
         if wallbox_data is not None:
             await self.event_bus.emit(
                 MQTTPublishEvent(wallbox_data.mqtt_topic(), wallbox_data)
             )
 
-        await self.event_bus.emit(MQTTPublishEvent(powerflow.mqtt_topic(), powerflow))
+    async def publish_powerflow(self, powerflows: dict[str, Powerflow], powerflow: Powerflow) -> None:
+        if self.settings.modbus.has_followers:
+            for pf in powerflows.values():
+                await self.event_bus.emit(
+                    MQTTPublishEvent(pf.mqtt_topic(), pf)
+                )
+
+            await self.event_bus.emit(
+                MQTTPublishEvent(
+                    powerflow.mqtt_topic("cumulated"),
+                    powerflow,
+                )
+            )
+        else:
+            await self.event_bus.emit(
+                MQTTPublishEvent(powerflow.mqtt_topic(), powerflow)
+            )
 
         await self.event_bus.emit(PowerflowGeneratedEvent(powerflow))
 
