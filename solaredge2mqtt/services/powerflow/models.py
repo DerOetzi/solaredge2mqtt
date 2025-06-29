@@ -9,10 +9,10 @@ from pydantic.json_schema import SkipJsonSchema
 
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.models import Solaredge2MQTTBaseModel
-from solaredge2mqtt.services.homeassistant.models import (
-    HomeAssistantSensorType as HASensor,
-)
-from solaredge2mqtt.services.modbus.models.base import ModbusUnitInfo
+from solaredge2mqtt.services.homeassistant.models import \
+    HomeAssistantSensorType as HASensor
+from solaredge2mqtt.services.modbus.models.base import (ModbusUnitInfo,
+                                                        ModbusUnitRole)
 from solaredge2mqtt.services.modbus.models.battery import ModbusBattery
 from solaredge2mqtt.services.modbus.models.inverter import ModbusInverter
 from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
@@ -69,6 +69,12 @@ class Powerflow(Component):
 
     @staticmethod
     def cumulated_powerflow(powerflows: dict[str, Powerflow]) -> Powerflow:
+        unit = ModbusUnitInfo(
+            key="cumulated",
+            unit=0,
+            role=ModbusUnitRole.CUMULATED,
+        )
+
         inverter = InverterPowerflow(
             power=sum(p.inverter.power for p in powerflows.values()),
             dc_power=sum(p.inverter.dc_power for p in powerflows.values()),
@@ -90,7 +96,7 @@ class Powerflow(Component):
         pv_production = sum(p.pv_production for p in powerflows.values())
 
         return Powerflow(
-            unit=None,
+            unit=unit,
             pv_production=pv_production,
             inverter=inverter,
             grid=grid,
@@ -166,18 +172,25 @@ class Powerflow(Component):
 
         return point
 
-    def mqtt_topic(self, key: str | None = None) -> str:
+    @property
+    def has_unit(self) -> bool:
+        return self.unit is not None
+
+    def mqtt_topic(self) -> str:
         topic = super().mqtt_topic()
 
-        if key is not None:
-            topic += f"/{key.lower()}"
-        elif self.unit is not None:
+        if self.has_unit:
             topic += f"/{self.unit.key.lower()}"
 
         return topic
 
     def homeassistant_device_info(self) -> dict[str, any]:
-        return self._default_homeassistant_device_info("Powerflow")
+        name = "Powerflow"
+
+        if self.has_unit:
+            name += f" {self.unit.key}"
+
+        return self._default_homeassistant_device_info(name)
 
 
 class InverterPowerflow(Solaredge2MQTTBaseModel):

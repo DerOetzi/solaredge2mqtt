@@ -43,10 +43,13 @@ class HomeAssistantDiscovery:
             [
                 ForecastEvent,
                 EnergyReadEvent,
-                PowerflowGeneratedEvent,
                 WallboxReadEvent,
             ],
             self.component_discovery,
+        )
+
+        self.event_bus.subscribe(
+            PowerflowGeneratedEvent, self.powerflow_discovery
         )
 
         self.event_bus.subscribe(
@@ -97,6 +100,16 @@ class HomeAssistantDiscovery:
                 state_topic = self.state_topic(
                     component.mqtt_topic(self.settings.modbus.has_followers), name)
                 await self.publish_component(component, device_info, state_topic)
+
+    async def powerflow_discovery(self, event: PowerflowGeneratedEvent) -> None:
+        self.event_bus.unsubscribe(event, self.powerflow_discovery)
+
+        for key, powerflow in event.components.items():
+            logger.info(f"Home Assistant discovery {key}:powerflow")
+
+            device_info = powerflow.homeassistant_device_info()
+            state_topic = self.state_topic(powerflow.mqtt_topic())
+            await self.publish_component(powerflow, device_info, state_topic)
 
     def state_topic(self, component_topic: str, name: str = "") -> str:
         subtopic = f"/{name.lower()}" if name else ""

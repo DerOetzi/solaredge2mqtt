@@ -8,6 +8,7 @@ from solaredge2mqtt.services.models import Component
 class ModbusUnitRole(EnumModel):
     LEADER = "leader"
     FOLLOWER = "follower"
+    CUMULATED = "cumulated"
 
     def __init__(self, role: str):
         self._role: str = role

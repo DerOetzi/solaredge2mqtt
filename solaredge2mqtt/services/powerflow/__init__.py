@@ -85,10 +85,9 @@ class PowerflowService:
 
         if self.settings.modbus.has_followers:
             powerflow = Powerflow.cumulated_powerflow(powerflows)
+            powerflows["cumulated"] = powerflow
         else:
             powerflow = powerflows["leader"]
-
-        logger.debug(powerflow.model_dump_json())
 
         # if not powerflow.is_valid:
         #     logger.info(powerflow)
@@ -117,7 +116,7 @@ class PowerflowService:
 
         await self.publish_wallbox(wallbox_data)
 
-        await self.publish_powerflow(powerflows, powerflow)
+        await self.publish_powerflow(powerflows)
 
     async def publish_modbus(self, units):
         for key, unit in units.items():
@@ -140,25 +139,19 @@ class PowerflowService:
                 MQTTPublishEvent(wallbox_data.mqtt_topic(), wallbox_data)
             )
 
-    async def publish_powerflow(self, powerflows: dict[str, Powerflow], powerflow: Powerflow) -> None:
+    async def publish_powerflow(self, powerflows: dict[str, Powerflow]) -> None:
         if self.settings.modbus.has_followers:
             for pf in powerflows.values():
                 await self.event_bus.emit(
                     MQTTPublishEvent(pf.mqtt_topic(), pf)
                 )
-
-            await self.event_bus.emit(
-                MQTTPublishEvent(
-                    powerflow.mqtt_topic("cumulated"),
-                    powerflow,
-                )
-            )
         else:
+            powerflow = powerflows["leader"]
             await self.event_bus.emit(
                 MQTTPublishEvent(powerflow.mqtt_topic(), powerflow)
             )
 
-        await self.event_bus.emit(PowerflowGeneratedEvent(powerflow))
+        await self.event_bus.emit(PowerflowGeneratedEvent(powerflows))
 
     async def write_to_influxdb(
         self, batteries_data: dict[str, ModbusBattery], powerflow: Powerflow
