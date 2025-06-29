@@ -56,10 +56,16 @@ class PowerflowService:
         if "leader" not in units:
             raise InvalidDataException("Invalid modbus data")
 
-        # for battery in batteries_data.values():
-        #     if not battery.is_valid:
-        #         logger.debug(battery)
-        #         raise InvalidDataException("Invalid battery data")
+        batteries = {
+            f"{unit_key}:{battery_key}": battery
+            for unit_key, unit in units.items()
+            for battery_key, battery in unit.batteries.items()
+        }
+
+        for battery in batteries.values():
+            if not battery.is_valid:
+                logger.debug(battery)
+                raise InvalidDataException("Invalid battery data")
 
         evcharger = 0
         wallbox_data = None
@@ -89,16 +95,16 @@ class PowerflowService:
         else:
             powerflow = powerflows["leader"]
 
-        # if not powerflow.is_valid:
-        #     logger.info(powerflow)
-        #     raise InvalidDataException("Invalid powerflow data")
+        if not powerflow.is_valid:
+            logger.info(powerflow)
+            raise InvalidDataException("Invalid powerflow data")
 
-        # if Powerflow.is_not_valid_with_last(powerflow):
-        #     logger.debug(powerflow)
-        #     raise InvalidDataException(
-        #         "Value change not valid, skipping this loop")
+        if Powerflow.is_not_valid_with_last(powerflow):
+            logger.debug(powerflow)
+            raise InvalidDataException(
+                "Value change not valid, skipping this loop")
 
-        # await self.write_to_influxdb(batteries_data, powerflow)
+        await self.write_to_influxdb(powerflows, batteries)
 
         logger.debug(powerflow)
         logger.info(
@@ -154,10 +160,15 @@ class PowerflowService:
         await self.event_bus.emit(PowerflowGeneratedEvent(powerflows))
 
     async def write_to_influxdb(
-        self, batteries_data: dict[str, ModbusBattery], powerflow: Powerflow
+        self, 
+        powerflows: dict[str, Powerflow],
+        batteries_data: dict[str, ModbusBattery],
     ):
         if self.influxdb is not None:
-            points = [powerflow.prepare_point()]
+            points = []
+
+            for powerflow in powerflows.values():
+                points.append(powerflow.prepare_point())
 
             for battery in batteries_data.values():
                 points.append(battery.prepare_point())

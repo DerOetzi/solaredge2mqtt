@@ -68,8 +68,12 @@ class ModbusDeviceInfo(Solaredge2MQTTBaseModel):
 
         return info
 
+    @property
+    def has_unit(self) -> bool:
+        return self.unit is not None
+
     def unit_key(self, suffix: str = "") -> str:
-        return f"{self.unit.key}{suffix}" if self.unit else ""
+        return f"{self.unit.key}{suffix}" if self.has_unit else ""
 
 
 class ModbusComponent(Component):
@@ -114,3 +118,7 @@ class ModbusComponent(Component):
         topic_parts.append(cls.COMPONENT)
 
         return "/".join(topic_parts)
+
+    @property
+    def has_unit(self) -> bool:
+        return self.info.has_unit

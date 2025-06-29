@@ -148,8 +148,11 @@ class Powerflow(Component):
 
     def prepare_point(self, measurement: str = "powerflow_raw") -> Point:
         point = Point(measurement)
-        for key, value in self.model_dump_influxdb().items():
+        for key, value in self.model_dump_influxdb(exclude=["unit"]).items():
             point.field(key, value)
+
+        if self.has_unit:
+            point.tag("unit", self.unit.key)
 
         return point
 
