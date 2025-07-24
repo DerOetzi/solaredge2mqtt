@@ -124,7 +124,7 @@ class Service:
         logger.info("Timezone: {timezone}", timezone=LOCAL_TZ)
 
         if self.settings.is_influxdb_configured:
-            await self.influxdb.async_init()
+            self.influxdb.init()
 
         while not self.cancel_request.is_set():
             try:
@@ -158,16 +158,10 @@ class Service:
         except MqttError:
             pass
 
-        try:
-            self.event_bus.cancel_tasks()
-        finally:
-            pass
+        self.event_bus.cancel_tasks()
 
         for task in self.loops:
-            try:
-                task.cancel()
-            finally:
-                pass
+            task.cancel()
 
     def _start_mqtt_listener(self):
         task = aio.create_task(self.mqtt.listen())

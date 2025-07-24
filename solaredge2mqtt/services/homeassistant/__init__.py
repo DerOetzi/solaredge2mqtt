@@ -69,9 +69,9 @@ class HomeAssistantDiscovery:
         if isinstance(event, EnergyReadEvent):
             period = event.component.info.period
             publish = (
-                period.auto_discovery and period.topic not in self._seen_energy_periods
+                period.auto_discovery and event.component.mqtt_topic() not in self._seen_energy_periods
             )
-            self._seen_energy_periods.add(period.topic)
+            self._seen_energy_periods.add(event.component.mqtt_topic())
         else:
             self.event_bus.unsubscribe(event, self.component_discovery)
 

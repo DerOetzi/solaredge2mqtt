@@ -106,12 +106,12 @@ class MQTTClient(Client):
                 input_raw = json.loads(json.dumps(payload))
 
             if isinstance(input_raw, dict):
-                input = model(**input_raw)
+                parsed_input = model(**input_raw)
             else:
-                input = model(input_raw)
+                parsed_input = model(input_raw)
 
             await self.event_bus.emit(
-                MQTTReceivedEvent(topic, input)
+                MQTTReceivedEvent(topic, parsed_input)
             )
         except (ValidationError, json.JSONDecodeError, TypeError) as ex:
             logger.warning(

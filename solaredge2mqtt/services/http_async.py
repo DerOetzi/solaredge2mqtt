@@ -11,7 +11,7 @@ class HTTPClientAsync:
         self.service = service
         self.session: aiohttp.ClientSession | None = None
 
-    async def async_init(self) -> None:
+    def init(self) -> None:
         if not self.session:
             cookie_jar = aiohttp.CookieJar(unsafe=True)
             self.session = aiohttp.ClientSession(cookie_jar=cookie_jar)
@@ -36,7 +36,7 @@ class HTTPClientAsync:
         login: Callable | None = None,
     ) -> dict | None:
         try:
-            await self.async_init()
+            self.init()
 
             async with self.session.get(
                 url, params=params, headers=headers, timeout=timeout, ssl=verify
@@ -61,7 +61,7 @@ class HTTPClientAsync:
         login: Callable | None = None,
     ) -> dict | str | None:
         try:
-            await self.async_init()
+            self.init()
 
             async with self.session.post(
                 url, json=json, data=data, headers=headers, timeout=timeout, ssl=verify

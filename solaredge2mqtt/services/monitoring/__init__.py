@@ -22,6 +22,7 @@ from solaredge2mqtt.services.monitoring.settings import MonitoringSettings
 LOGIN_URL = "https://monitoring.solaredge.com/solaredge-apigw/api/login"
 LOGICAL_URL = "https://monitoring.solaredge.com/solaredge-apigw/api/sites/{site_id}/layout/logical"
 POWER_PUBLIC_URL = "https://monitoring.solaredge.com/solaredge-web/p/playbackData"
+CONTENT_TYPE_FORM_URLENCODED = "application/x-www-form-urlencoded"
 
 
 class MonitoringSite(HTTPClientAsync):
@@ -87,7 +88,7 @@ class MonitoringSite(HTTPClientAsync):
             result = await self._get(
                 LOGICAL_URL.format(site_id=self.settings.site_id),
                 headers={
-                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Content-Type": CONTENT_TYPE_FORM_URLENCODED,
                     "X-CSRF-TOKEN": self.get_cookie("CSRF-TOKEN"),
                 },
                 timeout=10,
@@ -190,7 +191,7 @@ class MonitoringSite(HTTPClientAsync):
                     "CSRF": self.get_cookie("CSRF-TOKEN"),
                 },
                 headers={
-                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Content-Type": CONTENT_TYPE_FORM_URLENCODED,
                     "X-CSRF-TOKEN": self.get_cookie("CSRF-TOKEN"),
                 },
                 timeout=10,
@@ -216,8 +217,7 @@ class MonitoringSite(HTTPClientAsync):
     async def login(self) -> None:
         try:
             await self._post(
-                LOGIN_URL,
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                headers={"Content-Type": CONTENT_TYPE_FORM_URLENCODED},
                 data={
                     "j_username": self.settings.username,
                     "j_password": self.settings.password.get_secret_value(),

@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from numpy import power
-
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
 from solaredge2mqtt.core.influxdb import InfluxDBAsync
@@ -160,7 +158,7 @@ class PowerflowService:
         await self.event_bus.emit(PowerflowGeneratedEvent(powerflows))
 
     async def write_to_influxdb(
-        self, 
+        self,
         powerflows: dict[str, Powerflow],
         batteries_data: dict[str, ModbusBattery],
     ):

@@ -48,7 +48,7 @@ class Modbus:
             port=self.settings.port,
         )
 
-        logger.info(f"Modbus settings: {self.settings}")
+        logger.debug(f"Modbus settings: {self.settings}")
 
         self.event_bus = event_bus
 

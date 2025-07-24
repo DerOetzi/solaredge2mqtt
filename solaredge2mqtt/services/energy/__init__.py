@@ -28,12 +28,13 @@ class EnergyService:
         self._subscribe_events()
 
     def _subscribe_events(self) -> None:
-        self.event_bus.subscribe(InfluxDBAggregatedEvent, self.read_historic_energy)
+        self.event_bus.subscribe(
+            InfluxDBAggregatedEvent, self.read_historic_energy)
 
     async def read_historic_energy(self, _) -> None:
         for period in HistoricPeriod:
-            record = await self.influxdb.query_timeunit(period, "energy")
-            if record is None:
+            records = await self.influxdb.query_timeunit(period, "energy")
+            if records is None:
                 if period.query == HistoricQuery.LAST:
                     logger.info(
                         "No data found for {period}, skipping this loop", period=period
@@ -43,13 +44,14 @@ class EnergyService:
 
                 continue
 
-            energy = HistoricEnergy(record, period)
+            for record in records:
+                energy = HistoricEnergy(record, period)
 
-            logger.info(
-                "Read from influxdb {period} energy: {energy.pv_production} kWh",
-                period=period,
-                energy=energy,
-            )
+                logger.info(
+                    "Read from influxdb {period} energy: {energy.pv_production} kWh",
+                    period=period,
+                    energy=energy,
+                )
 
-            await self.event_bus.emit(EnergyReadEvent(energy))
-            await self.event_bus.emit(MQTTPublishEvent(energy.mqtt_topic(), energy))
+                await self.event_bus.emit(EnergyReadEvent(energy))
+                await self.event_bus.emit(MQTTPublishEvent(energy.mqtt_topic(), energy))
