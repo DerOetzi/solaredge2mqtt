@@ -157,9 +157,9 @@ For a more advanced deployment, especially when integrating with other services 
 1. **Docker Compose Installation**: Ensure Docker Compose is installed on your system. It's typically included with Docker Desktop for Windows and Mac but may require separate installation on Linux.
 2. **Configuration**: Obtain the [docker-compose.yml](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/docker-compose.yml) file from the SolarEdge2MQTT GitHub repository. Edit this file to include your specific environment variables and any other services you wish to integrate.
 3. **Environment File**: Similar to running in the console, copy the [.env.example](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/.env.example) file to `.env` and adjust the settings to fit your setup.
-4. **Execution**: Run `docker-compose up -d` to start the service in detached mode. This command reads your `docker-compose.yml` and `.env` file, setting up your SolarEdge2MQTT service along with any other specified services.
+4. **Execution**: Run `docker compose up -d` to start the service in detached mode. This command reads your `docker-compose.yml` and `.env` file, setting up your SolarEdge2MQTT service along with any other specified services.
 
-Stopping the Service: When you need to stop the service, use `docker-compose down` to gracefully stop and remove the containers defined in your Docker Compose file.
+Stopping the Service: When you need to stop the service, use `docker compose down` to gracefully stop and remove the containers defined in your Docker Compose file. Use `docker logs solaredge2mqtt -f` to show live logs.
 
 [buymecoffee-link]: https://www.buymeacoffee.com/deroetzik
 [buymecoffee-shield]: https://www.buymeacoffee.com/assets/img/custom_images/yellow_img.png
