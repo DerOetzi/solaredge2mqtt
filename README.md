@@ -6,6 +6,29 @@ The SolarEdge2MQTT service facilitates the retrieval of power data from SolarEdg
 
 Users can optionally collect panel energy production and power data directly from the SolarEdge monitoring site, without employing the API, by leveraging their monitoring platform account.
 
+## 🔧 Features
+
+SolarEdge2MQTT provides a comprehensive feature set for power monitoring, home automation integration, and advanced analysis. Key capabilities include:
+
+- 📡 **Modbus communication** with SolarEdge inverters (via TCP/IP)
+- 🧠 **Leader/follower support** for multi-inverter cascaded setups
+- ⚡ **Power flow monitoring**, including:
+  - Inverter production
+  - Battery status and charge/discharge
+  - Grid import/export
+  - Consumption and generation via Modbus meters
+- 🕸️ **MQTT integration** for use with Home Assistant and other systems
+- 🔄 **Home Assistant auto discovery** support (optional)
+- 📈 **PV production forecasting** using a built-in machine learning model  
+  → uses live weather data from OpenWeatherMap and historical data from InfluxDB
+- 💡 **Data logging to InfluxDB** (raw and aggregated values)
+- 💸 **Price-based savings calculation** for consumption and export
+- 🔌 **SolarEdge Wallbox monitoring** via REST API
+- 🌐 **Module-level monitoring** by retrieving data directly from the SolarEdge monitoring site (no API key needed)
+- 🐳 **Docker and Docker Compose support** for easy deployment
+- 🧪 **Console mode** for development and testing
+
+
 It also enables the monitoring of SolarEdge Wallbox via the REST API and supports saving all values into InfluxDB for advanced visualization.
 
 ## Contact and Feedback
