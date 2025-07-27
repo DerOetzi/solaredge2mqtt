@@ -1,4 +1,3 @@
-version: "3"
 services:
   solaredge2mqtt:
     container_name: solaredge2mqtt
@@ -9,6 +8,8 @@ services:
     # - se2mqtt_wallbox__password
     # - se2mqtt_influxdb__token
     # - se2mqtt_weather__api_key
+    env_file: 
+      - .env
     restart: unless-stopped
 
 secrets:
