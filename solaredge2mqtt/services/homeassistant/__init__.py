@@ -1,34 +1,22 @@
 from __future__ import annotations
 
-import jsonref
-
 from typing import TYPE_CHECKING
+
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.logging import logger
-from solaredge2mqtt.core.mqtt.events import (
-    MQTTPublishEvent,
-    MQTTReceivedEvent,
-    MQTTSubscribeEvent,
-)
+from solaredge2mqtt.core.mqtt.events import (MQTTPublishEvent,
+                                             MQTTReceivedEvent,
+                                             MQTTSubscribeEvent)
 from solaredge2mqtt.services.energy.events import EnergyReadEvent
-from solaredge2mqtt.services.events import ComponentEvent, ComponentsEvent
+from solaredge2mqtt.services.events import ComponentEvent
 from solaredge2mqtt.services.forecast.events import ForecastEvent
 from solaredge2mqtt.services.homeassistant.models import (
-    HomeAssistantBinarySensorType,
-    HomeAssistantDevice,
-    HomeAssistantEntity,
-    HomeAssistantNumberType,
-    HomeAssistantSensorType,
-    HomeAssistantStatus,
-    HomeAssistantStatusInput,
-    HomeAssistantType,
-)
-from solaredge2mqtt.services.modbus.events import (
-    ModbusBatteriesReadEvent,
-    ModbusInverterReadEvent,
-    ModbusMetersReadEvent,
-)
+    HomeAssistantBinarySensorType, HomeAssistantDevice, HomeAssistantEntity,
+    HomeAssistantNumberType, HomeAssistantSensorType, HomeAssistantStatus,
+    HomeAssistantStatusInput, HomeAssistantType)
+from solaredge2mqtt.services.modbus.events import ModbusUnitsReadEvent
+from solaredge2mqtt.services.modbus.models.inverter import ModbusInverter
 from solaredge2mqtt.services.models import Component
 from solaredge2mqtt.services.powerflow.events import PowerflowGeneratedEvent
 from solaredge2mqtt.services.wallbox.events import WallboxReadEvent
@@ -55,15 +43,17 @@ class HomeAssistantDiscovery:
             [
                 ForecastEvent,
                 EnergyReadEvent,
-                ModbusInverterReadEvent,
-                PowerflowGeneratedEvent,
                 WallboxReadEvent,
             ],
             self.component_discovery,
         )
 
         self.event_bus.subscribe(
-            [ModbusMetersReadEvent, ModbusBatteriesReadEvent], self.components_discovery
+            PowerflowGeneratedEvent, self.powerflow_discovery
+        )
+
+        self.event_bus.subscribe(
+            ModbusUnitsReadEvent, self.units_discovery
         )
 
         self.event_bus.subscribe(
@@ -79,35 +69,53 @@ class HomeAssistantDiscovery:
         if isinstance(event, EnergyReadEvent):
             period = event.component.info.period
             publish = (
-                period.auto_discovery and period.topic not in self._seen_energy_periods
+                period.auto_discovery and event.component.mqtt_topic() not in self._seen_energy_periods
             )
-            self._seen_energy_periods.add(period.topic)
+            self._seen_energy_periods.add(event.component.mqtt_topic())
         else:
             self.event_bus.unsubscribe(event, self.component_discovery)
 
         if publish:
             logger.info(
                 f"Home Assistant discovery component: {event.component}")
-            await self.publish_component(event.component)
+            device_info = event.component.homeassistant_device_info()
+            state_topic = self.state_topic(event.component.mqtt_topic())
+            await self.publish_component(event.component, device_info, state_topic)
 
-    async def components_discovery(self, event: ComponentsEvent) -> None:
-        self.event_bus.unsubscribe(event, self.components_discovery)
-        for name, component in event.components.items():
-            logger.info(f"Home Assistant discovery component: {component}")
-            await self.publish_component(component, name)
+    async def units_discovery(self, event: ModbusUnitsReadEvent) -> None:
+        self.event_bus.unsubscribe(event, self.units_discovery)
+        for unit_key, unit in event.units.items():
+            logger.info(f"Home Assistant discovery {unit_key}:inverter")
 
-    async def publish_component(self, component: Component, name: str = "") -> None:
+            device_info = unit.inverter.homeassistant_device_info()
+            state_topic = self.state_topic(
+                unit.inverter.mqtt_topic(self.settings.modbus.has_followers))
+            await self.publish_component(unit.inverter, device_info, state_topic)
+
+            for name, component in {**unit.meters, **unit.batteries}.items():
+                logger.info(f"Home Assistant discovery {unit_key}:{name}")
+
+                device_info = component.homeassistant_device_info_with_name(
+                    name)
+                state_topic = self.state_topic(
+                    component.mqtt_topic(self.settings.modbus.has_followers), name)
+                await self.publish_component(component, device_info, state_topic)
+
+    async def powerflow_discovery(self, event: PowerflowGeneratedEvent) -> None:
+        self.event_bus.unsubscribe(event, self.powerflow_discovery)
+
+        for key, powerflow in event.components.items():
+            logger.info(f"Home Assistant discovery {key}:powerflow")
+
+            device_info = powerflow.homeassistant_device_info()
+            state_topic = self.state_topic(powerflow.mqtt_topic())
+            await self.publish_component(powerflow, device_info, state_topic)
+
+    def state_topic(self, component_topic: str, name: str = "") -> str:
         subtopic = f"/{name.lower()}" if name else ""
+        return f"{self.settings.mqtt.topic_prefix}/{component_topic}{subtopic}"
 
-        state_topic = (
-            f"{self.settings.mqtt.topic_prefix}/{component.mqtt_topic()}{subtopic}"
-        )
-
-        if name:
-            device_info = component.homeassistant_device_info_with_name(name)
-        else:
-            device_info = component.homeassistant_device_info()
-
+    async def publish_component(self, component: Component, device_info: dict[str, any], state_topic: str) -> None:
         logger.trace(device_info)
         device = HomeAssistantDevice(
             client_id=self.settings.mqtt.client_id,
@@ -118,6 +126,14 @@ class HomeAssistantDiscovery:
 
         entities_info = component.parse_schema(self.property_parser)
         for entity_info in entities_info:
+            if isinstance(component, ModbusInverter):
+                path = entity_info["path"]
+                if not self.settings.modbus.check_grid_status and path[0] == "grid_status":
+                    continue
+
+                if not self.settings.modbus.advanced_power_controls_enabled and path[0] == "advanced_power_controls":
+                    continue
+
             if self.settings.is_prices_configured and entity_info["ha_type"] == HomeAssistantSensorType.MONETARY:
                 entity_info["unit"] = self.settings.prices.currency
 

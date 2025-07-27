@@ -54,45 +54,33 @@ class EventBus:
             self._subscribed_events.pop(event_key, None)
 
     async def emit(self, event: BaseEvent) -> None:
-        try:
-            event_key = event.event_key()
-            logger.trace(f"Event emitted: {event_key}")
+        event_key = event.event_key()
+        logger.trace(f"Event emitted: {event_key}")
 
-            if event_key in self._listeners:
-                if event.AWAIT:
-                    await self._notify_listeners(event, self._listeners[event_key])
-                else:
-                    task = asyncio.create_task(
-                        self._notify_listeners(event, self._listeners[event_key])
-                    )
-                    self._tasks.add(task)
-                    task.add_done_callback(self._tasks.remove)
-        except MqttCodeError as error:
-            raise error
-        except asyncio.CancelledError:
-            pass
+        if event_key in self._listeners:
+            if event.AWAIT:
+                await self._notify_listeners(event, self._listeners[event_key])
+            else:
+                task = asyncio.create_task(
+                    self._notify_listeners(event, self._listeners[event_key])
+                )
+                self._tasks.add(task)
+                task.add_done_callback(self._tasks.remove)
 
     async def _notify_listeners(
         self, event: BaseEvent, listeners: list[Callable]
     ) -> None:
-        try:
-            await asyncio.gather(
-                *[self._notify_listener(listener, event) for listener in listeners]
-            )
-        except MqttCodeError as error:
-            raise error
-        except asyncio.CancelledError:
-            pass
+        await asyncio.gather(
+            *[self._notify_listener(listener, event) for listener in listeners]
+        )
 
     async def _notify_listener(self, listener: Callable, event: BaseEvent) -> None:
         try:
             await listener(event)
         except InvalidDataException as error:
-            logger.warning("{message}, skipping this loop", message=error.message)
+            logger.warning("{message}, skipping this loop",
+                           message=error.message)
 
     def cancel_tasks(self):
         for task in self._tasks:
-            try:
-                task.cancel()
-            finally:
-                pass
+            task.cancel()

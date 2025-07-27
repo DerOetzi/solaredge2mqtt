@@ -40,14 +40,15 @@ class InfluxDBAsync:
             self._subscribe_events()
 
         self.client_async: InfluxDBClientAsync | None = None
-        self.client_sync: InfluxDBClient = InfluxDBClient(**self.settings.client_params)
+        self.client_sync: InfluxDBClient = InfluxDBClient(
+            **self.settings.client_params)
 
         self.flux_cache: dict[str, str] = {}
 
     def _subscribe_events(self) -> None:
         self.event_bus.subscribe(Interval10MinTriggerEvent, self.loop)
 
-    async def async_init(self) -> None:
+    def init(self) -> None:
         self.client_async = InfluxDBClientAsync(**self.settings.client_params)
 
         self.initialize_buckets()
@@ -78,7 +79,8 @@ class InfluxDBAsync:
         return self.client_sync.buckets_api()
 
     async def loop(self, _) -> None:
-        now = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0)
+        now = datetime.now(tz=timezone.utc).replace(
+            minute=0, second=0, microsecond=0)
 
         logger.info("Aggregate powerflow and energy raw data")
         aggregate_query = self._get_flux_query(
@@ -89,7 +91,7 @@ class InfluxDBAsync:
 
         logger.info("Apply retention on raw data")
         retention_time = now - timedelta(hours=self.settings.retention_raw)
-        await self.delete_from_measurements(
+        self.delete_from_measurements(
             datetime(1970, 1, 1, tzinfo=timezone.utc),
             retention_time,
             ["powerflow_raw", "battery_raw"],
@@ -102,13 +104,13 @@ class InfluxDBAsync:
     def query_api(self) -> QueryApiAsync:
         return self.client_async.query_api()
 
-    async def delete_from_measurements(
+    def delete_from_measurements(
         self, start: datetime, stop: datetime, measurements: list[str]
     ) -> None:
         for measurement in measurements:
-            await self.delete_from_measurement(start, stop, measurement)
+            self.delete_from_measurement(start, stop, measurement)
 
-    async def delete_from_measurement(
+    def delete_from_measurement(
         self, start: datetime, stop: datetime, measurement: str
     ) -> None:
         self.delete_api.delete(
@@ -133,10 +135,13 @@ class InfluxDBAsync:
 
     async def query_timeunit(
         self, period: HistoricPeriod, measurement: str
-    ) -> dict[str, any] | None:
-        return await self.query_first(
-            period.query.query, {"UNIT": period.unit, "MEASUREMENT": measurement}
+    ) -> list[dict[str, any]] | None:
+        results = await self.query(
+            period.query.query, {"UNIT": period.unit,
+                                 "MEASUREMENT": measurement}
         )
+
+        return results if len(results) > 0 else None
 
     async def query_first(
         self, query_name: str, additional_replacements: dict[str, any] | None = None

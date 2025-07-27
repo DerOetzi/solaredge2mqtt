@@ -2,9 +2,32 @@
 
 [![License](https://img.shields.io/github/license/DerOetzi/solaredge2mqtt)](https://github.com/DerOetzi/solaredge2mqtt/blob/main/LICENSE) [![Release](https://img.shields.io/github/v/release/DerOetzi/solaredge2mqtt)](https://github.com/DerOetzi/solaredge2mqtt/releases/latest) [![Build Status](https://img.shields.io/github/actions/workflow/status/DerOetzi/solaredge2mqtt/build_project.yml?branch=main)](https://github.com/DerOetzi/solaredge2mqtt/actions/workflows/build_project.yml) [![PyPI version](https://img.shields.io/pypi/v/solaredge2mqtt.svg)](https://pypi.org/project/solaredge2mqtt/) [![Discord Chat](https://img.shields.io/discord/1196540254686032014)](https://discord.gg/QXfghc93pY) [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-donate-yellow)][buymecoffee-link]
 
-The SolarEdge2MQTT service facilitates the retrieval of power data from SolarEdge inverters and its publication to an MQTT broker. Ideal for integrating SolarEdge inverters into home automation systems, this service supports real-time monitoring of power flow and additional parameters via Modbus.
+The SolarEdge2MQTT service facilitates the retrieval of power data from SolarEdge inverters and its publication to an MQTT broker. Ideal for integrating SolarEdge inverters into home automation systems, this service supports real-time monitoring of power flow and additional parameters via Modbus. 
 
 Users can optionally collect panel energy production and power data directly from the SolarEdge monitoring site, without employing the API, by leveraging their monitoring platform account.
+
+## 🔧 Features
+
+SolarEdge2MQTT provides a comprehensive feature set for power monitoring, home automation integration, and advanced analysis. Key capabilities include:
+
+- 📡 **Modbus communication** with SolarEdge inverters (via TCP/IP)
+- 🧠 **Leader/follower support** for multi-inverter cascaded setups
+- ⚡ **Power flow monitoring**, including:
+  - Inverter production
+  - Battery status and charge/discharge
+  - Grid import/export
+  - Consumption and generation via Modbus meters
+- 🕸️ **MQTT integration** for use with Home Assistant and other systems
+- 🔄 **Home Assistant auto discovery** support (optional)
+- 📈 **PV production forecasting** using a built-in machine learning model  
+  → uses live weather data from OpenWeatherMap and historical data from InfluxDB
+- 💡 **Data logging to InfluxDB** (raw and aggregated values)
+- 💸 **Price-based savings calculation** for consumption and export
+- 🔌 **SolarEdge Wallbox monitoring** via REST API
+- 🌐 **Module-level monitoring** by retrieving data directly from the SolarEdge monitoring site (no API key needed)
+- 🐳 **Docker and Docker Compose support** for easy deployment
+- 🧪 **Console mode** for development and testing
+
 
 It also enables the monitoring of SolarEdge Wallbox via the REST API and supports saving all values into InfluxDB for advanced visualization.
 
@@ -34,13 +57,37 @@ Configure the service using environment variables. The available options are lis
 - **SE2MQTT_LOGGING_LEVEL**: Adjust the verbosity of logs. Options include DEBUG, INFO, WARNING, ERROR, and CRITICAL.
 - **SE2MQTT_LOCATION\_\_LATITUDE** and **SE2MQTT_LOCATION\_\_LONGITUDE**: Specify your location to enable weather and forecast services. These settings are essential for accurate environmental data and PV production forecasts.
 
-### Modbus configuration
+### Basic Modbus configuration
 
-- **SE2MQTT_MODBUS\_\_HOST**: The IP address of your SolarEdge inverter.
-- **SE2MQTT_MODBUS\_\_PORT**: The port on which your inverter's Modbus is accessible. Default is 1502.
-- **SE2MQTT_MODBUS\_\_TIMEOUT**: The timeout (in seconds) for Modbus connections. A lower value makes the system more responsive but may lead to incomplete data in environments with poor network conditions.
-- **SE2MQTT_MODBUS\_\_UNIT**: The unit address for Modbus communication. Default is 1.
-- **SE2MQTT_MODBUS\_\_CHECK_GRID_STATUS**: Check whether system is on grid (not available without extra hardware). Default is false.
+- **SE2MQTT_MODBUS__HOST**: The IP address of your SolarEdge inverter.
+- **SE2MQTT_MODBUS__PORT**: The port on which your inverter's Modbus is accessible. Default is 1502.
+- **SE2MQTT_MODBUS__TIMEOUT**: The timeout (in seconds) for Modbus connections. A lower value makes the system more responsive but may lead to incomplete data in environments with poor network conditions.
+- **SE2MQTT_MODBUS__UNIT**: The unit address for Modbus communication. Default is 1.
+- **SE2MQTT_MODBUS__METER0, METER1, METER2**: Enable or disable detection of meters. Default is true.
+- **SE2MQTT_MODBUS__BATTERY0, BATTERY1**: Enable or disable detection of batteries. Default is true.
+- **SE2MQTT_MODBUS__CHECK_GRID_STATUS**: Check whether the system is on grid (not available without extra hardware like an Export+Import meter). Default is false.
+
+### Leader/follower setup
+
+SolarEdge inverters support a cascading setup, where one inverter acts as the leader and up to ten others act as followers.
+
+- For the leader inverter, use the basic Modbus settings described above.
+- For each follower inverter, use the additional follower-specific parameters as shown below.
+
+Example for configuring the first follower:
+
+- **SE2MQTT_MODBUS__FOLLOWER0__UNIT**: The unit address for Modbus communication.
+- **SE2MQTT_MODBUS__FOLLOWER0__METER0, METER1, METER2**: Enable or disable detection of meters. Default is false.
+- **SE2MQTT_MODBUS__FOLLOWER0__BATTERY0, BATTERY1**: Enable or disable detection of batteries. Default is false.
+
+You can configure up to 11 inverters in total: one leader and up to 10 followers (FOLLOWER0 through FOLLOWER9). Each configured inverter will report:
+
+- individual power flow data
+- individual energy data (if enabled)
+- cumulative energy and power flow data
+- cumulative production forecasts (if forecasting is enabled)
+
+This setup allows for comprehensive multi-inverter support in systems with cascaded SolarEdge installations.
 
 ### MQTT configuration
 

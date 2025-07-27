@@ -11,6 +11,7 @@ power =
         |> range(start: startTime, stop: stopTime)
         |> filter(fn: (r) => r._measurement == "powerflow_raw")
         |> filter(fn: (r) => r._field == "pv_production")
+        |> filter(fn: (r) => not exists r.unit or r.unit == "cumulated")
 
 energy =
     power

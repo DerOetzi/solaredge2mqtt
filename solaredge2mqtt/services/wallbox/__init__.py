@@ -1,7 +1,5 @@
-import asyncio
 import time
 
-import aiohttp
 import jwt
 from aiohttp.client_exceptions import ClientResponseError
 from pydantic import BaseModel, Field
@@ -25,15 +23,28 @@ class AuthorizationTokens(BaseModel):
 
     @property
     def access_token_expires(self) -> int:
-        payload = jwt.decode(self.access_token, options={"verify_signature": False})
-        logger.debug("Access token expires at: {expires}", expires=payload["exp"])
-        return payload["exp"]
+        expires = self.get_exp_claim(self.access_token)
+        logger.debug("Access token expires at: {expires}", expires=expires)
+        return expires
 
     @property
     def refresh_token_expires(self) -> int:
-        payload = jwt.decode(self.refresh_token, options={"verify_signature": False})
-        logger.debug("Refresh token expires at: {expires}", expires=payload["exp"])
-        return payload["exp"]
+        expires = self.get_exp_claim(self.refresh_token)
+        logger.debug("Refresh token expires at: {expires}", expires=expires)
+        return expires
+
+    @staticmethod
+    def get_exp_claim(token: str) -> int:
+        try:
+            # ⚠️ This only extracts the 'exp' claim without verifying the JWT signature.
+            # It's used for internal expiration checks, not for authentication or security decisions.
+            payload = jwt.decode(
+                token, options={"verify_signature": False})  # NOSONAR
+            return payload["exp"]
+        except Exception as e:
+            logger.warning(
+                "Failed to decode JWT for exp claim: {error}", error=e)
+            raise InvalidDataException("Cannot read token expiration") from e
 
 
 class WallboxClient(HTTPClientAsync):
@@ -57,7 +68,8 @@ class WallboxClient(HTTPClientAsync):
                 WALLBOX_URL.format(
                     host=self.settings.host, serial=self.settings.serial
                 ),
-                headers={"Authorization": f"Bearer {self.authorization.access_token}"},
+                headers={
+                    "Authorization": f"Bearer {self.authorization.access_token}"},
                 verify=False,
                 login=self.login,
             )
@@ -73,7 +85,8 @@ class WallboxClient(HTTPClientAsync):
 
             await self.event_bus.emit(WallboxReadEvent(wallbox))
         except ClientResponseError as error:
-            raise InvalidDataException(f"Cannot read Wallbox data: {error}") from error
+            raise InvalidDataException(
+                f"Cannot read Wallbox data: {error}") from error
 
         return wallbox
 
@@ -104,7 +117,8 @@ class WallboxClient(HTTPClientAsync):
             )
 
             if response is None:
-                raise ConfigurationException("wallbox", "Invalid Wallbox login")
+                raise ConfigurationException(
+                    "wallbox", "Invalid Wallbox login")
 
             self.authorization = AuthorizationTokens(**response)
             logger.info("Logged in to EV charger")

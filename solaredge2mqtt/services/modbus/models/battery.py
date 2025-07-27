@@ -69,6 +69,9 @@ class ModbusBattery(ModbusComponent):
         point.field("state_of_charge", self.state_of_charge)
         point.field("state_of_health", self.state_of_health)
 
+        if self.has_unit:
+            point.tag("unit", self.info.unit.key)
+
         return point
 
     def homeassistant_device_info_with_name(self, name: str) -> dict[str, any]:
