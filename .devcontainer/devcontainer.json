@@ -18,7 +18,10 @@
 				"SonarSource.sonarlint-vscode",
 				"charliermarsh.ruff",
 				"ms-python.python",
-				"ms-python.vscode-pylance"
+				"ms-python.vscode-pylance",
+				"ms-azuretools.vscode-containers",
+				"ms-azuretools.vscode-docker",
+				"ms-python.isort"
 			],
 			"settings": {
 				"python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",

@@ -2,14 +2,16 @@ from __future__ import annotations
 
 from pydantic import Field
 
-from solaredge2mqtt.services.homeassistant.models import \
-    HomeAssistantBinarySensorType as HABinarySensor
-from solaredge2mqtt.services.homeassistant.models import \
-    HomeAssistantNumberType as HANumber
-from solaredge2mqtt.services.homeassistant.models import \
-    HomeAssistantSensorType as HASensor
-from solaredge2mqtt.services.modbus.models.base import (ModbusComponent,
-                                                        ModbusDeviceInfo)
+from solaredge2mqtt.services.homeassistant.models import (
+    HomeAssistantBinarySensorType as HABinarySensor,
+)
+from solaredge2mqtt.services.homeassistant.models import (
+    HomeAssistantNumberType as HANumber,
+)
+from solaredge2mqtt.services.homeassistant.models import (
+    HomeAssistantSensorType as HASensor,
+)
+from solaredge2mqtt.services.modbus.models.base import ModbusComponent, ModbusDeviceInfo
 from solaredge2mqtt.services.modbus.models.inputs import ModbusPowerControlInput
 from solaredge2mqtt.services.modbus.models.values import ModbusAC, ModbusDC
 from solaredge2mqtt.services.modbus.sunspec.values import INVERTER_STATUS_MAP
@@ -49,7 +51,10 @@ class ModbusInverter(ModbusComponent):
             grid_status = not data["grid_status"]
 
         advanced_power_controls = None
-        if "advanced_power_control_enable" in data and data["advanced_power_control_enable"]:
+        if (
+            "advanced_power_control_enable" in data
+            and data["advanced_power_control_enable"]
+        ):
             advanced_power_controls = ModbusPowerControl(data)
 
         super().__init__(
@@ -72,7 +77,10 @@ class ModbusPowerControl(ComponentValueGroup):
     advanced_power_control: bool = Field(
         **HABinarySensor.ENABLED.field("Control enabled"))
     active_power_limit: int = Field(
-        **HANumber.ACTIVE_POWER_LIMIT.field(ModbusPowerControlInput.ACTIVE_POWER_LIMIT, "Active PowerLimit"))
+        **HANumber.ACTIVE_POWER_LIMIT.field(
+            ModbusPowerControlInput.ACTIVE_POWER_LIMIT,
+            "Active PowerLimit"
+        ))
 
     def __init__(self, data: dict[str, str | int | bool]):
         super().__init__(

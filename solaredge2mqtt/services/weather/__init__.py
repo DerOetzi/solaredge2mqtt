@@ -71,6 +71,9 @@ class WeatherClient(HTTPClientAsync):
                     "Invalid OpenWeatherMap API key or no subscription to OneCall-API"
                 )
             else:
-                error_msg = "Unable to read weather data from OpenWeatherMap (HTTP {status_code})"
+                error_msg = (
+                    "Unable to read weather data from OpenWeatherMap "
+                    "(HTTP {status_code})"
+                )
 
             raise InvalidDataException(error_msg) from error

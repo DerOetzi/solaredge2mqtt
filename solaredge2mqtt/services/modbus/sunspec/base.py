@@ -3,9 +3,11 @@ from __future__ import annotations
 from pymodbus.client import ModbusTcpClient
 
 from solaredge2mqtt.core.models import EnumModel
-from solaredge2mqtt.services.modbus.sunspec.values import (SunSpecInputData,
-                                                           SunSpecPayload,
-                                                           SunSpecValueType)
+from solaredge2mqtt.services.modbus.sunspec.values import (
+    SunSpecInputData,
+    SunSpecPayload,
+    SunSpecValueType,
+)
 
 
 class SunSpecRequestRegisterBundle:

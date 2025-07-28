@@ -118,7 +118,8 @@ class Service:
         logger.info("Starting SolarEdge2MQTT service...")
         logger.info("Version: {version}", version=__version__)
         logger.info(
-            f"Operationg system: {platform.platform()} ({platform.system()}/{platform.machine()})"
+            f"Operationg system: {platform.platform()} "
+            f"({platform.system()}/{platform.machine()})"
         )
         logger.debug(self.settings)
         logger.info("Timezone: {timezone}", timezone=LOCAL_TZ)

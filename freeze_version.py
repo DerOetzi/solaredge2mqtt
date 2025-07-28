@@ -20,5 +20,6 @@ def get_versions() -> dict[str | bool | None]:
     print("Generated solaredge2mqtt/_version.py")
     print(f"Version: {versions['version']}")
 
+
 if __name__ == "__main__":
     generate_static_version_file()

@@ -2,19 +2,26 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.logging import logger
-from solaredge2mqtt.core.mqtt.events import (MQTTPublishEvent,
-                                             MQTTReceivedEvent,
-                                             MQTTSubscribeEvent)
+from solaredge2mqtt.core.mqtt.events import (
+    MQTTPublishEvent,
+    MQTTReceivedEvent,
+    MQTTSubscribeEvent,
+)
 from solaredge2mqtt.services.energy.events import EnergyReadEvent
 from solaredge2mqtt.services.events import ComponentEvent
 from solaredge2mqtt.services.forecast.events import ForecastEvent
 from solaredge2mqtt.services.homeassistant.models import (
-    HomeAssistantBinarySensorType, HomeAssistantDevice, HomeAssistantEntity,
-    HomeAssistantNumberType, HomeAssistantSensorType, HomeAssistantStatus,
-    HomeAssistantStatusInput, HomeAssistantType)
+    HomeAssistantBinarySensorType,
+    HomeAssistantDevice,
+    HomeAssistantEntity,
+    HomeAssistantNumberType,
+    HomeAssistantSensorType,
+    HomeAssistantStatus,
+    HomeAssistantStatusInput,
+    HomeAssistantType,
+)
 from solaredge2mqtt.services.modbus.events import ModbusUnitsReadEvent
 from solaredge2mqtt.services.modbus.models.inverter import ModbusInverter
 from solaredge2mqtt.services.models import Component
@@ -62,14 +69,21 @@ class HomeAssistantDiscovery:
         )
 
     async def async_init(self) -> None:
-        await self.event_bus.emit(MQTTSubscribeEvent(self._status_topic, HomeAssistantStatusInput))
+        await self.event_bus.emit(
+            MQTTSubscribeEvent(
+                self._status_topic,
+                HomeAssistantStatusInput,
+            )
+        )
 
     async def component_discovery(self, event: ComponentEvent) -> None:
         publish = True
         if isinstance(event, EnergyReadEvent):
             period = event.component.info.period
             publish = (
-                period.auto_discovery and event.component.mqtt_topic() not in self._seen_energy_periods
+                period.auto_discovery and (
+                    event.component.mqtt_topic() not in self._seen_energy_periods
+                )
             )
             self._seen_energy_periods.add(event.component.mqtt_topic())
         else:
@@ -115,7 +129,12 @@ class HomeAssistantDiscovery:
         subtopic = f"/{name.lower()}" if name else ""
         return f"{self.settings.mqtt.topic_prefix}/{component_topic}{subtopic}"
 
-    async def publish_component(self, component: Component, device_info: dict[str, any], state_topic: str) -> None:
+    async def publish_component(
+        self,
+        component: Component,
+        device_info: dict[str, any],
+        state_topic: str
+    ) -> None:
         logger.trace(device_info)
         device = HomeAssistantDevice(
             client_id=self.settings.mqtt.client_id,
@@ -128,13 +147,22 @@ class HomeAssistantDiscovery:
         for entity_info in entities_info:
             if isinstance(component, ModbusInverter):
                 path = entity_info["path"]
-                if not self.settings.modbus.check_grid_status and path[0] == "grid_status":
+                if (
+                    not self.settings.modbus.check_grid_status
+                    and path[0] == "grid_status"
+                ):
                     continue
 
-                if not self.settings.modbus.advanced_power_controls_enabled and path[0] == "advanced_power_controls":
+                if (
+                    not self.settings.modbus.advanced_power_controls_enabled
+                    and path[0] == "advanced_power_controls"
+                ):
                     continue
 
-            if self.settings.is_prices_configured and entity_info["ha_type"] == HomeAssistantSensorType.MONETARY:
+            if (
+                self.settings.is_prices_configured
+                and entity_info["ha_type"] == HomeAssistantSensorType.MONETARY
+            ):
                 entity_info["unit"] = self.settings.prices.currency
 
             entity = HomeAssistantEntity(

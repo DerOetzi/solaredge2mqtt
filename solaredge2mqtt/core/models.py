@@ -120,7 +120,10 @@ class Solaredge2MQTTBaseModel(BaseModel):
     @classmethod
     def parse_schema(cls, property_parser: callable | None = None) -> list[dict]:
         return cls._walk_schema(
-            jsonref.replace_refs(cls.model_json_schema(mode="serialization"), merge_props=True)[
+            jsonref.replace_refs(
+                cls.model_json_schema(mode="serialization"),
+                merge_props=True
+            )[
                 "properties"
             ], property_parser or cls.property_parser
 
@@ -150,13 +153,19 @@ class Solaredge2MQTTBaseModel(BaseModel):
             elif "allOf" in prop:
                 items.extend(
                     cls._walk_schema(
-                        prop["allOf"][0]["properties"], property_parser, new_name, new_path
+                        prop["allOf"][0]["properties"],
+                        property_parser,
+                        new_name,
+                        new_path
                     )
                 )
             elif "anyOf" in prop and "properties" in prop["anyOf"][0]:
                 items.extend(
                     cls._walk_schema(
-                        prop["anyOf"][0]["properties"], property_parser, new_name, new_path
+                        prop["anyOf"][0]["properties"],
+                        property_parser,
+                        new_name,
+                        new_path
                     )
                 )
             else:
@@ -167,7 +176,11 @@ class Solaredge2MQTTBaseModel(BaseModel):
         return items
 
     @staticmethod
-    def property_parser(prop: dict[str, any], name: str, path: list[str]) -> dict | None:
+    def property_parser(
+        prop: dict[str, any], 
+        name: str, 
+        path: list[str]
+    ) -> dict | None:
         if "input_field" in prop:
             return {
                 "name": name,

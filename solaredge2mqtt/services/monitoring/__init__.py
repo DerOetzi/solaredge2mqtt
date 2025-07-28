@@ -276,7 +276,8 @@ class MonitoringSite(HTTPClientAsync):
             )
 
         logger.info(
-            "Read from monitoring total energy: {energy_total} kWh from {count_modules} modules",
+            "Read from monitoring total energy: {energy_total} kWh "
+            "from {count_modules} modules",
             energy_total=energy_total / 1000,
             count_modules=count_modules,
         )

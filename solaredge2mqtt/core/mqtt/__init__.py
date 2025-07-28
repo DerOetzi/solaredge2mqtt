@@ -1,7 +1,7 @@
 import json
-
 from asyncio import Queue, QueueFull
-from aiomqtt import Client, Will, Message
+
+from aiomqtt import Client, Message, Will
 from pydantic import BaseModel, ValidationError
 
 from solaredge2mqtt.core.events import EventBus
@@ -71,7 +71,8 @@ class MQTTClient(Client):
                     continue
                 if len(message.payload) > MAX_MQTT_PAYLOAD_SIZE:
                     logger.warning(
-                        f"Payload too large on topic: {topic} ({len(message.payload)} bytes)"
+                        f"Payload too large on topic: {topic} "
+                        f"({len(message.payload)} bytes)"
                     )
                     continue
                 try:

@@ -10,8 +10,7 @@ from solaredge2mqtt.services.modbus.models.base import ModbusUnitRole
 from solaredge2mqtt.services.modbus.models.inputs import ModbusPowerControlInput
 from solaredge2mqtt.services.modbus.models.inverter import ModbusInverter
 from solaredge2mqtt.services.modbus.settings import AdvancedControlsSettings
-from solaredge2mqtt.services.modbus.sunspec.inverter import \
-    SunSpecPowerControlRegister
+from solaredge2mqtt.services.modbus.sunspec.inverter import SunSpecPowerControlRegister
 
 if TYPE_CHECKING:
     from solaredge2mqtt.core.settings.models import ServiceSettings
@@ -82,7 +81,11 @@ class ModbusAdvancedControl:
             # await self.event_bus.emit(MQTTSubscribeEvent(topic))
 
     @staticmethod
-    def property_parser(prop: dict[str, any], name: str, path: list[str]) -> dict[str, str] | None:
+    def property_parser(
+        prop: dict[str, any], 
+        name: str, 
+        path: list[str]
+    ) -> dict[str, str] | None:
         field = None
 
         if prop.get("input_field", False):

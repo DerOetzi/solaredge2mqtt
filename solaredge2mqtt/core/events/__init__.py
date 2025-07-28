@@ -3,11 +3,9 @@ from __future__ import annotations
 import asyncio
 from typing import Callable
 
-from aiomqtt import MqttCodeError, MqttError
-
+from solaredge2mqtt.core.events.events import BaseEvent
 from solaredge2mqtt.core.exceptions import InvalidDataException
 from solaredge2mqtt.core.logging import logger
-from solaredge2mqtt.core.events.events import BaseEvent
 
 
 class EventBus:

@@ -37,7 +37,8 @@ class AuthorizationTokens(BaseModel):
     def get_exp_claim(token: str) -> int:
         try:
             # ⚠️ This only extracts the 'exp' claim without verifying the JWT signature.
-            # It's used for internal expiration checks, not for authentication or security decisions.
+            # It's used for internal expiration checks, not for authentication 
+            # or security decisions.
             payload = jwt.decode(
                 token, options={"verify_signature": False})  # NOSONAR
             return payload["exp"]
