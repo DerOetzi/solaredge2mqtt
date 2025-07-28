@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from importlib import resources
 from typing import TYPE_CHECKING
 
-import pkg_resources
 from influxdb_client import BucketRetentionRules, InfluxDBClient, Point
 from influxdb_client.client.bucket_api import BucketsApi
 from influxdb_client.client.delete_api import DeleteApi
@@ -169,9 +169,11 @@ class InfluxDBAsync:
         self, query_name: str, additional_replacements: dict[str, any] | None = None
     ) -> str:
         if query_name not in self.flux_cache:
-            flux = pkg_resources.resource_string(
-                __name__, f"./flux/{query_name}.flux"
-            ).decode("utf-8")
+            with resources.files(__package__).joinpath(
+                f"flux/{query_name}.flux"
+            ).open("r", encoding="utf-8") as f:
+                flux = f.read()
+
             flux = (
                 flux.replace("{{BUCKET_AGGREGATED}}", self.bucket_name)
                 .replace("{{BUCKET_NAME}}", self.bucket_name)
