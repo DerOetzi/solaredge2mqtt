@@ -1,4 +1,4 @@
-FROM python:3.11 AS buildimage
+FROM python:3.12 AS buildimage
 
 WORKDIR /app
 
@@ -16,7 +16,7 @@ RUN python3 -m venv /venv && \
     --extra-index-url https://www.piwheels.org/simple \
     -r requirements.txt
 
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

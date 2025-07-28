@@ -5,3 +5,23 @@ requires = [
     "versioneer[toml]"
 ]
 build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]  
+ignore = []
+fixable = ["ALL"]         
+unfixable = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+[tool.isort]
+profile = "black"
+line_length = 88
+known_first_party = ["solaredge2mqtt"]

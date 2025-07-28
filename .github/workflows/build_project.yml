@@ -38,6 +38,7 @@ jobs:
         python-version:
           - "3.10"
           - "3.11"
+          - "3.12"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -76,13 +77,13 @@ jobs:
             dist
 
       - name: Publish package to pypi
-        if: ${{github.event_name == 'release' && matrix.python-version == '3.11'}}
+        if: ${{github.event_name == 'release' && matrix.python-version == '3.12'}}
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
 
       - name: Publish assets to github
-        if: ${{github.event_name == 'release' && matrix.python-version == '3.11'}}
+        if: ${{github.event_name == 'release' && matrix.python-version == '3.12'}}
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ github.token }}
