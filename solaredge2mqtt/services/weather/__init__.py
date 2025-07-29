@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from requests.exceptions import HTTPError
+from aiohttp import ClientResponseError
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import InvalidDataException
@@ -64,8 +64,8 @@ class WeatherClient(HTTPClientAsync):
             weather = OpenWeatherMapOneCall(**result)
 
             return weather
-        except HTTPError as error:
-            status_code = error.response.status_code
+        except ClientResponseError as error:
+            status_code = error.status
             if status_code == 401:
                 error_msg = (
                     "Invalid OpenWeatherMap API key or no subscription to OneCall-API"
