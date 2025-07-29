@@ -1,4 +1,6 @@
-FROM python:3.12 AS buildimage
+FROM python:3.12-slim AS buildimage
+
+ARG TARGETARCH
 
 WORKDIR /app
 
@@ -6,15 +8,31 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/venv/bin:$PATH"
 
-COPY requirements.txt .
+COPY requirements*.txt .
 
-RUN python3 -m venv /venv && \
+RUN set -eux && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc && \
+    rm -rf /var/lib/apt/lists/*&& \
+    python3 -m venv /venv && \
     . /venv/bin/activate && \
     pip install --upgrade pip && \
+    if [ "$TARGETARCH" = "arm" ]; then \
     pip install \
+    --prefer-binary \
     --no-cache-dir \
     --extra-index-url https://www.piwheels.org/simple \
-    -r requirements.txt
+    --extra-index-url https://download.pytorch.org/whl/cpu \
+    -r requirements-armv7.txt; \
+    else  \
+    pip install \
+    --prefer-binary \
+    --no-cache-dir \
+    --extra-index-url https://download.pytorch.org/whl/cpu \
+    -r requirements.txt; \
+    fi 
 
 FROM python:3.12-slim
 
@@ -24,7 +42,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN adduser --uid 1000 --disabled-password --gecos '' --no-create-home solaredge2mqtt
+RUN set -eux && \
+    adduser --uid 1000 --disabled-password --gecos '' --no-create-home solaredge2mqtt 
 
 COPY --chown=solaredge2mqtt:solaredge2mqtt --from=buildimage /venv /venv
 COPY --chown=solaredge2mqtt:solaredge2mqtt . .

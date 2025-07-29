@@ -23,11 +23,14 @@ from solaredge2mqtt.core.mqtt import MQTTClient
 from solaredge2mqtt.core.settings import service_settings
 from solaredge2mqtt.core.timer import Timer
 from solaredge2mqtt.services.energy import EnergyService
-from solaredge2mqtt.services.forecast import ForecastService
+from solaredge2mqtt.services.forecast import FORECAST_AVAILABLE
 from solaredge2mqtt.services.homeassistant import HomeAssistantDiscovery
 from solaredge2mqtt.services.monitoring import MonitoringSite
 from solaredge2mqtt.services.powerflow import PowerflowService
 from solaredge2mqtt.services.weather import WeatherClient
+
+if FORECAST_AVAILABLE:
+    from solaredge2mqtt.services.forecast import ForecastService
 
 LOCAL_TZ = get_localzone_name()
 
@@ -91,16 +94,20 @@ class Service:
             else None
         )
 
-        self.forecast: ForecastService | None = (
-            ForecastService(
-                self.settings.forecast,
-                self.settings.location,
-                self.event_bus,
-                self.influxdb,
+        if FORECAST_AVAILABLE:
+            self.forecast: ForecastService | None = (
+                ForecastService(
+                    self.settings.forecast,
+                    self.settings.location,
+                    self.event_bus,
+                    self.influxdb,
+                )
+                if self.settings.is_forecast_configured
+                else None
             )
-            if self.settings.is_forecast_configured
-            else None
-        )
+        elif self.settings.is_forecast_configured:
+            logger.warning(
+                "Forecast service not available, please refer to README")
 
         self.homeassistant: HomeAssistantDiscovery | None = (
             HomeAssistantDiscovery(self.settings, self.event_bus)

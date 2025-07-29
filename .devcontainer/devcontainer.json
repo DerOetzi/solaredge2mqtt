@@ -9,7 +9,8 @@
 		"ghcr.io/devcontainers/features/node:1": {
 			"version": "20"
 		},
-		"ghcr.io/hspaans/devcontainer-features/pyupgrade:1": {},
+		"ghcr.io/devcontainers/features/github-cli:1": {},
+		"ghcr.io/hspaans/devcontainer-features/pyupgrade:2.0.0": {},
 		"ghcr.io/devcontainers-extra/features/pylint:2": {}
 	},
 	"customizations": {
@@ -35,5 +36,5 @@
 			}
 		}
 	},
-	"postCreateCommand": "python -m venv .venv && . .venv/bin/activate && pip install --upgrade pip && pip install -e . ruff isort"
+	"postCreateCommand": "python -m venv .venv && . .venv/bin/activate && pip install --upgrade pip && pip install -e .[dev]"
 }

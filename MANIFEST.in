@@ -12,7 +12,3 @@ include requirements.txt
 
 recursive-include solaredge2mqtt *.py
 recursive-include solaredge2mqtt *.flux
-
-# Include information about version
-include versioneer.py
-include solaredge2mqtt/_version.py

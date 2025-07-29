@@ -9,7 +9,6 @@ from influxdb_client.client.bucket_api import BucketsApi
 from influxdb_client.client.delete_api import DeleteApi
 from influxdb_client.client.influxdb_client_async import InfluxDBClientAsync
 from influxdb_client.client.query_api_async import QueryApiAsync
-from pandas import DataFrame
 from tzlocal import get_localzone_name
 
 from solaredge2mqtt.core.events import EventBus
@@ -19,6 +18,8 @@ from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.timer.events import Interval10MinTriggerEvent
 
 if TYPE_CHECKING:
+    from pandas import DataFrame
+
     from solaredge2mqtt.services.energy.models import HistoricPeriod
     from solaredge2mqtt.services.energy.settings import PriceSettings
 

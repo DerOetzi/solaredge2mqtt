@@ -1,10 +1,72 @@
+[project]
+name = "solaredge2mqtt"
+version = "0.0.0"  # wird von setuptools-scm überschrieben
+description = "Read data from SolarEdge Inverter and publish it to MQTT"
+readme = "README.md"
+requires-python = ">=3.11,<4"
+license = { text = "MIT" }
+authors = [
+    { name = "Johannes Ott", email = "info@johannes-ott.net" }
+]
+keywords = ["smart home"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Topic :: Home Automation",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "aiocsv==1.3.2",
+    "aiohttp==3.11.18",
+    "aiomqtt==2.4.0",
+    "astral==3.2",
+    "ephem==4.2",
+    "influxdb-client==1.49.0",
+    "jsonref==1.1.0",
+    "loguru==0.7.3",
+    "pydantic==2.11.7",
+    "pyjwt==2.10.1",
+    "pymodbus==3.9.2",
+    "tzlocal==5.3.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/DerOetzi/solaredge2mqtt"
+Documentation = "https://github.com/DerOetzi/solaredge2mqtt/README.md"
+Repository = "https://github.com/DerOetzi/solaredge2mqtt"
+Issues = "https://github.com/DerOetzi/solaredge2mqtt/issues"
+
+[project.scripts]
+solaredge2mqtt = "solaredge2mqtt.service:run"
+
+[project.optional-dependencies]
+dev = [
+    "setuptools-scm[toml]>=8",
+    "ruff",
+    "isort",
+    "tomli",
+]
+forecast = [
+    "numpy==2.2.5",
+    "pandas==2.2.3",
+    "scikit-learn==1.6.1",
+    "scipy==1.16.0"
+]
+
 [build-system]
 requires = [
-    "setuptools>=64", 
+    "setuptools>=64",
     "wheel",
-    "versioneer[toml]"
+    "setuptools-scm[toml]>=8"
 ]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+version_scheme = "post-release"
+local_scheme = "node-and-date"
 
 [tool.ruff]
 line-length = 88
