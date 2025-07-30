@@ -118,10 +118,27 @@ class ServiceSettings(BaseModel):
 
     @classmethod
     def insert_nested_key(cls, container: dict, keys: list[str], value: any) -> None:
+        key, i = cls._identify_key_and_position(keys)
+
+        key, idx, next_container = cls._get_or_initialize_nested_container(
+            container, key, i
+        )
+
+        cls._insert_value_in_container(
+            container, keys, value, key, idx, next_container)
+
+    @classmethod
+    def _identify_key_and_position(cls, keys: list[str]) -> tuple[str, int]:
         key = keys[0]
         for i in range(len(key) - 1, -1, -1):
             if not key[i].isdigit():
                 break
+        return key, i
+
+    @classmethod
+    def _get_or_initialize_nested_container(
+        cls, container: dict, key: str, i: int
+    ) -> tuple[str, int | str, dict | list]:
         prefix, idx = key[:i + 1], key[i + 1:]
         if idx.isdigit():
             key, idx = prefix, int(idx)
@@ -134,7 +151,18 @@ class ServiceSettings(BaseModel):
             if key not in container or not isinstance(container[key], dict):
                 container[key] = {}
             next_container = container[key]
+        return key, idx, next_container
 
+    @classmethod
+    def _insert_value_in_container(
+        cls,
+        container: dict[str, any],
+        keys: list[str],
+        value: any,
+        key: str,
+        idx: int | str,
+        next_container: dict | list,
+    ) -> None:
         if len(keys) == 1:
             if isinstance(next_container, dict):
                 if isinstance(container[key], list):

@@ -177,9 +177,9 @@ class Solaredge2MQTTBaseModel(BaseModel):
 
     @staticmethod
     def property_parser(
-        prop: dict[str, any], 
-        name: str, 
-        path: list[str]
+        prop: dict[str, any],
+        name: str,
+        path: list[str],
     ) -> dict | None:
         if "input_field" in prop:
             return {

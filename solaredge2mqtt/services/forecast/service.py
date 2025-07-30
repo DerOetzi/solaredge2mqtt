@@ -5,6 +5,7 @@ from asyncio import Event, to_thread
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
+from joblib import Memory
 from numpy import percentile
 from pandas import DataFrame
 from sklearn import clone
@@ -57,7 +58,7 @@ class ForecastService:
         self.influxdb = influxdb
 
         self.forecasters: dict[ForecasterType, Forecaster] = {
-            typed: Forecaster(typed, location, settings.hyperparametertuning)
+            typed: Forecaster(typed, location, settings)
             for typed in ForecasterType
         }
 
@@ -245,13 +246,19 @@ class Forecaster:
         self,
         typed: ForecasterType,
         location: LocationSettings,
-        enable_hyperparameter_tuning: bool = False,
+        settings: ForecastSettings
     ) -> None:
         self.typed: ForecasterType = typed
         self.location = location
-        self.enable_hyperparameter_tuning = enable_hyperparameter_tuning
-        self.model_pipeline: Pipeline = None
+        self.enable_hyperparameter_tuning = settings.hyperparametertuning
+        self.model_pipeline: Pipeline | None = None
         self.training_completed: Event = Event()
+
+        self.memory = (
+            Memory(settings.cachingdir, verbose=0)
+            if settings.is_caching_enabled
+            else False
+        )
 
     def train(self, data: DataFrame) -> None:
         data_count = len(data)
@@ -324,25 +331,27 @@ class Forecaster:
 
         return clone(grid_search.best_estimator_)
 
-    def _prepare_model_pipeline(self, x_vector_columns: list[str]) -> None:
+    def _prepare_model_pipeline(self, x_vector_columns: list[str]) -> Pipeline:
+        base_estimator = HistGradientBoostingRegressor(
+            random_state=42,
+            categorical_features="from_dtype",
+            learning_rate=0.1,
+        )
+
         return Pipeline(
             steps=[
                 ("preprocessor", self._prepare_preprocessor(x_vector_columns)),
                 (
                     "feature_selector",
                     PFISelector(
-                        estimator=HistGradientBoostingRegressor(
-                            random_state=42, categorical_features="from_dtype"
-                        )
+                        estimator=clone(base_estimator)
                     ),
                 ),
                 (
-                    "model",
-                    HistGradientBoostingRegressor(
-                        random_state=42, categorical_features="from_dtype"
-                    ),
+                    "model", clone(base_estimator)
                 ),
-            ]
+            ],
+            memory=self.memory,
         )
 
     def _prepare_preprocessor(self, x_vector_columns: list[str]) -> ColumnTransformer:
@@ -412,11 +421,6 @@ class PFISelector(BaseEstimator, TransformerMixin):
         self.estimator = estimator
         self.n_repeats = n_repeats
 
-        self.estimator_ = None
-        self.feature_importances_ = None
-        self.important_indices_ = None
-        self.important_features_ = None
-
     def fit(self, x_vector: DataFrame, y_vector=None) -> PFISelector:
         x_train, x_test, y_train, y_test = train_test_split(
             x_vector, y_vector, test_size=0.1, random_state=42
@@ -440,7 +444,11 @@ class PFISelector(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, x_vector: DataFrame) -> DataFrame:
+        if not hasattr(self, "important_features_"):
+            raise RuntimeError("PFISelector has not been fitted yet.")
         return x_vector[self.important_features_]
 
     def get_support(self, *_) -> list[bool]:
+        if not hasattr(self, "important_indices_"):
+            raise RuntimeError("PFISelector has not been fitted yet.")
         return self.important_indices_.to_list()

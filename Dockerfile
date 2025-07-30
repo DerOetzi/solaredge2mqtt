@@ -15,7 +15,7 @@ RUN set -eux && \
     apt-get install -y --no-install-recommends \
     build-essential \
     gcc && \
-    rm -rf /var/lib/apt/lists/*&& \
+    rm -rf /var/lib/apt/lists/* && \
     python3 -m venv /venv && \
     . /venv/bin/activate && \
     pip install --upgrade pip && \
@@ -43,10 +43,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN set -eux && \
-    adduser --uid 1000 --disabled-password --gecos '' --no-create-home solaredge2mqtt 
+    adduser --uid 1000 --disabled-password --gecos '' solaredge2mqtt 
 
-COPY --chown=solaredge2mqtt:solaredge2mqtt --from=buildimage /venv /venv
-COPY --chown=solaredge2mqtt:solaredge2mqtt . .
+COPY --chown=root:solaredge2mqtt --chmod=755 --from=buildimage /venv /venv
+COPY --chown=root:solaredge2mqtt --chmod=755 \
+    solaredge2mqtt pyproject.toml README.md LICENSE ./
 
 USER solaredge2mqtt
 

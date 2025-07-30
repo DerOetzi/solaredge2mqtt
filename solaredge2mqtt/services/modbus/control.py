@@ -82,8 +82,8 @@ class ModbusAdvancedControl:
 
     @staticmethod
     def property_parser(
-        prop: dict[str, any], 
-        name: str, 
+        prop: dict[str, any],
+        name: str,
         path: list[str]
     ) -> dict[str, str] | None:
         field = None

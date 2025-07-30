@@ -159,6 +159,7 @@ The SolarEdge2MQTT service features an integrated machine learning component des
 
 - **SE2MQTT_FORECAST\_\_ENABLE**: Activate the machine learning-based forecast feature by setting this to true. The default is false.
 - **SE2MQTT_FORECAST\_\_HYPERPARAMETERTUNING**: Optimize forecast accuracy by enabling hyperparameter tuning. Note that this process is computationally intensive and may not be suitable for devices with limited processing power, such as Raspberry Pi. The default setting is false.
+- **SE2MQTT_FORECAST\_\_CACHINGDIR**: Directory for caching forecast pipeline results. The default is <USER_CACHE_DIR>/se2mqtt_forecast
 
 **Precondition for Forecasting**: Before a forecast can be made, a minimum of 60 hours of training data must be collected. These data serve as the basis for model training and are crucial for prediction accuracy. Ensure that the service has had sufficient time to collect data before expecting forecast activation.
 

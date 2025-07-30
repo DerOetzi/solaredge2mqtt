@@ -1,6 +1,6 @@
 [project]
 name = "solaredge2mqtt"
-version = "0.0.0"  # wird von setuptools-scm überschrieben
+version = "0.0.0" 
 description = "Read data from SolarEdge Inverter and publish it to MQTT"
 readme = "README.md"
 requires-python = ">=3.11,<4"
@@ -27,6 +27,7 @@ dependencies = [
     "influxdb-client==1.49.0",
     "jsonref==1.1.0",
     "loguru==0.7.3",
+    "platformdirs==4.3.8",
     "pydantic==2.11.7",
     "pyjwt==2.10.1",
     "pymodbus==3.9.2",

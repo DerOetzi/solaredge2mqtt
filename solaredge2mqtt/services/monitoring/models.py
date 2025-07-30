@@ -44,7 +44,9 @@ class LogicalModule(BaseModel):
         power_today = None
 
         if self.power:
-            power_today = {k.strftime("%H:%M"): v for k,
-                           v in self.power.items()}
+            power_today = {
+                k.strftime("%H:%M"): v
+                for k, v in self.power.items()
+            }
 
         return power_today

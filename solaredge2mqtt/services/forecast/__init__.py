@@ -15,3 +15,12 @@ FORECAST_AVAILABLE: bool = _deps_available()
 if FORECAST_AVAILABLE:
     from .service import ForecastService
     __all__ = ["ForecastService"]
+else:
+    class ForecastService:
+        def __init__(self, *args, **kwargs):
+            raise ImportError(
+                (
+                    "ForecastService requires to install extra dependencies. "
+                    "Run pip install solaredge2mqtt[forecast]"
+                )
+            )
