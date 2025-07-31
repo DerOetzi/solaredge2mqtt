@@ -51,7 +51,7 @@ class ModbusAdvancedControl:
         else:
             logger.info("Advanced power control is disabled in settings")
 
-    async def enable_advanced_power_control(self):
+    def enable_advanced_power_control(self):
         logger.debug("Enabling advanced power control")
         # await self.event_bus.emit(ModbusWriteEvent(
         #    SunSpecPowerControlRegister.ADVANCED_POWER_CONTROL_ENABLE, True
@@ -74,7 +74,7 @@ class ModbusAdvancedControl:
 
         logger.info("Advanced power control disabled.")
 
-    async def subscribe_topics(self) -> None:
+    def subscribe_topics(self) -> None:
         for field in ModbusInverter.parse_schema(self.property_parser):
             topic = f"{self.topic_prefix}/{field['topic']}"
             logger.info(f"Subscribing to topic: {topic}")
@@ -99,5 +99,5 @@ class ModbusAdvancedControl:
 
         return field
 
-    async def handle_mqtt_received_event(self, event: MQTTReceivedEvent) -> None:
+    def handle_mqtt_received_event(self, event: MQTTReceivedEvent) -> None:
         logger.info(event.input)
