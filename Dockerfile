@@ -47,7 +47,9 @@ RUN set -eux && \
 
 COPY --chown=root:solaredge2mqtt --chmod=755 --from=buildimage /venv /venv
 COPY --chown=root:solaredge2mqtt --chmod=755 \
-    solaredge2mqtt pyproject.toml README.md LICENSE ./
+    solaredge2mqtt/ ./solaredge2mqtt/
+COPY --chown=root:solaredge2mqtt --chmod=755 \
+    pyproject.toml README.md LICENSE ./
 
 USER solaredge2mqtt
 

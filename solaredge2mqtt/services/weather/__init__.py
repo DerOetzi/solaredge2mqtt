@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 from aiohttp import ClientResponseError
@@ -41,19 +42,18 @@ class WeatherClient(HTTPClientAsync):
     async def get_weather(self) -> OpenWeatherMapOneCall:
         try:
             logger.info("Reading weather data from OpenWeatherMap")
-            result = await self._get(
-                ONECALL_URL,
-                params={
-                    "lat": self.location.latitude,
-                    "lon": self.location.longitude,
-                    "exclude": "minutely,daily,alerts",
-                    "units": "metric",
-                    "lang": self.settings.language,
-                    "appid": self.settings.api_key.get_secret_value(),
-                },
-                timeout=7,
-            )
-
+            async with asyncio.timeout(7):
+                result = await self._get(
+                    ONECALL_URL,
+                    params={
+                        "lat": self.location.latitude,
+                        "lon": self.location.longitude,
+                        "exclude": "minutely,daily,alerts",
+                        "units": "metric",
+                        "lang": self.settings.language,
+                        "appid": self.settings.api_key.get_secret_value(),
+                    },
+                )
             logger.trace(result)
 
             if result is None:
@@ -77,3 +77,7 @@ class WeatherClient(HTTPClientAsync):
                 )
 
             raise InvalidDataException(error_msg) from error
+        except asyncio.TimeoutError as error:
+            raise InvalidDataException(
+                "Unable to read weather data from OpenWeatherMap (timeout)"
+            ) from error

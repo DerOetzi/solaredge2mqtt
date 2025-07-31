@@ -1,3 +1,4 @@
+import asyncio
 import time
 
 import jwt
@@ -37,7 +38,7 @@ class AuthorizationTokens(BaseModel):
     def get_exp_claim(token: str) -> int:
         try:
             # ⚠️ This only extracts the 'exp' claim without verifying the JWT signature.
-            # It's used for internal expiration checks, not for authentication 
+            # It's used for internal expiration checks, not for authentication
             # or security decisions.
             payload = jwt.decode(
                 token, options={"verify_signature": False})  # NOSONAR
@@ -65,15 +66,16 @@ class WallboxClient(HTTPClientAsync):
         try:
             await self._get_access()
 
-            response = await self._get(
-                WALLBOX_URL.format(
-                    host=self.settings.host, serial=self.settings.serial
-                ),
-                headers={
-                    "Authorization": f"Bearer {self.authorization.access_token}"},
-                verify=False,
-                login=self.login,
-            )
+            async with asyncio.timeout(5):
+                response = await self._get(
+                    WALLBOX_URL.format(
+                        host=self.settings.host, serial=self.settings.serial
+                    ),
+                    headers={
+                        "Authorization": f"Bearer {self.authorization.access_token}"},
+                    verify=False,
+                    login=self.login,
+                )
 
             if response is None:
                 raise InvalidDataException("Invalid Wallbox data")
@@ -85,7 +87,7 @@ class WallboxClient(HTTPClientAsync):
             )
 
             await self.event_bus.emit(WallboxReadEvent(wallbox))
-        except ClientResponseError as error:
+        except (ClientResponseError, asyncio.TimeoutError) as error:
             raise InvalidDataException(
                 f"Cannot read Wallbox data: {error}") from error
 
@@ -108,14 +110,15 @@ class WallboxClient(HTTPClientAsync):
         try:
             logger.info("Logging in to Wallbox charger...")
             self.authorization = None
-            response = await self._post(
-                LOGIN_URL.format(host=self.settings.host),
-                json={
-                    "password": self.settings.password.get_secret_value(),
-                    "username": "admin",
-                },
-                verify=False,
-            )
+            async with asyncio.timeout(5):
+                response = await self._post(
+                    LOGIN_URL.format(host=self.settings.host),
+                    json={
+                        "password": self.settings.password.get_secret_value(),
+                        "username": "admin",
+                    },
+                    verify=False,
+                )
 
             if response is None:
                 raise ConfigurationException(
@@ -123,19 +126,21 @@ class WallboxClient(HTTPClientAsync):
 
             self.authorization = AuthorizationTokens(**response)
             logger.info("Logged in to EV charger")
-        except ClientResponseError as error:
+        except (ClientResponseError, asyncio.TimeoutError) as error:
             raise ConfigurationException(
                 "wallbox", "Unable to login to EV charger"
             ) from error
 
     async def _refresh_token(self):
         logger.info("Refreshing access token Wallbox...")
-        response = await self._post(
-            REFRESH_URL.format(host=self.settings.host),
-            headers={"Authorization": f"Bearer {self.authorization.refresh_token}"},
-            verify=False,
-            login=self.login,
-        )
+        async with asyncio.timeout(5):
+            response = await self._post(
+                REFRESH_URL.format(host=self.settings.host),
+                headers={
+                    "Authorization": f"Bearer {self.authorization.refresh_token}"},
+                verify=False,
+                login=self.login,
+            )
 
         self.authorization.access_token = response["accessToken"]
         logger.info("Refreshed access token Wallbox")

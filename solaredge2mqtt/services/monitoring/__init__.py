@@ -1,3 +1,4 @@
+import asyncio
 import json
 from datetime import datetime, timezone
 
@@ -84,15 +85,15 @@ class MonitoringSite(HTTPClientAsync):
             if not self.cookie_exists("CSRF-TOKEN"):
                 await self.login()
 
-            result = await self._get(
-                LOGICAL_URL.format(site_id=self.settings.site_id),
-                headers={
-                    "Content-Type": CONTENT_TYPE_FORM_URLENCODED,
-                    "X-CSRF-TOKEN": self.get_cookie("CSRF-TOKEN"),
-                },
-                timeout=10,
-            )
-        except ClientResponseError as error:
+            async with asyncio.timeout(10):
+                result = await self._get(
+                    LOGICAL_URL.format(site_id=self.settings.site_id),
+                    headers={
+                        "Content-Type": CONTENT_TYPE_FORM_URLENCODED,
+                        "X-CSRF-TOKEN": self.get_cookie("CSRF-TOKEN"),
+                    }
+                )
+        except (ClientResponseError, asyncio.TimeoutError) as error:
             raise InvalidDataException(
                 "Unable to read logical layout") from error
 
@@ -184,21 +185,20 @@ class MonitoringSite(HTTPClientAsync):
         try:
             if not self.cookie_exists("CSRF-TOKEN"):
                 await self.login()
-
-            playback_data = await self._post(
-                POWER_PUBLIC_URL,
-                data={
-                    "fieldId": self.settings.site_id,
-                    "timeUnit": 4,
-                    "CSRF": self.get_cookie("CSRF-TOKEN"),
-                },
-                headers={
-                    "Content-Type": CONTENT_TYPE_FORM_URLENCODED,
-                    "X-CSRF-TOKEN": self.get_cookie("CSRF-TOKEN"),
-                },
-                timeout=10,
-                expect_json=False,
-            )
+            async with asyncio.timeout(10):
+                playback_data = await self._post(
+                    POWER_PUBLIC_URL,
+                    data={
+                        "fieldId": self.settings.site_id,
+                        "timeUnit": 4,
+                        "CSRF": self.get_cookie("CSRF-TOKEN"),
+                    },
+                    headers={
+                        "Content-Type": CONTENT_TYPE_FORM_URLENCODED,
+                        "X-CSRF-TOKEN": self.get_cookie("CSRF-TOKEN"),
+                    },
+                    expect_json=False,
+                )
 
             response = (
                 playback_data.replace("'", '"')
@@ -211,7 +211,7 @@ class MonitoringSite(HTTPClientAsync):
             )
 
             result = json.loads(response)
-        except ClientResponseError as error:
+        except (ClientResponseError, asyncio.TimeoutError) as error:
             raise InvalidDataException(
                 "Unable to read logical layout") from error
 
@@ -219,18 +219,18 @@ class MonitoringSite(HTTPClientAsync):
 
     async def login(self) -> None:
         try:
-            await self._post(
-                headers={"Content-Type": CONTENT_TYPE_FORM_URLENCODED},
-                data={
-                    "j_username": self.settings.username,
-                    "j_password": self.settings.password.get_secret_value(),
-                },
-                timeout=10,
-                expect_json=False,
-            )
+            async with asyncio.timeout(10):
+                await self._post(
+                    headers={"Content-Type": CONTENT_TYPE_FORM_URLENCODED},
+                    data={
+                        "j_username": self.settings.username,
+                        "j_password": self.settings.password.get_secret_value(),
+                    },
+                    expect_json=False,
+                )
 
             logger.info("Login to monitoring site successful")
-        except ClientResponseError as error:
+        except (ClientResponseError, asyncio.TimeoutError) as error:
             raise ConfigurationException(
                 "Monitoring", "Unable to login to monitoring account"
             ) from error
