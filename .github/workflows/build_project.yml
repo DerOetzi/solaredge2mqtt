@@ -10,7 +10,7 @@ on:
 env:
   REGISTRY_GITHUB: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  PACKAGE_BRANCHES: '["main", "feature-modbus-control", "master-slave-support", "branch-cleanup"]'
+  PACKAGE_BRANCHES: '["main"]'
 
 jobs:
   variables:
