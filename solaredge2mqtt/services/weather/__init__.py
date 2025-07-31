@@ -53,9 +53,7 @@ class WeatherClient(HTTPClientAsync):
                         "lang": self.settings.language,
                         "appid": self.settings.api_key.get_secret_value(),
                     },
-                    timeout=7,
                 )
-
             logger.trace(result)
 
             if result is None:
