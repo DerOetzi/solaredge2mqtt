@@ -2,8 +2,10 @@ from pydantic import Field, field_serializer
 
 from solaredge2mqtt.core.models import Solaredge2MQTTBaseModel
 from solaredge2mqtt.services.homeassistant.models import (
+    HomeAssistantBinarySensorType as HABinarySensor,
+)
+from solaredge2mqtt.services.homeassistant.models import (
     HomeAssistantSensorType as HASensor,
-    HomeAssistantBinarySensorType as HABinarySensor
 )
 from solaredge2mqtt.services.models import Component
 

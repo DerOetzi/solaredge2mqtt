@@ -27,7 +27,9 @@ class ModbusUnitSettings(BaseModel):
         return values
 
     @staticmethod
-    def _fill_defaults_array(key: str, values: dict, length: int, default: str = "true") -> dict:
+    def _fill_defaults_array(
+        key: str, values: dict, length: int, default: str = "true"
+    ) -> dict:
         if key not in values or not isinstance(values[key], list):
             values[key] = [default] * length
         else:
@@ -64,8 +66,12 @@ class ModbusSettings(ModbusUnitSettings):
 
         for i, slave_values in enumerate(values.get("follower", [])):
             slave_values["role"] = ModbusUnitRole.FOLLOWER
-            slave_values = super()._fill_defaults_array("meter", slave_values, 3, "false")
-            slave_values = super()._fill_defaults_array("battery", slave_values, 2, "false")
+            slave_values = super()._fill_defaults_array(
+                "meter", slave_values, 3, "false"
+            )
+            slave_values = super()._fill_defaults_array(
+                "battery", slave_values, 2, "false"
+            )
             values["follower"][i] = slave_values
 
         return values

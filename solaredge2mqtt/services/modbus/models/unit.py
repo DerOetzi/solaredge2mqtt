@@ -3,7 +3,6 @@ from __future__ import annotations
 from pydantic import Field
 
 from solaredge2mqtt.core.models import Solaredge2MQTTBaseModel
-
 from solaredge2mqtt.services.modbus.models.base import ModbusUnitInfo
 from solaredge2mqtt.services.modbus.models.battery import ModbusBattery
 from solaredge2mqtt.services.modbus.models.inverter import ModbusInverter

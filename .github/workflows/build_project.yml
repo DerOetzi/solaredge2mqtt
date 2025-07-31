@@ -10,7 +10,7 @@ on:
 env:
   REGISTRY_GITHUB: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  PACKAGE_BRANCHES: '["main", "feature-modbus-control", "master-slave-support"]'
+  PACKAGE_BRANCHES: '["main", "feature-modbus-control", "master-slave-support", "branch-cleanup"]'
 
 jobs:
   variables:
@@ -36,8 +36,8 @@ jobs:
     strategy:
       matrix:
         python-version:
-          - "3.10"
           - "3.11"
+          - "3.12"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -76,13 +76,13 @@ jobs:
             dist
 
       - name: Publish package to pypi
-        if: ${{github.event_name == 'release' && matrix.python-version == '3.11'}}
+        if: ${{github.event_name == 'release' && matrix.python-version == '3.12'}}
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
 
       - name: Publish assets to github
-        if: ${{github.event_name == 'release' && matrix.python-version == '3.11'}}
+        if: ${{github.event_name == 'release' && matrix.python-version == '3.12'}}
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ github.token }}
@@ -102,8 +102,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Generate static _version.py
+      - name: Install setuptools-scm and tomli
+        run: pip install setuptools-scm[toml]>=8 tomli
+
+      - name: Generate static version.json
         run: python freeze_version.py
+
+      - name: Generate requirements hashFiles
+        run: python generate_requirements.py
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@master

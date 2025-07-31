@@ -3,10 +3,10 @@ from influxdb_client import Point
 from pydantic import Field
 
 from solaredge2mqtt.core.logging import logger
-from solaredge2mqtt.services.homeassistant.models import \
-    HomeAssistantSensorType as HASensor
-from solaredge2mqtt.services.modbus.models.base import (ModbusComponent,
-                                                        ModbusDeviceInfo)
+from solaredge2mqtt.services.homeassistant.models import (
+    HomeAssistantSensorType as HASensor,
+)
+from solaredge2mqtt.services.modbus.models.base import ModbusComponent, ModbusDeviceInfo
 from solaredge2mqtt.services.modbus.sunspec.values import BATTERY_STATUS_MAP
 
 

@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from importlib import resources
 from typing import TYPE_CHECKING
 
-import pkg_resources
 from influxdb_client import BucketRetentionRules, InfluxDBClient, Point
 from influxdb_client.client.bucket_api import BucketsApi
 from influxdb_client.client.delete_api import DeleteApi
 from influxdb_client.client.influxdb_client_async import InfluxDBClientAsync
 from influxdb_client.client.query_api_async import QueryApiAsync
-from pandas import DataFrame
 from tzlocal import get_localzone_name
 
 from solaredge2mqtt.core.events import EventBus
@@ -19,6 +18,8 @@ from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.timer.events import Interval10MinTriggerEvent
 
 if TYPE_CHECKING:
+    from pandas import DataFrame
+
     from solaredge2mqtt.services.energy.models import HistoricPeriod
     from solaredge2mqtt.services.energy.settings import PriceSettings
 
@@ -169,9 +170,11 @@ class InfluxDBAsync:
         self, query_name: str, additional_replacements: dict[str, any] | None = None
     ) -> str:
         if query_name not in self.flux_cache:
-            flux = pkg_resources.resource_string(
-                __name__, f"./flux/{query_name}.flux"
-            ).decode("utf-8")
+            with resources.files(__package__).joinpath(
+                f"flux/{query_name}.flux"
+            ).open("r", encoding="utf-8") as f:
+                flux = f.read()
+
             flux = (
                 flux.replace("{{BUCKET_AGGREGATED}}", self.bucket_name)
                 .replace("{{BUCKET_NAME}}", self.bucket_name)

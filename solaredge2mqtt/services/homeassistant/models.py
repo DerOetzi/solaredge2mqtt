@@ -7,7 +7,12 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field, computed_field
 
-from solaredge2mqtt.core.models import BaseField, BaseInputField, BaseInputFieldEnumModel, EnumModel
+from solaredge2mqtt.core.models import (
+    BaseField,
+    BaseInputField,
+    BaseInputFieldEnumModel,
+    EnumModel,
+)
 
 if TYPE_CHECKING:
     from solaredge2mqtt.core.models import BaseInputFieldEnumModel
@@ -77,7 +82,12 @@ class HomeAssistantType(EnumModel):
     NUMBER = "number", True, ["min", "max", "step", "mode"]
     SENSOR = "sensor", False, []
 
-    def __init__(self, identifier: str, command_topic: bool, additional_fields: list[str]):
+    def __init__(
+        self,
+        identifier: str,
+        command_topic: bool,
+        additional_fields: list[str]
+    ):
         self._identifier: str = identifier
         self._command_topic: bool = command_topic
         self._additional_fields: list[str] = additional_fields
@@ -158,7 +168,13 @@ class HomeAssistantBinarySensorType(HomeAssistantEntityBaseType):
         device_class: str | None = None,
         state_class: str | None = None,
     ):
-        super().__init__(key, HomeAssistantType.BINARY_SENSOR, device_class, state_class, None)
+        super().__init__(
+            key,
+            HomeAssistantType.BINARY_SENSOR,
+            device_class,
+            state_class,
+            None,
+        )
 
 
 class HomeAssistantNumberType(HomeAssistantEntityBaseType):
@@ -261,7 +277,11 @@ class HomeAssistantEntity(HomeAssistantBaseModel):
     @computed_field
     @property
     def command_topic(self) -> str | None:
-        return f"{self.device.state_topic}/{'/'.join(self.path)}" if self.ha_type.typed.command_topic else None
+        return (
+            f"{self.device.state_topic}/{'/'.join(self.path)}"
+            if self.ha_type.typed.command_topic
+            else None
+        )
 
     @computed_field
     @property

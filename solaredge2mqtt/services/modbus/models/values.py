@@ -1,11 +1,8 @@
 from pydantic import Field
 
-from solaredge2mqtt.services.homeassistant.models import \
-    HomeAssistantBinarySensorType as HABinarySensor
-from solaredge2mqtt.services.homeassistant.models import \
-    HomeAssistantNumberType as HANumber
-from solaredge2mqtt.services.homeassistant.models import \
-    HomeAssistantSensorType as HASensor
+from solaredge2mqtt.services.homeassistant.models import (
+    HomeAssistantSensorType as HASensor,
+)
 from solaredge2mqtt.services.models import ComponentValueGroup
 
 

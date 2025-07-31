@@ -159,10 +159,13 @@ The SolarEdge2MQTT service features an integrated machine learning component des
 
 - **SE2MQTT_FORECAST\_\_ENABLE**: Activate the machine learning-based forecast feature by setting this to true. The default is false.
 - **SE2MQTT_FORECAST\_\_HYPERPARAMETERTUNING**: Optimize forecast accuracy by enabling hyperparameter tuning. Note that this process is computationally intensive and may not be suitable for devices with limited processing power, such as Raspberry Pi. The default setting is false.
+- **SE2MQTT_FORECAST\_\_CACHINGDIR**: Directory for caching forecast pipeline results. The default is <USER_CACHE_DIR>/se2mqtt_forecast
 
 **Precondition for Forecasting**: Before a forecast can be made, a minimum of 60 hours of training data must be collected. These data serve as the basis for model training and are crucial for prediction accuracy. Ensure that the service has had sufficient time to collect data before expecting forecast activation.
 
 **Note on Training Data Collection**: If the service goes without recording production data for longer than an hour, it will be unable to save training data. It's essential to ensure consistent data recording to maintain the integrity of the training process and ensure accurate forecasting.
+
+> **Note**: The forecast service is not available for `arm/v7` architectures due to compatibility issues with certain dependencies. This feature is automatically disabled, and the Docker image for this architecture does not include the forecast functionality.
 
 _Your experience and feedback, especially regarding forecast accuracy and performance on low-powered devices, are highly valued. This continuous improvement effort aims to enhance the predictive capabilities of the SolarEdge2MQTT service for all users._
 
@@ -175,7 +178,20 @@ Each of these methods provides a different level of control and isolation, cater
 For users looking to run SolarEdge2MQTT directly within their console, which is ideal for testing or development environments, follow these steps:
 
 1. **Preparation**: Ensure you have Python installed on your system. The service is compatible with Python >=3.10.
-2. **Installation**: If you haven't already, install the service using pip with the command `pip install -U solaredge2mqtt`. This command fetches the latest version and installs all necessary dependencies.
+2. **Installation**: If you haven't already, install the service using pip with the command 
+```bash
+pip install -U solaredge2mqtt
+```
+This command fetches the latest version and installs all necessary dependencies. 
+
+To enable the forecast service, install the package with the `forecast` extras:
+
+```bash
+pip install -U solaredge2mqtt[forecast]
+```
+
+This ensures all necessary dependencies for the forecasting feature are installed.
+
 3. **Environment Configuration**: Copy the [.env.example](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/.env.example) file to a new file named `.env`. Open this file in a text editor and adjust the environment variables to match your system and preferences. This includes setting up your MQTT broker, InfluxDB credentials, and any other service configurations as detailed in the README.
 4. **Execution**: With your environment configured, run the command solaredge2mqtt in your terminal. The service will start and begin operating based on the settings you've specified in the .env file.
 

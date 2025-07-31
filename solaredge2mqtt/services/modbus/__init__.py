@@ -4,7 +4,6 @@ import asyncio
 import json
 from typing import TYPE_CHECKING
 
-from annotated_types import T
 from pymodbus.client import AsyncModbusTcpClient
 from pymodbus.exceptions import ModbusException
 
@@ -12,8 +11,7 @@ from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import InvalidDataException
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.services.modbus.control import ModbusAdvancedControl
-from solaredge2mqtt.services.modbus.events import (ModbusUnitsReadEvent,
-                                                   ModbusWriteEvent)
+from solaredge2mqtt.services.modbus.events import ModbusUnitsReadEvent, ModbusWriteEvent
 from solaredge2mqtt.services.modbus.models.base import ModbusDeviceInfo
 from solaredge2mqtt.services.modbus.models.battery import ModbusBattery
 from solaredge2mqtt.services.modbus.models.inverter import ModbusInverter
@@ -21,21 +19,36 @@ from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
 from solaredge2mqtt.services.modbus.models.unit import ModbusUnit
 from solaredge2mqtt.services.modbus.settings import ModbusUnitSettings
 from solaredge2mqtt.services.modbus.sunspec.base import (
-    SunSpecRegister, SunSpecRequestRegisterBundle)
+    SunSpecRegister,
+    SunSpecRequestRegisterBundle,
+)
 from solaredge2mqtt.services.modbus.sunspec.battery import (
-    SunSpecBatteryInfoRegister, SunSpecBatteryOffset, SunSpecBatteryRegister)
+    SunSpecBatteryInfoRegister,
+    SunSpecBatteryOffset,
+    SunSpecBatteryRegister,
+)
 from solaredge2mqtt.services.modbus.sunspec.inverter import (
-    SunSpecGridStatusRegister, SunSpecInverterInfoRegister,
-    SunSpecInverterRegister, SunSpecPowerControlRegister)
+    SunSpecGridStatusRegister,
+    SunSpecInverterInfoRegister,
+    SunSpecInverterRegister,
+    SunSpecPowerControlRegister,
+)
 from solaredge2mqtt.services.modbus.sunspec.meter import (
-    SunSpecMeterInfoRegister, SunSpecMeterOffset, SunSpecMeterRegister)
-from solaredge2mqtt.services.modbus.sunspec.values import (SunSpecInputData,
-                                                           SunSpecPayload)
+    SunSpecMeterInfoRegister,
+    SunSpecMeterOffset,
+    SunSpecMeterRegister,
+)
+from solaredge2mqtt.services.modbus.sunspec.values import (
+    SunSpecInputData,
+    SunSpecPayload,
+)
 
 if TYPE_CHECKING:
     from solaredge2mqtt.core.settings.models import ServiceSettings
 
-LOGGING_DEVICE_INFO = "{unit_key}{device} ({info.manufacturer} {info.model} {info.serialnumber})"
+LOGGING_DEVICE_INFO = (
+    "{unit_key}{device} ({info.manufacturer} {info.model} {info.serialnumber})"
+)
 
 
 class Modbus:
@@ -111,7 +124,11 @@ class Modbus:
                         and inverter_raw[meter.identifier] > 0
                     ):
                         await self.read_device_info(
-                            SunSpecMeterInfoRegister, unit_key, meter.identifier, unit_settings, meter.offset
+                            SunSpecMeterInfoRegister,
+                            unit_key,
+                            meter.identifier,
+                            unit_settings,
+                            meter.offset,
                         )
 
                 for battery in SunSpecBatteryOffset:
@@ -121,11 +138,20 @@ class Modbus:
                         and inverter_raw[battery.identifier] != 255
                     ):
                         await self.read_device_info(
-                            SunSpecBatteryInfoRegister, unit_key, battery.identifier, unit_settings, battery.offset
+                            SunSpecBatteryInfoRegister,
+                            unit_key,
+                            battery.identifier,
+                            unit_settings,
+                            battery.offset,
                         )
 
     async def read_device_info(
-        self, registers: SunSpecRegister, unit_key: str, key: str, unit_settings: ModbusUnitSettings, offset: int = 0
+        self, 
+        registers: SunSpecRegister, 
+        unit_key: str, 
+        key: str, 
+        unit_settings: ModbusUnitSettings, 
+        offset: int = 0
     ) -> SunSpecPayload:
         raw_data = await self._read_from_modbus(registers,
                                                 unit_settings.unit,
@@ -165,7 +191,9 @@ class Modbus:
 
         try:
             for unit_key, unit_settings in self.settings.units.items():
-                inverter_raw, meters_raw, batteries_raw = await self._get_raw_data(unit_key, unit_settings.unit)
+                inverter_raw, meters_raw, batteries_raw = await self._get_raw_data(
+                    unit_key, unit_settings.unit
+                )
 
                 inverter_data = self._map_inverter(unit_key, inverter_raw)
                 meters_data = self._map_meters(unit_key, meters_raw)
@@ -254,7 +282,10 @@ class Modbus:
                 continue
 
             logger.trace(
-                f"Read {register_or_bundle.length} register beginning at {address_start}"
+                (
+                    f"Read {register_or_bundle.length} register "
+                    f"beginning at {address_start}"
+                )
             )
 
             try:
@@ -274,7 +305,10 @@ class Modbus:
 
                 if not self._initialized:
                     logger.trace(
-                        f"Checked {register_or_bundle.length} registers from {address_start} successfully"
+                        (
+                            f"Checked {register_or_bundle.length} registers "
+                            f"from {address_start} successfully"
+                        )
                     )
 
             except ModbusException as error:
@@ -289,7 +323,9 @@ class Modbus:
             logger.info(f"Block unreadable register beginning at {register}")
             self._block_unreadable.add(register)
 
-    def _map_inverter(self, unit_key: str, inverter_raw: SunSpecPayload) -> ModbusInverter:
+    def _map_inverter(
+        self, unit_key: str, inverter_raw: SunSpecPayload
+    ) -> ModbusInverter:
         logger.debug(
             "Inverter raw:\n{raw}",
             raw=json.dumps(inverter_raw, indent=4),
@@ -376,7 +412,9 @@ class Modbus:
     async def _handle_write_event(self, event: ModbusWriteEvent):
         await self._write_to_modbus(event.register, event.payload)
 
-    async def _write_to_modbus(self, register: SunSpecRegister, value: SunSpecInputData) -> None:
+    async def _write_to_modbus(
+        self, register: SunSpecRegister, value: SunSpecInputData
+    ) -> None:
         logger.info(
             f"Writing {value} to register {register.address} ({register.name})"
         )

@@ -1,7 +1,16 @@
 from solaredge2mqtt.services.modbus.sunspec.base import SunSpecRegister
-from solaredge2mqtt.services.modbus.sunspec.battery import SunSpecBatteryInfoRegister, SunSpecBatteryOffset
-from solaredge2mqtt.services.modbus.sunspec.meter import SunSpecMeterInfoRegister, SunSpecMeterOffset
-from solaredge2mqtt.services.modbus.sunspec.values import SunSpecPayload, SunSpecValueType
+from solaredge2mqtt.services.modbus.sunspec.battery import (
+    SunSpecBatteryInfoRegister,
+    SunSpecBatteryOffset,
+)
+from solaredge2mqtt.services.modbus.sunspec.meter import (
+    SunSpecMeterInfoRegister,
+    SunSpecMeterOffset,
+)
+from solaredge2mqtt.services.modbus.sunspec.values import (
+    SunSpecPayload,
+    SunSpecValueType,
+)
 
 
 class SunSpecInverterInfoRegister(SunSpecRegister):

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from datetime import datetime
 
 from pydantic import BaseModel, Field, computed_field
@@ -43,6 +44,9 @@ class LogicalModule(BaseModel):
         power_today = None
 
         if self.power:
-            power_today = {k.strftime("%H:%M"): v for k, v in self.power.items()}
+            power_today = {
+                k.strftime("%H:%M"): v
+                for k, v in self.power.items()
+            }
 
         return power_today

@@ -163,3 +163,8 @@ test.py
 data.csv
 
 docker/container/
+
+version.json
+
+requirements.txt
+requirements-armv7.txt

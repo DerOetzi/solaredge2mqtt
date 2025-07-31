@@ -1,12 +1,11 @@
-import asyncio
 from datetime import datetime
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.timer.events import (
-    Interval10MinTriggerEvent,
-    Interval15MinTriggerEvent,
     Interval1MinTriggerEvent,
     Interval5MinTriggerEvent,
+    Interval10MinTriggerEvent,
+    Interval15MinTriggerEvent,
     IntervalBaseTriggerEvent,
 )
 

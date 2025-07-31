@@ -4,7 +4,6 @@ from pymodbus.client import ModbusTcpClient
 
 from solaredge2mqtt.core.models import EnumModel
 
-
 SunSpecRawData = str | int | float
 
 SunSpecInputData = int | float | str | bool

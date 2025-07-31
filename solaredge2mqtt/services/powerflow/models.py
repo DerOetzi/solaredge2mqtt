@@ -3,16 +3,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, ClassVar
 
 from influxdb_client import Point
-from numpy import invert
 from pydantic import Field, computed_field
 from pydantic.json_schema import SkipJsonSchema
 
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.models import Solaredge2MQTTBaseModel
-from solaredge2mqtt.services.homeassistant.models import \
-    HomeAssistantSensorType as HASensor
-from solaredge2mqtt.services.modbus.models.base import (ModbusUnitInfo,
-                                                        ModbusUnitRole)
+from solaredge2mqtt.services.homeassistant.models import (
+    HomeAssistantSensorType as HASensor,
+)
+from solaredge2mqtt.services.modbus.models.base import ModbusUnitInfo, ModbusUnitRole
 from solaredge2mqtt.services.modbus.models.battery import ModbusBattery
 from solaredge2mqtt.services.modbus.models.inverter import ModbusInverter
 from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
@@ -115,7 +114,10 @@ class Powerflow(Component):
             != self.inverter.production
         ):
             logger.warning(
-                "Consumer used production + grid delivery is not equal to inverter production"
+                (
+                    "Consumer used production + grid delivery "
+                    "is not equal to inverter production"
+                )
             )
             valid = True
         else:

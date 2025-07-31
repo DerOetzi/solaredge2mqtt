@@ -2,7 +2,6 @@ import json
 from datetime import datetime, timezone
 
 from aiohttp import ClientResponseError
-from requests.exceptions import HTTPError
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
@@ -94,7 +93,8 @@ class MonitoringSite(HTTPClientAsync):
                 timeout=10,
             )
         except ClientResponseError as error:
-            raise InvalidDataException("Unable to read logical layout") from error
+            raise InvalidDataException(
+                "Unable to read logical layout") from error
 
         return result
 
@@ -113,7 +113,8 @@ class MonitoringSite(HTTPClientAsync):
                     ),
                 )
 
-                self._parse_strings(inverter, inverter_obj["children"], reporters_data)
+                self._parse_strings(
+                    inverter, inverter_obj["children"], reporters_data)
 
                 inverters.append(inverter)
 
@@ -163,7 +164,8 @@ class MonitoringSite(HTTPClientAsync):
         modules = {}
 
         for date_str, reporters_data in playback["reportersData"].items():
-            date = datetime.strptime(date_str, "%a %b %d %H:%M:%S GMT %Y").astimezone()
+            date = datetime.strptime(
+                date_str, "%a %b %d %H:%M:%S GMT %Y").astimezone()
 
             for entries in reporters_data.values():
                 for entry in entries:
@@ -209,8 +211,9 @@ class MonitoringSite(HTTPClientAsync):
             )
 
             result = json.loads(response)
-        except HTTPError as error:
-            raise InvalidDataException("Unable to read logical layout") from error
+        except ClientResponseError as error:
+            raise InvalidDataException(
+                "Unable to read logical layout") from error
 
         return result
 
@@ -276,7 +279,8 @@ class MonitoringSite(HTTPClientAsync):
             )
 
         logger.info(
-            "Read from monitoring total energy: {energy_total} kWh from {count_modules} modules",
+            "Read from monitoring total energy: {energy_total} kWh "
+            "from {count_modules} modules",
             energy_total=energy_total / 1000,
             count_modules=count_modules,
         )
