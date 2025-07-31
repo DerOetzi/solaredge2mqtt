@@ -31,7 +31,6 @@ class HTTPClientAsync:
         url: str,
         params: dict[str, str | int | float] | None = None,
         headers: dict[str, str] | None = None,
-        timeout: int = 5,
         verify: bool = True,
         login: Callable | None = None,
     ) -> dict | None:
@@ -39,11 +38,11 @@ class HTTPClientAsync:
             self.init()
 
             async with self.session.get(
-                url, params=params, headers=headers, timeout=timeout, ssl=verify
+                url, params=params, headers=headers, ssl=verify
             ) as response:
                 if response.status in (401, 403) and login:
                     await login()
-                    return await self._get(url, params, headers, timeout, verify, None)
+                    return await self._get(url, params, headers, verify, None)
                 return await self._handle_response(response)
         except (aiohttp.ClientConnectionError, asyncio.TimeoutError) as error:
             logger.warning(f"Connection issue with {self.service}: {error}")
@@ -55,7 +54,6 @@ class HTTPClientAsync:
         json: dict[str, str] | None = None,
         data: dict[str, str] | None = None,
         headers: dict[str, str] | None = None,
-        timeout: int = 5,
         verify: bool = True,
         expect_json: bool = True,
         login: Callable | None = None,
@@ -64,12 +62,12 @@ class HTTPClientAsync:
             self.init()
 
             async with self.session.post(
-                url, json=json, data=data, headers=headers, timeout=timeout, ssl=verify
+                url, json=json, data=data, headers=headers, ssl=verify
             ) as response:
                 if response.status in (401, 403) and login:
                     await login()
                     return await self._post(
-                        url, json, data, headers, timeout, verify, expect_json, None
+                        url, json, data, headers, verify, expect_json, None
                     )
 
                 return await self._handle_response(response, expect_json)
