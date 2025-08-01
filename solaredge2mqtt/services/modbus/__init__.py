@@ -117,6 +117,8 @@ class Modbus:
                     SunSpecInverterInfoRegister, unit_key, "inverter", unit_settings
                 )
 
+                logger.debug(f"Detected inverter: {inverter_raw}")
+
                 for meter in SunSpecMeterOffset:
                     if (
                         unit_settings.meter[meter.idx]
@@ -146,11 +148,11 @@ class Modbus:
                         )
 
     async def read_device_info(
-        self, 
-        registers: SunSpecRegister, 
-        unit_key: str, 
-        key: str, 
-        unit_settings: ModbusUnitSettings, 
+        self,
+        registers: SunSpecRegister,
+        unit_key: str,
+        key: str,
+        unit_settings: ModbusUnitSettings,
         offset: int = 0
     ) -> SunSpecPayload:
         raw_data = await self._read_from_modbus(registers,
