@@ -183,6 +183,9 @@ jobs:
       IMAGE_NAME: ${{ needs.variables.outputs.image_name }}
       GHCR_IMAGE: ${{ needs.variables.outputs.ghcr_image }}
     if: ${{github.event_name == 'release' || (github.event_name == 'push' && contains(fromJSON(vars.PACKAGE_BRANCHES), github.ref_name))}}
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@master
