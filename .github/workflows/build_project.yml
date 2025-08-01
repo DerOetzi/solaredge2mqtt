@@ -100,6 +100,9 @@ jobs:
       REF_NAME: ${{ needs.variables.outputs.ref_name }}
       IMAGE_NAME: ${{ needs.variables.outputs.image_name }}
       GHCR_IMAGE: ${{ needs.variables.outputs.ghcr_image }}
+    permissions:
+      contents: read
+      packages: write
     strategy:
       matrix:
         arch: [amd64, arm64, arm/v7]
