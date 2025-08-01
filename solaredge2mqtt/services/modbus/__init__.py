@@ -292,7 +292,7 @@ class Modbus:
 
             try:
                 result = await self.client.read_holding_registers(
-                    slave=unit,
+                    device_id=unit,
                     address=address_start,
                     count=register_or_bundle.length,
                 )
@@ -429,7 +429,7 @@ class Modbus:
                 await self.client.write_registers(
                     register.address,
                     value_decoded,
-                    slave=self.settings.unit,
+                    device_id=self.settings.unit,
                 )
 
         except ModbusException as error:
