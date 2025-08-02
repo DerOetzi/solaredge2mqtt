@@ -1,10 +1,10 @@
 [project]
 name = "solaredge2mqtt"
-version = "0.0.0" 
+dynamic = ["version"]
 description = "Read data from SolarEdge Inverter and publish it to MQTT"
-readme = "README.md"
+readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11,<4"
-license = { text = "MIT" }
+license = "MIT"
 authors = [
     { name = "Johannes Ott", email = "info@johannes-ott.net" }
 ]
@@ -12,7 +12,6 @@ keywords = ["smart home"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Topic :: Home Automation",
-    "License :: OSI Approved :: MIT License",
     "Natural Language :: English",
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.11",
