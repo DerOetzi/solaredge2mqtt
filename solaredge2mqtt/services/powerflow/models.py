@@ -103,13 +103,13 @@ class Powerflow(Component):
             consumer=consumer,
         )
 
-    @property
-    def is_valid(self) -> bool:
+    def is_valid(self, external_production: bool) -> bool:
         valid = False
 
         if self.pv_production < 0:
             logger.warning("PV production is negative")
         elif (
+            not external_production and
             self.consumer.used_production + self.grid.delivery
             != self.inverter.production
         ):

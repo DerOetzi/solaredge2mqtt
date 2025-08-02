@@ -56,6 +56,7 @@ Configure the service using environment variables. The available options are lis
 - **SE2MQTT_INTERVAL**: The frequency (in seconds) of data retrieval requests. Default is every 5 seconds.
 - **SE2MQTT_LOGGING_LEVEL**: Adjust the verbosity of logs. Options include DEBUG, INFO, WARNING, ERROR, and CRITICAL.
 - **SE2MQTT_LOCATION\_\_LATITUDE** and **SE2MQTT_LOCATION\_\_LONGITUDE**: Specify your location to enable weather and forecast services. These settings are essential for accurate environmental data and PV production forecasts.
+- **SE2MQTT_EXTERNAL_PRODUCTION**: Set this to true if you have any additional producers to skip some validations. Default is false
 
 ### Basic Modbus configuration
 

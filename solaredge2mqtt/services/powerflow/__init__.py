@@ -93,7 +93,7 @@ class PowerflowService:
         else:
             powerflow = powerflows["leader"]
 
-        if not powerflow.is_valid:
+        if not powerflow.is_valid(self.settings.external_production):
             logger.info(powerflow)
             raise InvalidDataException("Invalid powerflow data")
 
