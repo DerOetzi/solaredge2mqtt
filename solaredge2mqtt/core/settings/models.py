@@ -27,6 +27,8 @@ class ServiceSettings(BaseModel):
     interval: int = Field(5)
     logging_level: LoggingLevelEnum = LoggingLevelEnum.INFO
 
+    external_production: bool = False
+
     modbus: ModbusSettings
     mqtt: MQTTSettings
 
