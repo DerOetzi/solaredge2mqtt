@@ -192,21 +192,22 @@ class Modbus:
         units: dict[str, ModbusUnit] = {}
 
         try:
-            for unit_key, unit_settings in self.settings.units.items():
-                inverter_raw, meters_raw, batteries_raw = await self._get_raw_data(
-                    unit_key, unit_settings.unit
-                )
+            async with self.client:
+                for unit_key, unit_settings in self.settings.units.items():
+                    inverter_raw, meters_raw, batteries_raw = await self._get_raw_data(
+                        unit_key, unit_settings.unit
+                    )
 
-                inverter_data = self._map_inverter(unit_key, inverter_raw)
-                meters_data = self._map_meters(unit_key, meters_raw)
-                batteries_data = self._map_batteries(unit_key, batteries_raw)
-
-                units[unit_key] = ModbusUnit(
-                    info=inverter_data.info.unit,
-                    inverter=inverter_data,
-                    meters=meters_data,
-                    batteries=batteries_data
-                )
+                    inverter_data = self._map_inverter(unit_key, inverter_raw)
+                    meters_data = self._map_meters(unit_key, meters_raw)
+                    batteries_data = self._map_batteries(unit_key, batteries_raw)
+    
+                    units[unit_key] = ModbusUnit(
+                        info=inverter_data.info.unit,
+                        inverter=inverter_data,
+                        meters=meters_data,
+                        batteries=batteries_data
+                    )
 
         except KeyError as error:
             raise InvalidDataException("Invalid modbus data") from error
@@ -221,49 +222,48 @@ class Modbus:
         unit: int
     ) -> tuple[SunSpecPayload, dict[str, SunSpecPayload], dict[str, SunSpecPayload]]:
 
-        async with self.client:
-            inverter_raw = await self._read_from_modbus(
-                SunSpecInverterRegister.request_bundles(),
+        inverter_raw = await self._read_from_modbus(
+            SunSpecInverterRegister.request_bundles(),
+            unit,
+        )
+
+        if self.settings.check_grid_status:
+            grid_status_raw = await self._read_from_modbus(
+                SunSpecGridStatusRegister.request_bundles(),
                 unit,
             )
+            inverter_raw = {**inverter_raw, **grid_status_raw}
 
-            if self.settings.check_grid_status:
-                grid_status_raw = await self._read_from_modbus(
-                    SunSpecGridStatusRegister.request_bundles(),
+        if self.settings.advanced_power_controls_enabled:
+            advanced_power_control_raw = await self._read_from_modbus(
+                SunSpecPowerControlRegister.request_bundles(),
+                unit,
+            )
+            inverter_raw = {
+                **inverter_raw,
+                **advanced_power_control_raw,
+            }
+
+            logger.debug(advanced_power_control_raw)
+
+        meters_raw = {}
+        batteries_raw = {}
+
+        for meter in SunSpecMeterOffset:
+            if meter.identifier in self._device_info[unit_key]:
+                meters_raw[meter.identifier] = await self._read_from_modbus(
+                    SunSpecMeterRegister.request_bundles(),
                     unit,
+                    offset=meter.offset
                 )
-                inverter_raw = {**inverter_raw, **grid_status_raw}
 
-            if self.settings.advanced_power_controls_enabled:
-                advanced_power_control_raw = await self._read_from_modbus(
-                    SunSpecPowerControlRegister.request_bundles(),
+        for battery in SunSpecBatteryOffset:
+            if battery.identifier in self._device_info[unit_key]:
+                batteries_raw[battery.identifier] = await self._read_from_modbus(
+                    SunSpecBatteryRegister.request_bundles(),
                     unit,
+                    offset=battery.offset
                 )
-                inverter_raw = {
-                    **inverter_raw,
-                    **advanced_power_control_raw,
-                }
-
-                logger.debug(advanced_power_control_raw)
-
-            meters_raw = {}
-            batteries_raw = {}
-
-            for meter in SunSpecMeterOffset:
-                if meter.identifier in self._device_info[unit_key]:
-                    meters_raw[meter.identifier] = await self._read_from_modbus(
-                        SunSpecMeterRegister.request_bundles(),
-                        unit,
-                        offset=meter.offset
-                    )
-
-            for battery in SunSpecBatteryOffset:
-                if battery.identifier in self._device_info[unit_key]:
-                    batteries_raw[battery.identifier] = await self._read_from_modbus(
-                        SunSpecBatteryRegister.request_bundles(),
-                        unit,
-                        offset=battery.offset
-                    )
 
         return inverter_raw, meters_raw, batteries_raw
 
