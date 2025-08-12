@@ -42,7 +42,7 @@ jobs:
           - "3.12"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -108,7 +108,7 @@ jobs:
         arch: [amd64, arm64, arm/v7]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
