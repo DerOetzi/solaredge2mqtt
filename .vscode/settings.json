@@ -16,6 +16,7 @@
     "git.alwaysSignOff": true,
     "python.analysis.typeCheckingMode": "off",
     "python.analysis.autoImportCompletions": true,
+    "python.terminal.useEnvFile": true,
     "sonarlint.connectedMode.project": {
         "connectionId": "deroetzi",
         "projectKey": "DerOetzi_solaredge2mqtt"

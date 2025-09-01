@@ -59,6 +59,6 @@ class EnergyService:
                     MQTTPublishEvent(
                         energy.mqtt_topic(),
                         energy,
-                        self.settings.energy.retain,
+                        self.settings.retain,
                     )
                 )

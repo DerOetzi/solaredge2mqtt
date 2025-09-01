@@ -99,16 +99,29 @@ class Solaredge2MQTTBaseModel(BaseModel):
         return data
 
     def model_dump_influxdb(self, exclude: list[str] | None = None) -> dict[str, any]:
-        return self._flatten_dict(self.model_dump(exclude=exclude, exclude_none=True))
+        return self._flatten_dict(
+            self.model_dump(exclude=exclude, exclude_none=True),
+            ignore_keys={"timestamp"}
+        )
 
     def _flatten_dict(
-        self, d: MutableMapping, join_chr: str = "_", parent_key: str = ""
+        self,
+        d: MutableMapping,
+        ignore_keys: set[str] = set(),
+        join_chr: str = "_",
+        parent_key: str = "",
     ) -> MutableMapping:
         items = []
         for k, v in d.items():
+            if k in ignore_keys:
+                continue
             new_key = parent_key + join_chr + k if parent_key else k
             if isinstance(v, MutableMapping):
-                items.extend(self._flatten_dict(v, join_chr, new_key).items())
+                items.extend(
+                    self._flatten_dict(
+                        v, ignore_keys, join_chr, new_key
+                    ).items()
+                )
             else:
                 if isinstance(v, int):
                     v = float(v)

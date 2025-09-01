@@ -1,46 +1,48 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Callable
+from typing import Awaitable, Callable
+
+from aiomqtt import MqttError
 
 from solaredge2mqtt.core.events.events import BaseEvent
 from solaredge2mqtt.core.exceptions import InvalidDataException
 from solaredge2mqtt.core.logging import logger
 
+Listener = Callable[[BaseEvent], Awaitable[None]]
+
 
 class EventBus:
     def __init__(self) -> None:
-        self._listeners: dict[str, list[Callable]] = {}
+        self._listeners: dict[str, list[Listener]] = {}
         self._subscribed_events: dict[str, type[BaseEvent]] = {}
         self._tasks: set[asyncio.Task] = set()
 
     def subscribe(
         self,
         event: type[BaseEvent] | list[type[BaseEvent]],
-        listener: Callable,
+        listener: Listener,
     ) -> None:
         if isinstance(event, list):
             for _event in event:
                 self.subscribe(_event, listener)
             return
-
         event_key = event.event_key()
-
         logger.info(f"Event subscribed: {event_key}")
-
-        if event_key not in self._listeners:
-            self._listeners[event_key] = []
-        self._listeners[event_key].append(listener)
+        self._listeners.setdefault(event_key, []).append(listener)
         self._subscribed_events[event_key] = event
 
     @property
-    def subcribed_events(self) -> list[type[BaseEvent]]:
+    def subscribed_events(self) -> list[type[BaseEvent]]:
         return list(self._subscribed_events.values())
 
-    def unsubscribe(self, event: type[BaseEvent], listener: Callable) -> None:
+    def unsubscribe(self, event: type[BaseEvent], listener: Listener) -> None:
         event_key = event.event_key()
         if event_key in self._listeners:
-            self._listeners[event_key].remove(listener)
+            try:
+                self._listeners[event_key].remove(listener)
+            except ValueError:
+                pass
             if not self._listeners[event_key]:
                 self._listeners.pop(event_key, None)
                 self._subscribed_events.pop(event_key, None)
@@ -54,31 +56,45 @@ class EventBus:
     async def emit(self, event: BaseEvent) -> None:
         event_key = event.event_key()
         logger.trace(f"Event emitted: {event_key}")
-
-        if event_key in self._listeners:
-            if event.AWAIT:
-                await self._notify_listeners(event, self._listeners[event_key])
-            else:
-                task = asyncio.create_task(
-                    self._notify_listeners(event, self._listeners[event_key])
-                )
-                self._tasks.add(task)
-                task.add_done_callback(self._tasks.remove)
+        listeners = self._listeners.get(event_key)
+        if not listeners:
+            return
+        if event.AWAIT:
+            await self._notify_listeners(event, listeners)
+        else:
+            task = asyncio.create_task(
+                self._notify_listeners(event, listeners))
+            self._tasks.add(task)
+            task.add_done_callback(lambda t: self._tasks.discard(t))
 
     async def _notify_listeners(
-        self, event: BaseEvent, listeners: list[Callable]
+        self, event: BaseEvent, listeners: list[Listener]
     ) -> None:
-        await asyncio.gather(
-            *[self._notify_listener(listener, event) for listener in listeners]
+        results = await asyncio.gather(
+            *(self._notify_listener(listener, event)
+              for listener in listeners),
+            return_exceptions=True,
         )
+        for r in results:
+            if isinstance(r, (asyncio.CancelledError, MqttError)):
+                raise r
+            elif isinstance(r, Exception):
+                logger.error("Unhandled listener error: {exc}", exc=repr(r))
 
-    async def _notify_listener(self, listener: Callable, event: BaseEvent) -> None:
+    async def _notify_listener(self, listener: Listener, event: BaseEvent) -> None:
         try:
             await listener(event)
         except InvalidDataException as error:
             logger.warning("{message}, skipping this loop",
                            message=error.message)
 
-    def cancel_tasks(self):
-        for task in self._tasks:
-            task.cancel()
+    async def cancel_tasks(self) -> None:
+        tasks = list(self._tasks)
+        for t in tasks:
+            t.cancel()
+
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+        self._tasks.clear()
+
+        logger.info("Running tasks cancelled: {count}", count=len(tasks))
