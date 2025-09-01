@@ -73,7 +73,7 @@ class Service:
         )
 
         self.energy: EnergyService | None = (
-            EnergyService(self.event_bus, self.influxdb)
+            EnergyService(self.settings.energy, self.event_bus, self.influxdb)
             if self.settings.is_influxdb_configured
             else None
         )

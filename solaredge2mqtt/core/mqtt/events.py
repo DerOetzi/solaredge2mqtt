@@ -11,7 +11,7 @@ class MQTTPublishEvent(BaseEvent):
         self,
         topic: str,
         payload: str | int | float | BaseModel,
-        retain: bool = False,
+        retain: bool,
         qos: int = 0,
         topic_prefix: str | None = None,
         exclude_none: bool = False,

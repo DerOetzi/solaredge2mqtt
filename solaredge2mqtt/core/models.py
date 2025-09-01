@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import MutableMapping
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 import jsonref
-from pydantic import BaseModel, model_serializer
+from pydantic import BaseModel, model_serializer, model_validator
 
 from solaredge2mqtt import __version__
 
@@ -89,6 +89,15 @@ class BaseField(EnumModel):
 
 
 class Solaredge2MQTTBaseModel(BaseModel):
+    timestamp: datetime | None = None
+
+    @model_validator(mode="before")
+    def _set_always(cls, data: dict[str, any]) -> dict[str, any]:
+        data = dict(data or {})
+        if "timestamp" not in data or data["timestamp"] is None:
+            data["timestamp"] = datetime.now(tz=timezone.utc)
+        return data
+
     def model_dump_influxdb(self, exclude: list[str] | None = None) -> dict[str, any]:
         return self._flatten_dict(self.model_dump(exclude=exclude, exclude_none=True))
 

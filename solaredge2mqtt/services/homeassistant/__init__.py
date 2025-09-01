@@ -182,6 +182,7 @@ class HomeAssistantDiscovery:
                 MQTTPublishEvent(
                     topic=topic,
                     payload=entity,
+                    retain=self.settings.homeassistant.retain,
                     topic_prefix=self.settings.homeassistant.topic_prefix,
                     exclude_none=True,
                 )
@@ -198,6 +199,7 @@ class HomeAssistantDiscovery:
                         MQTTPublishEvent(
                             topic=topic,
                             payload=entity,
+                            retain=self.settings.homeassistant.retain,
                             topic_prefix=self.settings.homeassistant.topic_prefix,
                             exclude_none=True,
                         )

@@ -93,7 +93,7 @@ class PowerflowService:
         else:
             powerflow = powerflows["leader"]
 
-        if not powerflow.is_valid(self.settings.external_production):
+        if not powerflow.is_valid(self.settings.powerflow.external_production):
             logger.info(powerflow)
             raise InvalidDataException("Invalid powerflow data")
 
@@ -125,34 +125,43 @@ class PowerflowService:
     async def publish_modbus(self, units):
         for key, unit in units.items():
             await self.event_bus.emit(
-                MQTTPublishEvent(unit.inverter.mqtt_topic(
-                    self.settings.modbus.has_followers), unit.inverter)
+                MQTTPublishEvent(
+                    unit.inverter.mqtt_topic(
+                        self.settings.modbus.has_followers),
+                    unit.inverter,
+                    retain=self.settings.modbus.retain)
             )
 
             for key, component in {**unit.meters, **unit.batteries}.items():
                 await self.event_bus.emit(
                     MQTTPublishEvent(
                         f"{component.mqtt_topic(self.settings.modbus.has_followers)}/{key.lower()}",
-                        component,
+                        component, retain=self.settings.modbus.retain
                     )
                 )
 
     async def publish_wallbox(self, wallbox_data):
         if wallbox_data is not None:
             await self.event_bus.emit(
-                MQTTPublishEvent(wallbox_data.mqtt_topic(), wallbox_data)
+                MQTTPublishEvent(
+                    wallbox_data.mqtt_topic(),
+                    wallbox_data,
+                    retain=self.settings.wallbox.retain
+                )
             )
 
     async def publish_powerflow(self, powerflows: dict[str, Powerflow]) -> None:
         if self.settings.modbus.has_followers:
             for pf in powerflows.values():
                 await self.event_bus.emit(
-                    MQTTPublishEvent(pf.mqtt_topic(), pf)
+                    MQTTPublishEvent(pf.mqtt_topic(), pf,
+                                     self.settings.powerflow.retain)
                 )
         else:
             powerflow = powerflows["leader"]
             await self.event_bus.emit(
-                MQTTPublishEvent(powerflow.mqtt_topic(), powerflow)
+                MQTTPublishEvent(powerflow.mqtt_topic(), powerflow,
+                                 self.settings.powerflow.retain)
             )
 
         await self.event_bus.emit(PowerflowGeneratedEvent(powerflows))

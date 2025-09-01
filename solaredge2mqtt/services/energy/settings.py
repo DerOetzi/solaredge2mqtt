@@ -25,3 +25,7 @@ class PriceSettings(BaseModel):
     @property
     def price_out(self) -> float:
         return self.delivery or 0.0
+
+
+class EnergySettings(BaseModel):
+    retain: bool = Field(False)

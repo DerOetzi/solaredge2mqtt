@@ -286,5 +286,9 @@ class MonitoringSite(HTTPClientAsync):
         )
 
         await self.event_bus.emit(
-            MQTTPublishEvent("monitoring/pv_energy_today", energy_total)
+            MQTTPublishEvent(
+                "monitoring/pv_energy_today",
+                energy_total,
+                self.settings.retain,
+            )
         )

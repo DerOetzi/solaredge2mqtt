@@ -59,6 +59,8 @@ class ModbusSettings(ModbusUnitSettings):
 
     follower: list[ModbusUnitSettings] = Field(default_factory=list)
 
+    retain: bool = Field(False)
+
     @model_validator(mode='before')
     @classmethod
     def fill_defaults(cls, values: dict) -> dict:

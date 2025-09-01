@@ -37,7 +37,13 @@ class WeatherClient(HTTPClientAsync):
     async def loop(self, _):
         weather = await self.get_weather()
         await self.event_bus.emit(WeatherUpdateEvent(weather))
-        await self.event_bus.emit(MQTTPublishEvent("weather/current", weather.current))
+        await self.event_bus.emit(
+            MQTTPublishEvent(
+                "weather/current",
+                weather.current,
+                self.settings.retain,
+            )
+        )
 
     async def get_weather(self) -> OpenWeatherMapOneCall:
         try:

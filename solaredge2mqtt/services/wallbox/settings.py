@@ -5,6 +5,7 @@ class WallboxSettings(BaseModel):
     host: str = Field(None)
     password: SecretStr = Field(None)
     serial: str = Field(None)
+    retain: bool = Field(False)
 
     @property
     def is_configured(self) -> bool:
