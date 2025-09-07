@@ -275,6 +275,7 @@ class MonitoringSite(HTTPClientAsync):
                 MQTTPublishEvent(
                     f"monitoring/module/{module.info.serialnumber}",
                     module,
+                    self.settings.retain
                 )
             )
 
