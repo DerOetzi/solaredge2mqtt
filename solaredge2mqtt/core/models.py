@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import MutableMapping
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 import jsonref
-from pydantic import BaseModel, model_serializer
+from pydantic import BaseModel, model_serializer, model_validator
 
 from solaredge2mqtt import __version__
 
@@ -89,17 +89,40 @@ class BaseField(EnumModel):
 
 
 class Solaredge2MQTTBaseModel(BaseModel):
+    timestamp: datetime | None = None
+
+    @model_validator(mode="before")
+    def _set_always(cls, data: dict[str, any]) -> dict[str, any]:
+        data = dict(data or {})
+        if "timestamp" not in data or data["timestamp"] is None:
+            data["timestamp"] = datetime.now(tz=timezone.utc)
+        return data
+
     def model_dump_influxdb(self, exclude: list[str] | None = None) -> dict[str, any]:
-        return self._flatten_dict(self.model_dump(exclude=exclude, exclude_none=True))
+        ignore_keys = {"timestamp"}
+        return self._flatten_dict(
+            self.model_dump(exclude=exclude, exclude_none=True),
+            ignore_keys=ignore_keys
+        )
 
     def _flatten_dict(
-        self, d: MutableMapping, join_chr: str = "_", parent_key: str = ""
+        self,
+        d: MutableMapping,
+        ignore_keys: set[str] = set(),
+        join_chr: str = "_",
+        parent_key: str = "",
     ) -> MutableMapping:
         items = []
         for k, v in d.items():
+            if k in ignore_keys:
+                continue
             new_key = parent_key + join_chr + k if parent_key else k
             if isinstance(v, MutableMapping):
-                items.extend(self._flatten_dict(v, join_chr, new_key).items())
+                items.extend(
+                    self._flatten_dict(
+                        v, ignore_keys, join_chr, new_key
+                    ).items()
+                )
             else:
                 if isinstance(v, int):
                     v = float(v)

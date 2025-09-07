@@ -214,7 +214,13 @@ class ForecastService:
                                 energy_period=energy_hours)
             logger.debug(forecast)
 
-            await self.event_bus.emit(MQTTPublishEvent(forecast.mqtt_topic(), forecast))
+            await self.event_bus.emit(
+                MQTTPublishEvent(
+                    forecast.mqtt_topic(),
+                    forecast,
+                    self.settings.retain,
+                )
+            )
             await self.event_bus.emit(ForecastEvent(forecast))
 
 

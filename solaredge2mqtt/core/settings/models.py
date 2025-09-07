@@ -7,11 +7,12 @@ from solaredge2mqtt.core.influxdb.settings import InfluxDBSettings
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.logging.models import LoggingLevelEnum
 from solaredge2mqtt.core.mqtt.settings import MQTTSettings
-from solaredge2mqtt.services.energy.settings import PriceSettings
+from solaredge2mqtt.services.energy.settings import EnergySettings, PriceSettings
 from solaredge2mqtt.services.forecast.settings import ForecastSettings
 from solaredge2mqtt.services.homeassistant.settings import HomeAssistantSettings
 from solaredge2mqtt.services.modbus.settings import ModbusSettings
 from solaredge2mqtt.services.monitoring.settings import MonitoringSettings
+from solaredge2mqtt.services.powerflow.settings import PowerflowSettings
 from solaredge2mqtt.services.wallbox.settings import WallboxSettings
 from solaredge2mqtt.services.weather.settings import WeatherSettings
 
@@ -27,10 +28,11 @@ class ServiceSettings(BaseModel):
     interval: int = Field(5)
     logging_level: LoggingLevelEnum = LoggingLevelEnum.INFO
 
-    external_production: bool = False
-
     modbus: ModbusSettings
     mqtt: MQTTSettings
+
+    powerflow: PowerflowSettings = PowerflowSettings()
+    energy: EnergySettings = EnergySettings()
 
     location: LocationSettings | None = None
     prices: PriceSettings = PriceSettings()

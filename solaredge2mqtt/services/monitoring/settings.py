@@ -5,6 +5,7 @@ class MonitoringSettings(BaseModel):
     site_id: str = Field(None)
     username: str = Field(None)
     password: SecretStr = Field(None)
+    retain: bool = Field(False)
 
     @property
     def is_configured(self) -> bool:

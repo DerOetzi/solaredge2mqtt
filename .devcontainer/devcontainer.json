@@ -9,6 +9,9 @@
 		"ghcr.io/devcontainers/features/node:1": {
 			"version": "20"
 		},
+		"ghcr.io/devcontainers/features/java:1": {
+			"version": "17"
+		},
 		"ghcr.io/devcontainers/features/github-cli:1": {},
 		"ghcr.io/hspaans/devcontainer-features/pyupgrade:2.0.0": {},
 		"ghcr.io/devcontainers-extra/features/pylint:2": {}
@@ -21,8 +24,7 @@
 				"ms-python.python",
 				"ms-python.vscode-pylance",
 				"ms-azuretools.vscode-containers",
-				"ms-azuretools.vscode-docker",
-				"ms-python.isort"
+				"ms-azuretools.vscode-docker"
 			],
 			"settings": {
 				"python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",

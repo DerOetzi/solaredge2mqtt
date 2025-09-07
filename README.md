@@ -56,7 +56,7 @@ Configure the service using environment variables. The available options are lis
 - **SE2MQTT_INTERVAL**: The frequency (in seconds) of data retrieval requests. Default is every 5 seconds.
 - **SE2MQTT_LOGGING_LEVEL**: Adjust the verbosity of logs. Options include DEBUG, INFO, WARNING, ERROR, and CRITICAL.
 - **SE2MQTT_LOCATION\_\_LATITUDE** and **SE2MQTT_LOCATION\_\_LONGITUDE**: Specify your location to enable weather and forecast services. These settings are essential for accurate environmental data and PV production forecasts.
-- **SE2MQTT_EXTERNAL_PRODUCTION**: Set this to true if you have any additional producers to skip some validations. Default is false
+- **SE2MQTT_POWERFLOW__EXTERNAL_PRODUCTION**: Set this to true if you have any additional producers to skip some validations. Default is false
 
 ### Basic Modbus configuration
 
@@ -97,6 +97,20 @@ This setup allows for comprehensive multi-inverter support in systems with casca
 - **SE2MQTT_MQTT\_\_PORT**: The port your MQTT broker listens on. Default is 1883.
 - **SE2MQTT_MQTT\_\_USERNAME** and **SE2MQTT_MQTT\_\_PASSWORD**: Credentials for connecting to your MQTT broker. It's recommended to use secrets for the password if deploying with Docker.
 - **SE2MQTT_MQTT\_\_TOPIC_PREFIX**: The prefix used for MQTT topics. Defaults to 'solaredge'.
+### Retain Configuration
+
+By default, all messages are not retained. However, you can configure the retain flag for each message type individually:
+
+- **SE2MQTT_ENERGY__RETAIN**: Default is `false`.
+- **SE2MQTT_FORECAST__RETAIN**: Default is `false`.
+- **SE2MQTT_HOMEASSISTANT__RETAIN**: Default is `false`.
+- **SE2MQTT_MODBUS__RETAIN**: Default is `false`.
+- **SE2MQTT_MONITORING__RETAIN**: Default is `false`.
+- **SE2MQTT_POWERFLOW__RETAIN**: Default is `false`.
+- **SE2MQTT_WALLBOX__RETAIN**: Default is `false`.
+- **SE2MQTT_WEATHER__RETAIN**: Default is `false`.
+
+This configuration allows you to control whether specific MQTT messages should be retained by the broker.
 
 ### Monitoring
 

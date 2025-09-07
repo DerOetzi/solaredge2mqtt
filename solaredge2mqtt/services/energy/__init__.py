@@ -12,15 +12,18 @@ from solaredge2mqtt.services.energy.models import (
     HistoricPeriod,
     HistoricQuery,
 )
+from solaredge2mqtt.services.energy.settings import EnergySettings
 
 
 class EnergyService:
     def __init__(
         self,
+        settings: EnergySettings,
         event_bus: EventBus,
         influxdb: InfluxDBAsync,
     ):
         self.influxdb = influxdb
+        self.settings = settings
 
         self.event_bus = event_bus
         self._subscribe_events()
@@ -52,4 +55,10 @@ class EnergyService:
                 )
 
                 await self.event_bus.emit(EnergyReadEvent(energy))
-                await self.event_bus.emit(MQTTPublishEvent(energy.mqtt_topic(), energy))
+                await self.event_bus.emit(
+                    MQTTPublishEvent(
+                        energy.mqtt_topic(),
+                        energy,
+                        self.settings.retain,
+                    )
+                )

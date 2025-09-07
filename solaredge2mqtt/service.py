@@ -5,7 +5,7 @@
     The module also includes a run function to initialize and start the service.
 """
 
-import asyncio as aio
+import asyncio
 import platform
 import signal
 from time import time
@@ -38,14 +38,13 @@ LOCAL_TZ = get_localzone_name()
 def run():
     try:
         service = Service()
-        loop = aio.get_event_loop()
+        loop = asyncio.get_event_loop()
         loop.add_signal_handler(signal.SIGINT, service.cancel)
         loop.add_signal_handler(signal.SIGTERM, service.cancel)
         loop.run_until_complete(service.main_loop())
-        loop.run_until_complete(service.close())
     except ConfigurationException:
         logger.error("Configuration error")
-    except aio.exceptions.CancelledError:
+    except asyncio.CancelledError:
         logger.debug("Service cancelled")
     finally:
         loop.close()
@@ -62,8 +61,8 @@ class Service:
 
         self.mqtt: MQTTClient | None = None
 
-        self.cancel_request = aio.Event()
-        self.loops: set[aio.Task] = set()
+        self.cancel_request = asyncio.Event()
+        self.loops: set[asyncio.Task] = set()
 
         self.influxdb: InfluxDBAsync | None = (
             InfluxDBAsync(self.settings.influxdb,
@@ -73,7 +72,7 @@ class Service:
         )
 
         self.energy: EnergyService | None = (
-            EnergyService(self.event_bus, self.influxdb)
+            EnergyService(self.settings.energy, self.event_bus, self.influxdb)
             if self.settings.is_influxdb_configured
             else None
         )
@@ -117,9 +116,11 @@ class Service:
 
     def cancel(self):
         logger.info("Stopping SolarEdge2MQTT service...")
+
         self.cancel_request.set()
-        for tasks in aio.all_tasks():
-            tasks.cancel()
+
+        for task in list(self.loops):
+            task.cancel()
 
     async def main_loop(self):
         logger.info("Starting SolarEdge2MQTT service...")
@@ -149,16 +150,19 @@ class Service:
                     self._start_mqtt_listener()
                     self.schedule_loop(1, self.timer.loop)
 
-                    await aio.gather(*self.loops)
+                    await asyncio.gather(*self.loops)
             except MqttError:
                 logger.error("MQTT error, reconnecting in 5 seconds...")
-            except aio.exceptions.CancelledError:
+            except asyncio.CancelledError:
                 logger.debug("Loops cancelled")
+                raise
             finally:
                 await self.finalize()
 
-            if not self.cancel_request.is_set():
-                await aio.sleep(5)
+            if self.cancel_request.is_set():
+                break
+
+            await asyncio.sleep(5)
 
     async def finalize(self):
         try:
@@ -166,17 +170,16 @@ class Service:
         except MqttError:
             pass
 
-        self.event_bus.cancel_tasks()
+        await self.event_bus.cancel_tasks()
 
-        for task in self.loops:
-            task.cancel()
+        await self.close()
 
     def _start_mqtt_listener(self):
-        task = aio.create_task(self.mqtt.listen())
+        task = asyncio.create_task(self.mqtt.listen())
         self.loops.add(task)
         task.add_done_callback(self.loops.remove)
 
-        task = aio.create_task(self.mqtt.process_queue())
+        task = asyncio.create_task(self.mqtt.process_queue())
         self.loops.add(task)
         task.add_done_callback(self.loops.remove)
 
@@ -187,7 +190,7 @@ class Service:
         delay_start: int = 0,
         args: list[any] = None,
     ):
-        loop = aio.create_task(
+        loop = asyncio.create_task(
             self.run_loop(interval_in_seconds, handles, delay_start, args)
         )
         self.loops.add(loop)
@@ -203,7 +206,7 @@ class Service:
         if not isinstance(handles, list):
             handles = [handles]
 
-        await aio.sleep(delay_start)
+        await asyncio.sleep(delay_start)
 
         while not self.cancel_request.is_set():
             execution_time = 0
@@ -213,16 +216,27 @@ class Service:
             execution_time = time() - start_time
 
             if execution_time < interval_in_seconds:
-                await aio.sleep(interval_in_seconds - execution_time)
+                await asyncio.sleep(interval_in_seconds - execution_time)
             else:
-                await aio.sleep(interval_in_seconds)
+                await asyncio.sleep(interval_in_seconds)
 
     async def close(self):
-        if self.influxdb:
-            await self.influxdb.close()
-        if self.powerflow:
-            await self.powerflow.close()
-        if self.monitoring:
-            await self.monitoring.close()
-        if self.weather:
-            await self.weather.close()
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(
+                    *[
+                        service.close()
+                        for service in [
+                            self.influxdb,
+                            self.powerflow,
+                            self.monitoring,
+                            self.weather,
+                        ]
+                        if service
+                    ]
+                ),
+                timeout=5
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Timeout while closing tasks, proceeding with shutdown.")

@@ -26,10 +26,10 @@ dependencies = [
     "influxdb-client==1.49.0",
     "jsonref==1.1.0",
     "loguru==0.7.3",
-    "platformdirs==4.3.8",
+    "platformdirs==4.4.0",
     "pydantic==2.11.7",
     "pyjwt==2.10.1",
-    "pymodbus==3.10.0",
+    "pymodbus==3.11.1",
     "tzlocal==5.3.1",
 ]
 
@@ -46,12 +46,11 @@ solaredge2mqtt = "solaredge2mqtt.service:run"
 dev = [
     "setuptools-scm[toml]>=8",
     "ruff",
-    "isort",
     "tomli",
 ]
 forecast = [
     "numpy==2.2.5",
-    "pandas==2.3.1",
+    "pandas==2.3.2",
     "scikit-learn==1.7.1",
     "scipy==1.16.1"
 ]
@@ -81,9 +80,4 @@ unfixable = []
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
-skip-magic-trailing-comma = false
-
-[tool.isort]
-profile = "black"
-line_length = 88
-known_first_party = ["solaredge2mqtt"]
+skip-magic-trailing-comma = false 
