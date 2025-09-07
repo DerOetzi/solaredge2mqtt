@@ -99,9 +99,10 @@ class Solaredge2MQTTBaseModel(BaseModel):
         return data
 
     def model_dump_influxdb(self, exclude: list[str] | None = None) -> dict[str, any]:
+        ignore_keys = {"timestamp"}
         return self._flatten_dict(
             self.model_dump(exclude=exclude, exclude_none=True),
-            ignore_keys={"timestamp"}
+            ignore_keys=ignore_keys
         )
 
     def _flatten_dict(

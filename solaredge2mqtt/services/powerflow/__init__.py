@@ -129,14 +129,15 @@ class PowerflowService:
                     unit.inverter.mqtt_topic(
                         self.settings.modbus.has_followers),
                     unit.inverter,
-                    retain=self.settings.modbus.retain)
+                    self.settings.modbus.retain)
             )
 
             for key, component in {**unit.meters, **unit.batteries}.items():
                 await self.event_bus.emit(
                     MQTTPublishEvent(
                         f"{component.mqtt_topic(self.settings.modbus.has_followers)}/{key.lower()}",
-                        component, retain=self.settings.modbus.retain
+                        component,
+                        self.settings.modbus.retain
                     )
                 )
 
@@ -146,7 +147,7 @@ class PowerflowService:
                 MQTTPublishEvent(
                     wallbox_data.mqtt_topic(),
                     wallbox_data,
-                    retain=self.settings.wallbox.retain
+                    self.settings.wallbox.retain
                 )
             )
 
@@ -154,14 +155,20 @@ class PowerflowService:
         if self.settings.modbus.has_followers:
             for pf in powerflows.values():
                 await self.event_bus.emit(
-                    MQTTPublishEvent(pf.mqtt_topic(), pf,
-                                     self.settings.powerflow.retain)
+                    MQTTPublishEvent(
+                        pf.mqtt_topic(),
+                        pf,
+                        self.settings.powerflow.retain
+                    )
                 )
         else:
             powerflow = powerflows["leader"]
             await self.event_bus.emit(
-                MQTTPublishEvent(powerflow.mqtt_topic(), powerflow,
-                                 self.settings.powerflow.retain)
+                MQTTPublishEvent(
+                    powerflow.mqtt_topic(),
+                    powerflow,
+                    self.settings.powerflow.retain
+                )
             )
 
         await self.event_bus.emit(PowerflowGeneratedEvent(powerflows))
