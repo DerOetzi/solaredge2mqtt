@@ -24,7 +24,9 @@
 				"ms-python.python",
 				"ms-python.vscode-pylance",
 				"ms-azuretools.vscode-containers",
-				"ms-azuretools.vscode-docker"
+				"ms-azuretools.vscode-docker",
+				"jebbs.plantuml",
+				"mhutchie.git-graph"
 			],
 			"settings": {
 				"python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
@@ -34,7 +36,9 @@
 					"source.organizeImports.ruff": "explicit"
 				},
 				"ruff.organizeImports": true,
-				"ruff.fixOnSave": true
+				"ruff.fixOnSave": true,
+				"plantuml.render": "PlantUMLServer",
+				"plantuml.server": "https://kroki.io/plantuml"
 			}
 		}
 	},

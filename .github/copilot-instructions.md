@@ -59,3 +59,10 @@
 ---
 
 **If you are unsure about a workflow or integration, check the README and the relevant service's `settings.py` for configuration details.**
+
+## (Coding) generation constraints
+- Use syntax and language features for python >= 3.11 <= 3.13
+- For diagrams use PlantUml
+- As this is an international project, ensure all code comments and documentation are in English.
+- Follow the project's directory structure and naming conventions.
+- Ensure SonarQube code quality standards are met.
