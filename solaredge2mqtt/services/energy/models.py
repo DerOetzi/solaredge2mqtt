@@ -133,6 +133,11 @@ class HistoricMoney(Solaredge2MQTTBaseModel):
     def balance_total(self) -> float:
         return round(self.balance_grid + self.saved, 3)
 
+    @computed_field(**HASensor.MONETARY.field("Total revenue"))
+    @property
+    def total_revenue(self) -> float:
+        return round(self.delivered + self.saved, 3)
+
 
 class HistoricInfo(Solaredge2MQTTBaseModel):
     unit: str | None = Field(None)
