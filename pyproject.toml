@@ -18,7 +18,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-    "aiocsv==1.3.2",
+    "aiocsv==1.4.0",
     "aiohttp==3.12.15",
     "aiomqtt==2.4.0",
     "astral==3.2",
