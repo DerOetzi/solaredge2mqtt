@@ -29,7 +29,7 @@ dependencies = [
     "platformdirs==4.4.0",
     "pydantic==2.11.7",
     "pyjwt==2.10.1",
-    "pymodbus==3.11.1",
+    "pymodbus==3.11.2",
     "tzlocal==5.3.1",
 ]
 
@@ -51,8 +51,8 @@ dev = [
 forecast = [
     "numpy==2.3.3",
     "pandas==2.3.2",
-    "scikit-learn==1.7.1",
-    "scipy==1.16.1"
+    "scikit-learn==1.7.2",
+    "scipy==1.16.2"
 ]
 
 [build-system]
