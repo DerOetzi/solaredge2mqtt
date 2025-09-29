@@ -27,7 +27,7 @@ dependencies = [
     "jsonref==1.1.0",
     "loguru==0.7.3",
     "platformdirs==4.4.0",
-    "pydantic==2.11.7",
+    "pydantic==2.11.9",
     "pyjwt==2.10.1",
     "pymodbus==3.11.2",
     "tzlocal==5.3.1",
