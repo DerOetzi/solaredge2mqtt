@@ -221,6 +221,7 @@ class MonitoringSite(HTTPClientAsync):
         try:
             async with asyncio.timeout(10):
                 await self._post(
+                    LOGIN_URL,
                     headers={"Content-Type": CONTENT_TYPE_FORM_URLENCODED},
                     data={
                         "j_username": self.settings.username,
