@@ -17,6 +17,7 @@ class EventBus:
         self._listeners: dict[str, list[Listener]] = {}
         self._subscribed_events: dict[str, type[BaseEvent]] = {}
         self._tasks: set[asyncio.Task] = set()
+        self._critical_error: BaseException | None = None
 
     def subscribe(
         self,
@@ -54,6 +55,12 @@ class EventBus:
             self._subscribed_events.pop(event_key, None)
 
     async def emit(self, event: BaseEvent) -> None:
+        # Check if a critical error occurred in a background task
+        if self._critical_error is not None:
+            error = self._critical_error
+            self._critical_error = None
+            raise error
+
         event_key = event.event_key()
         logger.trace(f"Event emitted: {event_key}")
         listeners = self._listeners.get(event_key)
@@ -65,7 +72,7 @@ class EventBus:
             task = asyncio.create_task(
                 self._notify_listeners(event, listeners))
             self._tasks.add(task)
-            task.add_done_callback(lambda t: self._tasks.discard(t))
+            task.add_done_callback(self._handle_task_done)
 
     async def _notify_listeners(
         self, event: BaseEvent, listeners: list[Listener]
@@ -88,6 +95,15 @@ class EventBus:
             logger.warning("{message}, skipping this loop",
                            message=error.message)
 
+    def _handle_task_done(self, task: asyncio.Task) -> None:
+        self._tasks.discard(task)
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None and isinstance(exc, (MqttError, asyncio.CancelledError)):
+            # Store critical error to be raised on next emit
+            self._critical_error = exc
+
     async def cancel_tasks(self) -> None:
         tasks = list(self._tasks)
         for t in tasks:
@@ -96,5 +112,6 @@ class EventBus:
         await asyncio.gather(*tasks, return_exceptions=True)
 
         self._tasks.clear()
+        self._critical_error = None
 
         logger.info("Running tasks cancelled: {count}", count=len(tasks))
