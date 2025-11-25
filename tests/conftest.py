@@ -10,7 +10,7 @@ from solaredge2mqtt.core.events import EventBus
 
 @pytest.fixture
 def event_bus():
-    """Create a mock event bus for testing."""
+    """Create an EventBus instance for testing."""
     return EventBus()
 
 
