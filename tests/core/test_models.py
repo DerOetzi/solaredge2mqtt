@@ -250,13 +250,20 @@ class TestSolaredge2MQTTBaseModel:
         assert result["event_time"] == ts.isoformat()
 
     def test_default_homeassistant_device_info(self):
-        """Test _default_homeassistant_device_info method."""
+        """Test _default_homeassistant_device_info method.
+        
+        Note: Testing protected method directly is intentional for thorough 
+        coverage of internal implementation behavior.
+        """
 
-        class TestModel(Solaredge2MQTTBaseModel):
+        class DeviceInfoModel(Solaredge2MQTTBaseModel):
+            """Model for testing device info."""
+
             value: int
 
-        model = TestModel(value=42)
-        info = model._default_homeassistant_device_info("Test Device")
+        model = DeviceInfoModel(value=42)
+        # Access to protected member is intentional for testing
+        info = model._default_homeassistant_device_info("Test Device")  # noqa: SLF001
 
         assert info["name"] == "SolarEdge2MQTT Test Device"
         assert info["manufacturer"] == "DerOetzi"

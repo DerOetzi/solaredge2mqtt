@@ -57,7 +57,7 @@ class TestComponentValueGroup:
         assert result == 1.23
 
 
-class TestComponent:
+class TestComponentBase:
     """Tests for Component class."""
 
     def test_component_default_values(self):
@@ -68,11 +68,13 @@ class TestComponent:
     def test_component_influxdb_tags(self):
         """Test Component influxdb_tags property."""
 
-        class TestComponent(Component):
+        class SampleComponent(Component):
+            """Sample component for testing."""
+
             COMPONENT = "test_component"
             SOURCE = "test_source"
 
-        component = TestComponent()
+        component = SampleComponent()
         tags = component.influxdb_tags
 
         assert tags["component"] == "test_component"
@@ -81,11 +83,13 @@ class TestComponent:
     def test_component_mqtt_topic_with_source(self):
         """Test Component mqtt_topic with source."""
 
-        class TestComponent(Component):
+        class InverterComponent(Component):
+            """Inverter component for testing."""
+
             COMPONENT = "inverter"
             SOURCE = "modbus"
 
-        component = TestComponent()
+        component = InverterComponent()
         topic = component.mqtt_topic()
 
         assert topic == "modbus/inverter"
@@ -93,11 +97,13 @@ class TestComponent:
     def test_component_mqtt_topic_without_source(self):
         """Test Component mqtt_topic without source."""
 
-        class TestComponent(Component):
+        class PowerflowComponent(Component):
+            """Powerflow component for testing."""
+
             COMPONENT = "powerflow"
             SOURCE = None
 
-        component = TestComponent()
+        component = PowerflowComponent()
         topic = component.mqtt_topic()
 
         assert topic == "powerflow"
@@ -105,32 +111,38 @@ class TestComponent:
     def test_component_str_with_source(self):
         """Test Component string representation with source."""
 
-        class TestComponent(Component):
+        class MeterComponent(Component):
+            """Meter component for testing."""
+
             COMPONENT = "meter"
             SOURCE = "modbus"
 
-        component = TestComponent()
+        component = MeterComponent()
 
         assert str(component) == "modbus: meter"
 
     def test_component_str_without_source(self):
         """Test Component string representation without source."""
 
-        class TestComponent(Component):
+        class PowerflowComponent(Component):
+            """Powerflow component for testing."""
+
             COMPONENT = "powerflow"
             SOURCE = None
 
-        component = TestComponent()
+        component = PowerflowComponent()
 
         assert str(component) == "powerflow"
 
     def test_component_has_timestamp(self):
         """Test Component has timestamp from base model."""
 
-        class TestComponent(Component):
+        class TimestampComponent(Component):
+            """Component for testing timestamps."""
+
             COMPONENT = "test"
 
-        component = TestComponent()
+        component = TimestampComponent()
 
         assert component.timestamp is not None
         assert isinstance(component.timestamp, datetime)
