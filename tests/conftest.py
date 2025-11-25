@@ -5,12 +5,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from solaredge2mqtt.core.events import EventBus
+
 
 @pytest.fixture
 def event_bus():
     """Create a mock event bus for testing."""
-    from solaredge2mqtt.core.events import EventBus
-
     return EventBus()
 
 

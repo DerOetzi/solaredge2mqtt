@@ -28,17 +28,16 @@ def calculate_timestamp_for_interval(base_interval: int, target_interval: int) -
 
     if target_interval == base_interval:
         return target_interval * 2  # Simple multiple of base_interval
-    elif target_interval == 60:
+    if target_interval == 60:
         offset = base_interval - 1
         return 60 + offset  # Results in (timestamp - offset) % 60 == 0
-    elif target_interval == 300:
+    if target_interval == 300:
         offset = (base_interval - 1) + base_interval
         return 300 + offset  # Results in (timestamp - offset) % 300 == 0
-    elif target_interval == 600:
+    if target_interval == 600:
         offset = (base_interval - 1) + base_interval + base_interval
         return 600 + offset  # Results in (timestamp - offset) % 600 == 0
-    else:
-        return target_interval
+    return target_interval
 
 
 class TestTimer:

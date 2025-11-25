@@ -152,7 +152,7 @@ class TestEventBus:
         assert call_order == ["listener", "after_emit"]
 
     @pytest.mark.asyncio
-    async def test_emit_handles_invalid_data_exception(self, event_bus, capfd):
+    async def test_emit_handles_invalid_data_exception(self, event_bus):
         """Test that InvalidDataException in listener is handled gracefully."""
 
         async def failing_listener(evt):

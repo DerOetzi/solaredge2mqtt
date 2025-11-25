@@ -251,8 +251,8 @@ class TestSolaredge2MQTTBaseModel:
 
     def test_default_homeassistant_device_info(self):
         """Test _default_homeassistant_device_info method.
-        
-        Note: Testing protected method directly is intentional for thorough 
+
+        Note: Testing protected method directly is intentional for thorough
         coverage of internal implementation behavior.
         """
 
