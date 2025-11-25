@@ -35,14 +35,6 @@ class TestLoggingLevelEnum:
         assert LoggingLevelEnum.CRITICAL.description == "CRITICAL"
         assert LoggingLevelEnum.CRITICAL.level == logging.CRITICAL
 
-    def test_level_values_are_correct(self):
-        """Test that level values match Python logging module."""
-        assert LoggingLevelEnum.DEBUG.level == 10
-        assert LoggingLevelEnum.INFO.level == 20
-        assert LoggingLevelEnum.WARNING.level == 30
-        assert LoggingLevelEnum.ERROR.level == 40
-        assert LoggingLevelEnum.CRITICAL.level == 50
-
     def test_all_levels_exist(self):
         """Test that all expected levels exist."""
         expected_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
