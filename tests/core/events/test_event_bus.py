@@ -30,7 +30,8 @@ class TestEventBus:
         """Test subscribing to a single event."""
 
         def listener(event):
-            pass
+            """Stub listener for subscription test - not invoked."""
+            del event
 
         event_bus.subscribe(TestEvent, listener)
         listeners = event_bus.subscribed_events
@@ -40,7 +41,8 @@ class TestEventBus:
         """Test subscribing to multiple events at once."""
 
         def listener(event):
-            pass
+            """Stub listener for subscription test - not invoked."""
+            del event
 
         class AnotherEvent(BaseEvent):
             """Another test event."""
@@ -54,7 +56,8 @@ class TestEventBus:
         """Test subscribed_events property returns correct events."""
 
         def listener(event):
-            pass
+            """Stub listener for subscription test - not invoked."""
+            del event
 
         event_bus.subscribe(TestEvent, listener)
 
@@ -65,7 +68,8 @@ class TestEventBus:
         """Test unsubscribing from an event."""
 
         def listener(event):
-            pass
+            """Stub listener for unsubscribe test - not invoked."""
+            del event
 
         event_bus.subscribe(TestEvent, listener)
         event_bus.unsubscribe(TestEvent, listener)
@@ -77,10 +81,12 @@ class TestEventBus:
         """Test unsubscribing non-existent listener doesn't raise."""
 
         def listener(event):
-            pass
+            """Stub listener for unsubscribe test - not invoked."""
+            del event
 
         def other_listener(event):
-            pass
+            """Stub listener for unsubscribe test - not invoked."""
+            del event
 
         event_bus.subscribe(TestEvent, listener)
         event_bus.unsubscribe(TestEvent, other_listener)
@@ -93,10 +99,12 @@ class TestEventBus:
         """Test unsubscribing all listeners for an event."""
 
         def listener1(event):
-            pass
+            """Stub listener for unsubscribe_all test - not invoked."""
+            del event
 
         def listener2(event):
-            pass
+            """Stub listener for unsubscribe_all test - not invoked."""
+            del event
 
         event_bus.subscribe(TestEvent, listener1)
         event_bus.subscribe(TestEvent, listener2)
@@ -132,7 +140,7 @@ class TestEventBus:
         call_order = []
 
         async def listener(evt):
-            del evt  # Unused parameter required by EventBus interface
+            del evt
             call_order.append("listener")
 
         event_bus.subscribe(AwaitingTestEvent, listener)
@@ -148,7 +156,7 @@ class TestEventBus:
         """Test that InvalidDataException in listener is handled gracefully."""
 
         async def failing_listener(evt):
-            del evt  # Unused parameter required by EventBus interface
+            del evt
             raise InvalidDataException("Test invalid data")
 
         event_bus.subscribe(AwaitingTestEvent, failing_listener)
@@ -166,11 +174,11 @@ class TestEventBus:
         calls = []
 
         async def listener1(evt):
-            del evt  # Unused parameter required by EventBus interface
+            del evt
             calls.append("listener1")
 
         async def listener2(evt):
-            del evt  # Unused parameter required by EventBus interface
+            del evt
             calls.append("listener2")
 
         event_bus.subscribe(AwaitingTestEvent, listener1)
