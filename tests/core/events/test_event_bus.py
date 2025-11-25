@@ -1,5 +1,7 @@
 """Tests for core EventBus module."""
 
+import asyncio
+
 import pytest
 
 from solaredge2mqtt.core.events import EventBus
@@ -119,6 +121,7 @@ class TestEventBus:
         received_events = []
 
         async def listener(event):
+            await asyncio.sleep(0)
             received_events.append(event)
 
         event_bus.subscribe(AwaitingTestEvent, listener)
@@ -141,6 +144,7 @@ class TestEventBus:
 
         async def listener(evt):
             del evt
+            await asyncio.sleep(0)
             call_order.append("listener")
 
         event_bus.subscribe(AwaitingTestEvent, listener)
@@ -157,6 +161,7 @@ class TestEventBus:
 
         async def failing_listener(evt):
             del evt
+            await asyncio.sleep(0)
             raise InvalidDataException("Test invalid data")
 
         event_bus.subscribe(AwaitingTestEvent, failing_listener)
@@ -175,10 +180,12 @@ class TestEventBus:
 
         async def listener1(evt):
             del evt
+            await asyncio.sleep(0)
             calls.append("listener1")
 
         async def listener2(evt):
             del evt
+            await asyncio.sleep(0)
             calls.append("listener2")
 
         event_bus.subscribe(AwaitingTestEvent, listener1)
