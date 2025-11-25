@@ -67,6 +67,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install build
 
+      - name: Install package with dev dependencies
+        run: pip install -e ".[dev,forecast]"
+
+      - name: Run tests
+        run: python -m pytest --tb=short
+
       - name: Build package
         run: python -m build
 
