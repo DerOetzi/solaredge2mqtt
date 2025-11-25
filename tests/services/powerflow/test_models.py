@@ -1,5 +1,6 @@
 """Tests for powerflow models module."""
 
+import pytest
 
 from solaredge2mqtt.services.powerflow.models import (
     BatteryPowerflow,
@@ -40,27 +41,25 @@ class TestInverterPowerflow:
         """Test battery_factor calculation with discharge."""
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=200)
 
-        # factor = battery_discharge / dc_power = 200 / 1200
         expected_factor = 200 / 1200
-        assert abs(inverter.battery_factor - expected_factor) < 0.001
+        assert inverter.battery_factor == pytest.approx(expected_factor)
 
     def test_inverter_powerflow_battery_factor_no_discharge(self):
         """Test battery_factor is 0 when no discharge."""
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
 
-        assert inverter.battery_factor == 0.0
+        assert inverter.battery_factor == pytest.approx(0.0)
 
     def test_inverter_powerflow_battery_factor_zero_power(self):
         """Test battery_factor is 0 when power is 0."""
         inverter = InverterPowerflow(power=0, dc_power=1200, battery_discharge=200)
 
-        assert inverter.battery_factor == 0.0
+        assert inverter.battery_factor == pytest.approx(0.0)
 
     def test_inverter_powerflow_battery_production(self):
         """Test battery_production calculation."""
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=200)
 
-        # battery_production = production * battery_factor
         expected = int(round(1000 * (200 / 1200)))
         assert inverter.battery_production == expected
 
@@ -181,12 +180,10 @@ class TestConsumerPowerflow:
     def test_consumer_powerflow_used_production(self):
         """Test used_production calculation."""
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
-        grid = GridPowerflow(power=300)  # Delivering to grid
+        grid = GridPowerflow(power=300)
 
         consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
 
-        # used_production = production - grid.delivery
-        # used_production = 1000 - 300 = 700
         assert consumer.used_production == 700
 
     def test_consumer_powerflow_used_production_no_production(self):

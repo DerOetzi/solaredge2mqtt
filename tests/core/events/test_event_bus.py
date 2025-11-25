@@ -28,10 +28,9 @@ class TestEventBus:
 
     def test_subscribe_single_event(self, event_bus):
         """Test subscribing to a single event."""
-        received = []
 
-        async def listener(event):
-            received.append(event)
+        def listener(event):
+            pass
 
         event_bus.subscribe(TestEvent, listener)
         listeners = event_bus.subscribed_events
@@ -39,10 +38,9 @@ class TestEventBus:
 
     def test_subscribe_multiple_events(self, event_bus):
         """Test subscribing to multiple events at once."""
-        received = []
 
-        async def listener(event):
-            received.append(event)
+        def listener(event):
+            pass
 
         class AnotherEvent(BaseEvent):
             """Another test event."""
@@ -54,10 +52,9 @@ class TestEventBus:
 
     def test_subscribed_events_property(self, event_bus):
         """Test subscribed_events property returns correct events."""
-        received = []
 
-        async def listener(event):
-            received.append(event)
+        def listener(event):
+            pass
 
         event_bus.subscribe(TestEvent, listener)
 
@@ -66,10 +63,9 @@ class TestEventBus:
 
     def test_unsubscribe(self, event_bus):
         """Test unsubscribing from an event."""
-        received = []
 
-        async def listener(event):
-            received.append(event)
+        def listener(event):
+            pass
 
         event_bus.subscribe(TestEvent, listener)
         event_bus.unsubscribe(TestEvent, listener)
@@ -79,14 +75,12 @@ class TestEventBus:
 
     def test_unsubscribe_nonexistent_listener(self, event_bus):
         """Test unsubscribing non-existent listener doesn't raise."""
-        received1 = []
-        received2 = []
 
-        async def listener(event):
-            received1.append(event)
+        def listener(event):
+            pass
 
-        async def other_listener(event):
-            received2.append(event)
+        def other_listener(event):
+            pass
 
         event_bus.subscribe(TestEvent, listener)
         event_bus.unsubscribe(TestEvent, other_listener)
@@ -97,14 +91,12 @@ class TestEventBus:
 
     def test_unsubscribe_all(self, event_bus):
         """Test unsubscribing all listeners for an event."""
-        received1 = []
-        received2 = []
 
-        async def listener1(event):
-            received1.append(event)
+        def listener1(event):
+            pass
 
-        async def listener2(event):
-            received2.append(event)
+        def listener2(event):
+            pass
 
         event_bus.subscribe(TestEvent, listener1)
         event_bus.subscribe(TestEvent, listener2)
@@ -140,7 +132,7 @@ class TestEventBus:
         call_order = []
 
         async def listener(evt):
-            _ = evt  # Use the event
+            del evt  # Unused parameter required by EventBus interface
             call_order.append("listener")
 
         event_bus.subscribe(AwaitingTestEvent, listener)
@@ -156,7 +148,7 @@ class TestEventBus:
         """Test that InvalidDataException in listener is handled gracefully."""
 
         async def failing_listener(evt):
-            _ = evt  # Use the event
+            del evt  # Unused parameter required by EventBus interface
             raise InvalidDataException("Test invalid data")
 
         event_bus.subscribe(AwaitingTestEvent, failing_listener)
@@ -174,11 +166,11 @@ class TestEventBus:
         calls = []
 
         async def listener1(evt):
-            _ = evt  # Use the event
+            del evt  # Unused parameter required by EventBus interface
             calls.append("listener1")
 
         async def listener2(evt):
-            _ = evt  # Use the event
+            del evt  # Unused parameter required by EventBus interface
             calls.append("listener2")
 
         event_bus.subscribe(AwaitingTestEvent, listener1)

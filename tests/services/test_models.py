@@ -2,6 +2,8 @@
 
 from datetime import datetime
 
+import pytest
+
 from solaredge2mqtt.services.models import Component, ComponentValueGroup
 
 
@@ -13,48 +15,42 @@ class TestComponentValueGroup:
         data = {"power": 100, "power_scale": 2}
         result = ComponentValueGroup.scale_value(data, "power")
 
-        # 100 * 10^2 = 10000
-        assert result == 10000.0
+        assert result == pytest.approx(10000.0)
 
     def test_scale_value_negative_scale(self):
         """Test scale_value with negative scale."""
         data = {"power": 12345, "power_scale": -2}
         result = ComponentValueGroup.scale_value(data, "power")
 
-        # 12345 * 10^-2 = 123.45
-        assert result == 123.45
+        assert result == pytest.approx(123.45)
 
     def test_scale_value_zero_scale(self):
         """Test scale_value with zero scale."""
         data = {"power": 500, "power_scale": 0}
         result = ComponentValueGroup.scale_value(data, "power")
 
-        # 500 * 10^0 = 500
-        assert result == 500.0
+        assert result == pytest.approx(500.0)
 
     def test_scale_value_custom_scale_key(self):
         """Test scale_value with custom scale key."""
         data = {"voltage": 2300, "custom_scale": -1}
         result = ComponentValueGroup.scale_value(data, "voltage", "custom_scale")
 
-        # 2300 * 10^-1 = 230
-        assert result == 230.0
+        assert result == pytest.approx(230.0)
 
     def test_scale_value_custom_digits(self):
         """Test scale_value with custom digit precision."""
         data = {"power": 333, "power_scale": -2}
         result = ComponentValueGroup.scale_value(data, "power", digits=4)
 
-        # 333 * 10^-2 = 3.33 rounded to 4 digits
-        assert result == 3.33
+        assert result == pytest.approx(3.33)
 
     def test_scale_value_rounding(self):
         """Test scale_value rounds correctly."""
         data = {"power": 12345, "power_scale": -4}
         result = ComponentValueGroup.scale_value(data, "power", digits=2)
 
-        # 12345 * 10^-4 = 1.2345 rounded to 2 digits = 1.23
-        assert result == 1.23
+        assert result == pytest.approx(1.23)
 
 
 class TestComponentBase:

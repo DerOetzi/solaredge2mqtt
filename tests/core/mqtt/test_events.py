@@ -1,5 +1,6 @@
 """Tests for core MQTT events module."""
 
+import pytest
 from pydantic import BaseModel
 
 from solaredge2mqtt.core.events.events import BaseEvent
@@ -57,7 +58,7 @@ class TestMQTTPublishEvent:
         event_float = MQTTPublishEvent("topic", 3.14, True)
 
         assert event_int.payload == 42
-        assert event_float.payload == 3.14
+        assert event_float.payload == pytest.approx(3.14)
 
     def test_mqtt_publish_event_model_payload(self):
         """Test MQTTPublishEvent with BaseModel payload."""
@@ -94,7 +95,7 @@ class TestMQTTReceivedEvent:
 
         assert event.topic == "test/topic"
         assert event.input == input_data
-        assert event.input.value == 3.14
+        assert event.input.value == pytest.approx(3.14)
 
 
 class TestMQTTSubscribeEvent:

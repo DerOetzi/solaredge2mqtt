@@ -41,7 +41,8 @@ class TestEnumModel:
             VALUE_A = "value_a"
             VALUE_B = "value_b"
 
-        assert TestEnum.VALUE_A == TestEnum.VALUE_A
+        value_a_copy = TestEnum.VALUE_A
+        assert TestEnum.VALUE_A == value_a_copy
         assert TestEnum.VALUE_A != TestEnum.VALUE_B
         assert TestEnum.VALUE_A != "value_a"
 
@@ -221,9 +222,9 @@ class TestSolaredge2MQTTBaseModel:
         result = model.model_dump_influxdb()
 
         assert "value" in result
-        assert result["value"] == 42.0
+        assert result["value"] == pytest.approx(42.0)
         assert "nested_inner_value" in result
-        assert result["nested_inner_value"] == 100.0
+        assert result["nested_inner_value"] == pytest.approx(100.0)
         assert "timestamp" not in result
 
     def test_flatten_dict_converts_int_to_float(self):
