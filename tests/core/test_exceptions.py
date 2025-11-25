@@ -30,12 +30,11 @@ class TestConfigurationException:
 
     def test_configuration_exception_can_be_raised(self):
         """Test ConfigurationException can be raised and caught."""
-        exc = ConfigurationException("ModBus", "Invalid host")
-        with pytest.raises(ConfigurationException):
-            raise exc
+        with pytest.raises(ConfigurationException) as excinfo:
+            raise ConfigurationException("ModBus", "Invalid host")
 
-        assert exc.component == "ModBus"
-        assert exc.message == "Invalid host"
+        assert excinfo.value.component == "ModBus"
+        assert excinfo.value.message == "Invalid host"
 
 
 class TestInvalidDataException:
@@ -61,8 +60,7 @@ class TestInvalidDataException:
 
     def test_invalid_data_exception_can_be_raised(self):
         """Test InvalidDataException can be raised and caught."""
-        exc = InvalidDataException("Powerflow data invalid")
-        with pytest.raises(InvalidDataException):
-            raise exc
+        with pytest.raises(InvalidDataException) as exc_info:
+            raise InvalidDataException("Powerflow data invalid")
 
-        assert exc.message == "Powerflow data invalid"
+        assert exc_info.value.message == "Powerflow data invalid"
