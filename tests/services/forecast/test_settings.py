@@ -3,14 +3,14 @@
 
 from solaredge2mqtt.services.forecast.settings import ForecastSettings
 
+# TODO: The ForecastSettings.ensure_secure_cache validator has a pydantic v1/v2
+# compatibility issue (uses `values.get()` instead of `info.data.get()`).
+# This limits test coverage for cachingdir=None scenarios.
+# See: https://docs.pydantic.dev/latest/migration/#field-validators
+
 
 class TestForecastSettings:
-    """Tests for ForecastSettings class.
-
-    Note: Some tests related to cachingdir=None are skipped due to a known
-    issue in the ForecastSettings.ensure_secure_cache validator which uses
-    pydantic v1 syntax in a pydantic v2 codebase.
-    """
+    """Tests for ForecastSettings class."""
 
     def test_forecast_settings_defaults(self):
         """Test ForecastSettings default values."""

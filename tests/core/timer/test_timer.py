@@ -13,6 +13,34 @@ from solaredge2mqtt.core.timer.events import (
 )
 
 
+def calculate_timestamp_for_interval(base_interval: int, target_interval: int) -> int:
+    """
+    Calculate a timestamp that triggers the target interval.
+
+    The timer logic subtracts offsets from the timestamp before checking
+    divisibility by the target interval.
+    """
+    # Base event: timestamp % base_interval == 0
+    # 1min event: (timestamp - base_interval + 1) % 60 == 0
+    # 5min event: (timestamp - base_interval + 1 - base_interval) % 300 == 0
+    # 10min event: (timestamp - offset) % 600 == 0
+    #   where offset = base_interval - 1 + base_interval + base_interval
+
+    if target_interval == base_interval:
+        return target_interval * 2  # Simple multiple of base_interval
+    elif target_interval == 60:
+        offset = base_interval - 1
+        return 60 + offset  # Results in (timestamp - offset) % 60 == 0
+    elif target_interval == 300:
+        offset = (base_interval - 1) + base_interval
+        return 300 + offset  # Results in (timestamp - offset) % 300 == 0
+    elif target_interval == 600:
+        offset = (base_interval - 1) + base_interval + base_interval
+        return 600 + offset  # Results in (timestamp - offset) % 600 == 0
+    else:
+        return target_interval
+
+
 class TestTimer:
     """Tests for Timer class."""
 
@@ -26,15 +54,16 @@ class TestTimer:
     @pytest.mark.asyncio
     async def test_timer_loop_emits_base_event_on_interval(self, mock_event_bus):
         """Test that timer loop emits base event at correct interval."""
-        timer = Timer(mock_event_bus, 5)
+        base_interval = 5
+        timer = Timer(mock_event_bus, base_interval)
 
-        # Mock datetime to return a timestamp divisible by 5
         with patch("solaredge2mqtt.core.timer.datetime") as mock_datetime:
-            mock_datetime.now.return_value.timestamp.return_value = 10
+            # Use a timestamp divisible by base_interval
+            timestamp = calculate_timestamp_for_interval(base_interval, base_interval)
+            mock_datetime.now.return_value.timestamp.return_value = timestamp
 
             await timer.loop()
 
-            # Check that emit was called with IntervalBaseTriggerEvent
             emit_calls = mock_event_bus.emit.call_args_list
             assert any(
                 isinstance(call.args[0], IntervalBaseTriggerEvent)
@@ -44,12 +73,12 @@ class TestTimer:
     @pytest.mark.asyncio
     async def test_timer_loop_emits_1min_event(self, mock_event_bus):
         """Test that timer loop emits 1 min event at correct interval."""
-        timer = Timer(mock_event_bus, 5)
+        base_interval = 5
+        timer = Timer(mock_event_bus, base_interval)
 
-        # Mock datetime where timestamp % 60 == 0 after base_interval adjustment
         with patch("solaredge2mqtt.core.timer.datetime") as mock_datetime:
-            # timestamp = 64 -> (64 - 4) = 60 which is divisible by 60
-            mock_datetime.now.return_value.timestamp.return_value = 64
+            timestamp = calculate_timestamp_for_interval(base_interval, 60)
+            mock_datetime.now.return_value.timestamp.return_value = timestamp
 
             await timer.loop()
 
@@ -62,14 +91,12 @@ class TestTimer:
     @pytest.mark.asyncio
     async def test_timer_loop_emits_5min_event(self, mock_event_bus):
         """Test that timer loop emits 5 min event at correct interval."""
-        timer = Timer(mock_event_bus, 5)
+        base_interval = 5
+        timer = Timer(mock_event_bus, base_interval)
 
         with patch("solaredge2mqtt.core.timer.datetime") as mock_datetime:
-            # Need timestamp where
-            # (timestamp - base_interval - 1 - base_interval) % 300 == 0
-            # (304 - 4 - 5) = 295, not divisible
-            # (309 - 4 - 5) = 300, divisible by 300
-            mock_datetime.now.return_value.timestamp.return_value = 309
+            timestamp = calculate_timestamp_for_interval(base_interval, 300)
+            mock_datetime.now.return_value.timestamp.return_value = timestamp
 
             await timer.loop()
 
@@ -82,12 +109,12 @@ class TestTimer:
     @pytest.mark.asyncio
     async def test_timer_loop_emits_10min_event(self, mock_event_bus):
         """Test that timer loop emits 10 min event at correct interval."""
-        timer = Timer(mock_event_bus, 5)
+        base_interval = 5
+        timer = Timer(mock_event_bus, base_interval)
 
         with patch("solaredge2mqtt.core.timer.datetime") as mock_datetime:
-            # Need (timestamp - 4 - 5 - 5) % 600 == 0
-            # 614 - 14 = 600
-            mock_datetime.now.return_value.timestamp.return_value = 614
+            timestamp = calculate_timestamp_for_interval(base_interval, 600)
+            mock_datetime.now.return_value.timestamp.return_value = timestamp
 
             await timer.loop()
 
@@ -100,16 +127,17 @@ class TestTimer:
     @pytest.mark.asyncio
     async def test_timer_loop_does_not_emit_when_not_on_interval(self, mock_event_bus):
         """Test that timer doesn't emit base event when not on interval."""
-        timer = Timer(mock_event_bus, 5)
+        base_interval = 5
+        timer = Timer(mock_event_bus, base_interval)
 
         with patch("solaredge2mqtt.core.timer.datetime") as mock_datetime:
-            # 11 % 5 != 0
-            mock_datetime.now.return_value.timestamp.return_value = 11
+            # Use a timestamp NOT divisible by base_interval
+            timestamp = 11  # 11 % 5 != 0
+            mock_datetime.now.return_value.timestamp.return_value = timestamp
 
             await timer.loop()
 
             emit_calls = mock_event_bus.emit.call_args_list
-            # Base event should not be emitted
             assert not any(
                 isinstance(call.args[0], IntervalBaseTriggerEvent)
                 for call in emit_calls
@@ -122,10 +150,11 @@ class TestTimer:
             timer = Timer(mock_event_bus, interval)
 
             with patch("solaredge2mqtt.core.timer.datetime") as mock_datetime:
-                mock_datetime.now.return_value.timestamp.return_value = interval * 10
+                # Use a timestamp that is a multiple of the base interval
+                timestamp = interval * 10
+                mock_datetime.now.return_value.timestamp.return_value = timestamp
 
                 mock_event_bus.emit.reset_mock()
                 await timer.loop()
 
-                # Should emit at least base event on interval
                 assert mock_event_bus.emit.called
