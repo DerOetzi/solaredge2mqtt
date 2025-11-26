@@ -13,12 +13,6 @@ from solaredge2mqtt.services.modbus.models.base import ModbusUnitRole
 from solaredge2mqtt.services.modbus.models.inputs import (
     ModbusPowerControlInput,
     ModbusStorageControlInput,
-    StorageBackupReserveInput,
-    StorageChargeLimitInput,
-    StorageCommandTimeoutInput,
-    StorageControlModeInput,
-    StorageDefaultModeInput,
-    StorageDischargeLimitInput,
 )
 from solaredge2mqtt.services.modbus.models.inverter import ModbusInverter
 from solaredge2mqtt.services.modbus.models.storage_control import StorageControl
@@ -124,14 +118,6 @@ class ModbusStorageControl:
     and writes the received values to the appropriate modbus registers.
     """
 
-    # Topic suffixes for storage control commands
-    TOPIC_CONTROL_MODE = "control_mode"
-    TOPIC_DEFAULT_MODE = "default_mode"
-    TOPIC_CHARGE_LIMIT = "charge_limit"
-    TOPIC_DISCHARGE_LIMIT = "discharge_limit"
-    TOPIC_BACKUP_RESERVE = "backup_reserve"
-    TOPIC_COMMAND_TIMEOUT = "command_timeout"
-
     def __init__(self, service_settings: ServiceSettings, event_bus: EventBus):
         self.settings = service_settings.modbus
         self.mqtt_settings = service_settings.mqtt
@@ -167,23 +153,16 @@ class ModbusStorageControl:
             logger.info("Storage control is disabled in settings")
 
     async def _subscribe_topics(self) -> None:
-        """Subscribe to all storage control MQTT topics."""
-        topic_mappings = [
-            (self.TOPIC_CONTROL_MODE, StorageControlModeInput),
-            (self.TOPIC_DEFAULT_MODE, StorageDefaultModeInput),
-            (self.TOPIC_CHARGE_LIMIT, StorageChargeLimitInput),
-            (self.TOPIC_DISCHARGE_LIMIT, StorageDischargeLimitInput),
-            (self.TOPIC_BACKUP_RESERVE, StorageBackupReserveInput),
-            (self.TOPIC_COMMAND_TIMEOUT, StorageCommandTimeoutInput),
-        ]
+        """Subscribe to all storage control MQTT topics.
 
-        for topic_suffix, model in topic_mappings:
-            topic = f"{self.topic_prefix}/{topic_suffix}/set"
+        Iterates through ModbusStorageControlInput enum to subscribe to
+        all available storage control command topics.
+        """
+        for input_type in ModbusStorageControlInput:
+            topic = f"{self.topic_prefix}/{input_type.key}/set"
             logger.info(f"Subscribing to storage control topic: {topic}")
-            self._subscribed_topics[topic] = ModbusStorageControlInput.from_string(
-                topic_suffix
-            )
-            await self.event_bus.emit(MQTTSubscribeEvent(topic, model))
+            self._subscribed_topics[topic] = input_type
+            await self.event_bus.emit(MQTTSubscribeEvent(topic, input_type.input_model))
 
     async def _handle_mqtt_received_event(self, event: MQTTReceivedEvent) -> None:
         """Handle incoming MQTT messages for storage control."""

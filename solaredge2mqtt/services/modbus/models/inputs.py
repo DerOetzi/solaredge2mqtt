@@ -4,7 +4,7 @@ from solaredge2mqtt.core.models import BaseInputField, BaseInputFieldEnumModel
 
 
 class ModbusActivePowerLimitInput(BaseInputField):
-    limit: int = Field(min=0, max=100)
+    limit: int = Field(ge=0, le=100)
 
 
 class ModbusPowerControlInput(BaseInputFieldEnumModel):
