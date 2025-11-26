@@ -10,12 +10,16 @@ from pymodbus.exceptions import ModbusException
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import InvalidDataException
 from solaredge2mqtt.core.logging import logger
-from solaredge2mqtt.services.modbus.control import ModbusAdvancedControl
+from solaredge2mqtt.services.modbus.control import (
+    ModbusAdvancedControl,
+    ModbusStorageControl,
+)
 from solaredge2mqtt.services.modbus.events import ModbusUnitsReadEvent, ModbusWriteEvent
 from solaredge2mqtt.services.modbus.models.base import ModbusDeviceInfo
 from solaredge2mqtt.services.modbus.models.battery import ModbusBattery
 from solaredge2mqtt.services.modbus.models.inverter import ModbusInverter
 from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
+from solaredge2mqtt.services.modbus.models.storage_control import StorageControl
 from solaredge2mqtt.services.modbus.models.unit import ModbusUnit
 from solaredge2mqtt.services.modbus.settings import ModbusUnitSettings
 from solaredge2mqtt.services.modbus.sunspec.base import (
@@ -26,6 +30,7 @@ from solaredge2mqtt.services.modbus.sunspec.battery import (
     SunSpecBatteryInfoRegister,
     SunSpecBatteryOffset,
     SunSpecBatteryRegister,
+    SunSpecStorageControlRegister,
 )
 from solaredge2mqtt.services.modbus.sunspec.inverter import (
     SunSpecGridStatusRegister,
@@ -54,6 +59,7 @@ LOGGING_DEVICE_INFO = (
 class Modbus:
     def __init__(self, settings: ServiceSettings, event_bus: EventBus):
         self.settings = settings.modbus
+        self._service_settings = settings
 
         logger.info(
             "Using SolarEdge inverter via modbus: {host}:{port}",
@@ -73,6 +79,8 @@ class Modbus:
         self.client: AsyncModbusTcpClient | None = None
 
         self._control: ModbusAdvancedControl = ModbusAdvancedControl(
+            settings, event_bus)
+        self._storage_control: ModbusStorageControl = ModbusStorageControl(
             settings, event_bus)
 
         self._subscribe_events()
@@ -105,6 +113,7 @@ class Modbus:
             )
 
         # await self._control.async_init()
+        await self._storage_control.async_init()
 
     async def detect_devices(self):
         async with self.client:
@@ -194,19 +203,26 @@ class Modbus:
         try:
             async with self.client:
                 for unit_key, unit_settings in self.settings.units.items():
-                    inverter_raw, meters_raw, batteries_raw = await self._get_raw_data(
-                        unit_key, unit_settings.unit
-                    )
+                    (
+                        inverter_raw,
+                        meters_raw,
+                        batteries_raw,
+                        storage_control_raw,
+                    ) = await self._get_raw_data(unit_key, unit_settings.unit)
 
                     inverter_data = self._map_inverter(unit_key, inverter_raw)
                     meters_data = self._map_meters(unit_key, meters_raw)
                     batteries_data = self._map_batteries(unit_key, batteries_raw)
-    
+                    storage_control_data = self._map_storage_control(
+                        storage_control_raw
+                    )
+
                     units[unit_key] = ModbusUnit(
                         info=inverter_data.info.unit,
                         inverter=inverter_data,
                         meters=meters_data,
-                        batteries=batteries_data
+                        batteries=batteries_data,
+                        storage_control=storage_control_data,
                     )
 
         except KeyError as error:
@@ -220,7 +236,12 @@ class Modbus:
         self,
         unit_key: str,
         unit: int
-    ) -> tuple[SunSpecPayload, dict[str, SunSpecPayload], dict[str, SunSpecPayload]]:
+    ) -> tuple[
+        SunSpecPayload,
+        dict[str, SunSpecPayload],
+        dict[str, SunSpecPayload],
+        SunSpecPayload | None,
+    ]:
 
         inverter_raw = await self._read_from_modbus(
             SunSpecInverterRegister.request_bundles(),
@@ -248,6 +269,7 @@ class Modbus:
 
         meters_raw = {}
         batteries_raw = {}
+        storage_control_raw = None
 
         for meter in SunSpecMeterOffset:
             if meter.identifier in self._device_info[unit_key]:
@@ -265,7 +287,18 @@ class Modbus:
                     offset=battery.offset
                 )
 
-        return inverter_raw, meters_raw, batteries_raw
+        # Read storage control data if enabled and batteries are present
+        if self.settings.storage_control_enabled and batteries_raw:
+            storage_control_raw = await self._read_from_modbus(
+                SunSpecStorageControlRegister.request_bundles(),
+                unit,
+            )
+            logger.debug(
+                "Storage control raw:\n{raw}",
+                raw=json.dumps(storage_control_raw, indent=4),
+            )
+
+        return inverter_raw, meters_raw, batteries_raw, storage_control_raw
 
     async def _read_from_modbus(
         self,
@@ -410,6 +443,27 @@ class Modbus:
             batteries[battery_key] = battery_data
 
         return batteries
+
+    def _map_storage_control(
+        self, storage_control_raw: SunSpecPayload | None
+    ) -> StorageControl | None:
+        """Map raw storage control data to StorageControl model."""
+        if storage_control_raw is None:
+            return None
+
+        storage_control_data = StorageControl(storage_control_raw)
+
+        if storage_control_data.is_valid:
+            logger.info(
+                "Storage control: mode={mode}, charge_limit={charge_limit} W, "
+                "discharge_limit={discharge_limit} W, backup_reserve={backup_reserve}%",
+                mode=storage_control_data.control_mode_text,
+                charge_limit=storage_control_data.charge_limit,
+                discharge_limit=storage_control_data.discharge_limit,
+                backup_reserve=storage_control_data.backup_reserve,
+            )
+
+        return storage_control_data
 
     async def _handle_write_event(self, event: ModbusWriteEvent):
         await self._write_to_modbus(event.register, event.payload)

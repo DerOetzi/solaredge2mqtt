@@ -6,6 +6,7 @@ from solaredge2mqtt.services.modbus.settings import (
     AdvancedControlsSettings,
     ModbusSettings,
     ModbusUnitSettings,
+    StorageControlSettings,
 )
 
 
@@ -169,3 +170,40 @@ class TestModbusSettings:
         settings = ModbusSettings(follower=[{"unit": 2}])
 
         assert all(b is False for b in settings.follower[0].battery)
+
+
+class TestStorageControlSettings:
+    """Tests for StorageControlSettings enum."""
+
+    def test_storage_control_settings_values(self):
+        """Test StorageControlSettings enum values."""
+        assert StorageControlSettings.ENABLED.value == "enabled"
+        assert StorageControlSettings.DISABLED.value == "disabled"
+
+    def test_storage_control_settings_string(self):
+        """Test StorageControlSettings string representation."""
+        assert str(StorageControlSettings.ENABLED) == "enabled"
+        assert str(StorageControlSettings.DISABLED) == "disabled"
+
+
+class TestModbusSettingsStorageControl:
+    """Tests for storage control in ModbusSettings."""
+
+    def test_storage_control_default_disabled(self):
+        """Test storage control is disabled by default."""
+        settings = ModbusSettings()
+
+        assert settings.storage_control == StorageControlSettings.DISABLED
+        assert settings.storage_control_enabled is False
+
+    def test_storage_control_enabled(self):
+        """Test storage_control_enabled property."""
+        settings_enabled = ModbusSettings(
+            storage_control=StorageControlSettings.ENABLED
+        )
+        settings_disabled = ModbusSettings(
+            storage_control=StorageControlSettings.DISABLED
+        )
+
+        assert settings_enabled.storage_control_enabled is True
+        assert settings_disabled.storage_control_enabled is False

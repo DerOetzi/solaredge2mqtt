@@ -67,6 +67,31 @@ REACTIVE_POWER_CONFIG_MAP = {
     4: "RRCR Mode"
 }
 
+STORAGE_CONTROL_MODE_MAP = {
+    0: "Disabled",
+    1: "Maximize Self Consumption",
+    2: "Time of Use",
+    3: "Backup Only",
+    4: "Remote Control",
+}
+
+STORAGE_AC_CHARGE_POLICY_MAP = {
+    0: "Disabled",
+    1: "Always Allowed",
+    2: "Fixed Energy Limit",
+    3: "Percent of Production",
+}
+
+STORAGE_DEFAULT_MODE_MAP = {
+    0: "Solar Power Only (Off)",
+    1: "Charge from Clipped Solar Power",
+    2: "Charge from Solar Power",
+    3: "Charge from Solar Power and Grid",
+    4: "Discharge to Maximize Export",
+    5: "Discharge to Minimize Import",
+    7: "Maximize Self Consumption",
+}
+
 
 class SunSpecValueType(EnumModel):
     INT16 = "int16", int, 0x8000, "h"

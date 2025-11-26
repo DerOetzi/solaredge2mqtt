@@ -217,7 +217,7 @@ class TestModbusGetData:
         }
 
         # Mock _get_raw_data
-        modbus._get_raw_data = AsyncMock(return_value=({}, {}, {}))
+        modbus._get_raw_data = AsyncMock(return_value=({}, {}, {}, None))
 
         # Mock mappers - create properly structured mock objects
         with patch(
@@ -233,6 +233,7 @@ class TestModbusGetData:
             modbus._map_inverter = MagicMock(return_value=mock_inverter)
             modbus._map_meters = MagicMock(return_value={})
             modbus._map_batteries = MagicMock(return_value={})
+            modbus._map_storage_control = MagicMock(return_value=None)
 
             result = await modbus.get_data()
 

@@ -1,5 +1,8 @@
 from solaredge2mqtt.services.modbus.sunspec.base import SunSpecOffset, SunSpecRegister
-from solaredge2mqtt.services.modbus.sunspec.values import SunSpecValueType
+from solaredge2mqtt.services.modbus.sunspec.values import (
+    SunSpecPayload,
+    SunSpecValueType,
+)
 
 
 class SunSpecBatteryInfoRegister(SunSpecRegister):
@@ -82,3 +85,48 @@ class SunSpecBatteryRegister(SunSpecRegister):
 class SunSpecBatteryOffset(SunSpecOffset):
     BATTERY0 = "battery0", 0
     BATTERY1 = "battery1", 256
+
+
+class SunSpecStorageControlRegister(SunSpecRegister):
+    """Storage control registers for battery management.
+
+    These registers allow control of battery charge/discharge behavior.
+    Based on SolarEdge Modbus protocol documentation.
+    Register addresses starting at 57348.
+    """
+
+    CONTROL_MODE = "control_mode", 57348, SunSpecValueType.UINT16, True
+    AC_CHARGE_POLICY = "ac_charge_policy", 57349, SunSpecValueType.UINT16, True
+    AC_CHARGE_LIMIT = "ac_charge_limit", 57350, SunSpecValueType.FLOAT32, True
+    BACKUP_RESERVE = "backup_reserve", 57352, SunSpecValueType.FLOAT32, True
+    DEFAULT_MODE = "default_mode", 57354, SunSpecValueType.UINT16, True
+    COMMAND_TIMEOUT = "command_timeout", 57355, SunSpecValueType.UINT32, True
+    COMMAND_MODE = "command_mode", 57357, SunSpecValueType.UINT16, True
+    CHARGE_LIMIT = "charge_limit", 57358, SunSpecValueType.FLOAT32, True
+    DISCHARGE_LIMIT = "discharge_limit", 57360, SunSpecValueType.FLOAT32, True
+
+    def decode_response(
+        self, registers: list[int], data: dict[str, SunSpecPayload]
+    ) -> dict[str, SunSpecPayload]:
+        data = super().decode_response(registers, data)
+
+        # Handle not implemented values
+        if self == SunSpecStorageControlRegister.CONTROL_MODE:
+            if data[self.identifier] == SunSpecValueType.UINT16.not_implemented_value:
+                data[self.identifier] = None
+        elif self in (
+            SunSpecStorageControlRegister.AC_CHARGE_LIMIT,
+            SunSpecStorageControlRegister.BACKUP_RESERVE,
+            SunSpecStorageControlRegister.CHARGE_LIMIT,
+            SunSpecStorageControlRegister.DISCHARGE_LIMIT,
+        ):
+            if data[self.identifier] == SunSpecValueType.FLOAT32.not_implemented_value:
+                data[self.identifier] = None
+            elif data[self.identifier] < 0:
+                data[self.identifier] = None
+
+        return data
+
+    @staticmethod
+    def wordorder() -> str:
+        return "little"
