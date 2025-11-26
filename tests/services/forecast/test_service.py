@@ -1,15 +1,18 @@
 """Tests for ForecastService with mocked ML dependencies."""
 
+from datetime import datetime as dt_class
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pandas as pd
 import pytest
 from pandas import DataFrame
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import InvalidDataException
-from solaredge2mqtt.services.forecast.events import ForecastEvent
-from solaredge2mqtt.services.forecast.models import Forecast, ForecasterType
+from solaredge2mqtt.services.forecast.models import ForecasterType
 from solaredge2mqtt.services.forecast.settings import ForecastSettings
 from solaredge2mqtt.services.forecast.service import (
     ForecastService,
@@ -17,7 +20,6 @@ from solaredge2mqtt.services.forecast.service import (
     LOCAL_TZ,
     PFISelector,
 )
-from solaredge2mqtt.services.weather.events import WeatherUpdateEvent
 
 
 class MockLocationSettings:
@@ -158,9 +160,7 @@ class TestForecastServiceWeatherUpdate:
         service = ForecastService(settings, location, event_bus, influxdb)
 
         # Use current hour to ensure it's not removed
-        from datetime import datetime as dt
-
-        current_hour = dt.now().hour
+        current_hour = dt_class.now().hour
         hourly_data = [MockOpenWeatherMapForecastData(hour=current_hour)]
         weather_data = MockWeatherData(hourly=hourly_data)
         event = MagicMock()
@@ -590,8 +590,6 @@ class TestPFISelector:
         selector = PFISelector(estimator=mock_estimator)
 
         # Manually set important_features_ to simulate fitted state
-        import pandas as pd
-
         selector.important_features_ = pd.Index(["col1", "col3"])
 
         data = DataFrame({
@@ -619,9 +617,6 @@ class TestForecasterPreparePreprocessor:
         columns = ["time", "clouds", "temp", "weather_id", "wind_deg"]
         preprocessor = forecaster._prepare_preprocessor(columns)
 
-        # Should be a ColumnTransformer
-        from sklearn.compose import ColumnTransformer
-
         assert isinstance(preprocessor, ColumnTransformer)
 
 
@@ -637,9 +632,6 @@ class TestForecasterPrepareModelPipeline:
 
         columns = ["time", "clouds", "temp"]
         pipeline = forecaster._prepare_model_pipeline(columns)
-
-        # Should be a Pipeline
-        from sklearn.pipeline import Pipeline
 
         assert isinstance(pipeline, Pipeline)
 
@@ -743,9 +735,10 @@ class TestForecastServiceAddLastHourPvProduction:
 
         result = await service.add_last_hour_pv_production(training_data)
 
-        # round() in Python rounds to nearest even for .5, so 1234.5 -> 1234
+        # Power is rounded using Python's built-in round()
         assert result[ForecasterType.POWER.target_column] == round(1234.5)
-        assert result[ForecasterType.ENERGY.target_column] == 1.57  # Rounded to 2 decimal places
+        # Energy is rounded to 2 decimal places
+        assert result[ForecasterType.ENERGY.target_column] == 1.57
 
 
 class TestForecasterHyperparameterTuning:
