@@ -4,7 +4,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from aiohttp import ClientResponseError
+from aiohttp import ClientResponseError, RequestInfo
 
 from solaredge2mqtt.core.exceptions import InvalidDataException
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
@@ -121,10 +121,6 @@ class TestWeatherClientGetWeather:
         """Test get_weather handles 401 error."""
         client = WeatherClient(mock_service_settings, mock_event_bus)
 
-        # Create a real exception
-        from aiohttp import ClientResponseError, RequestInfo
-        from multidict import CIMultiDictProxy, CIMultiDict
-
         mock_request_info = MagicMock(spec=RequestInfo)
         mock_request_info.real_url = "http://test.com"
 
@@ -146,8 +142,6 @@ class TestWeatherClientGetWeather:
     ):
         """Test get_weather handles other HTTP errors."""
         client = WeatherClient(mock_service_settings, mock_event_bus)
-
-        from aiohttp import ClientResponseError, RequestInfo
 
         mock_request_info = MagicMock(spec=RequestInfo)
         mock_request_info.real_url = "http://test.com"

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from aiohttp import ClientResponseError
+from aiohttp import ClientResponseError, RequestInfo
 
 from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
@@ -79,8 +79,6 @@ class TestMonitoringSiteLogin:
     ):
         """Test login failure raises ConfigurationException."""
         site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
-
-        from aiohttp import RequestInfo
 
         mock_request_info = MagicMock(spec=RequestInfo)
         mock_request_info.real_url = "http://test.com"
@@ -277,8 +275,6 @@ class TestMonitoringSiteGetLogical:
         site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
         site.cookie_exists = MagicMock(return_value=True)
         site.get_cookie = MagicMock(return_value="test_token")
-
-        from aiohttp import RequestInfo
 
         mock_request_info = MagicMock(spec=RequestInfo)
         mock_request_info.real_url = "http://test.com"
