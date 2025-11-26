@@ -129,9 +129,9 @@ SolarEdge2MQTT integrates with SolarEdge inverters to provide:
 - Meters/batteries configured per inverter
 
 ### Meter Configuration
-- Meter0: Often production meter
-- Meter1: Often import/export meter
-- Meter2: Additional meter (if present)
+- Meter0: Import/export meter
+- Meter1: Production meter
+- Meter2: Consumption meter
 - Enable only meters that exist
 
 ### Battery Configuration
