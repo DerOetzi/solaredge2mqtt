@@ -35,6 +35,7 @@ jobs:
     permissions:
       id-token: write
       contents: write
+      pull-requests: write
     strategy:
       matrix:
         python-version:
@@ -73,11 +74,18 @@ jobs:
         run: pip install -e ".[dev,forecast]"
 
       - name: Run tests with coverage
-        run: python -m pytest --cov=solaredge2mqtt --cov-report=xml:coverage.xml --cov-report=html:coverage-html --junit-xml=test-results.xml --tb=short
+        run: |
+          python -m pytest --cov=solaredge2mqtt --cov-report=xml:coverage.xml --cov-report=term-missing:skip-covered --junit-xml=test-results.xml --tb=short 2>&1 | tee pytest-coverage.txt
 
-      - name: Generate HTML test report
-        if: always()
-        run: junit2html test-results.xml test-results.html
+      - name: Pytest coverage comment
+        if: github.event_name == 'pull_request'
+        uses: MishaKav/pytest-coverage-comment@v1.5.0
+        with:
+          pytest-coverage-path: ./pytest-coverage.txt
+          pytest-xml-coverage-path: ./coverage.xml
+          junitxml-path: ./test-results.xml
+          unique-id-for-comment: ${{ matrix.python-version }}
+          title: Coverage Report (Python ${{ matrix.python-version }})
 
       - name: Upload test results and coverage artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -86,9 +94,8 @@ jobs:
           name: test-results-${{ matrix.python-version }}-${{ env.REF_NAME }}
           path: |
             test-results.xml
-            test-results.html
             coverage.xml
-            coverage-html/
+            pytest-coverage.txt
 
       - name: SonarCloud Scan
         if: ${{ matrix.python-version == '3.12' }}
