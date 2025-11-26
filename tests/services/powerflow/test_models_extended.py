@@ -410,3 +410,195 @@ class TestBatteryPowerflowValidation:
         assert battery.charge == 0
         assert battery.discharge == 0
         assert battery.is_valid is True
+
+
+class TestPowerflowPreparePointEnergy:
+    """Tests for Powerflow.prepare_point_energy method."""
+
+    def test_prepare_point_energy_without_prices(self):
+        """Test prepare_point_energy without prices."""
+        inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
+        grid = GridPowerflow(power=-200)
+        battery = BatteryPowerflow(power=0)
+        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+
+        powerflow = Powerflow(
+            pv_production=1200,
+            inverter=inverter,
+            grid=grid,
+            battery=battery,
+            consumer=consumer,
+        )
+
+        point = powerflow.prepare_point_energy()
+
+        assert point._name == "energy"
+
+    def test_prepare_point_energy_with_prices(self):
+        """Test prepare_point_energy with prices."""
+        from solaredge2mqtt.services.energy.settings import PriceSettings
+
+        inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
+        grid = GridPowerflow(power=300)  # Delivery = 300
+        battery = BatteryPowerflow(power=0)
+        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+
+        powerflow = Powerflow(
+            pv_production=1200,
+            inverter=inverter,
+            grid=grid,
+            battery=battery,
+            consumer=consumer,
+        )
+
+        prices = PriceSettings(consumption=0.30, delivery=0.08)
+        point = powerflow.prepare_point_energy(prices=prices)
+
+        # Check that the point has fields
+        assert point._name == "energy"
+        # The point should have field pairs added
+        assert len(point._fields) > 0
+
+    def test_prepare_point_energy_custom_measurement(self):
+        """Test prepare_point_energy with custom measurement name."""
+        inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
+        grid = GridPowerflow(power=-200)
+        battery = BatteryPowerflow(power=0)
+        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+
+        powerflow = Powerflow(
+            pv_production=1200,
+            inverter=inverter,
+            grid=grid,
+            battery=battery,
+            consumer=consumer,
+        )
+
+        point = powerflow.prepare_point_energy(measurement="custom_energy")
+
+        assert point._name == "custom_energy"
+
+
+class TestInverterPowerflowFromModbus:
+    """Tests for InverterPowerflow.from_modbus method."""
+
+    def test_from_modbus_basic(self):
+        """Test from_modbus creates InverterPowerflow correctly."""
+        from solaredge2mqtt.services.modbus.models.inverter import ModbusInverter, ModbusDeviceInfo
+
+        # Create mock device info
+        device_info = ModbusDeviceInfo({
+            "c_manufacturer": "SolarEdge",
+            "c_model": "SE10K",
+            "c_version": "1.0.0",
+            "c_serialnumber": "INV12345",
+        })
+
+        # Create mock inverter data with proper structure
+        inverter_data = ModbusInverter(
+            device_info,
+            {
+                "status": 4,  # ON and producing
+                "power_ac": 1000,
+                "power_ac_scale": 0,
+                "current": 10,
+                "current_scale": 0,
+                "l1_voltage": 230,
+                "l2_voltage": 230,
+                "l3_voltage": 230,
+                "l1n_voltage": 230,
+                "l2n_voltage": 230,
+                "l3n_voltage": 230,
+                "voltage_scale": 0,
+                "frequency": 50,
+                "frequency_scale": 0,
+                "power_apparent": 1100,
+                "power_apparent_scale": 0,
+                "power_reactive": 50,
+                "power_reactive_scale": 0,
+                "power_factor": 95,
+                "power_factor_scale": -2,
+                "energy_total": 50000,
+                "energy_total_scale": 0,
+                "current_dc": 5,
+                "current_dc_scale": 0,
+                "voltage_dc": 400,
+                "voltage_dc_scale": 0,
+                "power_dc": 1200,
+                "power_dc_scale": 0,
+                "temperature": 35,
+                "temperature_scale": 0,
+            }
+        )
+
+        battery = BatteryPowerflow(power=0)
+
+        result = InverterPowerflow.from_modbus(inverter_data, battery)
+
+        assert result.power == 1000
+        assert result.dc_power == 1200
+        assert result.battery_discharge == 0
+
+
+class TestGridPowerflowFromModbus:
+    """Tests for GridPowerflow.from_modbus method."""
+
+    def test_from_modbus_with_import_export_meter(self):
+        """Test from_modbus with Import/Export meter."""
+        from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
+        from solaredge2mqtt.services.modbus.models.base import ModbusDeviceInfo
+
+        # Create mock device info with Import/Export option
+        device_info = ModbusDeviceInfo({
+            "c_manufacturer": "SolarEdge",
+            "c_model": "Meter",
+            "c_version": "1.0.0",
+            "c_serialnumber": "MTR12345",
+            "c_option": "Export+Import",
+        })
+
+        # Create mock meter data with correct field names
+        meter_data = {
+            "current": 10,
+            "l1_current": 10,
+            "current_scale": 0,
+            "l1_voltage": 230,
+            "l1n_voltage": 230,
+            "voltage_scale": 0,
+            "frequency": 50,
+            "frequency_scale": 0,
+            "power": 500,
+            "power_scale": 0,
+            "power_apparent": 550,
+            "power_apparent_scale": 0,
+            "power_reactive": 50,
+            "power_reactive_scale": 0,
+            "power_factor": 95,
+            "power_factor_scale": -2,
+            "export_energy_active": 10000,
+            "import_energy_active": 5000,
+            "energy_active_scale": 0,
+        }
+
+        meter = ModbusMeter(device_info, meter_data)
+        meters = {"meter0": meter}
+
+        result = GridPowerflow.from_modbus(meters)
+
+        assert result.power == 500
+
+    def test_from_modbus_empty_meters(self):
+        """Test from_modbus with no meters."""
+        result = GridPowerflow.from_modbus({})
+
+        assert result.power == 0
+
+
+class TestBatteryPowerflowFromModbus:
+    """Tests for BatteryPowerflow.from_modbus method."""
+
+    def test_from_modbus_empty_batteries(self):
+        """Test from_modbus with no batteries."""
+        result = BatteryPowerflow.from_modbus({})
+
+        assert result.power == 0

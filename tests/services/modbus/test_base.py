@@ -270,3 +270,217 @@ class TestModbusComponent:
 
         topic = TestComponent.generate_topic_prefix("leader")
         assert topic == "modbus/leader/test"
+
+    def test_component_model_dump_influxdb(self):
+        """Test model_dump_influxdb excludes info by default."""
+        from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
+
+        # Create a real ModbusComponent subclass instance
+        device_info = ModbusDeviceInfo({
+            "c_manufacturer": "SolarEdge",
+            "c_model": "Meter",
+            "c_version": "1.0.0",
+            "c_serialnumber": "MTR12345",
+        })
+
+        meter_data = {
+            "current": 10,
+            "l1_current": 10,
+            "current_scale": 0,
+            "l1_voltage": 230,
+            "l1n_voltage": 230,
+            "voltage_scale": 0,
+            "frequency": 50,
+            "frequency_scale": 0,
+            "power": 500,
+            "power_scale": 0,
+            "power_apparent": 550,
+            "power_apparent_scale": 0,
+            "power_reactive": 50,
+            "power_reactive_scale": 0,
+            "power_factor": 95,
+            "power_factor_scale": -2,
+            "export_energy_active": 10000,
+            "import_energy_active": 5000,
+            "energy_active_scale": 0,
+        }
+
+        meter = ModbusMeter(device_info, meter_data)
+        dumped = meter.model_dump_influxdb()
+
+        # info should be excluded
+        assert "info" not in dumped
+        assert "info_manufacturer" not in dumped
+
+    def test_component_model_json_schema_excludes_info(self):
+        """Test model_json_schema excludes info."""
+        from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
+
+        schema = ModbusMeter.model_json_schema()
+
+        assert "info" not in schema.get("properties", {})
+
+    def test_component_influxdb_tags(self):
+        """Test influxdb_tags returns correct tags."""
+        from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
+
+        device_info = ModbusDeviceInfo({
+            "c_manufacturer": "SolarEdge",
+            "c_model": "Meter",
+            "c_version": "1.0.0",
+            "c_serialnumber": "MTR12345",
+            "c_option": "Export+Import",
+            "c_sunspec_did": 203,
+        })
+
+        meter_data = {
+            "current": 10,
+            "l1_current": 10,
+            "current_scale": 0,
+            "l1_voltage": 230,
+            "l1n_voltage": 230,
+            "voltage_scale": 0,
+            "frequency": 50,
+            "frequency_scale": 0,
+            "power": 500,
+            "power_scale": 0,
+            "power_apparent": 550,
+            "power_apparent_scale": 0,
+            "power_reactive": 50,
+            "power_reactive_scale": 0,
+            "power_factor": 95,
+            "power_factor_scale": -2,
+            "export_energy_active": 10000,
+            "import_energy_active": 5000,
+            "energy_active_scale": 0,
+        }
+
+        meter = ModbusMeter(device_info, meter_data)
+        tags = meter.influxdb_tags
+
+        assert tags["manufacturer"] == "SolarEdge"
+        assert tags["model"] == "Meter"
+        assert tags["serialnumber"] == "MTR12345"
+        assert tags["option"] == "Export+Import"
+        assert tags["sunspec_type"] == "Wye 3P1N Three Phase Meter"
+
+    def test_component_mqtt_topic_without_followers(self):
+        """Test mqtt_topic without followers."""
+        from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
+
+        device_info = ModbusDeviceInfo({
+            "c_manufacturer": "SolarEdge",
+            "c_model": "Meter",
+            "c_version": "1.0.0",
+            "c_serialnumber": "MTR12345",
+        })
+
+        meter_data = {
+            "current": 10,
+            "l1_current": 10,
+            "current_scale": 0,
+            "l1_voltage": 230,
+            "l1n_voltage": 230,
+            "voltage_scale": 0,
+            "frequency": 50,
+            "frequency_scale": 0,
+            "power": 500,
+            "power_scale": 0,
+            "power_apparent": 550,
+            "power_apparent_scale": 0,
+            "power_reactive": 50,
+            "power_reactive_scale": 0,
+            "power_factor": 95,
+            "power_factor_scale": -2,
+            "export_energy_active": 10000,
+            "import_energy_active": 5000,
+            "energy_active_scale": 0,
+        }
+
+        meter = ModbusMeter(device_info, meter_data)
+        topic = meter.mqtt_topic(has_followers=False)
+
+        assert topic == "modbus/meter"
+
+    def test_component_mqtt_topic_with_followers(self):
+        """Test mqtt_topic with followers."""
+        from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
+
+        unit_info = ModbusUnitInfo(
+            unit=1,
+            key="leader",
+            role=ModbusUnitRole.LEADER,
+        )
+
+        device_info = ModbusDeviceInfo({
+            "c_manufacturer": "SolarEdge",
+            "c_model": "Meter",
+            "c_version": "1.0.0",
+            "c_serialnumber": "MTR12345",
+            "unit": unit_info,
+        })
+
+        meter_data = {
+            "current": 10,
+            "l1_current": 10,
+            "current_scale": 0,
+            "l1_voltage": 230,
+            "l1n_voltage": 230,
+            "voltage_scale": 0,
+            "frequency": 50,
+            "frequency_scale": 0,
+            "power": 500,
+            "power_scale": 0,
+            "power_apparent": 550,
+            "power_apparent_scale": 0,
+            "power_reactive": 50,
+            "power_reactive_scale": 0,
+            "power_factor": 95,
+            "power_factor_scale": -2,
+            "export_energy_active": 10000,
+            "import_energy_active": 5000,
+            "energy_active_scale": 0,
+        }
+
+        meter = ModbusMeter(device_info, meter_data)
+        topic = meter.mqtt_topic(has_followers=True)
+
+        assert topic == "modbus/leader/meter"
+
+    def test_component_has_unit_property(self):
+        """Test has_unit property."""
+        from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
+
+        # Without unit
+        device_info = ModbusDeviceInfo({
+            "c_manufacturer": "SolarEdge",
+            "c_model": "Meter",
+            "c_version": "1.0.0",
+            "c_serialnumber": "MTR12345",
+        })
+
+        meter_data = {
+            "current": 10,
+            "l1_current": 10,
+            "current_scale": 0,
+            "l1_voltage": 230,
+            "l1n_voltage": 230,
+            "voltage_scale": 0,
+            "frequency": 50,
+            "frequency_scale": 0,
+            "power": 500,
+            "power_scale": 0,
+            "power_apparent": 550,
+            "power_apparent_scale": 0,
+            "power_reactive": 50,
+            "power_reactive_scale": 0,
+            "power_factor": 95,
+            "power_factor_scale": -2,
+            "export_energy_active": 10000,
+            "import_energy_active": 5000,
+            "energy_active_scale": 0,
+        }
+
+        meter = ModbusMeter(device_info, meter_data)
+
+        assert meter.has_unit is False
