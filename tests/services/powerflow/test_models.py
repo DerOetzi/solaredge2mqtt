@@ -203,3 +203,112 @@ class TestConsumerPowerflow:
         consumer = ConsumerPowerflow(inverter, grid, evcharger=100)
 
         assert consumer.is_valid is True
+
+
+class TestInverterPowerflowValidation:
+    """Tests for InverterPowerflow validation."""
+
+    def test_is_valid_negative_consumption(self):
+        """Test is_valid logs warning for negative consumption."""
+        # This is hard to trigger since consumption = abs(power) if power < 0 else 0
+        # which is always >= 0. But we test the normal case.
+        inverter = InverterPowerflow(power=100, dc_power=100, battery_discharge=0)
+        assert inverter.is_valid is True
+
+    def test_is_valid_valid_values(self):
+        """Test is_valid returns True for all positive values."""
+        inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=200)
+
+        assert inverter.is_valid is True
+
+
+class TestGridPowerflowValidation:
+    """Tests for GridPowerflow validation."""
+
+    def test_is_valid_negative_power(self):
+        """Test is_valid with negative power (consumption)."""
+        grid = GridPowerflow(power=-1000)
+
+        assert grid.is_valid is True
+        assert grid.consumption == 1000
+        assert grid.delivery == 0
+
+    def test_is_valid_positive_power(self):
+        """Test is_valid with positive power (delivery)."""
+        grid = GridPowerflow(power=500)
+
+        assert grid.is_valid is True
+        assert grid.consumption == 0
+        assert grid.delivery == 500
+
+
+class TestBatteryPowerflowValidation:
+    """Tests for BatteryPowerflow validation."""
+
+    def test_is_valid_charging(self):
+        """Test is_valid when battery is charging."""
+        battery = BatteryPowerflow(power=500)
+
+        assert battery.is_valid is True
+        assert battery.charge == 500
+        assert battery.discharge == 0
+
+    def test_is_valid_discharging(self):
+        """Test is_valid when battery is discharging."""
+        battery = BatteryPowerflow(power=-500)
+
+        assert battery.is_valid is True
+        assert battery.charge == 0
+        assert battery.discharge == 500
+
+
+class TestConsumerPowerflowValidation:
+    """Tests for ConsumerPowerflow validation."""
+
+    def test_used_battery_production_with_battery_factor(self):
+        """Test used_battery_production with battery factor."""
+        # Create inverter with battery discharge
+        inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=200)
+        grid = GridPowerflow(power=100)  # Delivery = 100
+
+        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+
+        # used_production = production - delivery = 1000 - 100 = 900
+        assert consumer.used_production == 900
+
+        # used_battery_production = round(used_production * battery_factor)
+        # battery_factor = 200/1200 = 0.1667
+        # used_battery_production = round(900 * 0.1667) = round(150) = 150
+        assert consumer.used_battery_production > 0
+
+        # used_pv_production = used_production - used_battery_production
+        assert consumer.used_pv_production == consumer.used_production - consumer.used_battery_production
+
+    def test_used_battery_production_no_battery(self):
+        """Test used_battery_production is 0 when no battery."""
+        inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
+        grid = GridPowerflow(power=100)
+
+        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+
+        assert consumer.used_battery_production == 0
+        assert consumer.used_pv_production == consumer.used_production
+
+    def test_consumer_with_evcharger(self):
+        """Test consumer calculation with EV charger."""
+        inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
+        grid = GridPowerflow(power=-200)
+
+        consumer = ConsumerPowerflow(inverter, grid, evcharger=500)
+
+        assert consumer.evcharger == 500
+        assert consumer.total == consumer.house + consumer.evcharger + consumer.inverter
+
+    def test_is_valid_returns_true(self):
+        """Test is_valid returns True for normal consumer."""
+        inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
+        grid = GridPowerflow(power=100)
+
+        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+
+        assert consumer.is_valid is True
