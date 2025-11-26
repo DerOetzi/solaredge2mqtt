@@ -13,6 +13,10 @@ from solaredge2mqtt.services.monitoring import MonitoringSite
 from solaredge2mqtt.services.monitoring.models import LogicalModule
 from solaredge2mqtt.services.monitoring.settings import MonitoringSettings
 
+# Date format used by SolarEdge monitoring API
+MONITORING_DATE_FORMAT = "%a %b %d %H:%M:%S GMT %Y"
+SAMPLE_PLAYBACK_DATE = "Mon Jan 01 12:00:00 GMT 2024"
+
 
 @pytest.fixture
 def mock_monitoring_settings():
@@ -508,7 +512,7 @@ class TestMonitoringSiteGetModulesPowerFull:
 
         playback_response = {
             "reportersData": {
-                "Mon Jan 01 12:00:00 GMT 2024": {
+                SAMPLE_PLAYBACK_DATE: {
                     "group1": [
                         {"key": "PAN1", "value": "100.5"},
                         {"key": "PAN2", "value": "95.3"},

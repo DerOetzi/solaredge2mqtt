@@ -188,7 +188,7 @@ class TestHomeAssistantDiscoveryComponentDiscovery:
         self, mock_service_settings, mock_event_bus
     ):
         """Test component_discovery with EnergyReadEvent and auto_discovery enabled."""
-        from solaredge2mqtt.services.energy.models import HistoricEnergy, HistoricPeriod
+        from solaredge2mqtt.services.energy.models import HistoricEnergy
 
         discovery = HomeAssistantDiscovery(mock_service_settings, mock_event_bus)
         discovery.publish_component = AsyncMock()
