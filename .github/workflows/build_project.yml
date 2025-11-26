@@ -67,6 +67,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install build
 
+      - name: Install package with dev dependencies
+        run: pip install -e ".[dev,forecast]"
+
+      - name: Run tests with coverage
+        run: python -m pytest --cov=solaredge2mqtt --cov-report=xml:coverage.xml --tb=short
+
+      - name: SonarCloud Scan
+        if: ${{ matrix.python-version == '3.12' }}
+        uses: SonarSource/sonarqube-scan-action@aa494459d7c39c106cc77b166de8b4250a32bb97
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
       - name: Build package
         run: python -m build
 
