@@ -67,10 +67,10 @@ class TestInfluxDBSettings:
         assert settings.retention_raw == 12
 
     def test_influxdb_settings_url_without_protocol(self):
-        """Test url property adds http:// when no protocol."""
+        """Test url property adds https:// when no protocol."""
         settings = InfluxDBSettings(host="localhost", port=8086)
 
-        assert settings.url == "http://localhost:8086"
+        assert settings.url == "https://localhost:8086"
 
     def test_influxdb_settings_url_with_http(self):
         """Test url property preserves http://."""
@@ -87,7 +87,7 @@ class TestInfluxDBSettings:
     def test_influxdb_settings_client_params(self):
         """Test client_params property."""
         settings = InfluxDBSettings(
-            host="localhost",
+            host="http://localhost",
             port=8086,
             token="my_token",
             org="my_org",
