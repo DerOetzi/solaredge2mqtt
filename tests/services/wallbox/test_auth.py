@@ -1,5 +1,7 @@
 """Tests for wallbox __init__ module - AuthorizationTokens."""
 
+import base64
+import json
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -17,9 +19,6 @@ class TestAuthorizationTokens:
         """Create a valid JWT token for testing."""
         # Create a simple JWT token (header.payload.signature)
         # Payload: {"exp": current_time + 3600} (expires in 1 hour)
-        import base64
-        import json
-
         exp_time = int(time.time()) + 3600
         header = base64.urlsafe_b64encode(
             json.dumps({"alg": "HS256", "typ": "JWT"}).encode()

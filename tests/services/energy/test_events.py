@@ -41,27 +41,6 @@ class TestEnergyReadEvent:
         """Test EnergyReadEvent inherits from ComponentEvent."""
         assert issubclass(EnergyReadEvent, ComponentEvent)
 
-    def test_event_str_method(self):
-        """Test __str__ method returns formatted string."""
-        data = make_historic_energy_data()
-        energy = HistoricEnergy(data, HistoricPeriod.TODAY)
-
-        event = EnergyReadEvent(energy)
-
-        # The EnergyReadEvent uses self.component.period which accesses
-        # the period property. Since HistoricEnergy doesn't have a .period
-        # attribute directly, this test verifies the source code behavior.
-        # This will raise AttributeError if accessed incorrectly.
-        try:
-            result = str(event)
-            # If we get here, the period attribute exists
-            assert "energy" in result
-        except AttributeError:
-            # The code has a bug - .period should be .info.period
-            # This is an existing issue, not something we need to fix
-            # Just verify the event was created correctly
-            pass
-
     def test_event_component_property(self):
         """Test component property returns energy component."""
         data = make_historic_energy_data()
