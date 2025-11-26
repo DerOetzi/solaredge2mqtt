@@ -288,3 +288,237 @@ class TestMonitoringSiteGetLogical:
 
         with pytest.raises(InvalidDataException):
             await site._get_logical()
+
+
+class TestMonitoringSiteGetPlayback:
+    """Tests for MonitoringSite _get_playback."""
+
+    @pytest.mark.asyncio
+    async def test_get_playback_error(
+        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+    ):
+        """Test _get_playback raises on error."""
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
+        site.cookie_exists = MagicMock(return_value=True)
+        site.get_cookie = MagicMock(return_value="test_token")
+
+        mock_request_info = MagicMock(spec=RequestInfo)
+        mock_request_info.real_url = "http://test.com"
+
+        error = ClientResponseError(
+            request_info=mock_request_info,
+            history=(),
+            status=500,
+        )
+        site._post = AsyncMock(side_effect=error)
+
+        with pytest.raises(InvalidDataException):
+            await site._get_playback()
+
+
+class TestMonitoringSiteParseInverters:
+    """Tests for MonitoringSite _parse_inverters."""
+
+    def test_parse_inverters(
+        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+    ):
+        """Test _parse_inverters parses inverter data."""
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
+
+        inverter_objs = [
+            {
+                "data": {
+                    "id": 1,
+                    "name": "Inverter 1",
+                    "serialNumber": "SN123",
+                    "key": "INV1",
+                    "type": "INVERTER",
+                },
+                "children": [],
+            }
+        ]
+        reporters_data = {
+            "1": {"unscaledEnergy": 1000},
+        }
+
+        result = site._parse_inverters(inverter_objs, reporters_data)
+
+        assert len(result) == 1
+        assert result[0].info.serialnumber == "SN123"
+
+    def test_parse_inverters_unknown_type(
+        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+    ):
+        """Test _parse_inverters logs unknown type."""
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
+
+        inverter_objs = [
+            {
+                "data": {
+                    "id": 2,
+                    "name": "Unknown Device",
+                    "serialNumber": "SN456",
+                    "key": "UNK1",
+                    "type": "UNKNOWN_TYPE",
+                },
+                "children": [],
+            }
+        ]
+        reporters_data = {}
+
+        result = site._parse_inverters(inverter_objs, reporters_data)
+
+        # Should skip unknown types
+        assert len(result) == 0
+
+
+class TestMonitoringSiteParseStrings:
+    """Tests for MonitoringSite _parse_strings."""
+
+    def test_parse_strings(
+        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+    ):
+        """Test _parse_strings parses string data."""
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
+
+        inverter = MagicMock()
+        inverter.strings = []
+
+        string_objs = [
+            {
+                "data": {
+                    "id": 10,
+                    "name": "String 1",
+                    "serialNumber": "STR1",
+                    "key": "STR1",
+                    "type": "STRING",
+                },
+                "children": [],
+            }
+        ]
+        reporters_data = {
+            "10": {"unscaledEnergy": 500},
+        }
+
+        site._parse_strings(inverter, string_objs, reporters_data)
+
+        assert len(inverter.strings) == 1
+
+
+class TestMonitoringSiteParsePanels:
+    """Tests for MonitoringSite _parse_panels."""
+
+    def test_parse_panels(
+        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+    ):
+        """Test _parse_panels parses panel data."""
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
+
+        string = MagicMock()
+        string.modules = []
+
+        panel_objs = [
+            {
+                "data": {
+                    "id": 100,
+                    "name": "Panel 1",
+                    "serialNumber": "PAN1",
+                    "key": "PAN1",
+                    "type": "PANEL",
+                },
+            }
+        ]
+        reporters_data = {
+            "100": {"unscaledEnergy": 100},
+        }
+
+        site._parse_panels(string, panel_objs, reporters_data)
+
+        assert len(string.modules) == 1
+
+
+class TestMonitoringSiteGetModulesEnergyFull:
+    """Tests for MonitoringSite get_modules_energy with full parsing."""
+
+    @pytest.mark.asyncio
+    async def test_get_modules_energy_full(
+        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+    ):
+        """Test get_modules_energy with full data parsing."""
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
+
+        logical_response = {
+            "logicalTree": {
+                "children": [
+                    {
+                        "data": {
+                            "id": 1,
+                            "name": "Inverter 1",
+                            "serialNumber": "INV1",
+                            "key": "INV1",
+                            "type": "INVERTER",
+                        },
+                        "children": [
+                            {
+                                "data": {
+                                    "id": 10,
+                                    "name": "String 1",
+                                    "serialNumber": "STR1",
+                                    "key": "STR1",
+                                    "type": "STRING",
+                                },
+                                "children": [
+                                    {
+                                        "data": {
+                                            "id": 100,
+                                            "name": "Panel 1",
+                                            "serialNumber": "PAN1",
+                                            "key": "PAN1",
+                                            "type": "PANEL",
+                                        },
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ]
+            },
+            "reportersData": {
+                "1": {"unscaledEnergy": 1000},
+                "10": {"unscaledEnergy": 500},
+                "100": {"unscaledEnergy": 100},
+            },
+        }
+        site._get_logical = AsyncMock(return_value=logical_response)
+
+        result = await site.get_modules_energy()
+
+        assert "100" in result
+
+
+class TestMonitoringSiteGetModulesPowerFull:
+    """Tests for MonitoringSite get_modules_power with full parsing."""
+
+    @pytest.mark.asyncio
+    async def test_get_modules_power_full(
+        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+    ):
+        """Test get_modules_power with full data parsing."""
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
+
+        playback_response = {
+            "reportersData": {
+                "Mon Jan 01 12:00:00 GMT 2024": {
+                    "group1": [
+                        {"key": "PAN1", "value": "100.5"},
+                        {"key": "PAN2", "value": "95.3"},
+                    ]
+                }
+            }
+        }
+        site._get_playback = AsyncMock(return_value=playback_response)
+
+        result = await site.get_modules_power()
+
+        assert "PAN1" in result
+        assert "PAN2" in result
