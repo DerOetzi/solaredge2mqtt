@@ -4,10 +4,9 @@
 # Each agent is specialized for a specific role and has its own instructions.
 #
 # IMPORTANT: Agent roles have hard constraints:
-# - business-analyst, pv-expert, reviewer, security-expert: READ-ONLY (no code changes)
+# - business-analyst, pv-expert, reviewer, security-expert, ml-expert: READ-ONLY (no code changes)
 # - documentation-expert: Documentation files only (*.md, examples/)
 # - qa-engineer: Test files only (tests/)
-# - ml-expert: Forecast service only (services/forecast/)
 # - developer: Full code access (primary implementation agent)
 
 agents:
@@ -51,12 +50,12 @@ agents:
       - "add feature"
       - "code"
 
-  # Machine Learning - LIMITED CODE ACCESS
+  # Machine Learning - READ-ONLY ROLE
   - name: ml-expert
     description: >
-      Machine Learning expert for maintaining and improving the PV production 
+      Machine Learning expert for providing guidance on the PV production 
       forecasting service using historical data and weather information.
-      LIMITED ACCESS: Can only modify forecast service code (solaredge2mqtt/services/forecast/).
+      READ-ONLY: Provides ML expertise and code examples as suggestions only, cannot modify code.
     instructions: agents/ml-expert.md
     triggers:
       - "forecast"
