@@ -56,7 +56,7 @@ agents:
     description: >
       Machine Learning expert for maintaining and improving the PV production 
       forecasting service using historical data and weather information.
-      LIMITED ACCESS: Can only modify forecast service code (services/forecast/).
+      LIMITED ACCESS: Can only modify forecast service code (solaredge2mqtt/services/forecast/).
     instructions: agents/ml-expert.md
     triggers:
       - "forecast"

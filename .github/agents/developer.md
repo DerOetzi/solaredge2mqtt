@@ -132,7 +132,11 @@ This agent is the **primary implementation** role. Your deliverables are:
 - Code refactoring
 - Technical documentation updates
 
-This is the appropriate agent to use when code changes are required. Other agents (business-analyst, reviewer, security-expert, pv-expert) provide analysis and feedback but do NOT implement code.
+This is the appropriate agent to use when code changes are required. Other agents provide analysis and feedback but have limited or no implementation scope:
+- **business-analyst, pv-expert, reviewer, security-expert**: Read-only (no code changes)
+- **documentation-expert**: Documentation files only
+- **qa-engineer**: Test files only
+- **ml-expert**: Forecast service only
 
 ## Example: Adding a New Setting
 
