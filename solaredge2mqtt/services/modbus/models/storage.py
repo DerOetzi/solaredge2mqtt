@@ -97,10 +97,12 @@ class ModbusStorageControl(ComponentValueGroup):
         if self.charge_limit < 0:
             logger.warning("Storage charge limit is negative")
             valid = False
-        elif self.discharge_limit < 0:
+
+        if self.discharge_limit < 0:
             logger.warning("Storage discharge limit is negative")
             valid = False
-        elif self.backup_reserve < 0 or self.backup_reserve > 100:
+
+        if self.backup_reserve < 0 or self.backup_reserve > 100:
             logger.warning("Storage backup reserve out of range")
             valid = False
 

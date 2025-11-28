@@ -68,6 +68,42 @@ Configure the service using environment variables. The available options are lis
 - **SE2MQTT_MODBUS__BATTERY0, BATTERY1**: Enable or disable detection of batteries. Default is true.
 - **SE2MQTT_MODBUS__CHECK_GRID_STATUS**: Check whether the system is on grid (not available without extra hardware like an Export+Import meter). Default is false.
 
+### Battery Storage Control (Advanced)
+
+Enable remote control of battery charge/discharge via MQTT. This feature allows external applications to control when and how the battery should be charged or discharged.
+
+> ⚠️ **Warning**: Use with caution! Adjustable parameters in Modbus registers are intended for long-term storage. Frequent changes may damage the flash memory of the inverter.
+
+To enable storage control:
+
+- **SE2MQTT_MODBUS__STORAGE_CONTROL**: Set to `enabled` to activate storage control. Default is `disabled`.
+
+When enabled, the following MQTT topics become available for receiving commands (using your topic prefix):
+
+- `{prefix}/modbus/inverter/storage_control/charge_limit` - Set the charge limit in watts (0-1000000)
+- `{prefix}/modbus/inverter/storage_control/discharge_limit` - Set the discharge limit in watts (0-1000000)
+- `{prefix}/modbus/inverter/storage_control/command_mode` - Set the command mode (0-7)
+- `{prefix}/modbus/inverter/storage_control/command_timeout` - Set the command timeout in seconds (0-86400)
+
+**Command Mode Values:**
+- 0: Off
+- 1: Charge from Clipped Solar Power
+- 2: Charge from Solar Power
+- 3: Charge from Solar Power and Grid
+- 4: Discharge to Maximize Export
+- 5: Discharge to Minimize Import
+- 7: Maximize Self Consumption
+
+**Example MQTT Payload:**
+```json
+{"limit": 5000}
+```
+
+**Requirements:**
+- The inverter must have a battery connected
+- Storage control mode on the inverter should be set to "Remote Control" (mode 4)
+- Only works when the battery system supports remote control
+
 ### Leader/follower setup
 
 SolarEdge inverters support a cascading setup, where one inverter acts as the leader and up to ten others act as followers.
