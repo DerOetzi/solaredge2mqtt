@@ -2,13 +2,20 @@
 #
 # This file defines the custom agents available for the SolarEdge2MQTT project.
 # Each agent is specialized for a specific role and has its own instructions.
+#
+# IMPORTANT: Agent roles have hard constraints:
+# - business-analyst, pv-expert, reviewer, security-expert, ml-expert: READ-ONLY (no code changes)
+# - documentation-expert: Documentation files only (*.md, examples/)
+# - qa-engineer: Test files only (tests/)
+# - developer: Full code access (primary implementation agent)
 
 agents:
-  # Business Analysis
+  # Business Analysis - READ-ONLY ROLE
   - name: business-analyst
     description: >
       Business Analyst expert for analyzing user-reported issues and translating 
       them into clear, actionable requirements and user stories.
+      READ-ONLY: Cannot modify code, create branches, or open PRs.
     instructions: agents/business-analyst.md
     triggers:
       - "analyze issue"
@@ -16,11 +23,12 @@ agents:
       - "requirements"
       - "impact assessment"
 
-  # Code Review
+  # Code Review - READ-ONLY ROLE
   - name: reviewer
     description: >
       Code Review expert for reviewing pull requests and ensuring code quality, 
       maintainability, and adherence to project standards.
+      READ-ONLY: Provides feedback only, cannot modify code.
     instructions: agents/reviewer.md
     triggers:
       - "review"
@@ -28,11 +36,12 @@ agents:
       - "pull request"
       - "PR review"
 
-  # Development
+  # Development - FULL CODE ACCESS
   - name: developer
     description: >
       Python Developer expert for implementing new features and fixing bugs 
       following project conventions and best practices.
+      FULL ACCESS: Can create, modify, and delete code files.
     instructions: agents/developer.md
     triggers:
       - "implement"
@@ -41,11 +50,12 @@ agents:
       - "add feature"
       - "code"
 
-  # Machine Learning
+  # Machine Learning - READ-ONLY ROLE
   - name: ml-expert
     description: >
-      Machine Learning expert for maintaining and improving the PV production 
+      Machine Learning expert for providing guidance on the PV production 
       forecasting service using historical data and weather information.
+      READ-ONLY: Provides ML expertise and code examples as suggestions only, cannot modify code.
     instructions: agents/ml-expert.md
     triggers:
       - "forecast"
@@ -54,11 +64,12 @@ agents:
       - "prediction"
       - "model training"
 
-  # Quality Assurance
+  # Quality Assurance - TEST FILES ONLY
   - name: qa-engineer
     description: >
       Quality Assurance expert for ensuring software quality through comprehensive 
       testing, test planning, and quality metrics.
+      LIMITED ACCESS: Can only modify test files (tests/).
     instructions: agents/qa-engineer.md
     triggers:
       - "test"
@@ -67,11 +78,12 @@ agents:
       - "QA"
       - "coverage"
 
-  # Documentation
+  # Documentation - DOCUMENTATION FILES ONLY
   - name: documentation-expert
     description: >
       Documentation expert for ensuring clear, accurate, and up-to-date 
       documentation, with a primary focus on the README.md file.
+      LIMITED ACCESS: Can only modify documentation files (*.md, examples/).
     instructions: agents/documentation-expert.md
     triggers:
       - "documentation"
@@ -79,11 +91,12 @@ agents:
       - "README"
       - "document"
 
-  # Security
+  # Security - READ-ONLY ROLE
   - name: security-expert
     description: >
       Security expert for reviewing all changes for security risks and ensuring 
       the project maintains strong security practices.
+      READ-ONLY: Provides security analysis only, cannot modify code.
     instructions: agents/security-expert.md
     triggers:
       - "security"
@@ -92,11 +105,12 @@ agents:
       - "secrets"
       - "audit"
 
-  # PV Domain Expert
+  # PV Domain Expert - READ-ONLY ROLE
   - name: pv-expert
     description: >
       Photovoltaic Systems expert for providing domain expertise about solar 
       energy systems, SolarEdge products, and power flow concepts.
+      READ-ONLY: Provides domain expertise only, cannot modify code.
     instructions: agents/pv-expert.md
     triggers:
       - "photovoltaic"
