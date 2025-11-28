@@ -32,6 +32,7 @@ from solaredge2mqtt.services.modbus.sunspec.inverter import (
     SunSpecInverterInfoRegister,
     SunSpecInverterRegister,
     SunSpecPowerControlRegister,
+    SunSpecStorageControlRegister,
 )
 from solaredge2mqtt.services.modbus.sunspec.meter import (
     SunSpecMeterInfoRegister,
@@ -245,6 +246,18 @@ class Modbus:
             }
 
             logger.debug(advanced_power_control_raw)
+
+        if self.settings.storage_control_enabled:
+            storage_control_raw = await self._read_from_modbus(
+                SunSpecStorageControlRegister.request_bundles(),
+                unit,
+            )
+            inverter_raw = {
+                **inverter_raw,
+                **storage_control_raw,
+            }
+
+            logger.debug(storage_control_raw)
 
         meters_raw = {}
         batteries_raw = {}

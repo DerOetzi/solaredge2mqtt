@@ -80,6 +80,7 @@ class HomeAssistantDevice(HomeAssistantBaseModel):
 class HomeAssistantType(EnumModel):
     BINARY_SENSOR = "binary_sensor", False, []
     NUMBER = "number", True, ["min", "max", "step", "mode"]
+    SELECT = "select", True, ["options"]
     SENSOR = "sensor", False, []
 
     def __init__(
@@ -179,6 +180,13 @@ class HomeAssistantBinarySensorType(HomeAssistantEntityBaseType):
 
 class HomeAssistantNumberType(HomeAssistantEntityBaseType):
     ACTIVE_POWER_LIMIT = "active_power_limit", None, '%', 0, 100, 1, "slider"
+    STORAGE_CHARGE_LIMIT = "storage_charge_limit", "power", 'W', 0, 1000000, 1, "box"
+    STORAGE_DISCHARGE_LIMIT = (
+        "storage_discharge_limit", "power", 'W', 0, 1000000, 1, "box"
+    )
+    STORAGE_COMMAND_TIMEOUT = (
+        "storage_command_timeout", "duration", 's', 0, 86400, 1, "box"
+    )
 
     def __init__(
         self,
@@ -222,6 +230,7 @@ class HomeAssistantSensorType(HomeAssistantEntityBaseType):
     APPARENT_POWER = "apparent_power", "apparent_power", "measurement", "VA"
     BATTERY = "battery", "battery", "measurement", "%"
     CURRENT_A = "current_a", "current", "measurement", "A"
+    DURATION_S = "duration_s", "duration", "measurement", "s"
     ENERGY_KWH = "energy_kwh", "energy", "total_increasing", "kWh"
     ENERGY_WH = "energy_wh", "energy", "total_increasing", "Wh"
     FREQUENCY_HZ = "frequency_hz", "frequency", "measurement", "Hz"
@@ -245,6 +254,34 @@ class HomeAssistantSensorType(HomeAssistantEntityBaseType):
     ):
         super().__init__(key, HomeAssistantType.SENSOR,
                          device_class, state_class, unit_of_measurement)
+
+
+class HomeAssistantSelectType(HomeAssistantEntityBaseType):
+    STORAGE_COMMAND_MODE = (
+        "storage_command_mode", None, ["0", "1", "2", "3", "4", "5", "7"]
+    )
+
+    def __init__(
+        self,
+        key: str,
+        device_class: str | None = None,
+        options: list[str] | None = None,
+    ):
+        super().__init__(key, HomeAssistantType.SELECT, device_class, None, None)
+        self._options: list[str] = options or []
+
+    def field(
+        self,
+        input_field: BaseInputFieldEnumModel,
+        title: str | None = None,
+        icon: str | None = None,
+        options: list[str] | None = None,
+    ) -> dict[str, any]:
+        json_schema_extra = {
+            "options": options or self._options,
+        }
+
+        return super().field(title, icon, json_schema_extra, input_field)
 
 
 class HomeAssistantEntity(HomeAssistantBaseModel):

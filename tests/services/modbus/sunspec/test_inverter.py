@@ -6,6 +6,7 @@ from solaredge2mqtt.services.modbus.sunspec.inverter import (
     SunSpecInverterRegister,
     SunSpecPowerControlRegister,
     SunSpecSiteLimitRegister,
+    SunSpecStorageControlRegister,
 )
 from solaredge2mqtt.services.modbus.sunspec.values import SunSpecValueType
 
@@ -234,3 +235,92 @@ class TestSunSpecSiteLimitRegister:
     def test_wordorder_little_endian(self):
         """Test wordorder returns little for site limit registers."""
         assert SunSpecSiteLimitRegister.wordorder() == "little"
+
+
+class TestSunSpecStorageControlRegister:
+    """Tests for SunSpecStorageControlRegister class."""
+
+    def test_control_mode_register(self):
+        """Test CONTROL_MODE register properties."""
+        reg = SunSpecStorageControlRegister.CONTROL_MODE
+
+        assert reg.identifier == "storage_control_mode"
+        assert reg.address == 57348
+        assert reg.value_type == SunSpecValueType.UINT16
+        assert reg.required is True
+
+    def test_ac_charge_policy_register(self):
+        """Test AC_CHARGE_POLICY register properties."""
+        reg = SunSpecStorageControlRegister.AC_CHARGE_POLICY
+
+        assert reg.identifier == "storage_ac_charge_policy"
+        assert reg.address == 57349
+        assert reg.value_type == SunSpecValueType.UINT16
+        assert reg.required is True
+
+    def test_ac_charge_limit_register(self):
+        """Test AC_CHARGE_LIMIT register properties."""
+        reg = SunSpecStorageControlRegister.AC_CHARGE_LIMIT
+
+        assert reg.identifier == "storage_ac_charge_limit"
+        assert reg.address == 57350
+        assert reg.value_type == SunSpecValueType.FLOAT32
+        assert reg.required is True
+
+    def test_backup_reserve_register(self):
+        """Test BACKUP_RESERVE register properties."""
+        reg = SunSpecStorageControlRegister.BACKUP_RESERVE
+
+        assert reg.identifier == "storage_backup_reserve"
+        assert reg.address == 57352
+        assert reg.value_type == SunSpecValueType.FLOAT32
+        assert reg.required is True
+
+    def test_default_mode_register(self):
+        """Test DEFAULT_MODE register properties."""
+        reg = SunSpecStorageControlRegister.DEFAULT_MODE
+
+        assert reg.identifier == "storage_default_mode"
+        assert reg.address == 57354
+        assert reg.value_type == SunSpecValueType.UINT16
+        assert reg.required is True
+
+    def test_command_timeout_register(self):
+        """Test COMMAND_TIMEOUT register properties."""
+        reg = SunSpecStorageControlRegister.COMMAND_TIMEOUT
+
+        assert reg.identifier == "storage_command_timeout"
+        assert reg.address == 57355
+        assert reg.value_type == SunSpecValueType.UINT32
+        assert reg.required is True
+
+    def test_command_mode_register(self):
+        """Test COMMAND_MODE register properties."""
+        reg = SunSpecStorageControlRegister.COMMAND_MODE
+
+        assert reg.identifier == "storage_command_mode"
+        assert reg.address == 57357
+        assert reg.value_type == SunSpecValueType.UINT16
+        assert reg.required is True
+
+    def test_charge_limit_register(self):
+        """Test CHARGE_LIMIT register properties."""
+        reg = SunSpecStorageControlRegister.CHARGE_LIMIT
+
+        assert reg.identifier == "storage_charge_limit"
+        assert reg.address == 57358
+        assert reg.value_type == SunSpecValueType.FLOAT32
+        assert reg.required is True
+
+    def test_discharge_limit_register(self):
+        """Test DISCHARGE_LIMIT register properties."""
+        reg = SunSpecStorageControlRegister.DISCHARGE_LIMIT
+
+        assert reg.identifier == "storage_discharge_limit"
+        assert reg.address == 57360
+        assert reg.value_type == SunSpecValueType.FLOAT32
+        assert reg.required is True
+
+    def test_wordorder_little_endian(self):
+        """Test wordorder returns little for storage control registers."""
+        assert SunSpecStorageControlRegister.wordorder() == "little"

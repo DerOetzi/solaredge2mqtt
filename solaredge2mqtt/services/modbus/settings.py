@@ -12,6 +12,11 @@ class AdvancedControlsSettings(EnumModel):
     DISABLE = "disable"
 
 
+class StorageControlSettings(EnumModel):
+    ENABLED = "enabled"
+    DISABLED = "disabled"
+
+
 class ModbusUnitSettings(BaseModel):
     unit: int = Field(1)
     meter: list[bool] = Field(default_factory=list)
@@ -56,6 +61,8 @@ class ModbusSettings(ModbusUnitSettings):
     check_grid_status: bool = Field(False)
     advanced_power_controls: AdvancedControlsSettings = Field(
         AdvancedControlsSettings.DISABLED)
+    storage_control: StorageControlSettings = Field(
+        StorageControlSettings.DISABLED)
 
     follower: list[ModbusUnitSettings] = Field(default_factory=list)
 
@@ -81,6 +88,10 @@ class ModbusSettings(ModbusUnitSettings):
     @property
     def advanced_power_controls_enabled(self) -> bool:
         return self.advanced_power_controls == AdvancedControlsSettings.ENABLED
+
+    @property
+    def storage_control_enabled(self) -> bool:
+        return self.storage_control == StorageControlSettings.ENABLED
 
     @property
     def units(self) -> dict[str, ModbusUnitSettings]:

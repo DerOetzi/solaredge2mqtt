@@ -210,3 +210,26 @@ class SunSpecSiteLimitRegister(SunSpecRegister):
     @staticmethod
     def wordorder() -> str:
         return "little"
+
+
+class SunSpecStorageControlRegister(SunSpecRegister):
+    """Storage control registers for battery discharge/charge management.
+
+    These registers allow controlling when and how the battery should be
+    discharged/charged. Based on SolarEdge Modbus documentation and
+    cross-referenced with solaredge-modbus-multi Home Assistant integration.
+    """
+
+    CONTROL_MODE = "storage_control_mode", 57348, SunSpecValueType.UINT16, True
+    AC_CHARGE_POLICY = "storage_ac_charge_policy", 57349, SunSpecValueType.UINT16, True
+    AC_CHARGE_LIMIT = "storage_ac_charge_limit", 57350, SunSpecValueType.FLOAT32, True
+    BACKUP_RESERVE = "storage_backup_reserve", 57352, SunSpecValueType.FLOAT32, True
+    DEFAULT_MODE = "storage_default_mode", 57354, SunSpecValueType.UINT16, True
+    COMMAND_TIMEOUT = "storage_command_timeout", 57355, SunSpecValueType.UINT32, True
+    COMMAND_MODE = "storage_command_mode", 57357, SunSpecValueType.UINT16, True
+    CHARGE_LIMIT = "storage_charge_limit", 57358, SunSpecValueType.FLOAT32, True
+    DISCHARGE_LIMIT = "storage_discharge_limit", 57360, SunSpecValueType.FLOAT32, True
+
+    @staticmethod
+    def wordorder() -> str:
+        return "little"
