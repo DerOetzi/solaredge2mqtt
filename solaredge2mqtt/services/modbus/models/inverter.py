@@ -13,6 +13,7 @@ from solaredge2mqtt.services.homeassistant.models import (
 )
 from solaredge2mqtt.services.modbus.models.base import ModbusComponent, ModbusDeviceInfo
 from solaredge2mqtt.services.modbus.models.inputs import ModbusPowerControlInput
+from solaredge2mqtt.services.modbus.models.storage import ModbusStorageControl
 from solaredge2mqtt.services.modbus.models.values import ModbusAC, ModbusDC
 from solaredge2mqtt.services.modbus.sunspec.values import INVERTER_STATUS_MAP
 from solaredge2mqtt.services.models import ComponentValueGroup
@@ -32,6 +33,8 @@ class ModbusInverter(ModbusComponent):
     )
     advanced_power_controls: ModbusPowerControl | None = Field(
         None, title="Advanced Power Controls")
+    storage_control: ModbusStorageControl | None = Field(
+        None, title="Storage Control")
 
     def __init__(self, info: ModbusDeviceInfo, data: dict[str, str | int]):
         ac = ModbusAC(data)
@@ -57,6 +60,10 @@ class ModbusInverter(ModbusComponent):
         ):
             advanced_power_controls = ModbusPowerControl(data)
 
+        storage_control = None
+        if "storage_control_mode" in data:
+            storage_control = ModbusStorageControl(data)
+
         super().__init__(
             info=info,
             ac=ac,
@@ -67,6 +74,7 @@ class ModbusInverter(ModbusComponent):
             status_text=status_text,
             grid_status=grid_status,
             advanced_power_controls=advanced_power_controls,
+            storage_control=storage_control,
         )
 
     def homeassistant_device_info(self) -> dict[str, any]:
