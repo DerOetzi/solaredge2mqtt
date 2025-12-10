@@ -101,9 +101,14 @@ class EventBus:
             return
         exc = task.exception()
         if exc is not None and isinstance(exc, MqttError):
-            # Store critical error to be raised on next emit
-            self._critical_error = exc
-
+            # Store critical error to be raised on next emit, but log if one is already set
+            if self._critical_error is None:
+                self._critical_error = exc
+            else:
+                logger.warning(
+                    "Additional critical error occurred before previous was handled: {exc}",
+                    exc=repr(exc)
+                )
     async def cancel_tasks(self) -> None:
         tasks = list(self._tasks)
         for t in tasks:
