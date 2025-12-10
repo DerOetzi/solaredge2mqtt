@@ -100,7 +100,7 @@ class EventBus:
         if task.cancelled():
             return
         exc = task.exception()
-        if exc is not None and isinstance(exc, (MqttError, asyncio.CancelledError)):
+        if exc is not None and isinstance(exc, MqttError):
             # Store critical error to be raised on next emit
             self._critical_error = exc
 
