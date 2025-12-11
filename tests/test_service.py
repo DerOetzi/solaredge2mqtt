@@ -496,6 +496,7 @@ async def test_finalize_cancels_loops_and_handles_mqtt_errors(settings_factory):
         try:
             await asyncio.sleep(10)
         except asyncio.CancelledError:
+            # Task cancellation is expected in this test; ignore the exception.
             pass
 
     task = asyncio.create_task(pending())
