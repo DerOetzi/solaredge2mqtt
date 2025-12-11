@@ -54,7 +54,7 @@ dev = [
 forecast = [
     "numpy==2.3.5",
     "pandas==2.3.3",
-    "scikit-learn==1.7.2",
+    "scikit-learn==1.8.0",
     "scipy==1.16.3"
 ]
 
