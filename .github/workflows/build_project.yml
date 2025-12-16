@@ -18,6 +18,8 @@ jobs:
       ghcr_image: ${{ steps.var.outputs.ghcr_image }}
       version: ${{ steps.var.outputs.version }}
     runs-on: "ubuntu-latest"
+    permissions:
+      contents: read
     steps:
       - name: Setting global variables
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
