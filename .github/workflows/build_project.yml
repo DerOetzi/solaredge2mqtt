@@ -168,6 +168,14 @@ jobs:
             arm/v7)  echo "ARCH_TAG=armv7" >> $GITHUB_ENV ;;
           esac
 
+      - name: Extract version from tag
+        if: github.event_name == 'release'
+        id: version
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051
@@ -177,6 +185,7 @@ jobs:
             ${{ github.event_name == 'release' && env.IMAGE_NAME || '' }}
           tags: |
             type=raw,value=latest-${{ env.ARCH_TAG }},enable=${{ github.event_name == 'release' }}
+            type=raw,value=${{ env.VERSION }}-${{ env.ARCH_TAG }},enable=${{ github.event_name == 'release' }}
             type=raw,value=${{ env.REF_NAME }}-${{ env.ARCH_TAG }},enable=${{ github.event_name != 'release' }}
 
       - name: Build and push Docker image
@@ -220,6 +229,14 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Extract version from tag
+        if: github.event_name == 'release'
+        id: version
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051
@@ -229,6 +246,7 @@ jobs:
             ${{ github.event_name == 'release' && env.IMAGE_NAME || '' }}
           tags: |
             type=raw,value=latest,enable=${{ github.event_name == 'release' }}
+            type=raw,value=${{ env.VERSION }},enable=${{ github.event_name == 'release' }}
             type=raw,value=${{ env.REF_NAME }},enable=${{ github.event_name != 'release' }}
 
       - name: Create and push multi-arch manifest
@@ -236,6 +254,7 @@ jobs:
           set -eux
 
           if [ "${{ github.event_name }}" == "release" ]; then
+            # Create latest tag
             docker buildx imagetools create \
               -t ${{ env.GHCR_IMAGE }}:latest \
               ${{ env.GHCR_IMAGE }}:latest-amd64 \
@@ -247,6 +266,19 @@ jobs:
               ${{ env.IMAGE_NAME }}:latest-amd64 \
               ${{ env.IMAGE_NAME }}:latest-arm64 \
               ${{ env.IMAGE_NAME }}:latest-armv7
+
+            # Create version tag
+            docker buildx imagetools create \
+              -t ${{ env.GHCR_IMAGE }}:${{ env.VERSION }} \
+              ${{ env.GHCR_IMAGE }}:${{ env.VERSION }}-amd64 \
+              ${{ env.GHCR_IMAGE }}:${{ env.VERSION }}-arm64 \
+              ${{ env.GHCR_IMAGE }}:${{ env.VERSION }}-armv7
+
+            docker buildx imagetools create \
+              -t ${{ env.IMAGE_NAME }}:${{ env.VERSION }} \
+              ${{ env.IMAGE_NAME }}:${{ env.VERSION }}-amd64 \
+              ${{ env.IMAGE_NAME }}:${{ env.VERSION }}-arm64 \
+              ${{ env.IMAGE_NAME }}:${{ env.VERSION }}-armv7
           else
             docker buildx imagetools create \
               -t ${{ env.GHCR_IMAGE }}:${{ env.REF_NAME }} \
