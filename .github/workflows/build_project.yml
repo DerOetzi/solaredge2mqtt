@@ -16,7 +16,10 @@ jobs:
       ref_name: ${{ steps.var.outputs.ref_name}}
       image_name: ${{ steps.var.outputs.image_name }}
       ghcr_image: ${{ steps.var.outputs.ghcr_image }}
+      version: ${{ steps.var.outputs.version }}
     runs-on: "ubuntu-latest"
+    permissions:
+      contents: read
     steps:
       - name: Setting global variables
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
@@ -26,6 +29,8 @@ jobs:
             core.setOutput('ref_name', '${{ github.ref_name }}'.toLowerCase().replaceAll(/[/.]/g, '-').trim('-'));
             core.setOutput('image_name', '${{ github.repository }}'.toLowerCase());
             core.setOutput('ghcr_image', '${{ env.REGISTRY_GITHUB }}/${{ github.repository }}'.toLowerCase());
+            const version = '${{ github.ref_name }}'.replace(/^v/, '');
+            core.setOutput('version', version);
 
   build-service:
     runs-on: ubuntu-latest
@@ -114,6 +119,7 @@ jobs:
       REF_NAME: ${{ needs.variables.outputs.ref_name }}
       IMAGE_NAME: ${{ needs.variables.outputs.image_name }}
       GHCR_IMAGE: ${{ needs.variables.outputs.ghcr_image }}
+      VERSION: ${{ needs.variables.outputs.version }}
     permissions:
       contents: read
       packages: write
@@ -177,6 +183,7 @@ jobs:
             ${{ github.event_name == 'release' && env.IMAGE_NAME || '' }}
           tags: |
             type=raw,value=latest-${{ env.ARCH_TAG }},enable=${{ github.event_name == 'release' }}
+            type=raw,value=${{ env.VERSION }}-${{ env.ARCH_TAG }},enable=${{ github.event_name == 'release' }}
             type=raw,value=${{ env.REF_NAME }}-${{ env.ARCH_TAG }},enable=${{ github.event_name != 'release' }}
 
       - name: Build and push Docker image
@@ -199,6 +206,7 @@ jobs:
       REF_NAME: ${{ needs.variables.outputs.ref_name }}
       IMAGE_NAME: ${{ needs.variables.outputs.image_name }}
       GHCR_IMAGE: ${{ needs.variables.outputs.ghcr_image }}
+      VERSION: ${{ needs.variables.outputs.version }}
     if: ${{github.event_name == 'release' || (github.event_name == 'push' && contains(fromJSON(vars.PACKAGE_BRANCHES), github.ref_name))}}
     permissions:
       contents: read
@@ -215,6 +223,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to the Docker container registry
+        if: ${{github.event_name == 'release'}}
         uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -229,6 +238,7 @@ jobs:
             ${{ github.event_name == 'release' && env.IMAGE_NAME || '' }}
           tags: |
             type=raw,value=latest,enable=${{ github.event_name == 'release' }}
+            type=raw,value=${{ env.VERSION }},enable=${{ github.event_name == 'release' }}
             type=raw,value=${{ env.REF_NAME }},enable=${{ github.event_name != 'release' }}
 
       - name: Create and push multi-arch manifest
@@ -236,6 +246,7 @@ jobs:
           set -eux
 
           if [ "${{ github.event_name }}" == "release" ]; then
+            # Create latest tag
             docker buildx imagetools create \
               -t ${{ env.GHCR_IMAGE }}:latest \
               ${{ env.GHCR_IMAGE }}:latest-amd64 \
@@ -247,6 +258,19 @@ jobs:
               ${{ env.IMAGE_NAME }}:latest-amd64 \
               ${{ env.IMAGE_NAME }}:latest-arm64 \
               ${{ env.IMAGE_NAME }}:latest-armv7
+
+            # Create version tag
+            docker buildx imagetools create \
+              -t ${{ env.GHCR_IMAGE }}:${{ env.VERSION }} \
+              ${{ env.GHCR_IMAGE }}:${{ env.VERSION }}-amd64 \
+              ${{ env.GHCR_IMAGE }}:${{ env.VERSION }}-arm64 \
+              ${{ env.GHCR_IMAGE }}:${{ env.VERSION }}-armv7
+
+            docker buildx imagetools create \
+              -t ${{ env.IMAGE_NAME }}:${{ env.VERSION }} \
+              ${{ env.IMAGE_NAME }}:${{ env.VERSION }}-amd64 \
+              ${{ env.IMAGE_NAME }}:${{ env.VERSION }}-arm64 \
+              ${{ env.IMAGE_NAME }}:${{ env.VERSION }}-armv7
           else
             docker buildx imagetools create \
               -t ${{ env.GHCR_IMAGE }}:${{ env.REF_NAME }} \
