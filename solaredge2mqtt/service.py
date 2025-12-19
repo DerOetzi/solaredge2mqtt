@@ -126,10 +126,7 @@ class Service:
 
     def _register_signal_handlers(self, loop: asyncio.AbstractEventLoop) -> None:
         for signum in (signal.SIGINT, signal.SIGTERM):
-            try:
-                loop.add_signal_handler(signum, self.cancel)
-            except NotImplementedError:
-                signal.signal(signum, lambda *_: self.cancel())
+            loop.add_signal_handler(signum, self.cancel)
 
     def cancel(self):
         logger.info("Stopping SolarEdge2MQTT service...")
@@ -221,7 +218,6 @@ class Service:
         task = asyncio.create_task(self.mqtt.process_queue())
         self.loops.add(task)
         task.add_done_callback(self.loops.discard)
-
 
     def schedule_loop(
         self,

@@ -262,8 +262,8 @@ def test_run_invokes_asyncio_run(monkeypatch):
             "error",
             "Configuration error",
         ),
-        (lambda: asyncio.CancelledError(), "debug", "Service cancelled"),
-        (lambda: KeyboardInterrupt(), "info", "Service interrupted by user"),
+        (asyncio.CancelledError(), "debug", "Service cancelled"),
+        (KeyboardInterrupt(), "info", "Service interrupted by user"),
     ],
 )
 def test_run_handles_exceptions(monkeypatch, exception_factory, level, message):
@@ -356,6 +356,7 @@ async def test_cancel_sets_flag_and_cancels_tasks(settings_factory):
         try:
             await asyncio.sleep(10)
         except asyncio.CancelledError:
+            # Task cancellation is expected in this test; ignore the exception.
             pass
 
     task = asyncio.create_task(pending())
@@ -496,6 +497,7 @@ async def test_finalize_cancels_loops_and_handles_mqtt_errors(settings_factory):
         try:
             await asyncio.sleep(10)
         except asyncio.CancelledError:
+            # Task cancellation is expected in this test; ignore the exception.
             pass
 
     task = asyncio.create_task(pending())
