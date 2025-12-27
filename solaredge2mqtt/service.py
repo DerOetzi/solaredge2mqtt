@@ -64,6 +64,7 @@ class Service:
 
         self.cancel_request = asyncio.Event()
         self.loops: set[asyncio.Task] = set()
+        self._run_task: asyncio.Task | None = None
 
         self.influxdb: InfluxDBAsync | None = (
             InfluxDBAsync(self.settings.influxdb,
@@ -118,6 +119,7 @@ class Service:
 
     async def run(self) -> None:
         loop = asyncio.get_running_loop()
+        self._run_task = asyncio.current_task()
         self._register_signal_handlers(loop)
         try:
             await self.main_loop()
@@ -131,7 +133,13 @@ class Service:
     def cancel(self):
         logger.info("Stopping SolarEdge2MQTT service...")
 
+        if self.cancel_request.is_set():
+            return
+
         self.cancel_request.set()
+
+        if self._run_task is not None:
+            self._run_task.cancel()
 
         for task in self.loops:
             task.cancel()

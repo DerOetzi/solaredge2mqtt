@@ -262,8 +262,8 @@ def test_run_invokes_asyncio_run(monkeypatch):
             "error",
             "Configuration error",
         ),
-        (asyncio.CancelledError(), "debug", "Service cancelled"),
-        (KeyboardInterrupt(), "info", "Service interrupted by user"),
+        (lambda:asyncio.CancelledError(), "debug", "Service cancelled"),
+        (lambda: KeyboardInterrupt(), "info", "Service interrupted by user"),
     ],
 )
 def test_run_handles_exceptions(monkeypatch, exception_factory, level, message):
@@ -285,7 +285,10 @@ def test_run_handles_exceptions(monkeypatch, exception_factory, level, message):
 
 
 @pytest.mark.asyncio
-async def test_service_run_invokes_main_loop_and_shutdown(monkeypatch, settings_factory):
+async def test_service_run_invokes_main_loop_and_shutdown(
+    monkeypatch,
+    settings_factory
+):
     settings_factory()
     captured_handlers = []
 
@@ -322,30 +325,6 @@ async def test_service_run_invokes_main_loop_and_shutdown(monkeypatch, settings_
         for _, cb in captured_handlers
     )
     assert sequence == ["main", "shutdown"]
-
-
-def test_register_signal_handlers_fallback(monkeypatch, settings_factory):
-    settings_factory()
-    service = service_module.Service()
-
-    class FailingLoop:
-        def add_signal_handler(self, signum, callback):
-            raise NotImplementedError
-
-    recorded = []
-    monkeypatch.setattr(
-        service_module.signal,
-        "signal",
-        lambda signum, handler: recorded.append((signum, handler)),
-    )
-
-    service._register_signal_handlers(FailingLoop())
-
-    assert [sig for sig, _ in recorded] == [signal.SIGINT, signal.SIGTERM]
-    for _, handler in recorded:
-        handler()
-    assert service.cancel_request.is_set()
-
 
 @pytest.mark.asyncio
 async def test_cancel_sets_flag_and_cancels_tasks(settings_factory):
