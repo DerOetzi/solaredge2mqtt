@@ -23,7 +23,8 @@ class ModbusAdvancedControl:
         inverter_topic = (
             ModbusInverter.generate_topic_prefix(str(ModbusUnitRole.LEADER))
             if self.settings.has_followers
-            else ModbusInverter.generate_topic_prefix())
+            else ModbusInverter.generate_topic_prefix()
+        )
 
         self.topic_prefix = f"{service_settings.mqtt.topic_prefix}/{inverter_topic}"
         self.event_bus = event_bus
@@ -32,9 +33,7 @@ class ModbusAdvancedControl:
 
     def _subscribe_events(self) -> None:
         if self.settings.advanced_power_controls_enabled:
-            self.event_bus.subscribe(
-                MQTTReceivedEvent, self.handle_mqtt_received_event
-            )
+            self.event_bus.subscribe(MQTTReceivedEvent, self.handle_mqtt_received_event)
 
     async def async_init(self) -> None:
         await self.handle_advanced_power_control_settings()
@@ -46,8 +45,7 @@ class ModbusAdvancedControl:
         elif self.settings.advanced_power_controls == AdvancedControlsSettings.DISABLE:
             await self.disable_advanced_control_settings()
 
-            logger.warning(
-                "Change setting to disabled and restart the service.")
+            logger.warning("Change setting to disabled and restart the service.")
         else:
             logger.info("Advanced power control is disabled in settings")
 
@@ -60,17 +58,21 @@ class ModbusAdvancedControl:
 
     async def disable_advanced_control_settings(self):
         logger.debug("Disabling advanced power control")
-        await self.event_bus.emit(ModbusWriteEvent(
-            SunSpecPowerControlRegister.REACTIVE_POWER_CONFIG, 0
-        ))
+        await self.event_bus.emit(
+            ModbusWriteEvent(SunSpecPowerControlRegister.REACTIVE_POWER_CONFIG, 0)
+        )
 
-        await self.event_bus.emit(ModbusWriteEvent(
-            SunSpecPowerControlRegister.ADVANCED_POWER_CONTROL_ENABLE, False
-        ))
+        await self.event_bus.emit(
+            ModbusWriteEvent(
+                SunSpecPowerControlRegister.ADVANCED_POWER_CONTROL_ENABLE, False
+            )
+        )
 
-        await self.event_bus.emit(ModbusWriteEvent(
-            SunSpecPowerControlRegister.COMMIT_POWER_CONTROL_SETTINGS, 1
-        ))
+        await self.event_bus.emit(
+            ModbusWriteEvent(
+                SunSpecPowerControlRegister.COMMIT_POWER_CONTROL_SETTINGS, 1
+            )
+        )
 
         logger.info("Advanced power control disabled.")
 
@@ -82,9 +84,7 @@ class ModbusAdvancedControl:
 
     @staticmethod
     def property_parser(
-        prop: dict[str, any],
-        name: str,
-        path: list[str]
+        prop: dict[str, any], name: str, path: list[str]
     ) -> dict[str, str] | None:
         field = None
 

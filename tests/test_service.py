@@ -175,15 +175,11 @@ def build_settings(**overrides):
 
 @pytest.fixture(autouse=True)
 def patch_service_dependencies(monkeypatch):
-    monkeypatch.setattr(
-        service_module, "initialize_logging", lambda level: None)
+    monkeypatch.setattr(service_module, "initialize_logging", lambda level: None)
     monkeypatch.setattr(service_module, "EventBus", DummyEventBus)
     monkeypatch.setattr(service_module, "Timer", DummyTimer)
-    monkeypatch.setattr(service_module, "PowerflowService",
-                        DummyPowerflowService)
-    monkeypatch.setattr(
-        service_module, "HomeAssistantDiscovery", DummyHomeAssistant
-    )
+    monkeypatch.setattr(service_module, "PowerflowService", DummyPowerflowService)
+    monkeypatch.setattr(service_module, "HomeAssistantDiscovery", DummyHomeAssistant)
     monkeypatch.setattr(service_module, "MonitoringSite", DummyMonitoringSite)
     monkeypatch.setattr(service_module, "WeatherClient", DummyWeatherClient)
     monkeypatch.setattr(service_module, "EnergyService", DummyEnergyService)
@@ -195,8 +191,7 @@ def patch_service_dependencies(monkeypatch):
 def settings_factory(monkeypatch):
     def factory(**overrides):
         settings = build_settings(**overrides)
-        monkeypatch.setattr(
-            service_module, "service_settings", lambda: settings)
+        monkeypatch.setattr(service_module, "service_settings", lambda: settings)
         return settings
 
     return factory
@@ -286,8 +281,7 @@ def test_run_handles_exceptions(monkeypatch, exception_factory, level, message):
 
 @pytest.mark.asyncio
 async def test_service_run_invokes_main_loop_and_shutdown(
-    monkeypatch,
-    settings_factory
+    monkeypatch, settings_factory
 ):
     settings_factory()
     captured_handlers = []
@@ -622,7 +616,9 @@ async def test_main_loop_runs_once_on_cancel(monkeypatch, settings_factory):
 
 
 @pytest.mark.asyncio
-async def test_main_loop_initializes_influxdb_when_configured(monkeypatch, settings_factory):
+async def test_main_loop_initializes_influxdb_when_configured(
+    monkeypatch, settings_factory
+):
     settings_factory(is_influxdb_configured=True)
     service = service_module.Service()
 
@@ -649,7 +645,9 @@ async def test_main_loop_initializes_influxdb_when_configured(monkeypatch, setti
 
 
 @pytest.mark.asyncio
-async def test_main_loop_initializes_homeassistant_when_configured(monkeypatch, settings_factory):
+async def test_main_loop_initializes_homeassistant_when_configured(
+    monkeypatch, settings_factory
+):
     settings_factory(is_homeassistant_configured=True)
     service = service_module.Service()
 
@@ -676,7 +674,9 @@ async def test_main_loop_initializes_homeassistant_when_configured(monkeypatch, 
 
 
 @pytest.mark.asyncio
-async def test_main_loop_mqtt_error_breaks_when_already_cancelled(monkeypatch, settings_factory):
+async def test_main_loop_mqtt_error_breaks_when_already_cancelled(
+    monkeypatch, settings_factory
+):
     settings_factory()
     service = service_module.Service()
 

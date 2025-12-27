@@ -56,7 +56,7 @@ EXPORT_CONTROL_MODE_MAP = {
     0: "Disabled",
     1: "Direct Export Limitation",
     2: "Indirect Export Limitation",
-    3: "Production Limitation"
+    3: "Production Limitation",
 }
 
 REACTIVE_POWER_CONFIG_MAP = {
@@ -64,7 +64,7 @@ REACTIVE_POWER_CONFIG_MAP = {
     1: "Fixed Q",
     2: "CosPhi(P)",
     3: "Q(U) + Q(P)",
-    4: "RRCR Mode"
+    4: "RRCR Mode",
 }
 
 

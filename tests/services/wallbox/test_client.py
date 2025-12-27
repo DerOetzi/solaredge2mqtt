@@ -7,7 +7,6 @@ import pytest
 
 from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
 from solaredge2mqtt.services.wallbox import WallboxClient
-from solaredge2mqtt.services.wallbox.events import WallboxReadEvent
 from solaredge2mqtt.services.wallbox.settings import WallboxSettings
 
 
@@ -26,8 +25,10 @@ def wallbox_settings():
 @pytest.fixture
 def mock_http_client():
     """Mock HTTP client methods."""
-    with patch.object(WallboxClient, "_get", new_callable=AsyncMock) as mock_get, \
-         patch.object(WallboxClient, "_post", new_callable=AsyncMock) as mock_post:
+    with (
+        patch.object(WallboxClient, "_get", new_callable=AsyncMock) as mock_get,
+        patch.object(WallboxClient, "_post", new_callable=AsyncMock) as mock_post,
+    ):
         yield mock_get, mock_post
 
 
@@ -88,9 +89,7 @@ class TestWallboxClientGetAccess:
     """Tests for WallboxClient _get_access."""
 
     @pytest.mark.asyncio
-    async def test_get_access_no_authorization(
-        self, wallbox_settings, mock_event_bus
-    ):
+    async def test_get_access_no_authorization(self, wallbox_settings, mock_event_bus):
         """Test _get_access calls login when no authorization."""
         client = WallboxClient(wallbox_settings, mock_event_bus)
         client.login = AsyncMock()
@@ -101,9 +100,7 @@ class TestWallboxClientGetAccess:
         client.login.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_get_access_token_expired(
-        self, wallbox_settings, mock_event_bus
-    ):
+    async def test_get_access_token_expired(self, wallbox_settings, mock_event_bus):
         """Test _get_access calls login when access token expired."""
         client = WallboxClient(wallbox_settings, mock_event_bus)
         client.login = AsyncMock()
@@ -119,9 +116,7 @@ class TestWallboxClientGetAccess:
         client.login.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_get_access_refresh_token(
-        self, wallbox_settings, mock_event_bus
-    ):
+    async def test_get_access_refresh_token(self, wallbox_settings, mock_event_bus):
         """Test _get_access refreshes token when access expired but refresh valid."""
         client = WallboxClient(wallbox_settings, mock_event_bus)
         client._refresh_token = AsyncMock()
@@ -139,9 +134,7 @@ class TestWallboxClientGetAccess:
         client.login.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_get_access_token_valid(
-        self, wallbox_settings, mock_event_bus
-    ):
+    async def test_get_access_token_valid(self, wallbox_settings, mock_event_bus):
         """Test _get_access does nothing when token is valid."""
         client = WallboxClient(wallbox_settings, mock_event_bus)
         client.login = AsyncMock()
@@ -201,9 +194,7 @@ class TestWallboxClientGetData:
         client.authorization = MagicMock()
         client.authorization.access_token = "test_token"
 
-        with patch(
-            "solaredge2mqtt.services.wallbox.WallboxAPI"
-        ) as mock_wallbox_api:
+        with patch("solaredge2mqtt.services.wallbox.WallboxAPI") as mock_wallbox_api:
             mock_wallbox_instance = MagicMock()
             mock_wallbox_instance.power = 7400
             mock_wallbox_instance.state = "CHARGING"

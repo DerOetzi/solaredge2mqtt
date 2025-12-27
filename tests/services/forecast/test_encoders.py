@@ -124,10 +124,12 @@ class TestCategoricalEncoder:
     def test_categorical_encoder_multiple_columns(self):
         """Test CategoricalEncoder with multiple columns."""
         encoder = CategoricalEncoder()
-        df = DataFrame({
-            "cat1": ["a", "b", "a"],
-            "cat2": ["x", "y", "z"],
-        })
+        df = DataFrame(
+            {
+                "cat1": ["a", "b", "a"],
+                "cat2": ["x", "y", "z"],
+            }
+        )
         encoder.fit(df)
 
         result = encoder.transform(df)
@@ -194,9 +196,7 @@ class TestCyclicalEncoder:
         """Test transform_cycle_columns static method."""
         df = DataFrame({"value": [0, 6, 12, 18]})
 
-        result = CyclicalEncoder.transform_cycle_columns(
-            df, "test", df["value"], 24
-        )
+        result = CyclicalEncoder.transform_cycle_columns(df, "test", df["value"], 24)
 
         assert "test_cos" in result.columns
         assert "test_sin" in result.columns
@@ -216,12 +216,14 @@ class TestTimeEncoder:
     def test_time_encoder_transform(self):
         """Test TimeEncoder transform method."""
         encoder = TimeEncoder()
-        df = DataFrame({
-            "timestamp": [
-                datetime(2024, 6, 15, 12, 0, tzinfo=timezone.utc),
-                datetime(2024, 12, 15, 6, 0, tzinfo=timezone.utc),
-            ]
-        })
+        df = DataFrame(
+            {
+                "timestamp": [
+                    datetime(2024, 6, 15, 12, 0, tzinfo=timezone.utc),
+                    datetime(2024, 12, 15, 6, 0, tzinfo=timezone.utc),
+                ]
+            }
+        )
         encoder.fit(df)
 
         result = encoder.transform(df)
@@ -308,12 +310,14 @@ class TestSunEncoder:
         location = MockLocationSettings(latitude=52.52, longitude=13.405)
         encoder = SunEncoder(location)
 
-        df = DataFrame({
-            "time": [
-                datetime(2024, 6, 15, 12, 0, tzinfo=timezone.utc),
-                datetime(2024, 6, 15, 14, 0, tzinfo=timezone.utc),
-            ]
-        })
+        df = DataFrame(
+            {
+                "time": [
+                    datetime(2024, 6, 15, 12, 0, tzinfo=timezone.utc),
+                    datetime(2024, 6, 15, 14, 0, tzinfo=timezone.utc),
+                ]
+            }
+        )
         encoder.fit(df)
 
         result = encoder.transform(df)
@@ -347,9 +351,7 @@ class TestSunEncoder:
         location = MockLocationSettings(latitude=52.52, longitude=13.405)
         encoder = SunEncoder(location)
 
-        df = DataFrame({
-            "time": [datetime(2024, 6, 15, 12, 0, tzinfo=timezone.utc)]
-        })
+        df = DataFrame({"time": [datetime(2024, 6, 15, 12, 0, tzinfo=timezone.utc)]})
         encoder.fit(df)
 
         result = encoder.transform(df)

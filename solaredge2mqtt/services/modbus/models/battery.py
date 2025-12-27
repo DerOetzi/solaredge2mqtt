@@ -1,4 +1,3 @@
-
 from influxdb_client import Point
 from pydantic import Field
 
@@ -18,10 +17,8 @@ class ModbusBattery(ModbusComponent):
     current: float = Field(**HASensor.CURRENT_A.field("current"))
     voltage: float = Field(**HASensor.VOLTAGE_V.field("voltage"))
     power: float = Field(**HASensor.POWER_W.field("power"))
-    state_of_charge: float = Field(
-        **HASensor.BATTERY.field("state of charge"))
-    state_of_health: float = Field(
-        **HASensor.BATTERY.field("state of health"))
+    state_of_charge: float = Field(**HASensor.BATTERY.field("state of charge"))
+    state_of_health: float = Field(**HASensor.BATTERY.field("state of health"))
 
     def __init__(self, info: ModbusDeviceInfo, data: dict[str, str | int]) -> None:
         status = data["status"]

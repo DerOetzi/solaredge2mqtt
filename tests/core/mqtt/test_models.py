@@ -1,6 +1,5 @@
 """Tests for core MQTT models module."""
 
-
 from solaredge2mqtt.core.mqtt.models import MAX_MQTT_PAYLOAD_SIZE
 
 

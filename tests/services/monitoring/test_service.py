@@ -2,13 +2,12 @@
 
 import asyncio
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from aiohttp import ClientResponseError, RequestInfo
 
 from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
-from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.services.monitoring import MonitoringSite
 from solaredge2mqtt.services.monitoring.models import LogicalModule
 from solaredge2mqtt.services.monitoring.settings import MonitoringSettings
@@ -172,34 +171,6 @@ class TestMonitoringSiteSaveToInfluxDB:
 
         # Should not raise
         await site.save_to_influxdb({})
-
-    @pytest.mark.asyncio
-    async def test_save_to_influxdb_handles_exception(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
-    ):
-        """Test save_to_influxdb handles exceptions gracefully."""
-        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
-
-        # Create mock module with power data
-        mock_info = MagicMock()
-        mock_info.serialnumber = "SN123"
-        mock_info.name = "Module 1"
-        mock_info.identifier = "ID123"
-
-        mock_module = MagicMock()
-        mock_module.info = mock_info
-        mock_module.power = {datetime.now(timezone.utc): 100.0}
-
-        # Make write_points raise an exception
-        mock_influxdb.write_points = AsyncMock(
-            side_effect=Exception("Connection failed")
-        )
-
-        # Should not raise
-        await site.save_to_influxdb({"SN123": mock_module})
-
-        # Verify the write was attempted
-        mock_influxdb.write_points.assert_called_once()
 
 
 class TestMonitoringSitePublishMQTT:

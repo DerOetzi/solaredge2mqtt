@@ -260,11 +260,7 @@ class MonitoringSite(HTTPClientAsync):
                         point.tag("identifier", module.info.identifier)
                         points.append(point)
 
-            try:
-                await self.influxdb.write_points(points)
-            except Exception:
-                logger.debug("InfluxDB write failed, continuing with MQTT publishing")
-                pass
+            await self.influxdb.write_points(points)
 
     async def publish_mqtt(self, modules, energy_total, count_modules):
         for module in modules.values():

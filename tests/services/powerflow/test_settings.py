@@ -1,6 +1,5 @@
 """Tests for powerflow settings module."""
 
-
 from solaredge2mqtt.services.powerflow.settings import PowerflowSettings
 
 

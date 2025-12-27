@@ -1,6 +1,5 @@
 """Tests for powerflow models - additional tests for better coverage."""
 
-import pytest
 
 from solaredge2mqtt.services.modbus.models.base import ModbusUnitInfo, ModbusUnitRole
 from solaredge2mqtt.services.powerflow.models import (
@@ -484,15 +483,20 @@ class TestInverterPowerflowFromModbus:
 
     def test_from_modbus_basic(self):
         """Test from_modbus creates InverterPowerflow correctly."""
-        from solaredge2mqtt.services.modbus.models.inverter import ModbusInverter, ModbusDeviceInfo
+        from solaredge2mqtt.services.modbus.models.inverter import (
+            ModbusDeviceInfo,
+            ModbusInverter,
+        )
 
         # Create mock device info
-        device_info = ModbusDeviceInfo({
-            "c_manufacturer": "SolarEdge",
-            "c_model": "SE10K",
-            "c_version": "1.0.0",
-            "c_serialnumber": "INV12345",
-        })
+        device_info = ModbusDeviceInfo(
+            {
+                "c_manufacturer": "SolarEdge",
+                "c_model": "SE10K",
+                "c_version": "1.0.0",
+                "c_serialnumber": "INV12345",
+            }
+        )
 
         # Create mock inverter data with proper structure
         inverter_data = ModbusInverter(
@@ -528,7 +532,7 @@ class TestInverterPowerflowFromModbus:
                 "power_dc_scale": 0,
                 "temperature": 35,
                 "temperature_scale": 0,
-            }
+            },
         )
 
         battery = BatteryPowerflow(power=0)
@@ -545,17 +549,19 @@ class TestGridPowerflowFromModbus:
 
     def test_from_modbus_with_import_export_meter(self):
         """Test from_modbus with Import/Export meter."""
-        from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
         from solaredge2mqtt.services.modbus.models.base import ModbusDeviceInfo
+        from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
 
         # Create mock device info with Import/Export option
-        device_info = ModbusDeviceInfo({
-            "c_manufacturer": "SolarEdge",
-            "c_model": "Meter",
-            "c_version": "1.0.0",
-            "c_serialnumber": "MTR12345",
-            "c_option": "Export+Import",
-        })
+        device_info = ModbusDeviceInfo(
+            {
+                "c_manufacturer": "SolarEdge",
+                "c_model": "Meter",
+                "c_version": "1.0.0",
+                "c_serialnumber": "MTR12345",
+                "c_option": "Export+Import",
+            }
+        )
 
         # Create mock meter data with correct field names
         meter_data = {

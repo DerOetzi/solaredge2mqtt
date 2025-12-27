@@ -15,7 +15,6 @@ class SunSpecRequestRegisterBundle:
     def from_registers(
         cls, registers: list[SunSpecRegister], required_only: bool = True
     ) -> list[SunSpecRequestRegisterBundle]:
-
         sorted_registers = sorted(registers, key=lambda reg: reg.address)
 
         bundles = cls._bundle_registers(required_only, sorted_registers)
@@ -96,7 +95,7 @@ class SunSpecRequestRegisterBundle:
     ) -> dict[str, SunSpecPayload]:
         for register in self._registers:
             offset = register.address - self.address
-            response_slice = registers[offset: offset + register.length]
+            response_slice = registers[offset : offset + register.length]
             data = register.decode_response(response_slice, data)
 
         return data

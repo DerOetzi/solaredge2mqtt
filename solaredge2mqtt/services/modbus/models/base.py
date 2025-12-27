@@ -38,7 +38,7 @@ class ModbusDeviceInfo(Solaredge2MQTTBaseModel):
             "manufacturer": data["c_manufacturer"],
             "model": data["c_model"],
             "version": data["c_version"],
-            "serialnumber": data["c_serialnumber"]
+            "serialnumber": data["c_serialnumber"],
         }
 
         if "unit" in data:
@@ -60,7 +60,7 @@ class ModbusDeviceInfo(Solaredge2MQTTBaseModel):
             "manufacturer": self.manufacturer,
             "model": self.model,
             "hw_version": self.version,
-            "serial_number": self.serialnumber
+            "serial_number": self.serialnumber,
         }
 
         if self.unit:

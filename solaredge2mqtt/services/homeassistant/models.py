@@ -66,15 +66,12 @@ class HomeAssistantDevice(HomeAssistantBaseModel):
     @computed_field
     @property
     def identifiers(self) -> str:
-        identifiers = [self.name, self.manufacturer,
-                       self.model, self.serial_number]
+        identifiers = [self.name, self.manufacturer, self.model, self.serial_number]
 
         if self.unit_key:
             identifiers.append(self.unit_key)
 
-        return self.hash_unique_id(
-            identifiers
-        )
+        return self.hash_unique_id(identifiers)
 
 
 class HomeAssistantType(EnumModel):
@@ -83,10 +80,7 @@ class HomeAssistantType(EnumModel):
     SENSOR = "sensor", False, []
 
     def __init__(
-        self,
-        identifier: str,
-        command_topic: bool,
-        additional_fields: list[str]
+        self, identifier: str, command_topic: bool, additional_fields: list[str]
     ):
         self._identifier: str = identifier
         self._command_topic: bool = command_topic
@@ -142,7 +136,7 @@ class HomeAssistantEntityBaseType(BaseField):
         title: str | None = None,
         icon: str | None = None,
         json_schema_extra: dict[str, any] | None = None,
-        input_field: BaseInputFieldEnumModel | None = None
+        input_field: BaseInputFieldEnumModel | None = None,
     ) -> dict[str, any]:
         if json_schema_extra is None:
             json_schema_extra = {}
@@ -151,7 +145,7 @@ class HomeAssistantEntityBaseType(BaseField):
             "ha_type": self,
             "ha_typed": self.typed.identifier,
             "icon": icon,
-            **json_schema_extra
+            **json_schema_extra,
         }
 
         return super().field(title, json_schema_extra, input_field)
@@ -178,7 +172,7 @@ class HomeAssistantBinarySensorType(HomeAssistantEntityBaseType):
 
 
 class HomeAssistantNumberType(HomeAssistantEntityBaseType):
-    ACTIVE_POWER_LIMIT = "active_power_limit", None, '%', 0, 100, 1, "slider"
+    ACTIVE_POWER_LIMIT = "active_power_limit", None, "%", 0, 100, 1, "slider"
 
     def __init__(
         self,
@@ -190,8 +184,9 @@ class HomeAssistantNumberType(HomeAssistantEntityBaseType):
         step: int | float | None = None,
         mode: str | None = None,
     ):
-        super().__init__(key, HomeAssistantType.NUMBER,
-                         device_class, None, unit_of_measurement)
+        super().__init__(
+            key, HomeAssistantType.NUMBER, device_class, None, unit_of_measurement
+        )
 
         self._min: int | float | None = min
         self._max: int | float | None = max
@@ -206,7 +201,7 @@ class HomeAssistantNumberType(HomeAssistantEntityBaseType):
         min: float | None = None,
         max: float | None = None,
         step: float | None = None,
-        mode: str | None = None
+        mode: str | None = None,
     ) -> dict[str, any]:
         json_schema_extra = {
             "min": min or self._min,
@@ -243,8 +238,13 @@ class HomeAssistantSensorType(HomeAssistantEntityBaseType):
         state_class: str | None = None,
         unit_of_measurement: str | None = None,
     ):
-        super().__init__(key, HomeAssistantType.SENSOR,
-                         device_class, state_class, unit_of_measurement)
+        super().__init__(
+            key,
+            HomeAssistantType.SENSOR,
+            device_class,
+            state_class,
+            unit_of_measurement,
+        )
 
 
 class HomeAssistantEntity(HomeAssistantBaseModel):
@@ -253,8 +253,7 @@ class HomeAssistantEntity(HomeAssistantBaseModel):
     _icon: str | None = None
     _additional_fields: dict[str, any] = {}
     path: list[str] | None = Field(None, exclude=True)
-    ha_type: HomeAssistantEntityBaseType = Field(
-        exclude=True)
+    ha_type: HomeAssistantEntityBaseType = Field(exclude=True)
     unit: str | None = Field(None, exclude=True)
 
     def __init__(self, device: HomeAssistantDevice, icon: str | None = None, **data):
@@ -270,8 +269,7 @@ class HomeAssistantEntity(HomeAssistantBaseModel):
     @property
     def unique_id(self) -> str:
         return self.hash_unique_id(
-            [self.device.identifiers, self.name,
-                self.state_topic, self.value_template]
+            [self.device.identifiers, self.name, self.state_topic, self.value_template]
         )
 
     @computed_field

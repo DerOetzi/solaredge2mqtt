@@ -18,7 +18,7 @@ class ModbusUnitSettings(BaseModel):
     battery: list[bool] = Field(default_factory=list)
     role: ModbusUnitRole = Field(ModbusUnitRole.LEADER, read_only=True)
 
-    @model_validator(mode='before')
+    @model_validator(mode="before")
     @classmethod
     def fill_defaults(cls, values: dict) -> dict:
         values = cls._fill_defaults_array("meter", values, 3)
@@ -55,13 +55,14 @@ class ModbusSettings(ModbusUnitSettings):
 
     check_grid_status: bool = Field(False)
     advanced_power_controls: AdvancedControlsSettings = Field(
-        AdvancedControlsSettings.DISABLED)
+        AdvancedControlsSettings.DISABLED
+    )
 
     follower: list[ModbusUnitSettings] = Field(default_factory=list)
 
     retain: bool = Field(False)
 
-    @model_validator(mode='before')
+    @model_validator(mode="before")
     @classmethod
     def fill_defaults(cls, values: dict) -> dict:
         values = super().fill_defaults(values)

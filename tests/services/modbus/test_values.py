@@ -1,6 +1,5 @@
 """Tests for modbus values models module."""
 
-
 from solaredge2mqtt.services.modbus.models.values import (
     ModbusAC,
     ModbusACCurrent,

@@ -4,16 +4,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from solaredge2mqtt.core.events import EventBus
-from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
+from solaredge2mqtt.core.exceptions import InvalidDataException
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.services.powerflow import PowerflowService
-from solaredge2mqtt.services.powerflow.events import PowerflowGeneratedEvent
 from solaredge2mqtt.services.powerflow.models import (
-    BatteryPowerflow,
-    ConsumerPowerflow,
-    GridPowerflow,
-    InverterPowerflow,
     Powerflow,
 )
 
@@ -268,31 +262,6 @@ class TestPowerflowServiceWriteInfluxDB:
 
             # Should not raise
             await service.write_to_influxdb({}, {})
-
-    @pytest.mark.asyncio
-    async def test_write_to_influxdb_handles_exception(
-        self, mock_service_settings, mock_event_bus, mock_influxdb
-    ):
-        """Test write_to_influxdb handles exceptions gracefully."""
-        with patch("solaredge2mqtt.services.powerflow.Modbus"):
-            service = PowerflowService(
-                mock_service_settings, mock_event_bus, mock_influxdb
-            )
-
-            # Create mock powerflow
-            mock_powerflow = MagicMock()
-            mock_powerflow.prepare_point.return_value = MagicMock()
-
-            # Make write_points raise an exception
-            mock_influxdb.write_points = AsyncMock(
-                side_effect=Exception("Connection failed")
-            )
-
-            # Should not raise
-            await service.write_to_influxdb({"leader": mock_powerflow}, {})
-
-            # Verify the write was attempted
-            mock_influxdb.write_points.assert_called_once()
 
 
 class TestPowerflowServicePublish:

@@ -17,12 +17,10 @@ class SunSpecInverterInfoRegister(SunSpecRegister):
     C_ID = "c_id", 40000, SunSpecValueType.STRING, False, 2
     C_DID = "c_did", 40002, SunSpecValueType.UINT16
     C_LENGTH = "c_length", 40003, SunSpecValueType.UINT16
-    C_MANUFACTURER = ("c_manufacturer", 40004,
-                      SunSpecValueType.STRING, True, 16)
+    C_MANUFACTURER = ("c_manufacturer", 40004, SunSpecValueType.STRING, True, 16)
     C_MODEL = "c_model", 40020, SunSpecValueType.STRING, True, 16
     C_VERSION = "c_version", 40044, SunSpecValueType.STRING, True, 8
-    C_SERIALNUMBER = ("c_serialnumber", 40052,
-                      SunSpecValueType.STRING, True, 16)
+    C_SERIALNUMBER = ("c_serialnumber", 40052, SunSpecValueType.STRING, True, 16)
     C_DEVICEADDRESS = "c_deviceaddress", 40068, SunSpecValueType.UINT16, True
     C_SUNSPEC_DID = "c_sunspec_did", 40069, SunSpecValueType.UINT16, True
     C_SUNSPEC_LENGTH = "c_sunspec_length", 40070, SunSpecValueType.UINT16
@@ -133,27 +131,28 @@ class SunSpecPowerControlRegister(SunSpecRegister):
         "commit_power_control_settings",
         61696,
         SunSpecValueType.INT16,
-        True
+        True,
     )
     RESTORE_POWER_CONTROL_SETTINGS = (
         "restore_power_control_settings",
         61697,
         SunSpecValueType.INT16,
-        True
+        True,
     )
 
     ADVANCED_POWER_CONTROL_ENABLE = (
         "advanced_power_control_enable",
         61762,
         SunSpecValueType.INT32,
-        True
+        True,
     )
 
     REACTIVE_POWER_CONFIG = "reactive_power_config", 61700, SunSpecValueType.INT32, True
     REACTIVE_POWER_RESPONSE_TIME = (
         "reactive_power_response_time",
         61702,
-        SunSpecValueType.UINT32, True
+        SunSpecValueType.UINT32,
+        True,
     )
 
     def decode_response(
@@ -177,13 +176,13 @@ class SunSpecSiteLimitRegister(SunSpecRegister):
         "export_control_limit_mode",
         57345,
         SunSpecValueType.UINT16,
-        True
+        True,
     )
     EXPORT_CONTROL_SITE_LIMIT = (
         "export_control_site_limit",
         57346,
         SunSpecValueType.FLOAT32,
-        True
+        True,
     )
 
     def decode_response(
@@ -192,15 +191,18 @@ class SunSpecSiteLimitRegister(SunSpecRegister):
         data = super().decode_response(registers, data)
 
         if self == SunSpecPowerControlRegister.EXPORT_CONTROL_SITE_LIMIT:
-            data[self.identifier] = 0 if data[self.identifier] < 0 else int(
-                data[self.identifier])
+            data[self.identifier] = (
+                0 if data[self.identifier] < 0 else int(data[self.identifier])
+            )
         elif self == SunSpecPowerControlRegister.EXPORT_CONTROL_MODE:
             bitmask = data[self.identifier]
             data[f"{self.identifier}_raw"] = bitmask
 
-            data[self.identifier] = ((bitmask & 0x0001) +
-                                     ((bitmask & 0x0002) >> 1) +
-                                     ((bitmask & 0x0004) >> 2))
+            data[self.identifier] = (
+                (bitmask & 0x0001)
+                + ((bitmask & 0x0002) >> 1)
+                + ((bitmask & 0x0004) >> 2)
+            )
 
             data["export_control_external_production"] = bool(bitmask & 0x0400)
             data["export_control_negative_site_limit"] = bool(bitmask & 0x0800)

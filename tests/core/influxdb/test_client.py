@@ -1,11 +1,10 @@
 """Tests for core InfluxDBAsync module with mocking."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.influxdb import InfluxDBAsync
 from solaredge2mqtt.core.influxdb.events import InfluxDBAggregatedEvent
 from solaredge2mqtt.core.influxdb.settings import InfluxDBSettings

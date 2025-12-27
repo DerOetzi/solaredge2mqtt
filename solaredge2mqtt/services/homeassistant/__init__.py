@@ -55,13 +55,9 @@ class HomeAssistantDiscovery:
             self.component_discovery,
         )
 
-        self.event_bus.subscribe(
-            PowerflowGeneratedEvent, self.powerflow_discovery
-        )
+        self.event_bus.subscribe(PowerflowGeneratedEvent, self.powerflow_discovery)
 
-        self.event_bus.subscribe(
-            ModbusUnitsReadEvent, self.units_discovery
-        )
+        self.event_bus.subscribe(ModbusUnitsReadEvent, self.units_discovery)
 
         self.event_bus.subscribe(
             MQTTReceivedEvent,
@@ -80,18 +76,15 @@ class HomeAssistantDiscovery:
         publish = True
         if isinstance(event, EnergyReadEvent):
             period = event.component.info.period
-            publish = (
-                period.auto_discovery and (
-                    event.component.mqtt_topic() not in self._seen_energy_periods
-                )
+            publish = period.auto_discovery and (
+                event.component.mqtt_topic() not in self._seen_energy_periods
             )
             self._seen_energy_periods.add(event.component.mqtt_topic())
         else:
             self.event_bus.unsubscribe(event, self.component_discovery)
 
         if publish:
-            logger.info(
-                f"Home Assistant discovery component: {event.component}")
+            logger.info(f"Home Assistant discovery component: {event.component}")
             device_info = event.component.homeassistant_device_info()
             state_topic = self.state_topic(event.component.mqtt_topic())
             await self.publish_component(event.component, device_info, state_topic)
@@ -103,16 +96,17 @@ class HomeAssistantDiscovery:
 
             device_info = unit.inverter.homeassistant_device_info()
             state_topic = self.state_topic(
-                unit.inverter.mqtt_topic(self.settings.modbus.has_followers))
+                unit.inverter.mqtt_topic(self.settings.modbus.has_followers)
+            )
             await self.publish_component(unit.inverter, device_info, state_topic)
 
             for name, component in {**unit.meters, **unit.batteries}.items():
                 logger.info(f"Home Assistant discovery {unit_key}:{name}")
 
-                device_info = component.homeassistant_device_info_with_name(
-                    name)
+                device_info = component.homeassistant_device_info_with_name(name)
                 state_topic = self.state_topic(
-                    component.mqtt_topic(self.settings.modbus.has_followers), name)
+                    component.mqtt_topic(self.settings.modbus.has_followers), name
+                )
                 await self.publish_component(component, device_info, state_topic)
 
     async def powerflow_discovery(self, event: PowerflowGeneratedEvent) -> None:
@@ -130,10 +124,7 @@ class HomeAssistantDiscovery:
         return f"{self.settings.mqtt.topic_prefix}/{component_topic}{subtopic}"
 
     async def publish_component(
-        self,
-        component: Component,
-        device_info: dict[str, any],
-        state_topic: str
+        self, component: Component, device_info: dict[str, any], state_topic: str
     ) -> None:
         logger.trace(device_info)
         device = HomeAssistantDevice(
@@ -192,8 +183,7 @@ class HomeAssistantDiscovery:
         if event.topic == self._status_topic:
             status = event.input.status
             if status == HomeAssistantStatus.ONLINE:
-                logger.info(
-                    "Home Assistant status changed to online resend discovery")
+                logger.info("Home Assistant status changed to online resend discovery")
                 for topic, entity in self._send_entities.items():
                     await self.event_bus.emit(
                         MQTTPublishEvent(
@@ -210,25 +200,19 @@ class HomeAssistantDiscovery:
         entity: dict | None = None
 
         if "ha_type" in prop:
-            entity = {"name": name,
-                      "path": path}
+            entity = {"name": name, "path": path}
 
             ha_type = prop["ha_type"]
             entity["icon"] = prop["icon"]
 
-            typed = HomeAssistantType.from_string(
-                prop["ha_typed"]
-            )
+            typed = HomeAssistantType.from_string(prop["ha_typed"])
 
             if typed == HomeAssistantType.BINARY_SENSOR:
-                entity["ha_type"] = HomeAssistantBinarySensorType.from_string(
-                    ha_type)
+                entity["ha_type"] = HomeAssistantBinarySensorType.from_string(ha_type)
             elif typed == HomeAssistantType.NUMBER:
-                entity["ha_type"] = HomeAssistantNumberType.from_string(
-                    ha_type)
+                entity["ha_type"] = HomeAssistantNumberType.from_string(ha_type)
             elif typed == HomeAssistantType.SENSOR:
-                entity["ha_type"] = HomeAssistantSensorType.from_string(
-                    ha_type)
+                entity["ha_type"] = HomeAssistantSensorType.from_string(ha_type)
 
             for field in typed.additional_fields:
                 entity[field] = prop.get(field, None)

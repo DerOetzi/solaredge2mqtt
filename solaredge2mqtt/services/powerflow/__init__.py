@@ -180,11 +180,7 @@ class PowerflowService:
             for battery in batteries_data.values():
                 points.append(battery.prepare_point())
 
-            try:
-                await self.influxdb.write_points(points)
-            except Exception:
-                logger.debug("InfluxDB write failed, continuing with MQTT publishing")
-                pass
+            await self.influxdb.write_points(points)
 
     async def close(self) -> None:
         if self.settings.is_wallbox_configured:
