@@ -226,12 +226,18 @@ class TestInfluxDBAsyncWrite:
         influxdb.client_async = mock_async
 
         mock_points = [MagicMock()]
-        
-        # Should not raise exception
-        await influxdb.write_points(mock_points)
-        
-        # Verify the write was attempted
-        mock_write_api.write.assert_called_once()
+
+        # Should not raise exception and should log error
+        with patch("solaredge2mqtt.core.influxdb.logger") as mock_logger:
+            await influxdb.write_points(mock_points)
+
+            # Verify the write was attempted
+            mock_write_api.write.assert_called_once()
+
+            # Verify error was logged
+            mock_logger.error.assert_called_once()
+            call_args = mock_logger.error.call_args[0][0]
+            assert "Failed to write points to InfluxDB" in call_args
 
     @pytest.mark.asyncio
     async def test_write_point_handles_exception(
@@ -250,12 +256,18 @@ class TestInfluxDBAsyncWrite:
         influxdb.client_async = mock_async
 
         mock_point = MagicMock()
-        
-        # Should not raise exception
-        await influxdb.write_point(mock_point)
-        
-        # Verify the write was attempted
-        mock_write_api.write.assert_called_once()
+
+        # Should not raise exception and should log error
+        with patch("solaredge2mqtt.core.influxdb.logger") as mock_logger:
+            await influxdb.write_point(mock_point)
+
+            # Verify the write was attempted
+            mock_write_api.write.assert_called_once()
+
+            # Verify error was logged
+            mock_logger.error.assert_called_once()
+            call_args = mock_logger.error.call_args[0][0]
+            assert "Failed to write points to InfluxDB" in call_args
 
 
 class TestInfluxDBAsyncQuery:
