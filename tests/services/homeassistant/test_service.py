@@ -1,14 +1,16 @@
 """Tests for HomeAssistantDiscovery service with mocking."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from solaredge2mqtt.core.mqtt.events import (
+    MQTTPublishEvent,
     MQTTReceivedEvent,
     MQTTSubscribeEvent,
 )
 from solaredge2mqtt.services.energy.events import EnergyReadEvent
+from solaredge2mqtt.services.events import ComponentEvent
 from solaredge2mqtt.services.forecast.events import ForecastEvent
 from solaredge2mqtt.services.homeassistant import HomeAssistantDiscovery
 from solaredge2mqtt.services.homeassistant.models import (
@@ -17,6 +19,7 @@ from solaredge2mqtt.services.homeassistant.models import (
     HomeAssistantSensorType,
     HomeAssistantStatus,
     HomeAssistantStatusInput,
+    HomeAssistantType,
 )
 from solaredge2mqtt.services.modbus.events import ModbusUnitsReadEvent
 from solaredge2mqtt.services.powerflow.events import PowerflowGeneratedEvent
@@ -359,7 +362,9 @@ class TestHomeAssistantDiscoveryPublishComponent:
     """Tests for HomeAssistantDiscovery publish_component."""
 
     @pytest.mark.asyncio
-    async def test_publish_component_basic(self, mock_service_settings, mock_event_bus):
+    async def test_publish_component_basic(
+        self, mock_service_settings, mock_event_bus
+    ):
         """Test publish_component creates and publishes entities."""
         from solaredge2mqtt.services.powerflow.models import Powerflow
 

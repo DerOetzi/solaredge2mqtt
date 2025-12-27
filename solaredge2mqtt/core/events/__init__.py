@@ -68,7 +68,8 @@ class EventBus:
         if event.AWAIT:
             await self._notify_listeners(event, listeners)
         else:
-            task = asyncio.create_task(self._notify_listeners(event, listeners))
+            task = asyncio.create_task(
+                self._notify_listeners(event, listeners))
             self._tasks.add(task)
             task.add_done_callback(self._handle_task_done)
 
@@ -76,7 +77,8 @@ class EventBus:
         self, event: BaseEvent, listeners: list[Listener]
     ) -> None:
         results = await asyncio.gather(
-            *(self._notify_listener(listener, event) for listener in listeners),
+            *(self._notify_listener(listener, event)
+              for listener in listeners),
             return_exceptions=True,
         )
         for r in results:
@@ -89,7 +91,8 @@ class EventBus:
         try:
             await listener(event)
         except InvalidDataException as error:
-            logger.warning("{message}, skipping this loop", message=error.message)
+            logger.warning("{message}, skipping this loop",
+                           message=error.message)
 
     def _handle_task_done(self, task: asyncio.Task) -> None:
         self._tasks.discard(task)

@@ -1,5 +1,6 @@
 """Tests for homeassistant settings module."""
 
+
 from solaredge2mqtt.services.homeassistant.settings import HomeAssistantSettings
 
 

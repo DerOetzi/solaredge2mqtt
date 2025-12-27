@@ -31,8 +31,7 @@ class ModbusInverter(ModbusComponent):
         None, **HABinarySensor.GRID_STATUS.field("Grid status")
     )
     advanced_power_controls: ModbusPowerControl | None = Field(
-        None, title="Advanced Power Controls"
-    )
+        None, title="Advanced Power Controls")
 
     def __init__(self, info: ModbusDeviceInfo, data: dict[str, str | int]):
         ac = ModbusAC(data)
@@ -76,13 +75,12 @@ class ModbusInverter(ModbusComponent):
 
 class ModbusPowerControl(ComponentValueGroup):
     advanced_power_control: bool = Field(
-        **HABinarySensor.ENABLED.field("Control enabled")
-    )
+        **HABinarySensor.ENABLED.field("Control enabled"))
     active_power_limit: int = Field(
         **HANumber.ACTIVE_POWER_LIMIT.field(
-            ModbusPowerControlInput.ACTIVE_POWER_LIMIT, "Active PowerLimit"
-        )
-    )
+            ModbusPowerControlInput.ACTIVE_POWER_LIMIT,
+            "Active PowerLimit"
+        ))
 
     def __init__(self, data: dict[str, str | int | bool]):
         super().__init__(

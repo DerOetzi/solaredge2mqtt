@@ -16,7 +16,9 @@ class ModbusUnitsReadEvent(BaseEvent):
 class ModbusWriteEvent(BaseEvent):
     AWAIT = True
 
-    def __init__(self, register: SunSpecRegister, payload: SunSpecInputData):
+    def __init__(self,
+                 register: SunSpecRegister,
+                 payload: SunSpecInputData):
         self._register = register
         self._payload = payload
 

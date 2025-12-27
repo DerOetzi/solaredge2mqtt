@@ -1,5 +1,6 @@
 """Tests for core timer events module."""
 
+
 from solaredge2mqtt.core.events.events import BaseEvent
 from solaredge2mqtt.core.timer.events import (
     Interval1MinTriggerEvent,

@@ -2,6 +2,8 @@
 
 from datetime import datetime, timezone
 
+import pytest
+
 from solaredge2mqtt.services.energy.events import EnergyReadEvent
 from solaredge2mqtt.services.energy.models import HistoricEnergy, HistoricPeriod
 from solaredge2mqtt.services.events import ComponentEvent

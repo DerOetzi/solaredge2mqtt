@@ -49,7 +49,8 @@ class ServiceSettings(BaseModel):
     homeassistant: HomeAssistantSettings | None = None
 
     def __init__(self, **data: dict[str, any]):
-        sources = [self._read_environment, self._read_dotenv, self._read_secrets]
+        sources = [self._read_environment,
+                   self._read_dotenv, self._read_secrets]
         data = self._parse_key_and_values(sources, data)
         super().__init__(**data)
 
@@ -114,7 +115,8 @@ class ServiceSettings(BaseModel):
             for key, value in source():
                 key = key.lower().strip()[8:]
                 subkeys = key.split("__")
-                self.insert_nested_key(data, subkeys, value.strip())
+                self.insert_nested_key(
+                    data, subkeys, value.strip())
 
         return data
 
@@ -126,7 +128,8 @@ class ServiceSettings(BaseModel):
             container, key, i
         )
 
-        cls._insert_value_in_container(container, keys, value, key, idx, next_container)
+        cls._insert_value_in_container(
+            container, keys, value, key, idx, next_container)
 
     @classmethod
     def _identify_key_and_position(cls, keys: list[str]) -> tuple[str, int]:
@@ -140,7 +143,7 @@ class ServiceSettings(BaseModel):
     def _get_or_initialize_nested_container(
         cls, container: dict, key: str, i: int
     ) -> tuple[str, int | str, dict | list]:
-        prefix, idx = key[: i + 1], key[i + 1 :]
+        prefix, idx = key[:i + 1], key[i + 1:]
         if idx.isdigit():
             key, idx = prefix, int(idx)
             if key not in container or not isinstance(container[key], list):

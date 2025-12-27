@@ -29,7 +29,8 @@ class EnergyService:
         self._subscribe_events()
 
     def _subscribe_events(self) -> None:
-        self.event_bus.subscribe(InfluxDBAggregatedEvent, self.read_historic_energy)
+        self.event_bus.subscribe(
+            InfluxDBAggregatedEvent, self.read_historic_energy)
 
     async def read_historic_energy(self, _) -> None:
         for period in HistoricPeriod:

@@ -5,9 +5,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from solaredge2mqtt.core.exceptions import InvalidDataException
+from solaredge2mqtt.core.influxdb.events import InfluxDBAggregatedEvent
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.services.energy import EnergyService
 from solaredge2mqtt.services.energy.events import EnergyReadEvent
+from solaredge2mqtt.services.energy.models import HistoricPeriod, HistoricQuery
 from solaredge2mqtt.services.energy.settings import EnergySettings
 
 

@@ -2,12 +2,13 @@
 
 import asyncio
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from aiohttp import ClientResponseError, RequestInfo
 
 from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
+from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.services.monitoring import MonitoringSite
 from solaredge2mqtt.services.monitoring.models import LogicalModule
 from solaredge2mqtt.services.monitoring.settings import MonitoringSettings

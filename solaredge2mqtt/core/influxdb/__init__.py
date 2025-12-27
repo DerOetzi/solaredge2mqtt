@@ -41,7 +41,8 @@ class InfluxDBAsync:
             self._subscribe_events()
 
         self.client_async: InfluxDBClientAsync | None = None
-        self.client_sync: InfluxDBClient = InfluxDBClient(**self.settings.client_params)
+        self.client_sync: InfluxDBClient = InfluxDBClient(
+            **self.settings.client_params)
 
         self.flux_cache: dict[str, str] = {}
 
@@ -79,7 +80,8 @@ class InfluxDBAsync:
         return self.client_sync.buckets_api()
 
     async def loop(self, _) -> None:
-        now = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0)
+        now = datetime.now(tz=timezone.utc).replace(
+            minute=0, second=0, microsecond=0)
 
         logger.info("Aggregate powerflow and energy raw data")
         aggregate_query = self._get_flux_query(
@@ -142,7 +144,8 @@ class InfluxDBAsync:
         self, period: HistoricPeriod, measurement: str
     ) -> list[dict[str, any]] | None:
         results = await self.query(
-            period.query.query, {"UNIT": period.unit, "MEASUREMENT": measurement}
+            period.query.query, {"UNIT": period.unit,
+                                 "MEASUREMENT": measurement}
         )
 
         return results if len(results) > 0 else None
@@ -156,6 +159,7 @@ class InfluxDBAsync:
     async def query(
         self, query_name: str, additional_replacements: dict[str, any] | None = None
     ) -> list[dict[str, any]]:
+
         tables = await self.query_api.query(
             self._get_flux_query(query_name, additional_replacements)
         )
@@ -172,11 +176,9 @@ class InfluxDBAsync:
         self, query_name: str, additional_replacements: dict[str, any] | None = None
     ) -> str:
         if query_name not in self.flux_cache:
-            with (
-                resources.files(__package__)
-                .joinpath(f"flux/{query_name}.flux")
-                .open("r", encoding="utf-8") as f
-            ):
+            with resources.files(__package__).joinpath(
+                f"flux/{query_name}.flux"
+            ).open("r", encoding="utf-8") as f:
                 flux = f.read()
 
             flux = (

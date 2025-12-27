@@ -78,14 +78,13 @@ class Powerflow(Component):
             power=sum(p.inverter.power for p in powerflows.values()),
             dc_power=sum(p.inverter.dc_power for p in powerflows.values()),
             battery_discharge=sum(
-                p.inverter.battery_discharge for p in powerflows.values()
-            ),
+                p.inverter.battery_discharge for p in powerflows.values()),
         )
 
-        grid = GridPowerflow(power=sum(p.grid.power for p in powerflows.values()))
+        grid = GridPowerflow(
+            power=sum(p.grid.power for p in powerflows.values()))
         battery = BatteryPowerflow(
-            power=sum(p.battery.power for p in powerflows.values())
-        )
+            power=sum(p.battery.power for p in powerflows.values()))
 
         consumer = ConsumerPowerflow(
             inverter=inverter,
@@ -110,8 +109,8 @@ class Powerflow(Component):
         if self.pv_production < 0:
             logger.warning("PV production is negative")
         elif (
-            not external_production
-            and self.consumer.used_production + self.grid.delivery
+            not external_production and
+            self.consumer.used_production + self.grid.delivery
             != self.inverter.production
         ):
             logger.warning(
@@ -201,7 +200,8 @@ class Powerflow(Component):
 
 class InverterPowerflow(Solaredge2MQTTBaseModel):
     power: SkipJsonSchema[int]
-    dc_power: int = Field(**HASensor.POWER_W.field("Power DC", "solar-power"))
+    dc_power: int = Field(
+        **HASensor.POWER_W.field("Power DC", "solar-power"))
     battery_discharge: SkipJsonSchema[int] = Field(exclude=True)
 
     @staticmethod
@@ -243,7 +243,8 @@ class InverterPowerflow(Solaredge2MQTTBaseModel):
     def battery_production(self) -> int:
         battery_production = 0
         if self.production > 0 and self.battery_factor > 0:
-            battery_production = int(round(self.production * self.battery_factor))
+            battery_production = int(
+                round(self.production * self.battery_factor))
             battery_production = min(battery_production, self.production)
         return battery_production
 
@@ -341,13 +342,17 @@ class BatteryPowerflow(Solaredge2MQTTBaseModel):
 
 
 class ConsumerPowerflow(Solaredge2MQTTBaseModel):
-    house: int = Field(**HASensor.POWER_W.field("House", "home-lightning-bolt-outline"))
+    house: int = Field(
+        **HASensor.POWER_W.field("House", "home-lightning-bolt-outline")
+    )
 
-    evcharger: int = Field(0, **HASensor.POWER_W.field("EV-Charger", "ev-station"))
+    evcharger: int = Field(
+        0, **HASensor.POWER_W.field("EV-Charger", "ev-station"))
 
     inverter: int = Field(**HASensor.POWER_W.field("Inverter"))
 
-    used_production: int = Field(0, **HASensor.POWER_W.field("Used production"))
+    used_production: int = Field(
+        0, **HASensor.POWER_W.field("Used production"))
 
     battery_factor: SkipJsonSchema[float] = Field(exclude=True)
 
@@ -383,7 +388,8 @@ class ConsumerPowerflow(Solaredge2MQTTBaseModel):
     def used_battery_production(self) -> int:
         battery_production = 0
         if self.used_production > 0 and self.battery_factor > 0:
-            battery_production = int(round(self.used_production * self.battery_factor))
+            battery_production = int(
+                round(self.used_production * self.battery_factor))
             battery_production = min(battery_production, self.used_production)
         return battery_production
 

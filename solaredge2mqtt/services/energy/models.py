@@ -23,7 +23,7 @@ class HistoricBaseModel(Component):
                 unit=data.get("unit", None),
                 period=period,
                 start=data["_start"],
-                stop=data["_stop"],
+                stop=data["_stop"]
             ),
             **kwargs,
         )
@@ -43,7 +43,8 @@ class HistoricBaseModel(Component):
 
 
 class HistoricEnergy(HistoricBaseModel):
-    pv_production: float = Field(**HASensor.ENERGY_KWH.field("PV production"))
+    pv_production: float = Field(
+        **HASensor.ENERGY_KWH.field("PV production"))
     inverter: InverterEnergy = Field(title="Inverter")
     grid: GridEnergy = Field(title="Grid")
     battery: BatteryEnergy = Field(title="Battery")
@@ -238,8 +239,11 @@ class InverterEnergy(Solaredge2MQTTBaseModel):
     production: float = Field(**HASensor.ENERGY_KWH.field("Production"))
     consumption: float = Field(**HASensor.ENERGY_KWH.field("Consumption"))
     dc_power: float = Field(**HASensor.POWER_W.field("DC production"))
-    pv_production: float = Field(**HASensor.ENERGY_KWH.field("PV production"))
-    battery_production: float = Field(**HASensor.ENERGY_KWH.field("Battery production"))
+    pv_production: float = Field(
+        **HASensor.ENERGY_KWH.field("PV production"))
+    battery_production: float = Field(
+        **HASensor.ENERGY_KWH.field("Battery production")
+    )
 
 
 class GridEnergy(Solaredge2MQTTBaseModel):
@@ -259,8 +263,11 @@ class ConsumerEnergy(Solaredge2MQTTBaseModel):
 
     total: float = Field(**HASensor.ENERGY_KWH.field("Total"))
 
-    used_production: float = Field(**HASensor.ENERGY_KWH.field("Used production"))
-    used_pv_production: float = Field(**HASensor.ENERGY_KWH.field("Used PV production"))
+    used_production: float = Field(
+        **HASensor.ENERGY_KWH.field("Used production"))
+    used_pv_production: float = Field(
+        **HASensor.ENERGY_KWH.field("Used PV production")
+    )
     used_battery_production: float = Field(
         **HASensor.ENERGY_KWH.field("Used battery production")
     )

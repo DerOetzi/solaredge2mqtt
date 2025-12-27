@@ -1,5 +1,6 @@
 """Tests for weather events module."""
 
+from datetime import datetime, timezone
 
 from solaredge2mqtt.core.events.events import BaseEvent
 from solaredge2mqtt.services.weather.events import WeatherUpdateEvent

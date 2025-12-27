@@ -1,7 +1,7 @@
 """Tests for WeatherClient with mocking."""
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from aiohttp import ClientResponseError, RequestInfo
@@ -115,7 +115,9 @@ class TestWeatherClientGetWeather:
         assert "Unable to read weather data" in exc_info.value.message
 
     @pytest.mark.asyncio
-    async def test_get_weather_401_error(self, mock_service_settings, mock_event_bus):
+    async def test_get_weather_401_error(
+        self, mock_service_settings, mock_event_bus
+    ):
         """Test get_weather handles 401 error."""
         client = WeatherClient(mock_service_settings, mock_event_bus)
 
@@ -157,7 +159,9 @@ class TestWeatherClientGetWeather:
         assert "Unable to read weather data" in exc_info.value.message
 
     @pytest.mark.asyncio
-    async def test_get_weather_timeout(self, mock_service_settings, mock_event_bus):
+    async def test_get_weather_timeout(
+        self, mock_service_settings, mock_event_bus
+    ):
         """Test get_weather handles timeout."""
         client = WeatherClient(mock_service_settings, mock_event_bus)
         client._get = AsyncMock(side_effect=asyncio.TimeoutError())

@@ -1,8 +1,8 @@
 """
-This module, service.py, is part of the SolarEdge2MQTT service, which reads data
-from a SolarEdge inverter and publishes it to an MQTT broker. It uses the asyncio
-library for asynchronous I/O and the aiomqtt library for MQTT communication.
-The module also includes a run function to initialize and start the service.
+    This module, service.py, is part of the SolarEdge2MQTT service, which reads data 
+    from a SolarEdge inverter and publishes it to an MQTT broker. It uses the asyncio 
+    library for asynchronous I/O and the aiomqtt library for MQTT communication. 
+    The module also includes a run function to initialize and start the service.
 """
 
 import asyncio
@@ -67,7 +67,8 @@ class Service:
         self._run_task: asyncio.Task | None = None
 
         self.influxdb: InfluxDBAsync | None = (
-            InfluxDBAsync(self.settings.influxdb, self.settings.prices, self.event_bus)
+            InfluxDBAsync(self.settings.influxdb,
+                          self.settings.prices, self.event_bus)
             if self.settings.is_influxdb_configured
             else None
         )
@@ -78,10 +79,12 @@ class Service:
             else None
         )
 
-        self.powerflow = PowerflowService(self.settings, self.event_bus, self.influxdb)
+        self.powerflow = PowerflowService(
+            self.settings, self.event_bus, self.influxdb)
 
         self.monitoring: MonitoringSite | None = (
-            MonitoringSite(self.settings.monitoring, self.event_bus, self.influxdb)
+            MonitoringSite(self.settings.monitoring,
+                           self.event_bus, self.influxdb)
             if self.settings.is_monitoring_configured
             else None
         )
@@ -105,7 +108,8 @@ class Service:
                 else None
             )
         elif self.settings.is_forecast_configured:
-            logger.warning("Forecast service not available, please refer to README")
+            logger.warning(
+                "Forecast service not available, please refer to README")
 
         self.homeassistant: HomeAssistantDiscovery | None = (
             HomeAssistantDiscovery(self.settings, self.event_bus)
@@ -202,7 +206,9 @@ class Service:
             try:
                 await self.mqtt.publish_status_offline()
             except MqttError:
-                logger.debug("Unable to publish offline status during cleanup")
+                logger.debug(
+                    "Unable to publish offline status during cleanup"
+                )
             finally:
                 self.mqtt = None
 
@@ -273,7 +279,8 @@ class Service:
                         if service
                     ]
                 ),
-                timeout=5,
+                timeout=5
             )
         except asyncio.TimeoutError:
-            logger.warning("Timeout while closing tasks, proceeding with shutdown.")
+            logger.warning(
+                "Timeout while closing tasks, proceeding with shutdown.")

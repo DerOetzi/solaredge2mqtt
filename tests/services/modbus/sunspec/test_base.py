@@ -1,6 +1,8 @@
 """Tests for modbus sunspec base module."""
 
+from unittest.mock import MagicMock
 
+import pytest
 
 from solaredge2mqtt.services.modbus.sunspec.base import (
     SunSpecOffset,
@@ -102,9 +104,7 @@ class TestSunSpecRegister:
         data = {}
         # Simulate string decoding (ModbusTcpClient returns string with nulls)
         # The actual decoding depends on ModbusTcpClient, but we test null strip
-        result = TestRegister.TEST_REG.decode_response(
-            [0x5465, 0x7374, 0x0000, 0x0000], data
-        )
+        result = TestRegister.TEST_REG.decode_response([0x5465, 0x7374, 0x0000, 0x0000], data)
 
         assert "test_reg" in result
 

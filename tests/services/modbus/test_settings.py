@@ -1,5 +1,6 @@
 """Tests for modbus settings module."""
 
+
 from solaredge2mqtt.services.modbus.models.base import ModbusUnitRole
 from solaredge2mqtt.services.modbus.settings import (
     AdvancedControlsSettings,

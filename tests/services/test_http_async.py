@@ -214,7 +214,9 @@ class TestHTTPClientAsync:
         mock_response_200.raise_for_status = MagicMock()
 
         mock_session = MagicMock()
-        mock_session.get = MagicMock(side_effect=[mock_response_401, mock_response_200])
+        mock_session.get = MagicMock(
+            side_effect=[mock_response_401, mock_response_200]
+        )
 
         login_callback = AsyncMock()
 

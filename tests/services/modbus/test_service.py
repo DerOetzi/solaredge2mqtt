@@ -69,7 +69,9 @@ class TestModbusInit:
         assert modbus.client is None
         assert modbus._initialized is False
 
-    def test_modbus_subscribes_to_events(self, mock_service_settings, mock_event_bus):
+    def test_modbus_subscribes_to_events(
+        self, mock_service_settings, mock_event_bus
+    ):
         """Test Modbus subscribes to write events."""
         modbus = Modbus(mock_service_settings, mock_event_bus)
 
@@ -88,9 +90,7 @@ class TestModbusAsyncInit:
         modbus.detect_devices = AsyncMock()
         modbus.check_readable_registers = AsyncMock()
 
-        with patch(
-            "solaredge2mqtt.services.modbus.asyncio.sleep", new_callable=AsyncMock
-        ):
+        with patch("solaredge2mqtt.services.modbus.asyncio.sleep", new_callable=AsyncMock):
             await modbus.async_init()
 
         assert modbus.client is not None
@@ -165,9 +165,7 @@ class TestModbusReadFromModbus:
         mock_bundle.length = 10
 
         # Mock exception
-        mock_modbus_client.read_holding_registers.side_effect = ModbusException(
-            "Test error"
-        )
+        mock_modbus_client.read_holding_registers.side_effect = ModbusException("Test error")
 
         await modbus._read_from_modbus([mock_bundle], 1)
 
@@ -222,7 +220,9 @@ class TestModbusGetData:
         modbus._get_raw_data = AsyncMock(return_value=({}, {}, {}))
 
         # Mock mappers - create properly structured mock objects
-        with patch("solaredge2mqtt.services.modbus.ModbusUnit") as mock_unit_class:
+        with patch(
+            "solaredge2mqtt.services.modbus.ModbusUnit"
+        ) as mock_unit_class:
             mock_unit_instance = MagicMock()
             mock_unit_class.return_value = mock_unit_instance
 
@@ -284,12 +284,16 @@ class TestModbusMappers:
 
             assert result is mock_inverter
 
-    def test_map_meters(self, mock_service_settings, mock_event_bus, mock_device_info):
+    def test_map_meters(
+        self, mock_service_settings, mock_event_bus, mock_device_info
+    ):
         """Test _map_meters creates ModbusMeter dict."""
         modbus = Modbus(mock_service_settings, mock_event_bus)
         modbus._device_info = {"leader": {"meter0": mock_device_info}}
 
-        with patch("solaredge2mqtt.services.modbus.ModbusMeter") as mock_meter_class:
+        with patch(
+            "solaredge2mqtt.services.modbus.ModbusMeter"
+        ) as mock_meter_class:
             mock_meter = MagicMock()
             mock_meter.info = mock_device_info
             mock_meter.power.actual = 500

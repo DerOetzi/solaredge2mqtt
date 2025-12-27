@@ -41,7 +41,9 @@ class EnumModel(Enum):
 
 
 class BaseInputField(BaseModel):
-    model_config = {"extra": "forbid"}
+    model_config = {
+        "extra": "forbid"
+    }
 
 
 class BaseInputFieldEnumModel(EnumModel):
@@ -63,12 +65,10 @@ class BaseField(EnumModel):
         self._key: str = key
         self._input_field: BaseInputFieldEnumModel | None = input_field
 
-    def field(
-        self,
-        title: str | None,
-        json_schema_extra: dict[str, any] | None = None,
-        input_field: BaseInputFieldEnumModel | None = None,
-    ) -> dict[str, any]:
+    def field(self, title: str | None,
+              json_schema_extra: dict[str, any] | None = None,
+              input_field: BaseInputFieldEnumModel | None = None) -> dict[str, any]:
+
         if json_schema_extra is None:
             json_schema_extra = {}
 
@@ -101,7 +101,8 @@ class Solaredge2MQTTBaseModel(BaseModel):
     def model_dump_influxdb(self, exclude: list[str] | None = None) -> dict[str, any]:
         ignore_keys = {"timestamp"}
         return self._flatten_dict(
-            self.model_dump(exclude=exclude, exclude_none=True), ignore_keys=ignore_keys
+            self.model_dump(exclude=exclude, exclude_none=True),
+            ignore_keys=ignore_keys
         )
 
     def _flatten_dict(
@@ -118,7 +119,9 @@ class Solaredge2MQTTBaseModel(BaseModel):
             new_key = parent_key + join_chr + k if parent_key else k
             if isinstance(v, MutableMapping):
                 items.extend(
-                    self._flatten_dict(v, ignore_keys, join_chr, new_key).items()
+                    self._flatten_dict(
+                        v, ignore_keys, join_chr, new_key
+                    ).items()
                 )
             else:
                 if isinstance(v, int):
@@ -141,9 +144,12 @@ class Solaredge2MQTTBaseModel(BaseModel):
     def parse_schema(cls, property_parser: callable | None = None) -> list[dict]:
         return cls._walk_schema(
             jsonref.replace_refs(
-                cls.model_json_schema(mode="serialization"), merge_props=True
-            )["properties"],
-            property_parser or cls.property_parser,
+                cls.model_json_schema(mode="serialization"),
+                merge_props=True
+            )[
+                "properties"
+            ], property_parser or cls.property_parser
+
         )
 
     @classmethod
@@ -152,13 +158,14 @@ class Solaredge2MQTTBaseModel(BaseModel):
         properties: dict[str, dict],
         property_parser: callable,
         parent_name: str | None = None,
-        parent_path: list[str] = [],
+        parent_path: list[str] = []
     ) -> list[dict]:
         items: list[dict] = []
         for key, prop in properties.items():
             new_path = [*parent_path, key]
             new_name = (
-                parent_name + " " + prop["title"] if parent_name else prop["title"]
+                parent_name + " " +
+                prop["title"] if parent_name else prop["title"]
             )
             if "properties" in prop:
                 items.extend(
@@ -172,7 +179,7 @@ class Solaredge2MQTTBaseModel(BaseModel):
                         prop["allOf"][0]["properties"],
                         property_parser,
                         new_name,
-                        new_path,
+                        new_path
                     )
                 )
             elif "anyOf" in prop and "properties" in prop["anyOf"][0]:
@@ -181,7 +188,7 @@ class Solaredge2MQTTBaseModel(BaseModel):
                         prop["anyOf"][0]["properties"],
                         property_parser,
                         new_name,
-                        new_path,
+                        new_path
                     )
                 )
             else:

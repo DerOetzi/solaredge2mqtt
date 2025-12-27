@@ -199,10 +199,14 @@ class TestEventBus:
         assert bus._critical_error is None
 
     @pytest.mark.asyncio
-    async def test_handle_task_done_logs_second_critical_error(self, monkeypatch):
+    async def test_handle_task_done_logs_second_critical_error(
+        self, monkeypatch
+    ):
         bus = EventBus()
         logger_spy = LoggerSpy()
-        monkeypatch.setattr("solaredge2mqtt.core.events.logger", logger_spy)
+        monkeypatch.setattr(
+            "solaredge2mqtt.core.events.logger", logger_spy
+        )
 
         async def failing(error):
             raise error
@@ -221,10 +225,14 @@ class TestEventBus:
         assert logger_spy.warnings
 
     @pytest.mark.asyncio
-    async def test_handle_task_done_logs_unhandled_error(self, monkeypatch):
+    async def test_handle_task_done_logs_unhandled_error(
+        self, monkeypatch
+    ):
         bus = EventBus()
         logger_spy = LoggerSpy()
-        monkeypatch.setattr("solaredge2mqtt.core.events.logger", logger_spy)
+        monkeypatch.setattr(
+            "solaredge2mqtt.core.events.logger", logger_spy
+        )
 
         async def failing():
             raise ValueError("unexpected")

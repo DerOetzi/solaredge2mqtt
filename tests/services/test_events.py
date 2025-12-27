@@ -1,5 +1,6 @@
 """Tests for services events module."""
 
+
 from solaredge2mqtt.core.events.events import BaseEvent
 from solaredge2mqtt.services.events import ComponentEvent, ComponentsEvent
 from solaredge2mqtt.services.models import Component

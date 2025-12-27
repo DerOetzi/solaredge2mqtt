@@ -65,7 +65,9 @@ class MQTTClient(Client):
             async for message in self.messages:
                 topic = str(message.topic)
                 if topic not in self._subscribed_topics:
-                    logger.warning(f"Received message on unsubscribed topic: {topic}")
+                    logger.warning(
+                        f"Received message on unsubscribed topic: {topic}"
+                    )
                     continue
                 if len(message.payload) > MAX_MQTT_PAYLOAD_SIZE:
                     logger.warning(
@@ -76,7 +78,8 @@ class MQTTClient(Client):
                 try:
                     self._received_message_queue.put_nowait(message)
                 except QueueFull:
-                    logger.warning("MQTT processing queue full – dropping message")
+                    logger.warning(
+                        "MQTT processing queue full – dropping message")
 
     async def process_queue(self) -> None:
         if self._subscribed_topics:
@@ -92,7 +95,8 @@ class MQTTClient(Client):
         try:
             model = self._subscribed_topics.get(topic)
             if not model:
-                logger.warning(f"Received message for unexpected topic: {topic}")
+                logger.warning(
+                    f"Received message for unexpected topic: {topic}")
                 return
 
             payload = message.payload.decode()
@@ -107,9 +111,13 @@ class MQTTClient(Client):
             else:
                 parsed_input = model(input_raw)
 
-            await self.event_bus.emit(MQTTReceivedEvent(topic, parsed_input))
+            await self.event_bus.emit(
+                MQTTReceivedEvent(topic, parsed_input)
+            )
         except (ValidationError, json.JSONDecodeError, TypeError) as ex:
-            logger.warning(f"Received invalid message on topic: {topic}, error: {ex}")
+            logger.warning(
+                f"Received invalid message on topic: {topic}, error: {ex}"
+            )
 
     async def publish_status_online(self) -> None:
         await self.publish_to("status", "online", True)

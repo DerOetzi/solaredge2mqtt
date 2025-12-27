@@ -1,5 +1,6 @@
 """Tests for modbus base models module."""
 
+
 from solaredge2mqtt.services.modbus.models.base import (
     ModbusComponent,
     ModbusDeviceInfo,
@@ -275,14 +276,12 @@ class TestModbusComponent:
         from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
 
         # Create a real ModbusComponent subclass instance
-        device_info = ModbusDeviceInfo(
-            {
-                "c_manufacturer": "SolarEdge",
-                "c_model": "Meter",
-                "c_version": "1.0.0",
-                "c_serialnumber": "MTR12345",
-            }
-        )
+        device_info = ModbusDeviceInfo({
+            "c_manufacturer": "SolarEdge",
+            "c_model": "Meter",
+            "c_version": "1.0.0",
+            "c_serialnumber": "MTR12345",
+        })
 
         meter_data = {
             "current": 10,
@@ -325,16 +324,14 @@ class TestModbusComponent:
         """Test influxdb_tags returns correct tags."""
         from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
 
-        device_info = ModbusDeviceInfo(
-            {
-                "c_manufacturer": "SolarEdge",
-                "c_model": "Meter",
-                "c_version": "1.0.0",
-                "c_serialnumber": "MTR12345",
-                "c_option": "Export+Import",
-                "c_sunspec_did": 203,
-            }
-        )
+        device_info = ModbusDeviceInfo({
+            "c_manufacturer": "SolarEdge",
+            "c_model": "Meter",
+            "c_version": "1.0.0",
+            "c_serialnumber": "MTR12345",
+            "c_option": "Export+Import",
+            "c_sunspec_did": 203,
+        })
 
         meter_data = {
             "current": 10,
@@ -371,14 +368,12 @@ class TestModbusComponent:
         """Test mqtt_topic without followers."""
         from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
 
-        device_info = ModbusDeviceInfo(
-            {
-                "c_manufacturer": "SolarEdge",
-                "c_model": "Meter",
-                "c_version": "1.0.0",
-                "c_serialnumber": "MTR12345",
-            }
-        )
+        device_info = ModbusDeviceInfo({
+            "c_manufacturer": "SolarEdge",
+            "c_model": "Meter",
+            "c_version": "1.0.0",
+            "c_serialnumber": "MTR12345",
+        })
 
         meter_data = {
             "current": 10,
@@ -417,15 +412,13 @@ class TestModbusComponent:
             role=ModbusUnitRole.LEADER,
         )
 
-        device_info = ModbusDeviceInfo(
-            {
-                "c_manufacturer": "SolarEdge",
-                "c_model": "Meter",
-                "c_version": "1.0.0",
-                "c_serialnumber": "MTR12345",
-                "unit": unit_info,
-            }
-        )
+        device_info = ModbusDeviceInfo({
+            "c_manufacturer": "SolarEdge",
+            "c_model": "Meter",
+            "c_version": "1.0.0",
+            "c_serialnumber": "MTR12345",
+            "unit": unit_info,
+        })
 
         meter_data = {
             "current": 10,
@@ -459,14 +452,12 @@ class TestModbusComponent:
         from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
 
         # Without unit
-        device_info = ModbusDeviceInfo(
-            {
-                "c_manufacturer": "SolarEdge",
-                "c_model": "Meter",
-                "c_version": "1.0.0",
-                "c_serialnumber": "MTR12345",
-            }
-        )
+        device_info = ModbusDeviceInfo({
+            "c_manufacturer": "SolarEdge",
+            "c_model": "Meter",
+            "c_version": "1.0.0",
+            "c_serialnumber": "MTR12345",
+        })
 
         meter_data = {
             "current": 10,

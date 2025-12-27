@@ -282,10 +282,7 @@ class TestConsumerPowerflowValidation:
         assert consumer.used_battery_production > 0
 
         # used_pv_production = used_production - used_battery_production
-        assert (
-            consumer.used_pv_production
-            == consumer.used_production - consumer.used_battery_production
-        )
+        assert consumer.used_pv_production == consumer.used_production - consumer.used_battery_production
 
     def test_used_battery_production_no_battery(self):
         """Test used_battery_production is 0 when no battery."""
