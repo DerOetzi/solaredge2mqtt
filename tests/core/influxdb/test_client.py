@@ -4,6 +4,8 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from aiohttp import ClientError
+from influxdb_client.rest import ApiException
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.influxdb import InfluxDBAsync
@@ -216,7 +218,7 @@ class TestInfluxDBAsyncWrite:
 
         mock_write_api = MagicMock()
         mock_write_api.write = AsyncMock(
-            side_effect=Exception("Connection failed")
+            side_effect=ApiException("Connection failed")
         )
         mock_async.write_api = MagicMock(return_value=mock_write_api)
 
@@ -240,7 +242,7 @@ class TestInfluxDBAsyncWrite:
 
         mock_write_api = MagicMock()
         mock_write_api.write = AsyncMock(
-            side_effect=Exception("Connection timeout")
+            side_effect=ClientError("Connection timeout")
         )
         mock_async.write_api = MagicMock(return_value=mock_write_api)
 

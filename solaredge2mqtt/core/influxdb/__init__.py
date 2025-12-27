@@ -4,11 +4,14 @@ from datetime import datetime, timedelta, timezone
 from importlib import resources
 from typing import TYPE_CHECKING
 
+from aiohttp import ClientError
 from influxdb_client import BucketRetentionRules, InfluxDBClient, Point
 from influxdb_client.client.bucket_api import BucketsApi
 from influxdb_client.client.delete_api import DeleteApi
+from influxdb_client.client.exceptions import InfluxDBError
 from influxdb_client.client.influxdb_client_async import InfluxDBClientAsync
 from influxdb_client.client.query_api_async import QueryApiAsync
+from influxdb_client.rest import ApiException
 from tzlocal import get_localzone_name
 
 from solaredge2mqtt.core.events import EventBus
@@ -134,7 +137,7 @@ class InfluxDBAsync:
             await self.client_async.write_api().write(
                 bucket=self.bucket_name, record=points
             )
-        except Exception as ex:
+        except (InfluxDBError, ApiException, ClientError) as ex:
             logger.error(
                 f"Failed to write points to InfluxDB at "
                 f"{self.settings.host}:{self.settings.port}: {ex}"
