@@ -183,6 +183,7 @@ class PowerflowService:
             try:
                 await self.influxdb.write_points(points)
             except Exception:
+                logger.debug("InfluxDB write failed, continuing with MQTT publishing")
                 pass
 
     async def close(self) -> None:

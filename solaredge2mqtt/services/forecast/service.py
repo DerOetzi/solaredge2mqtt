@@ -136,6 +136,9 @@ class ForecastService:
         try:
             await self.influxdb.write_point(point)
         except Exception:
+            logger.debug(
+                "InfluxDB write failed for training data, continuing with forecast"
+            )
             pass
 
     async def train(self) -> None:
@@ -199,6 +202,10 @@ class ForecastService:
         try:
             await self.influxdb.write_points(points)
         except Exception:
+            logger.debug(
+                "InfluxDB write failed for forecast data, "
+                "continuing with forecast publishing"
+            )
             pass
 
     async def publish_forecast(self) -> None:
