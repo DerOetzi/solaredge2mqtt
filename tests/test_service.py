@@ -262,7 +262,7 @@ def test_run_invokes_asyncio_run(monkeypatch):
             "error",
             "Configuration error",
         ),
-        (lambda:asyncio.CancelledError(), "debug", "Service cancelled"),
+        (lambda: asyncio.CancelledError(), "debug", "Service cancelled"),
         (lambda: KeyboardInterrupt(), "info", "Service interrupted by user"),
     ],
 )
@@ -326,6 +326,7 @@ async def test_service_run_invokes_main_loop_and_shutdown(
     )
     assert sequence == ["main", "shutdown"]
 
+
 @pytest.mark.asyncio
 async def test_cancel_sets_flag_and_cancels_tasks(settings_factory):
     settings_factory()
@@ -347,6 +348,28 @@ async def test_cancel_sets_flag_and_cancels_tasks(settings_factory):
     assert service.cancel_request.is_set()
     assert all(loop.cancelled() for loop in service.loops)
     await asyncio.gather(*service.loops, return_exceptions=True)
+    service.loops.clear()
+
+
+@pytest.mark.asyncio
+async def test_cancel_is_idempotent(settings_factory):
+    settings_factory()
+    service = service_module.Service()
+
+    async def pending():
+        await asyncio.sleep(0)
+
+    task = asyncio.create_task(pending())
+    service.loops.add(task)
+    service.cancel_request.set()
+
+    service.cancel()
+
+    assert service.cancel_request.is_set()
+    assert not task.cancelled()
+
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
     service.loops.clear()
 
 
@@ -517,6 +540,28 @@ async def test_close_handles_timeout(monkeypatch, settings_factory):
     async def fake_wait_for(awaitable, timeout):
         await awaitable
         raise asyncio.TimeoutError
+
+    monkeypatch.setattr(service_module.asyncio, "wait_for", fake_wait_for)
+
+    await service.close()
+
+    assert service.powerflow.closed
+    assert service.monitoring.closed
+    assert service.weather.closed
+    assert service.influxdb.closed
+
+
+@pytest.mark.asyncio
+async def test_close_shuts_down_services(monkeypatch, settings_factory):
+    settings_factory()
+    service = service_module.Service()
+    service.influxdb = DummyInfluxDB()
+    service.powerflow = DummyPowerflowService()
+    service.monitoring = DummyMonitoringSite()
+    service.weather = DummyWeatherClient()
+
+    async def fake_wait_for(awaitable, timeout):
+        return await awaitable
 
     monkeypatch.setattr(service_module.asyncio, "wait_for", fake_wait_for)
 
