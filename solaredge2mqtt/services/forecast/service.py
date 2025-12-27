@@ -58,13 +58,11 @@ class ForecastService:
         self.influxdb = influxdb
 
         self.forecasters: dict[ForecasterType, Forecaster] = {
-            typed: Forecaster(typed, location, settings)
-            for typed in ForecasterType
+            typed: Forecaster(typed, location, settings) for typed in ForecasterType
         }
 
         self.last_weather_forecast: list[OpenWeatherMapForecastData] | None = None
-        self.last_hour_forecast: dict[int,
-                                      OpenWeatherMapForecastData] | None = None
+        self.last_hour_forecast: dict[int, OpenWeatherMapForecastData] | None = None
 
     def _subscribe_events(self) -> None:
         self.event_bus.subscribe(WeatherUpdateEvent, self.weather_update)
@@ -96,8 +94,7 @@ class ForecastService:
         self, last_hour_weather_forecast: OpenWeatherMapForecastData
     ) -> None:
         now = datetime.now().astimezone()
-        last_hour = now.replace(
-            minute=0, second=0, microsecond=0) - timedelta(hours=1)
+        last_hour = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)
 
         training_data = last_hour_weather_forecast.model_dump_estimation_data()
         training_data["time"] = last_hour
@@ -136,7 +133,10 @@ class ForecastService:
 
         logger.info("Write new forecast training data to influxdb")
         logger.debug(trainings_data)
-        await self.influxdb.write_point(point)
+        try:
+            await self.influxdb.write_point(point)
+        except Exception:
+            pass
 
     async def train(self) -> None:
         data = await self.influxdb.query_dataframe("training_data")
@@ -196,13 +196,15 @@ class ForecastService:
             points.append(point)
 
         logger.info("Write forecast data to influxdb")
-        await self.influxdb.write_points(points)
+        try:
+            await self.influxdb.write_points(points)
+        except Exception:
+            pass
 
     async def publish_forecast(self) -> None:
         forecast_data = await self.influxdb.query_dataframe("forecast")
         if not forecast_data.empty:
-            forecast_data["time"] = forecast_data["_time"].dt.tz_convert(
-                LOCAL_TZ)
+            forecast_data["time"] = forecast_data["_time"].dt.tz_convert(LOCAL_TZ)
             power_hours = {
                 row["time"]: row["power"] for idx, row in forecast_data.iterrows()
             }
@@ -210,8 +212,7 @@ class ForecastService:
                 row["time"]: round(row["energy"] * 1000)
                 for idx, row in forecast_data.iterrows()
             }
-            forecast = Forecast(power_period=power_hours,
-                                energy_period=energy_hours)
+            forecast = Forecast(power_period=power_hours, energy_period=energy_hours)
             logger.debug(forecast)
 
             await self.event_bus.emit(
@@ -252,7 +253,7 @@ class Forecaster:
         self,
         typed: ForecasterType,
         location: LocationSettings,
-        settings: ForecastSettings
+        settings: ForecastSettings,
     ) -> None:
         self.typed: ForecasterType = typed
         self.location = location
@@ -284,8 +285,7 @@ class Forecaster:
         pipeline = self._prepare_model_pipeline(data.columns.to_list())
 
         if self.enable_hyperparameter_tuning:
-            self.model_pipeline = self._hyperparametertuning(
-                data, y_vector, pipeline)
+            self.model_pipeline = self._hyperparametertuning(data, y_vector, pipeline)
         else:
             self.model_pipeline = pipeline
 
@@ -332,8 +332,7 @@ class Forecaster:
         logger.info(
             "Training with best parameters: {params}", params=grid_search.best_params_
         )
-        logger.info(
-            "Training with best score: {score}", score=grid_search.best_score_)
+        logger.info("Training with best score: {score}", score=grid_search.best_score_)
 
         return clone(grid_search.best_estimator_)
 
@@ -349,13 +348,9 @@ class Forecaster:
                 ("preprocessor", self._prepare_preprocessor(x_vector_columns)),
                 (
                     "feature_selector",
-                    PFISelector(
-                        estimator=clone(base_estimator)
-                    ),
+                    PFISelector(estimator=clone(base_estimator)),
                 ),
-                (
-                    "model", clone(base_estimator)
-                ),
+                ("model", clone(base_estimator)),
             ],
             memory=self.memory,
         )
@@ -373,8 +368,7 @@ class Forecaster:
                 (
                     "num",
                     "passthrough",
-                    self._extract_used_columns(
-                        self.NUMERIC_FEATURES, x_vector_columns),
+                    self._extract_used_columns(self.NUMERIC_FEATURES, x_vector_columns),
                 ),
                 (
                     "time",

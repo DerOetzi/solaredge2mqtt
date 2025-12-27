@@ -39,9 +39,10 @@ def price_settings():
 @pytest.fixture
 def mock_influxdb_client():
     """Create mock InfluxDB clients."""
-    with patch("solaredge2mqtt.core.influxdb.InfluxDBClient") as mock_sync, patch(
-        "solaredge2mqtt.core.influxdb.InfluxDBClientAsync"
-    ) as mock_async:
+    with (
+        patch("solaredge2mqtt.core.influxdb.InfluxDBClient") as mock_sync,
+        patch("solaredge2mqtt.core.influxdb.InfluxDBClientAsync") as mock_async,
+    ):
         mock_sync_instance = MagicMock()
         mock_sync.return_value = mock_sync_instance
 
@@ -87,9 +88,7 @@ class TestInfluxDBAsyncInit:
 class TestInfluxDBAsyncInitialize:
     """Tests for InfluxDBAsync initialize methods."""
 
-    def test_init_method(
-        self, influxdb_settings, price_settings, mock_influxdb_client
-    ):
+    def test_init_method(self, influxdb_settings, price_settings, mock_influxdb_client):
         """Test init method creates async client and initializes buckets."""
         mock_sync, mock_async = mock_influxdb_client
 
@@ -206,6 +205,50 @@ class TestInfluxDBAsyncWrite:
         mock_write_api.write.assert_called_once_with(
             bucket="test_bucket", record=mock_points
         )
+
+    @pytest.mark.asyncio
+    async def test_write_points_handles_exception(
+        self, influxdb_settings, price_settings, mock_influxdb_client
+    ):
+        """Test write_points handles exceptions gracefully."""
+        mock_sync, mock_async = mock_influxdb_client
+
+        mock_write_api = MagicMock()
+        mock_write_api.write = AsyncMock(side_effect=Exception("Connection failed"))
+        mock_async.write_api = MagicMock(return_value=mock_write_api)
+
+        influxdb = InfluxDBAsync(influxdb_settings, price_settings)
+        influxdb.client_async = mock_async
+
+        mock_points = [MagicMock()]
+
+        # Should not raise exception
+        await influxdb.write_points(mock_points)
+
+        # Verify the write was attempted
+        mock_write_api.write.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_write_point_handles_exception(
+        self, influxdb_settings, price_settings, mock_influxdb_client
+    ):
+        """Test write_point handles exceptions gracefully."""
+        mock_sync, mock_async = mock_influxdb_client
+
+        mock_write_api = MagicMock()
+        mock_write_api.write = AsyncMock(side_effect=Exception("Connection timeout"))
+        mock_async.write_api = MagicMock(return_value=mock_write_api)
+
+        influxdb = InfluxDBAsync(influxdb_settings, price_settings)
+        influxdb.client_async = mock_async
+
+        mock_point = MagicMock()
+
+        # Should not raise exception
+        await influxdb.write_point(mock_point)
+
+        # Verify the write was attempted
+        mock_write_api.write.assert_called_once()
 
 
 class TestInfluxDBAsyncQuery:

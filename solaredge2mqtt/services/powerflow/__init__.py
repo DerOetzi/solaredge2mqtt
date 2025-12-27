@@ -19,7 +19,6 @@ if TYPE_CHECKING:
 
 
 class PowerflowService:
-
     def __init__(
         self,
         settings: ServiceSettings,
@@ -42,8 +41,7 @@ class PowerflowService:
         self._subscribe_events()
 
     def _subscribe_events(self) -> None:
-        self.event_bus.subscribe(
-            IntervalBaseTriggerEvent, self.calculate_powerflow)
+        self.event_bus.subscribe(IntervalBaseTriggerEvent, self.calculate_powerflow)
 
     async def async_init(self) -> None:
         await self.modbus.async_init()
@@ -99,8 +97,7 @@ class PowerflowService:
 
         if Powerflow.is_not_valid_with_last(powerflow):
             logger.debug(powerflow)
-            raise InvalidDataException(
-                "Value change not valid, skipping this loop")
+            raise InvalidDataException("Value change not valid, skipping this loop")
 
         await self.write_to_influxdb(powerflows, batteries)
 
@@ -126,10 +123,10 @@ class PowerflowService:
         for key, unit in units.items():
             await self.event_bus.emit(
                 MQTTPublishEvent(
-                    unit.inverter.mqtt_topic(
-                        self.settings.modbus.has_followers),
+                    unit.inverter.mqtt_topic(self.settings.modbus.has_followers),
                     unit.inverter,
-                    self.settings.modbus.retain)
+                    self.settings.modbus.retain,
+                )
             )
 
             for key, component in {**unit.meters, **unit.batteries}.items():
@@ -137,7 +134,7 @@ class PowerflowService:
                     MQTTPublishEvent(
                         f"{component.mqtt_topic(self.settings.modbus.has_followers)}/{key.lower()}",
                         component,
-                        self.settings.modbus.retain
+                        self.settings.modbus.retain,
                     )
                 )
 
@@ -147,7 +144,7 @@ class PowerflowService:
                 MQTTPublishEvent(
                     wallbox_data.mqtt_topic(),
                     wallbox_data,
-                    self.settings.wallbox.retain
+                    self.settings.wallbox.retain,
                 )
             )
 
@@ -156,18 +153,14 @@ class PowerflowService:
             for pf in powerflows.values():
                 await self.event_bus.emit(
                     MQTTPublishEvent(
-                        pf.mqtt_topic(),
-                        pf,
-                        self.settings.powerflow.retain
+                        pf.mqtt_topic(), pf, self.settings.powerflow.retain
                     )
                 )
         else:
             powerflow = powerflows["leader"]
             await self.event_bus.emit(
                 MQTTPublishEvent(
-                    powerflow.mqtt_topic(),
-                    powerflow,
-                    self.settings.powerflow.retain
+                    powerflow.mqtt_topic(), powerflow, self.settings.powerflow.retain
                 )
             )
 
@@ -187,7 +180,10 @@ class PowerflowService:
             for battery in batteries_data.values():
                 points.append(battery.prepare_point())
 
-            await self.influxdb.write_points(points)
+            try:
+                await self.influxdb.write_points(points)
+            except Exception:
+                pass
 
     async def close(self) -> None:
         if self.settings.is_wallbox_configured:
