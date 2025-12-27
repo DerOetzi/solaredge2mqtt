@@ -4,6 +4,8 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from aiohttp import ClientError
+from influxdb_client.rest import ApiException
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.influxdb import InfluxDBAsync
@@ -206,6 +208,66 @@ class TestInfluxDBAsyncWrite:
         mock_write_api.write.assert_called_once_with(
             bucket="test_bucket", record=mock_points
         )
+
+    @pytest.mark.asyncio
+    async def test_write_points_handles_exception(
+        self, influxdb_settings, price_settings, mock_influxdb_client
+    ):
+        """Test write_points handles exceptions gracefully."""
+        mock_sync, mock_async = mock_influxdb_client
+
+        mock_write_api = MagicMock()
+        mock_write_api.write = AsyncMock(
+            side_effect=ApiException("Connection failed")
+        )
+        mock_async.write_api = MagicMock(return_value=mock_write_api)
+
+        influxdb = InfluxDBAsync(influxdb_settings, price_settings)
+        influxdb.client_async = mock_async
+
+        mock_points = [MagicMock()]
+
+        # Should not raise exception and should log error
+        with patch("solaredge2mqtt.core.influxdb.logger") as mock_logger:
+            await influxdb.write_points(mock_points)
+
+            # Verify the write was attempted
+            mock_write_api.write.assert_called_once()
+
+            # Verify error was logged
+            mock_logger.error.assert_called_once()
+            call_args = mock_logger.error.call_args[0][0]
+            assert "Failed to write points to InfluxDB" in call_args
+
+    @pytest.mark.asyncio
+    async def test_write_point_handles_exception(
+        self, influxdb_settings, price_settings, mock_influxdb_client
+    ):
+        """Test write_point handles exceptions gracefully."""
+        mock_sync, mock_async = mock_influxdb_client
+
+        mock_write_api = MagicMock()
+        mock_write_api.write = AsyncMock(
+            side_effect=ClientError("Connection timeout")
+        )
+        mock_async.write_api = MagicMock(return_value=mock_write_api)
+
+        influxdb = InfluxDBAsync(influxdb_settings, price_settings)
+        influxdb.client_async = mock_async
+
+        mock_point = MagicMock()
+
+        # Should not raise exception and should log error
+        with patch("solaredge2mqtt.core.influxdb.logger") as mock_logger:
+            await influxdb.write_point(mock_point)
+
+            # Verify the write was attempted
+            mock_write_api.write.assert_called_once()
+
+            # Verify error was logged
+            mock_logger.error.assert_called_once()
+            call_args = mock_logger.error.call_args[0][0]
+            assert "Failed to write points to InfluxDB" in call_args
 
 
 class TestInfluxDBAsyncQuery:
