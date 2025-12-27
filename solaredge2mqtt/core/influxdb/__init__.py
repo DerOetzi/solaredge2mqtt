@@ -87,31 +87,19 @@ class InfluxDBAsync:
             minute=0, second=0, microsecond=0)
 
         logger.info("Aggregate powerflow and energy raw data")
-        try:
-            aggregate_query = self._get_flux_query(
-                "aggregate",
-                {"PRICE_IN": self.prices.price_in, "PRICE_OUT": self.prices.price_out},
-            )
-            await self.query_api.query(aggregate_query)
-        except (InfluxDBError, ApiException, ClientError) as ex:
-            logger.error(
-                f"Failed to aggregate data in InfluxDB at "
-                f"{self.settings.host}:{self.settings.port}: {ex}"
-            )
+        aggregate_query = self._get_flux_query(
+            "aggregate",
+            {"PRICE_IN": self.prices.price_in, "PRICE_OUT": self.prices.price_out},
+        )
+        await self.query_api.query(aggregate_query)
 
         logger.info("Apply retention on raw data")
-        try:
-            retention_time = now - timedelta(hours=self.settings.retention_raw)
-            self.delete_from_measurements(
-                datetime(1970, 1, 1, tzinfo=timezone.utc),
-                retention_time,
-                ["powerflow_raw", "battery_raw"],
-            )
-        except (InfluxDBError, ApiException, ClientError) as ex:
-            logger.error(
-                f"Failed to delete old data from InfluxDB at "
-                f"{self.settings.host}:{self.settings.port}: {ex}"
-            )
+        retention_time = now - timedelta(hours=self.settings.retention_raw)
+        self.delete_from_measurements(
+            datetime(1970, 1, 1, tzinfo=timezone.utc),
+            retention_time,
+            ["powerflow_raw", "battery_raw"],
+        )
 
         if self.event_bus:
             await self.event_bus.emit(InfluxDBAggregatedEvent())
