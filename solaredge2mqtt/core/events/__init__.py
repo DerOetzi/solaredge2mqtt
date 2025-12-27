@@ -55,7 +55,6 @@ class EventBus:
             self._subscribed_events.pop(event_key, None)
 
     async def emit(self, event: BaseEvent) -> None:
-        # Check if a critical error occurred in a background task
         if self._critical_error is not None:
             error = self._critical_error
             self._critical_error = None
@@ -97,18 +96,26 @@ class EventBus:
 
     def _handle_task_done(self, task: asyncio.Task) -> None:
         self._tasks.discard(task)
+
         if task.cancelled():
             return
+
         exc = task.exception()
-        if exc is not None and isinstance(exc, MqttError):
-            # Store critical error to be raised on next emit, but log if one is already set
+        if exc is None:
+            return
+
+        if isinstance(exc, MqttError):
             if self._critical_error is None:
                 self._critical_error = exc
             else:
                 logger.warning(
-                    "Additional critical error occurred before previous was handled: {exc}",
-                    exc=repr(exc)
+                    "New critical error occurred before previous was handled: {exc}",
+                    exc=repr(exc),
                 )
+            return
+
+        logger.error("Unhandled listener error: {exc}", exc=repr(exc))
+
     async def cancel_tasks(self) -> None:
         tasks = list(self._tasks)
         for t in tasks:

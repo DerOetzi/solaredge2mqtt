@@ -35,19 +35,20 @@ if FORECAST_AVAILABLE:
 LOCAL_TZ = get_localzone_name()
 
 
+async def _run_service() -> None:
+    service = Service()
+    await service.run()
+
+
 def run():
     try:
-        service = Service()
-        loop = asyncio.get_event_loop()
-        loop.add_signal_handler(signal.SIGINT, service.cancel)
-        loop.add_signal_handler(signal.SIGTERM, service.cancel)
-        loop.run_until_complete(service.main_loop())
+        asyncio.run(_run_service())
     except ConfigurationException:
         logger.error("Configuration error")
     except asyncio.CancelledError:
         logger.debug("Service cancelled")
-    finally:
-        loop.close()
+    except KeyboardInterrupt:
+        logger.info("Service interrupted by user")
 
 
 class Service:
@@ -63,6 +64,7 @@ class Service:
 
         self.cancel_request = asyncio.Event()
         self.loops: set[asyncio.Task] = set()
+        self._run_task: asyncio.Task | None = None
 
         self.influxdb: InfluxDBAsync | None = (
             InfluxDBAsync(self.settings.influxdb,
@@ -93,8 +95,9 @@ class Service:
             else None
         )
 
+        self.forecast: ForecastService | None = None
         if FORECAST_AVAILABLE:
-            self.forecast: ForecastService | None = (
+            self.forecast = (
                 ForecastService(
                     self.settings.forecast,
                     self.settings.location,
@@ -114,12 +117,31 @@ class Service:
             else None
         )
 
+    async def run(self) -> None:
+        loop = asyncio.get_running_loop()
+        self._run_task = asyncio.current_task()
+        self._register_signal_handlers(loop)
+        try:
+            await self.main_loop()
+        finally:
+            await self.shutdown()
+
+    def _register_signal_handlers(self, loop: asyncio.AbstractEventLoop) -> None:
+        for signum in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(signum, self.cancel)
+
     def cancel(self):
         logger.info("Stopping SolarEdge2MQTT service...")
 
+        if self.cancel_request.is_set():
+            return
+
         self.cancel_request.set()
 
-        for task in list(self.loops):
+        if self._run_task is not None:
+            self._run_task.cancel()
+
+        for task in self.loops:
             task.cancel()
 
     async def main_loop(self):
@@ -152,6 +174,8 @@ class Service:
 
                     await asyncio.gather(*self.loops)
             except MqttError:
+                if self.cancel_request.is_set():
+                    break
                 logger.error("MQTT error, reconnecting in 5 seconds...")
             except asyncio.CancelledError:
                 logger.debug("Loops cancelled")
@@ -164,24 +188,44 @@ class Service:
 
             await asyncio.sleep(5)
 
+    async def _stop_loops(self) -> None:
+        if not self.loops:
+            return
+
+        tasks = list(self.loops)
+        for task in tasks:
+            task.cancel()
+
+        await asyncio.gather(*tasks, return_exceptions=True)
+        self.loops.clear()
+
     async def finalize(self):
-        try:
-            await self.mqtt.publish_status_offline()
-        except MqttError:
-            pass
+        await self._stop_loops()
+
+        if self.mqtt is not None:
+            try:
+                await self.mqtt.publish_status_offline()
+            except MqttError:
+                logger.debug(
+                    "Unable to publish offline status during cleanup"
+                )
+            finally:
+                self.mqtt = None
 
         await self.event_bus.cancel_tasks()
 
+    async def shutdown(self) -> None:
+        await self.finalize()
         await self.close()
 
     def _start_mqtt_listener(self):
         task = asyncio.create_task(self.mqtt.listen())
         self.loops.add(task)
-        task.add_done_callback(self.loops.remove)
+        task.add_done_callback(self.loops.discard)
 
         task = asyncio.create_task(self.mqtt.process_queue())
         self.loops.add(task)
-        task.add_done_callback(self.loops.remove)
+        task.add_done_callback(self.loops.discard)
 
     def schedule_loop(
         self,
@@ -194,7 +238,7 @@ class Service:
             self.run_loop(interval_in_seconds, handles, delay_start, args)
         )
         self.loops.add(loop)
-        loop.add_done_callback(self.loops.remove)
+        loop.add_done_callback(self.loops.discard)
 
     async def run_loop(
         self,

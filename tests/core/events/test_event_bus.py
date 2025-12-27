@@ -3,10 +3,23 @@
 import asyncio
 
 import pytest
+from aiomqtt import MqttError
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.events.events import BaseEvent
 from solaredge2mqtt.core.exceptions import InvalidDataException
+
+
+class LoggerSpy:
+    def __init__(self):
+        self.warnings = []
+        self.errors = []
+
+    def warning(self, message, **kwargs):
+        self.warnings.append((message, kwargs))
+
+    def error(self, message, **kwargs):
+        self.errors.append((message, kwargs))
 
 
 class TestEvent(BaseEvent):
@@ -167,6 +180,69 @@ class TestEventBus:
         event_bus.subscribe(AwaitingTestEvent, failing_listener)
         event = AwaitingTestEvent()
         await event_bus.emit(event)  # Should not raise
+
+    @pytest.mark.asyncio
+    async def test_emit_raises_stored_critical_error(self):
+        bus = EventBus()
+
+        async def failing():
+            raise MqttError("boom")
+
+        task = asyncio.create_task(failing())
+        await asyncio.gather(task, return_exceptions=True)
+        bus._tasks.add(task)
+        bus._handle_task_done(task)
+
+        with pytest.raises(MqttError):
+            await bus.emit(TestEvent())
+
+        assert bus._critical_error is None
+
+    @pytest.mark.asyncio
+    async def test_handle_task_done_logs_second_critical_error(
+        self, monkeypatch
+    ):
+        bus = EventBus()
+        logger_spy = LoggerSpy()
+        monkeypatch.setattr(
+            "solaredge2mqtt.core.events.logger", logger_spy
+        )
+
+        async def failing(error):
+            raise error
+
+        first = asyncio.create_task(failing(MqttError("first")))
+        await asyncio.gather(first, return_exceptions=True)
+        bus._tasks.add(first)
+        bus._handle_task_done(first)
+
+        second = asyncio.create_task(failing(MqttError("second")))
+        await asyncio.gather(second, return_exceptions=True)
+        bus._tasks.add(second)
+        bus._handle_task_done(second)
+
+        assert bus._critical_error is not None
+        assert logger_spy.warnings
+
+    @pytest.mark.asyncio
+    async def test_handle_task_done_logs_unhandled_error(
+        self, monkeypatch
+    ):
+        bus = EventBus()
+        logger_spy = LoggerSpy()
+        monkeypatch.setattr(
+            "solaredge2mqtt.core.events.logger", logger_spy
+        )
+
+        async def failing():
+            raise ValueError("unexpected")
+
+        task = asyncio.create_task(failing())
+        await asyncio.gather(task, return_exceptions=True)
+        bus._tasks.add(task)
+        bus._handle_task_done(task)
+
+        assert logger_spy.errors
 
     @pytest.mark.asyncio
     async def test_cancel_tasks(self, event_bus):
