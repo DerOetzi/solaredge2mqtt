@@ -26,7 +26,7 @@ class TestMonitoringSettings:
             retain=True,
         )
 
-        assert settings.site_id == "12345"
+        assert settings.site_id.get_secret_value() == "12345"
         assert settings.username == "test_user"
         assert settings.password.get_secret_value() == "test_password"
         assert settings.retain is True
