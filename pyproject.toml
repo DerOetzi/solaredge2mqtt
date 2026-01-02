@@ -76,7 +76,7 @@ version_scheme = "post-release"
 local_scheme = "node-and-date"
 
 [tool.ruff]
-line-length = 88
+line-length = 79
 target-version = "py312"
 
 [tool.ruff.lint]
