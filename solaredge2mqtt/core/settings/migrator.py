@@ -1,4 +1,3 @@
-
 from os import environ, listdir, makedirs, path
 from typing import Any, get_args, get_origin
 
@@ -42,7 +41,9 @@ class EnvironmentReader:
             for filename in listdir(DOCKER_SECRETS_DIR):
                 if cls._has_prefix(filename):
                     with open(
-                        path.join(DOCKER_SECRETS_DIR, filename), "r", encoding="utf-8"
+                        path.join(DOCKER_SECRETS_DIR, filename),
+                        "r",
+                        encoding="utf-8",
                     ) as f:
                         yield filename, f.read().strip()
 
@@ -135,8 +136,8 @@ class ConfigurationMigrator:
                             secret_fields[key].extend(fields)
 
             is_secret_annotation = annotation is SecretStr or (
-                isinstance(annotation, type) and issubclass(
-                    annotation, SecretStr)
+                isinstance(annotation, type)
+                and issubclass(annotation, SecretStr)
             )
             if is_secret_annotation:
                 parent_key = prefix or field_name.split(".")[0]
@@ -145,9 +146,12 @@ class ConfigurationMigrator:
                 secret_fields[parent_key].append(field_name)
                 continue
 
-            if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+            if isinstance(annotation, type) and issubclass(
+                annotation, BaseModel
+            ):
                 nested_secrets = self._identify_secret_fields(
-                    annotation, field_path)
+                    annotation, field_path
+                )
                 for key, fields in nested_secrets.items():
                     if key not in secret_fields:
                         secret_fields[key] = []
@@ -163,14 +167,17 @@ class ConfigurationMigrator:
         try:
             validated_model = self.model_class(**parsed_data)
             logger.info(
-                "Environment variables validated successfully with Pydantic model"
+                "Environment variables validated successfully with "
+                "Pydantic model"
             )
             return validated_model
         except ValidationError as e:
             logger.error(f"Validation failed: {e}")
             raise
 
-    def _parse_environment_to_dict(self, env_data: dict[str, str]) -> dict[str, Any]:
+    def _parse_environment_to_dict(
+        self, env_data: dict[str, str]
+    ) -> dict[str, Any]:
         config_data = {}
 
         for key, value in env_data.items():
@@ -194,13 +201,13 @@ class ConfigurationMigrator:
                 return False
             return bool(value)
 
-        if target_type == int or target_type is int:
+        if target_type is int:
             try:
                 return int(value)
             except ValueError:
                 return value
 
-        if target_type == float or target_type is float:
+        if target_type is float:
             try:
                 return float(value)
             except ValueError:
@@ -231,7 +238,7 @@ class ConfigurationMigrator:
     def _get_or_initialize_nested_container(
         container: dict, key: str, i: int
     ) -> tuple[str, int | str, dict | list]:
-        prefix, idx = key[: i + 1], key[i + 1:]
+        prefix, idx = key[: i + 1], key[i + 1 :]
         if idx.isdigit():
             key, idx = prefix, int(idx)
             if key not in container or not isinstance(container[key], list):
@@ -274,8 +281,9 @@ class ConfigurationMigrator:
 
         config_data = self._ensure_proper_types(config_data, model)
 
-        self._write_yaml_files(config_data, secrets_data,
-                               config_file, secrets_file)
+        self._write_yaml_files(
+            config_data, secrets_data, config_file, secrets_file
+        )
 
     def _ensure_proper_types(self, data: dict, model: BaseModel) -> dict:
         result = {}
@@ -284,7 +292,9 @@ class ConfigurationMigrator:
                 field_info = model.model_fields[key]
                 annotation = field_info.annotation
 
-                if isinstance(value, dict) and hasattr(annotation, "model_fields"):
+                if isinstance(value, dict) and hasattr(
+                    annotation, "model_fields"
+                ):
                     result[key] = self._ensure_proper_types(value, annotation)
                 elif isinstance(value, list):
                     result[key] = value
@@ -330,7 +340,9 @@ class ConfigurationMigrator:
 
         return config_data, secrets_data
 
-    def extract_from_environment(self) -> tuple[dict[str, Any], dict[str, Any]]:
+    def extract_from_environment(
+        self,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
         env_data = EnvironmentReader.read_all()
         parsed_data = self._parse_environment_to_dict(env_data)
 
@@ -338,7 +350,9 @@ class ConfigurationMigrator:
             validated_model = self.model_class(**parsed_data)
             validated_data = validated_model.model_dump()
             config_data, secrets_data = self._extract_secrets(validated_data)
-            config_data = self._ensure_proper_types(config_data, validated_model)
+            config_data = self._ensure_proper_types(
+                config_data, validated_model
+            )
             return config_data, secrets_data
         except ValidationError as e:
             logger.error(
@@ -353,8 +367,9 @@ class ConfigurationMigrator:
         config_file: str,
         secrets_file: str,
     ) -> None:
-        self._write_yaml_files(config_data, secrets_data,
-                               config_file, secrets_file)
+        self._write_yaml_files(
+            config_data, secrets_data, config_file, secrets_file
+        )
 
     def _write_yaml_files(
         self,
@@ -381,7 +396,8 @@ class ConfigurationMigrator:
             logger.info(f"Configuration written to {config_file}")
         except Exception as e:
             logger.error(
-                f"Error writing configuration file {config_file}: {e}")
+                f"Error writing configuration file {config_file}: {e}"
+            )
             raise
 
         if secrets_data:
