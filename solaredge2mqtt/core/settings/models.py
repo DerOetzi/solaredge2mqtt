@@ -4,9 +4,14 @@ from solaredge2mqtt.core.influxdb.settings import InfluxDBSettings
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.logging.models import LoggingLevelEnum
 from solaredge2mqtt.core.mqtt.settings import MQTTSettings
-from solaredge2mqtt.services.energy.settings import EnergySettings, PriceSettings
+from solaredge2mqtt.services.energy.settings import (
+    EnergySettings,
+    PriceSettings,
+)
 from solaredge2mqtt.services.forecast.settings import ForecastSettings
-from solaredge2mqtt.services.homeassistant.settings import HomeAssistantSettings
+from solaredge2mqtt.services.homeassistant.settings import (
+    HomeAssistantSettings,
+)
 from solaredge2mqtt.services.modbus.settings import ModbusSettings
 from solaredge2mqtt.services.monitoring.settings import MonitoringSettings
 from solaredge2mqtt.services.powerflow.settings import PowerflowSettings
@@ -69,7 +74,8 @@ class ServiceSettings(BaseModel):
 
         if is_configured and not self.is_location_configured:
             logger.warning(
-                "Weather settings are configured but location is not configured."
+                "Weather settings are configured but location is not "
+                "configured."
             )
             is_configured = False
 
@@ -77,17 +83,21 @@ class ServiceSettings(BaseModel):
 
     @property
     def is_forecast_configured(self) -> bool:
-        is_configured = self.forecast is not None and self.forecast.is_configured
+        is_configured = (
+            self.forecast is not None and self.forecast.is_configured
+        )
 
         if is_configured and not self.is_location_configured:
             logger.warning(
-                "Forecast settings are configured but location is not configured."
+                "Forecast settings are configured but location is not "
+                "configured."
             )
             is_configured = False
 
         if is_configured and not self.is_weather_configured:
             logger.warning(
-                "Forecast settings are configured but weather is not configured."
+                "Forecast settings are configured but weather is not "
+                "configured."
             )
             is_configured = False
 
@@ -95,4 +105,7 @@ class ServiceSettings(BaseModel):
 
     @property
     def is_homeassistant_configured(self) -> bool:
-        return self.homeassistant is not None and self.homeassistant.is_configured
+        return (
+            self.homeassistant is not None
+            and self.homeassistant.is_configured
+        )

@@ -101,63 +101,70 @@ class ConfigurationMigrator:
     def __init__(self, model_class: type[BaseModel]):
         self.model_class = model_class
         self.secret_fields = self._identify_secret_fields(model_class)
-    
-    def _is_secret_str_type(self, annotation: Any) -> bool:
-        return annotation is SecretStr or (isinstance(annotation, type) and issubclass(annotation, SecretStr))
 
-    def _add_secret_field(self, secret_fields: dict[str, list[str]], parent_key: str, field_name: str) -> None:
-        if parent_key not in secret_fields:
-            secret_fields[parent_key] = []
-        secret_fields[parent_key].append(field_name)
+    def _identify_secret_fields(
+        self, model: type[BaseModel], prefix: str = ""
+    ) -> dict[str, list[str]]:
+        secret_fields: dict[str, list[str]] = {}
 
-    def _merge_nested_secrets(self, secret_fields: dict[str, list[str]], nested_secrets: dict[str, list[str]]) -> None:
-        for key, fields in nested_secrets.items():
-            if key not in secret_fields:
-                secret_fields[key] = []
-            secret_fields[key].extend(fields)
-
-    def _process_union_type(self, secret_fields: dict[str, list[str]], args: tuple, field_name: str, field_path: str, prefix: str) -> None:
-        for arg in args:
-            if self._is_secret_str_type(arg):
-                parent_key = prefix if prefix else field_name.split(".")[0]
-                self._add_secret_field(secret_fields, parent_key, field_name)
-                break
-            elif isinstance(arg, type) and issubclass(arg, BaseModel):
-                nested_secrets = self._identify_secret_fields(arg, field_path)
-                self._merge_nested_secrets(secret_fields, nested_secrets)
-
-    def _process_field_annotation(self, secret_fields: dict[str, list[str]], annotation: Any, field_name: str, field_path: str, prefix: str) -> None:
-        if self._is_secret_str_type(annotation):
-            parent_key = prefix if prefix else field_name.split(".")[0]
-            self._add_secret_field(secret_fields, parent_key, field_name)
-        elif isinstance(annotation, type) and issubclass(annotation, BaseModel):
-            nested_secrets = self._identify_secret_fields(annotation, field_path)
-            self._merge_nested_secrets(secret_fields, nested_secrets)
-
-    def _identify_secret_fields(self, model: type[BaseModel], prefix: str = "") -> dict[str, list[str]]:
-        secret_fields = {}
-        
         for field_name, field_info in model.model_fields.items():
             field_path = f"{prefix}.{field_name}" if prefix else field_name
             annotation = field_info.annotation
-            
+
             origin = get_origin(annotation)
             if origin is not None:
                 args = get_args(annotation)
-                self._process_union_type(secret_fields, args, field_name, field_path, prefix)
-            else:
-                self._process_field_annotation(secret_fields, annotation, field_name, field_path, prefix)
-        
+                for arg in args:
+                    is_secret_arg = arg is SecretStr or (
+                        isinstance(arg, type) and issubclass(arg, SecretStr)
+                    )
+                    if is_secret_arg:
+                        parent_key = prefix or field_name.split(".")[0]
+                        if parent_key not in secret_fields:
+                            secret_fields[parent_key] = []
+                        secret_fields[parent_key].append(field_name)
+                        break
+
+                    if isinstance(arg, type) and issubclass(arg, BaseModel):
+                        nested_secrets = self._identify_secret_fields(
+                            arg, field_path
+                        )
+                        for key, fields in nested_secrets.items():
+                            if key not in secret_fields:
+                                secret_fields[key] = []
+                            secret_fields[key].extend(fields)
+
+            is_secret_annotation = annotation is SecretStr or (
+                isinstance(annotation, type) and issubclass(
+                    annotation, SecretStr)
+            )
+            if is_secret_annotation:
+                parent_key = prefix or field_name.split(".")[0]
+                if parent_key not in secret_fields:
+                    secret_fields[parent_key] = []
+                secret_fields[parent_key].append(field_name)
+                continue
+
+            if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+                nested_secrets = self._identify_secret_fields(
+                    annotation, field_path)
+                for key, fields in nested_secrets.items():
+                    if key not in secret_fields:
+                        secret_fields[key] = []
+                    secret_fields[key].extend(fields)
+
         return secret_fields
 
     def migrate(self) -> BaseModel:
         env_data = EnvironmentReader.read_all()
-        
+
         parsed_data = self._parse_environment_to_dict(env_data)
-        
+
         try:
             validated_model = self.model_class(**parsed_data)
-            logger.info("Environment variables validated successfully with Pydantic model")
+            logger.info(
+                "Environment variables validated successfully with Pydantic model"
+            )
             return validated_model
         except ValidationError as e:
             logger.error(f"Validation failed: {e}")
@@ -169,36 +176,36 @@ class ConfigurationMigrator:
         for key, value in env_data.items():
             key = key.lower().strip()[8:]
             subkeys = key.split("__")
-            
+
             typed_value = value.strip()
             self._insert_nested_key(config_data, subkeys, typed_value)
 
         return config_data
-    
+
     def _convert_to_type(self, value: str, target_type: type) -> Any:
         if not value:
             return value
-        
-        if target_type == bool or target_type is bool:
+
+        if target_type is bool:
             value_lower = value.lower()
             if value_lower in ("true", "yes", "on"):
                 return True
             if value_lower in ("false", "no", "off"):
                 return False
             return bool(value)
-        
+
         if target_type == int or target_type is int:
             try:
                 return int(value)
             except ValueError:
                 return value
-        
+
         if target_type == float or target_type is float:
             try:
                 return float(value)
             except ValueError:
                 return value
-        
+
         return value
 
     def _insert_nested_key(
@@ -224,7 +231,7 @@ class ConfigurationMigrator:
     def _get_or_initialize_nested_container(
         container: dict, key: str, i: int
     ) -> tuple[str, int | str, dict | list]:
-        prefix, idx = key[: i + 1], key[i + 1 :]
+        prefix, idx = key[: i + 1], key[i + 1:]
         if idx.isdigit():
             key, idx = prefix, int(idx)
             if key not in container or not isinstance(container[key], list):
@@ -262,21 +269,22 @@ class ConfigurationMigrator:
         self, model: BaseModel, config_file: str, secrets_file: str
     ) -> None:
         validated_data = model.model_dump()
-        
+
         config_data, secrets_data = self._extract_secrets(validated_data)
-        
+
         config_data = self._ensure_proper_types(config_data, model)
-        
-        self._write_yaml_files(config_data, secrets_data, config_file, secrets_file)
-    
+
+        self._write_yaml_files(config_data, secrets_data,
+                               config_file, secrets_file)
+
     def _ensure_proper_types(self, data: dict, model: BaseModel) -> dict:
         result = {}
         for key, value in data.items():
             if key in model.model_fields:
                 field_info = model.model_fields[key]
                 annotation = field_info.annotation
-                
-                if isinstance(value, dict) and hasattr(annotation, 'model_fields'):
+
+                if isinstance(value, dict) and hasattr(annotation, "model_fields"):
                     result[key] = self._ensure_proper_types(value, annotation)
                 elif isinstance(value, list):
                     result[key] = value
@@ -288,32 +296,13 @@ class ConfigurationMigrator:
                     result[key] = value
                 elif isinstance(value, SecretReference):
                     result[key] = value
-                elif hasattr(value, 'value'):
+                elif hasattr(value, "value"):
                     result[key] = value.value
                 else:
                     result[key] = value
             else:
                 result[key] = value
         return result
-
-    def _get_secret_value(self, secret_value: Any) -> Any:
-        if isinstance(secret_value, SecretStr):
-            return secret_value.get_secret_value()
-        return secret_value
-
-    def _extract_field_secret(self, section_data: dict, field: str, section: str, secrets_data: dict) -> None:
-        if field in section_data:
-            secret_key = f"{section}_{field}"
-            secret_value = section_data.pop(field)
-            secrets_data[secret_key] = self._get_secret_value(secret_value)
-            section_data[field] = SecretReference(secret_key)
-
-    def _extract_section_secrets(self, config_data: dict, section: str, fields: list[str], secrets_data: dict) -> None:
-        if section in config_data:
-            section_data = config_data[section]
-            if isinstance(section_data, dict):
-                for field in fields:
-                    self._extract_field_secret(section_data, field, section, secrets_data)
 
     def _extract_secrets(self, validated_data: dict) -> tuple[dict, dict]:
         import copy
@@ -322,14 +311,29 @@ class ConfigurationMigrator:
         secrets_data = {}
 
         for section, fields in self.secret_fields.items():
-            self._extract_section_secrets(config_data, section, fields, secrets_data)
+            if section in config_data:
+                section_data = config_data[section]
+                if isinstance(section_data, dict):
+                    for field in fields:
+                        if field in section_data:
+                            secret_key = f"{section}_{field}"
+                            secret_value = section_data.pop(field)
+
+                            if isinstance(secret_value, SecretStr):
+                                secrets_data[secret_key] = (
+                                    secret_value.get_secret_value()
+                                )
+                            else:
+                                secrets_data[secret_key] = secret_value
+
+                            section_data[field] = SecretReference(secret_key)
 
         return config_data, secrets_data
 
     def extract_from_environment(self) -> tuple[dict[str, Any], dict[str, Any]]:
         env_data = EnvironmentReader.read_all()
         parsed_data = self._parse_environment_to_dict(env_data)
-        
+
         try:
             validated_model = self.model_class(**parsed_data)
             validated_data = validated_model.model_dump()
@@ -337,9 +341,11 @@ class ConfigurationMigrator:
             config_data = self._ensure_proper_types(config_data, validated_model)
             return config_data, secrets_data
         except ValidationError as e:
-            logger.error(f"Validation failed during extract_from_environment: {e}")
+            logger.error(
+                f"Validation failed during extract_from_environment: {e}"
+            )
             raise
-    
+
     def write_yaml_files(
         self,
         config_data: dict,
@@ -347,8 +353,9 @@ class ConfigurationMigrator:
         config_file: str,
         secrets_file: str,
     ) -> None:
-        self._write_yaml_files(config_data, secrets_data, config_file, secrets_file)
-    
+        self._write_yaml_files(config_data, secrets_data,
+                               config_file, secrets_file)
+
     def _write_yaml_files(
         self,
         config_data: dict,
@@ -372,8 +379,9 @@ class ConfigurationMigrator:
                     Dumper=ConfigDumper,
                 )
             logger.info(f"Configuration written to {config_file}")
-        except (OSError, yaml.YAMLError) as e:
-            logger.error(f"Error writing configuration file {config_file}: {e}")
+        except Exception as e:
+            logger.error(
+                f"Error writing configuration file {config_file}: {e}")
             raise
 
         if secrets_data:
@@ -391,6 +399,6 @@ class ConfigurationMigrator:
                     f"IMPORTANT: {secrets_file} contains sensitive data. "
                     f"Keep it secure and do not commit it to version control!"
                 )
-            except (OSError, yaml.YAMLError) as e:
+            except Exception as e:
                 logger.error(f"Error writing secrets file {secrets_file}: {e}")
                 raise

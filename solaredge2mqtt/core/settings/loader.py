@@ -1,8 +1,8 @@
-import sys
 from os import path
 from typing import Any
 
 import yaml
+from pydantic import ValidationError
 
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.settings.migrator import ConfigurationMigrator
@@ -13,8 +13,10 @@ CONFIG_DIR = "config"
 CONFIG_FILE = "config/configuration.yml"
 SECRETS_FILE = "config/secrets.yml"
 
+
 class SecretLoader(yaml.SafeLoader):
     secrets: dict[str, Any] = {}
+
 
 def secret_constructor(loader: SecretLoader, node: yaml.ScalarNode) -> Any:
     secret_key = loader.construct_scalar(node)
@@ -31,21 +33,23 @@ def secret_constructor(loader: SecretLoader, node: yaml.ScalarNode) -> Any:
             f"Please ensure the secret is defined."
         )
 
+
 # Register the !secret constructor
 SecretLoader.add_constructor("!secret", secret_constructor)
+
 
 class ConfigurationLoader:
     @staticmethod
     def load_configuration(override_data: dict[str, any] = None):
         config_exists = path.exists(CONFIG_FILE)
-        
+
         if not config_exists:
             logger.info(
                 f"{CONFIG_FILE} not found. "
                 "Performing automatic migration from environment variables."
             )
             return ConfigurationLoader._migrate_from_environment()
-        
+
         if ConfigurationLoader._is_file_empty(CONFIG_FILE):
             logger.info(
                 f"{CONFIG_FILE} is empty. "
@@ -54,7 +58,9 @@ class ConfigurationLoader:
             return ConfigurationLoader._migrate_from_environment()
 
         if path.exists(SECRETS_FILE):
-            SecretLoader.secrets = ConfigurationLoader._load_yaml_file(SECRETS_FILE)
+            SecretLoader.secrets = ConfigurationLoader._load_yaml_file(
+                SECRETS_FILE
+            )
             logger.info(f"Loaded secrets from {SECRETS_FILE}")
 
         config_data = ConfigurationLoader._load_yaml_file(
@@ -63,7 +69,9 @@ class ConfigurationLoader:
         logger.info(f"Loaded configuration from {CONFIG_FILE}")
 
         if override_data:
-            config_data = ConfigurationLoader._deep_merge(config_data, override_data)
+            config_data = ConfigurationLoader._deep_merge(
+                config_data, override_data
+            )
 
         return ServiceSettings(**config_data)
 
@@ -80,7 +88,7 @@ class ConfigurationLoader:
     def _load_yaml_file(
         filepath: str, use_secret_loader: bool = False
     ) -> dict[str, any]:
-        
+
         try:
             with open(filepath, "r", encoding="utf-8") as f:
                 if use_secret_loader:
@@ -98,21 +106,22 @@ class ConfigurationLoader:
     @staticmethod
     def _migrate_from_environment():
         from solaredge2mqtt.core.settings.models import ServiceSettings
-        
+
         migrator = ConfigurationMigrator(model_class=ServiceSettings)
-        
+
         try:
             validated_model = migrator.migrate()
-            
+
             migrator.export_to_yaml(validated_model, CONFIG_FILE, SECRETS_FILE)
-            
+
             logger.info(
-                f"Migration complete. Created {CONFIG_FILE} and {SECRETS_FILE}. "
-                f"Configuration validated through Pydantic model."
+                f"Migration complete. Created {CONFIG_FILE} and "
+                f"{SECRETS_FILE}. Configuration validated through "
+                f"Pydantic model."
             )
-            
+
             return validated_model
-                
+
         except (ValidationError, OSError, yaml.YAMLError) as e:
             logger.error(
                 f"Migration failed: {e}. "
@@ -122,7 +131,7 @@ class ConfigurationLoader:
 
     @staticmethod
     def _deep_merge(base: dict, override: dict) -> dict:
-        
+
         result = base.copy()
         for key, value in override.items():
             if (
@@ -130,7 +139,9 @@ class ConfigurationLoader:
                 and isinstance(result[key], dict)
                 and isinstance(value, dict)
             ):
-                result[key] = ConfigurationLoader._deep_merge(result[key], value)
+                result[key] = ConfigurationLoader._deep_merge(
+                    result[key], value
+                )
             else:
                 result[key] = value
         return result
