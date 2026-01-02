@@ -24,7 +24,7 @@ class TestConfigurationMigrator:
 
     def test_convert_to_type(self):
         """Test converting string values to appropriate Python types."""
-        migrator = ConfigurationMigrator()
+        migrator = ConfigurationMigrator(ServiceSettings)
         
         # Test boolean conversion
         assert migrator._convert_to_type("true", bool) is True
@@ -61,7 +61,7 @@ class TestConfigurationMigrator:
 
     def test_insert_nested_key_simple(self):
         """Test inserting a simple key-value pair."""
-        migrator = ConfigurationMigrator()
+        migrator = ConfigurationMigrator(ServiceSettings)
         container = {}
 
         migrator._insert_nested_key(container, ["interval"], "5")
@@ -70,7 +70,7 @@ class TestConfigurationMigrator:
 
     def test_insert_nested_key_nested(self):
         """Test inserting nested key-value pairs."""
-        migrator = ConfigurationMigrator()
+        migrator = ConfigurationMigrator(ServiceSettings)
         container = {}
 
         migrator._insert_nested_key(container, ["modbus", "host"], "192.168.1.100")
@@ -80,7 +80,7 @@ class TestConfigurationMigrator:
 
     def test_insert_nested_key_with_array(self):
         """Test inserting nested key-value pairs with array indices."""
-        migrator = ConfigurationMigrator()
+        migrator = ConfigurationMigrator(ServiceSettings)
         container = {}
 
         migrator._insert_nested_key(container, ["meter0"], "true")
@@ -91,7 +91,7 @@ class TestConfigurationMigrator:
 
     def test_extract_secrets(self):
         """Test extracting secrets from configuration."""
-        migrator = ConfigurationMigrator()
+        migrator = ConfigurationMigrator(ServiceSettings)
         config_data = {
             "mqtt": {
                 "broker": "mqtt.example.com",
@@ -103,7 +103,7 @@ class TestConfigurationMigrator:
             "modbus": {"host": "192.168.1.100"},
         }
 
-        secrets_data = migrator._extract_secrets(config_data)
+        config_data, secrets_data = migrator._extract_secrets(config_data)
 
         # Check that secrets were extracted in flat format
         assert "mqtt_password" in secrets_data
@@ -131,13 +131,13 @@ class TestConfigurationMigrator:
 
     def test_extract_secrets_no_sensitive_data(self):
         """Test extracting secrets when there is no sensitive data."""
-        migrator = ConfigurationMigrator()
+        migrator = ConfigurationMigrator(ServiceSettings)
         config_data = {
             "mqtt": {"broker": "mqtt.example.com", "username": "user"},
             "modbus": {"host": "192.168.1.100"},
         }
 
-        secrets_data = migrator._extract_secrets(config_data)
+        config_data, secrets_data = migrator._extract_secrets(config_data)
 
         # Check that no secrets were extracted
         assert secrets_data == {}
@@ -149,7 +149,7 @@ class TestConfigurationMigrator:
 
     def test_write_yaml_files(self):
         """Test writing configuration and secrets to YAML files."""
-        migrator = ConfigurationMigrator()
+        migrator = ConfigurationMigrator(ServiceSettings)
 
         config_data = {
             "interval": 5,
@@ -180,7 +180,7 @@ class TestConfigurationMigrator:
 
     def test_write_yaml_files_no_secrets(self):
         """Test writing configuration when there are no secrets."""
-        migrator = ConfigurationMigrator()
+        migrator = ConfigurationMigrator(ServiceSettings)
 
         config_data = {
             "interval": 5,
@@ -204,7 +204,7 @@ class TestConfigurationMigrator:
 
     def test_yaml_output_format(self):
         """Test YAML output format (no quotes on booleans/secrets)."""
-        migrator = ConfigurationMigrator()
+        migrator = ConfigurationMigrator(ServiceSettings)
 
         config_data = {
             "interval": 5,

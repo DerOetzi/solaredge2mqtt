@@ -316,7 +316,9 @@ class ConfigurationMigrator:
         try:
             validated_model = self.model_class(**parsed_data)
             validated_data = validated_model.model_dump()
-            return self._extract_secrets(validated_data)
+            config_data, secrets_data = self._extract_secrets(validated_data)
+            config_data = self._ensure_proper_types(config_data, validated_model)
+            return config_data, secrets_data
         except ValidationError as e:
             logger.error(f"Validation failed during extract_from_environment: {e}")
             raise
