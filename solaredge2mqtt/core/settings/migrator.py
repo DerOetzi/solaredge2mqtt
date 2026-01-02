@@ -112,52 +112,92 @@ class ConfigurationMigrator:
             field_path = f"{prefix}.{field_name}" if prefix else field_name
             annotation = field_info.annotation
 
-            origin = get_origin(annotation)
-            if origin is not None:
-                args = get_args(annotation)
-                for arg in args:
-                    is_secret_arg = arg is SecretStr or (
-                        isinstance(arg, type) and issubclass(arg, SecretStr)
-                    )
-                    if is_secret_arg:
-                        parent_key = prefix or field_name.split(".")[0]
-                        if parent_key not in secret_fields:
-                            secret_fields[parent_key] = []
-                        secret_fields[parent_key].append(field_name)
-                        break
-
-                    if isinstance(arg, type) and issubclass(arg, BaseModel):
-                        nested_secrets = self._identify_secret_fields(
-                            arg, field_path
-                        )
-                        for key, fields in nested_secrets.items():
-                            if key not in secret_fields:
-                                secret_fields[key] = []
-                            secret_fields[key].extend(fields)
-
-            is_secret_annotation = annotation is SecretStr or (
-                isinstance(annotation, type)
-                and issubclass(annotation, SecretStr)
+            self._process_field_annotation(
+                annotation, field_name, field_path, prefix, secret_fields
             )
-            if is_secret_annotation:
-                parent_key = prefix or field_name.split(".")[0]
-                if parent_key not in secret_fields:
-                    secret_fields[parent_key] = []
-                secret_fields[parent_key].append(field_name)
-                continue
-
-            if isinstance(annotation, type) and issubclass(
-                annotation, BaseModel
-            ):
-                nested_secrets = self._identify_secret_fields(
-                    annotation, field_path
-                )
-                for key, fields in nested_secrets.items():
-                    if key not in secret_fields:
-                        secret_fields[key] = []
-                    secret_fields[key].extend(fields)
 
         return secret_fields
+
+    def _process_field_annotation(
+        self,
+        annotation: Any,
+        field_name: str,
+        field_path: str,
+        prefix: str,
+        secret_fields: dict[str, list[str]],
+    ) -> None:
+        """Process a field annotation to identify secrets."""
+        origin = get_origin(annotation)
+        if origin is not None:
+            self._process_generic_annotation(
+                annotation, field_name, field_path, prefix, secret_fields
+            )
+
+        if self._is_secret_type(annotation):
+            self._add_secret_field(field_name, prefix, secret_fields)
+            return
+
+        if self._is_base_model_type(annotation):
+            self._merge_nested_secrets(annotation, field_path, secret_fields)
+
+    def _process_generic_annotation(
+        self,
+        annotation: Any,
+        field_name: str,
+        field_path: str,
+        prefix: str,
+        secret_fields: dict[str, list[str]],
+    ) -> None:
+        """Process generic type annotations (e.g., Optional, Union)."""
+        args = get_args(annotation)
+        for arg in args:
+            if self._is_secret_type(arg):
+                self._add_secret_field(field_name, prefix, secret_fields)
+                break
+
+            if self._is_base_model_type(arg):
+                self._merge_nested_secrets(arg, field_path, secret_fields)
+
+    @staticmethod
+    def _is_secret_type(annotation: Any) -> bool:
+        """Check if annotation is SecretStr type."""
+        if annotation is SecretStr:
+            return True
+        return isinstance(annotation, type) and issubclass(
+            annotation, SecretStr
+        )
+
+    @staticmethod
+    def _is_base_model_type(annotation: Any) -> bool:
+        """Check if annotation is BaseModel type."""
+        return isinstance(annotation, type) and issubclass(
+            annotation, BaseModel
+        )
+
+    def _add_secret_field(
+        self,
+        field_name: str,
+        prefix: str,
+        secret_fields: dict[str, list[str]],
+    ) -> None:
+        """Add a secret field to the tracking dictionary."""
+        parent_key = prefix or field_name.split(".")[0]
+        if parent_key not in secret_fields:
+            secret_fields[parent_key] = []
+        secret_fields[parent_key].append(field_name)
+
+    def _merge_nested_secrets(
+        self,
+        model: type[BaseModel],
+        field_path: str,
+        secret_fields: dict[str, list[str]],
+    ) -> None:
+        """Merge secrets from nested models."""
+        nested_secrets = self._identify_secret_fields(model, field_path)
+        for key, fields in nested_secrets.items():
+            if key not in secret_fields:
+                secret_fields[key] = []
+            secret_fields[key].extend(fields)
 
     def migrate(self) -> BaseModel:
         env_data = EnvironmentReader.read_all()
@@ -238,19 +278,32 @@ class ConfigurationMigrator:
     def _get_or_initialize_nested_container(
         container: dict, key: str, i: int
     ) -> tuple[str, int | str, dict | list]:
-        prefix, idx = key[: i + 1], key[i + 1:]
+        prefix, idx = key[: i + 1], key[i + 1 :]
         if idx.isdigit():
-            key, idx = prefix, int(idx)
-            if key not in container or not isinstance(container[key], list):
-                container[key] = []
-            while len(container[key]) <= idx:
-                container[key].append({})
-            next_container = container[key][idx]
-        else:
-            if key not in container or not isinstance(container[key], dict):
-                container[key] = {}
-            next_container = container[key]
-        return key, idx, next_container
+            return ConfigurationMigrator._init_list_container(
+                container, prefix, int(idx)
+            )
+        return ConfigurationMigrator._init_dict_container(container, key)
+
+    @staticmethod
+    def _init_list_container(
+        container: dict, key: str, idx: int
+    ) -> tuple[str, int, dict]:
+        """Initialize or get a list-based nested container."""
+        if key not in container or not isinstance(container[key], list):
+            container[key] = []
+        while len(container[key]) <= idx:
+            container[key].append({})
+        return key, idx, container[key][idx]
+
+    @staticmethod
+    def _init_dict_container(
+        container: dict, key: str
+    ) -> tuple[str, str, dict]:
+        """Initialize or get a dict-based nested container."""
+        if key not in container or not isinstance(container[key], dict):
+            container[key] = {}
+        return key, key, container[key]
 
     def _insert_value_in_container(
         self,
@@ -262,15 +315,19 @@ class ConfigurationMigrator:
         next_container: dict | list,
     ) -> None:
         if len(keys) == 1:
-            if isinstance(next_container, dict):
-                if isinstance(container[key], list):
-                    container[key][idx] = value
-                else:
-                    container[key] = value
-            else:
-                container[key] = value
+            self._set_final_value(container, key, idx, value)
         else:
             self._insert_nested_key(next_container, keys[1:], value)
+
+    @staticmethod
+    def _set_final_value(
+        container: dict[str, Any], key: str, idx: int | str, value: Any
+    ) -> None:
+        """Set the final value in the container."""
+        if isinstance(container[key], list):
+            container[key][idx] = value
+        else:
+            container[key] = value
 
     def export_to_yaml(
         self, model: BaseModel, config_file: str, secrets_file: str
@@ -288,31 +345,34 @@ class ConfigurationMigrator:
     def _ensure_proper_types(self, data: dict, model: BaseModel) -> dict:
         result = {}
         for key, value in data.items():
-            if key in model.model_fields:
-                field_info = model.model_fields[key]
-                annotation = field_info.annotation
-
-                if isinstance(value, dict) and hasattr(
-                    annotation, "model_fields"
-                ):
-                    result[key] = self._ensure_proper_types(value, annotation)
-                elif isinstance(value, list):
-                    result[key] = value
-                elif isinstance(value, bool):
-                    result[key] = value
-                elif isinstance(value, int):
-                    result[key] = value
-                elif isinstance(value, float):
-                    result[key] = value
-                elif isinstance(value, SecretReference):
-                    result[key] = value
-                elif hasattr(value, "value"):
-                    result[key] = value.value
-                else:
-                    result[key] = value
-            else:
-                result[key] = value
+            result[key] = self._process_field_value(key, value, model)
         return result
+
+    def _process_field_value(
+        self, key: str, value: Any, model: BaseModel
+    ) -> Any:
+        """Process a single field value to ensure proper type."""
+        if key not in model.model_fields:
+            return value
+
+        field_info = model.model_fields[key]
+        annotation = field_info.annotation
+
+        if isinstance(value, dict) and hasattr(annotation, "model_fields"):
+            return self._ensure_proper_types(value, annotation)
+
+        if self._is_simple_type(value):
+            return value
+
+        if hasattr(value, "value"):
+            return value.value
+
+        return value
+
+    @staticmethod
+    def _is_simple_type(value: Any) -> bool:
+        """Check if value is a simple type that needs no conversion."""
+        return isinstance(value, (list, bool, int, float, SecretReference))
 
     def _extract_secrets(self, validated_data: dict) -> tuple[dict, dict]:
         import copy
@@ -322,23 +382,47 @@ class ConfigurationMigrator:
 
         for section, fields in self.secret_fields.items():
             if section in config_data:
-                section_data = config_data[section]
-                if isinstance(section_data, dict):
-                    for field in fields:
-                        if field in section_data:
-                            secret_key = f"{section}_{field}"
-                            secret_value = section_data.pop(field)
-
-                            if isinstance(secret_value, SecretStr):
-                                secrets_data[secret_key] = (
-                                    secret_value.get_secret_value()
-                                )
-                            else:
-                                secrets_data[secret_key] = secret_value
-
-                            section_data[field] = SecretReference(secret_key)
+                self._process_section_secrets(
+                    config_data, secrets_data, section, fields
+                )
 
         return config_data, secrets_data
+
+    def _process_section_secrets(
+        self,
+        config_data: dict,
+        secrets_data: dict,
+        section: str,
+        fields: list[str],
+    ) -> None:
+        """Process secrets for a specific section."""
+        section_data = config_data[section]
+        if not isinstance(section_data, dict):
+            return
+
+        for field in fields:
+            if field in section_data:
+                self._extract_single_secret(
+                    section_data, secrets_data, section, field
+                )
+
+    @staticmethod
+    def _extract_single_secret(
+        section_data: dict,
+        secrets_data: dict,
+        section: str,
+        field: str,
+    ) -> None:
+        """Extract a single secret field."""
+        secret_key = f"{section}_{field}"
+        secret_value = section_data.pop(field)
+
+        if isinstance(secret_value, SecretStr):
+            secrets_data[secret_key] = secret_value.get_secret_value()
+        else:
+            secrets_data[secret_key] = secret_value
+
+        section_data[field] = SecretReference(secret_key)
 
     def extract_from_environment(
         self,
