@@ -250,7 +250,7 @@ class ConfigurationMigrator:
     def export_to_yaml(
         self, model: BaseModel, config_file: str, secrets_file: str
     ) -> None:
-        validated_data = model.model_dump(mode='json')
+        validated_data = model.model_dump()
         
         config_data, secrets_data = self._extract_secrets(validated_data)
         
@@ -277,6 +277,8 @@ class ConfigurationMigrator:
                     result[key] = value
                 elif isinstance(value, SecretReference):
                     result[key] = value
+                elif hasattr(value, 'value'):
+                    result[key] = value.value
                 else:
                     result[key] = value
             else:
@@ -313,7 +315,7 @@ class ConfigurationMigrator:
         
         try:
             validated_model = self.model_class(**parsed_data)
-            validated_data = validated_model.model_dump(mode='json')
+            validated_data = validated_model.model_dump()
             return self._extract_secrets(validated_data)
         except ValidationError as e:
             logger.error(f"Validation failed during extract_from_environment: {e}")
