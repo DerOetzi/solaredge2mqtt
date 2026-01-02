@@ -142,6 +142,7 @@ docker compose up -d
 - Code must pass `ruff check` linting.
 - Follow PEP 8 style guidelines (enforced by ruff).
 - Maximum line length: 88 characters.
+- Fix or prevent any line-too-long issues (E501) by keeping lines at or below 88 characters.
 - Use type hints for function signatures.
 - Ensure SonarQube code quality standards are met.
 
