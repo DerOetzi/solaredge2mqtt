@@ -102,6 +102,38 @@ class ConfigurationMigrator:
         self.model_class = model_class
         self.secret_fields = self._identify_secret_fields(model_class)
     
+    def _is_secret_str_type(self, annotation: Any) -> bool:
+        return annotation is SecretStr or (isinstance(annotation, type) and issubclass(annotation, SecretStr))
+
+    def _add_secret_field(self, secret_fields: dict[str, list[str]], parent_key: str, field_name: str) -> None:
+        if parent_key not in secret_fields:
+            secret_fields[parent_key] = []
+        secret_fields[parent_key].append(field_name)
+
+    def _merge_nested_secrets(self, secret_fields: dict[str, list[str]], nested_secrets: dict[str, list[str]]) -> None:
+        for key, fields in nested_secrets.items():
+            if key not in secret_fields:
+                secret_fields[key] = []
+            secret_fields[key].extend(fields)
+
+    def _process_union_type(self, secret_fields: dict[str, list[str]], args: tuple, field_name: str, field_path: str, prefix: str) -> None:
+        for arg in args:
+            if self._is_secret_str_type(arg):
+                parent_key = prefix if prefix else field_name.split(".")[0]
+                self._add_secret_field(secret_fields, parent_key, field_name)
+                break
+            elif isinstance(arg, type) and issubclass(arg, BaseModel):
+                nested_secrets = self._identify_secret_fields(arg, field_path)
+                self._merge_nested_secrets(secret_fields, nested_secrets)
+
+    def _process_field_annotation(self, secret_fields: dict[str, list[str]], annotation: Any, field_name: str, field_path: str, prefix: str) -> None:
+        if self._is_secret_str_type(annotation):
+            parent_key = prefix if prefix else field_name.split(".")[0]
+            self._add_secret_field(secret_fields, parent_key, field_name)
+        elif isinstance(annotation, type) and issubclass(annotation, BaseModel):
+            nested_secrets = self._identify_secret_fields(annotation, field_path)
+            self._merge_nested_secrets(secret_fields, nested_secrets)
+
     def _identify_secret_fields(self, model: type[BaseModel], prefix: str = "") -> dict[str, list[str]]:
         secret_fields = {}
         
@@ -112,30 +144,9 @@ class ConfigurationMigrator:
             origin = get_origin(annotation)
             if origin is not None:
                 args = get_args(annotation)
-                for arg in args:
-                    if arg is SecretStr or (isinstance(arg, type) and issubclass(arg, SecretStr)):
-                        parent_key = prefix if prefix else field_name.split(".")[0]
-                        if parent_key not in secret_fields:
-                            secret_fields[parent_key] = []
-                        secret_fields[parent_key].append(field_name)
-                        break
-                    elif isinstance(arg, type) and issubclass(arg, BaseModel):
-                        nested_secrets = self._identify_secret_fields(arg, field_path)
-                        for key, fields in nested_secrets.items():
-                            if key not in secret_fields:
-                                secret_fields[key] = []
-                            secret_fields[key].extend(fields)
-            elif annotation is SecretStr or (isinstance(annotation, type) and issubclass(annotation, SecretStr)):
-                parent_key = prefix if prefix else field_name.split(".")[0]
-                if parent_key not in secret_fields:
-                    secret_fields[parent_key] = []
-                secret_fields[parent_key].append(field_name)
-            elif isinstance(annotation, type) and issubclass(annotation, BaseModel):
-                nested_secrets = self._identify_secret_fields(annotation, field_path)
-                for key, fields in nested_secrets.items():
-                    if key not in secret_fields:
-                        secret_fields[key] = []
-                    secret_fields[key].extend(fields)
+                self._process_union_type(secret_fields, args, field_name, field_path, prefix)
+            else:
+                self._process_field_annotation(secret_fields, annotation, field_name, field_path, prefix)
         
         return secret_fields
 
@@ -285,6 +296,25 @@ class ConfigurationMigrator:
                 result[key] = value
         return result
 
+    def _get_secret_value(self, secret_value: Any) -> Any:
+        if isinstance(secret_value, SecretStr):
+            return secret_value.get_secret_value()
+        return secret_value
+
+    def _extract_field_secret(self, section_data: dict, field: str, section: str, secrets_data: dict) -> None:
+        if field in section_data:
+            secret_key = f"{section}_{field}"
+            secret_value = section_data.pop(field)
+            secrets_data[secret_key] = self._get_secret_value(secret_value)
+            section_data[field] = SecretReference(secret_key)
+
+    def _extract_section_secrets(self, config_data: dict, section: str, fields: list[str], secrets_data: dict) -> None:
+        if section in config_data:
+            section_data = config_data[section]
+            if isinstance(section_data, dict):
+                for field in fields:
+                    self._extract_field_secret(section_data, field, section, secrets_data)
+
     def _extract_secrets(self, validated_data: dict) -> tuple[dict, dict]:
         import copy
 
@@ -292,20 +322,7 @@ class ConfigurationMigrator:
         secrets_data = {}
 
         for section, fields in self.secret_fields.items():
-            if section in config_data:
-                section_data = config_data[section]
-                if isinstance(section_data, dict):
-                    for field in fields:
-                        if field in section_data:
-                            secret_key = f"{section}_{field}"
-                            secret_value = section_data.pop(field)
-                            
-                            if isinstance(secret_value, SecretStr):
-                                secrets_data[secret_key] = secret_value.get_secret_value()
-                            else:
-                                secrets_data[secret_key] = secret_value
-                            
-                            section_data[field] = SecretReference(secret_key)
+            self._extract_section_secrets(config_data, section, fields, secrets_data)
 
         return config_data, secrets_data
 
