@@ -238,7 +238,7 @@ class ConfigurationMigrator:
     def _get_or_initialize_nested_container(
         container: dict, key: str, i: int
     ) -> tuple[str, int | str, dict | list]:
-        prefix, idx = key[: i + 1], key[i + 1 :]
+        prefix, idx = key[: i + 1], key[i + 1:]
         if idx.isdigit():
             key, idx = prefix, int(idx)
             if key not in container or not isinstance(container[key], list):
