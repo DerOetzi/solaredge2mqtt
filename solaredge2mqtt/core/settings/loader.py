@@ -101,24 +101,10 @@ class ConfigurationLoader:
         
         migrator = ConfigurationMigrator(model_class=ServiceSettings)
         
-        env_config_data, env_secrets_data = migrator.extract_from_environment()
-        
-        merged_env_data = ConfigurationLoader._deep_merge(
-            env_config_data, env_secrets_data
-        )
-        
         try:
-            validated_model = ServiceSettings(**merged_env_data)
+            validated_model = migrator.migrate()
             
-            validated_data = validated_model.model_dump(exclude_none=True)
-            
-            config_data, secrets_data = migrator.extract_and_prepare_for_export(
-                validated_data
-            )
-            
-            migrator.write_yaml_files(
-                config_data, secrets_data, CONFIG_FILE, SECRETS_FILE
-            )
+            migrator.export_to_yaml(validated_model, CONFIG_FILE, SECRETS_FILE)
             
             logger.info(
                 f"Migration complete. Created {CONFIG_FILE} and {SECRETS_FILE}. "
@@ -128,21 +114,11 @@ class ConfigurationLoader:
             return validated_model
                 
         except Exception as e:
-            logger.warning(
-                f"Pydantic validation failed during migration: {e}. "
-                f"Falling back to basic migration."
+            logger.error(
+                f"Migration failed: {e}. "
+                f"Please check your environment variables and try again."
             )
-            
-            migrator.write_yaml_files(
-                env_config_data, env_secrets_data, CONFIG_FILE, SECRETS_FILE
-            )
-            
-            logger.info(
-                f"Migration complete. Created {CONFIG_FILE} and {SECRETS_FILE}. "
-                f"Please review the files and restart the service."
-            )
-            
-            sys.exit(0)
+            raise
 
     @staticmethod
     def _deep_merge(base: dict, override: dict) -> dict:

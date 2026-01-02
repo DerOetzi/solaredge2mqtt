@@ -1,14 +1,15 @@
 
+
 from os import environ, listdir, makedirs, path
-from typing import Any, get_args, get_origin
+from typing import Any, Generator, get_args, get_origin
 
 import yaml
-from pydantic import BaseModel, SecretStr, ValidationError
+from pydantic import BaseModel
+from pydantic.fields import FieldInfo
 
 from solaredge2mqtt.core.logging import logger
 
 DOCKER_SECRETS_DIR = "/run/secrets"
-
 
 class EnvironmentReader:
     PREFIX = "se2mqtt_"
@@ -31,23 +32,23 @@ class EnvironmentReader:
         return config
 
     @classmethod
-    def _read_environment(cls):
+    def _read_environment(cls) -> Generator[tuple[str, str], any, any]:
         for key, value in environ.items():
             if cls._has_prefix(key):
                 yield key, value
 
     @classmethod
-    def _read_secrets(cls):
+    def _read_secrets(cls) -> Generator[tuple[str, str], any, any]:
         if path.exists(DOCKER_SECRETS_DIR) and path.isdir(DOCKER_SECRETS_DIR):
             for filename in listdir(DOCKER_SECRETS_DIR):
                 if cls._has_prefix(filename):
                     with open(
                         path.join(DOCKER_SECRETS_DIR, filename), "r", encoding="utf-8"
                     ) as f:
-                        yield filename, f.read().strip()
+                        yield filename, f.read()
 
     @classmethod
-    def _read_dotenv(cls):
+    def _read_dotenv(cls) -> Generator[tuple[str, str], any, any]:
         try:
             if path.exists(".env"):
                 with open(".env", "r", encoding="utf-8") as f:
@@ -55,7 +56,7 @@ class EnvironmentReader:
                         line = line.strip()
                         if cls._has_prefix(line) and "=" in line:
                             key, value = line.split("=", 1)
-                            yield key, value.strip()
+                            yield key, value
         except FileNotFoundError:
             pass
 
@@ -71,8 +72,8 @@ class SecretReference:
     def __repr__(self):
         return f"!secret {self.secret_key}"
 
-
 def secret_representer(dumper, data):
+    
     return yaml.ScalarNode(
         tag="!secret",
         value=data.secret_key,
@@ -86,84 +87,96 @@ class ConfigDumper(yaml.SafeDumper):
 
 _original_choose_scalar_style = ConfigDumper.choose_scalar_style
 
-
 def _custom_choose_scalar_style(self):
+    
     if self.event.tag == "!secret":
         return ""
     return _original_choose_scalar_style(self)
 
-
 ConfigDumper.choose_scalar_style = _custom_choose_scalar_style
+
 ConfigDumper.add_representer(SecretReference, secret_representer)
 
 
 class ConfigurationMigrator:
-    def __init__(self, model_class: type[BaseModel]):
+    SENSITIVE_FIELDS = {
+        "mqtt": ["password"],
+        "monitoring": ["password", "site_id"],
+        "wallbox": ["password", "serial"],
+        "influxdb": ["token"],
+        "weather": ["api_key"],
+    }
+
+    def __init__(self, model_class: type[BaseModel] | None = None):
         self.model_class = model_class
-        self.secret_fields = self._identify_secret_fields(model_class)
-    
-    def _identify_secret_fields(self, model: type[BaseModel], prefix: str = "") -> dict[str, list[str]]:
-        secret_fields = {}
-        
+        self._field_types_cache: dict[str, type] = {}
+        if model_class:
+            self._build_field_types_map(model_class)
+
+    def _build_field_types_map(
+        self, model: type[BaseModel], prefix: str = ""
+    ) -> None:
         for field_name, field_info in model.model_fields.items():
             field_path = f"{prefix}.{field_name}" if prefix else field_name
-            annotation = field_info.annotation
+            field_type = field_info.annotation
             
-            origin = get_origin(annotation)
-            if origin is not None:
-                args = get_args(annotation)
-                for arg in args:
-                    if arg is SecretStr or (isinstance(arg, type) and issubclass(arg, SecretStr)):
-                        parent_key = prefix if prefix else field_name.split(".")[0]
-                        if parent_key not in secret_fields:
-                            secret_fields[parent_key] = []
-                        secret_fields[parent_key].append(field_name)
-                        break
-                    elif isinstance(arg, type) and issubclass(arg, BaseModel):
-                        nested_secrets = self._identify_secret_fields(arg, field_path)
-                        for key, fields in nested_secrets.items():
-                            if key not in secret_fields:
-                                secret_fields[key] = []
-                            secret_fields[key].extend(fields)
-            elif annotation is SecretStr or (isinstance(annotation, type) and issubclass(annotation, SecretStr)):
-                parent_key = prefix if prefix else field_name.split(".")[0]
-                if parent_key not in secret_fields:
-                    secret_fields[parent_key] = []
-                secret_fields[parent_key].append(field_name)
-            elif isinstance(annotation, type) and issubclass(annotation, BaseModel):
-                nested_secrets = self._identify_secret_fields(annotation, field_path)
-                for key, fields in nested_secrets.items():
-                    if key not in secret_fields:
-                        secret_fields[key] = []
-                    secret_fields[key].extend(fields)
-        
-        return secret_fields
+            origin = get_origin(field_type)
+            
+            if origin is list:
+                args = get_args(field_type)
+                if args:
+                    list_item_type = args[0]
+                    self._field_types_cache[field_path] = list_item_type
+                else:
+                    self._field_types_cache[field_path] = str
+            elif origin is type(None) or origin is Any:
+                args = get_args(field_type)
+                if args:
+                    actual_type = args[0] if args[0] is not type(None) else (args[1] if len(args) > 1 else str)
+                    self._field_types_cache[field_path] = actual_type
+                    
+                    if isinstance(actual_type, type) and issubclass(actual_type, BaseModel):
+                        self._build_field_types_map(actual_type, field_path)
+            else:
+                self._field_types_cache[field_path] = field_type
+                
+                if isinstance(field_type, type) and issubclass(field_type, BaseModel):
+                    self._build_field_types_map(field_type, field_path)
 
-    def migrate(self) -> BaseModel:
+    def extract_from_environment(self) -> tuple[dict[str, Any], dict[str, Any]]:
         env_data = EnvironmentReader.read_all()
-        
-        parsed_data = self._parse_environment_to_dict(env_data)
-        
-        try:
-            validated_model = self.model_class(**parsed_data)
-            logger.info("Environment variables validated successfully with Pydantic model")
-            return validated_model
-        except ValidationError as e:
-            logger.error(f"Validation failed: {e}")
-            raise
-
-    def _parse_environment_to_dict(self, env_data: dict[str, str]) -> dict[str, Any]:
         config_data = {}
 
         for key, value in env_data.items():
             key = key.lower().strip()[8:]
             subkeys = key.split("__")
             
-            typed_value = value.strip()
+            field_path = ".".join(subkeys)
+            field_type = self._get_field_type(field_path)
+            
+            typed_value = self._convert_to_type(value.strip(), field_type)
             self._insert_nested_key(config_data, subkeys, typed_value)
 
-        return config_data
-    
+        secrets_data = self._extract_secrets(config_data)
+
+        return config_data, secrets_data
+
+    def _get_field_type(self, field_path: str) -> type:
+        parts = field_path.split(".")
+        
+        for i in range(len(parts), 0, -1):
+            path_to_check = ".".join(parts[:i])
+            
+            if path_to_check.endswith(tuple(str(d) for d in range(10))):
+                base_path = path_to_check.rstrip("0123456789")
+                if base_path in self._field_types_cache:
+                    return self._field_types_cache[base_path]
+            
+            if path_to_check in self._field_types_cache:
+                return self._field_types_cache[path_to_check]
+        
+        return str
+
     def _convert_to_type(self, value: str, target_type: type) -> Any:
         if not value:
             return value
@@ -247,78 +260,37 @@ class ConfigurationMigrator:
         else:
             self._insert_nested_key(next_container, keys[1:], value)
 
-    def export_to_yaml(
-        self, model: BaseModel, config_file: str, secrets_file: str
-    ) -> None:
-        validated_data = model.model_dump()
-        
-        config_data, secrets_data = self._extract_secrets(validated_data)
-        
-        config_data = self._ensure_proper_types(config_data, model)
-        
-        self._write_yaml_files(config_data, secrets_data, config_file, secrets_file)
-    
-    def _ensure_proper_types(self, data: dict, model: BaseModel) -> dict:
-        result = {}
-        for key, value in data.items():
-            if key in model.model_fields:
-                field_info = model.model_fields[key]
-                annotation = field_info.annotation
-                
-                if isinstance(value, dict) and hasattr(annotation, 'model_fields'):
-                    result[key] = self._ensure_proper_types(value, annotation)
-                elif isinstance(value, list):
-                    result[key] = value
-                elif isinstance(value, bool):
-                    result[key] = value
-                elif isinstance(value, int):
-                    result[key] = value
-                elif isinstance(value, float):
-                    result[key] = value
-                elif isinstance(value, SecretReference):
-                    result[key] = value
-                else:
-                    result[key] = value
-            else:
-                result[key] = value
-        return result
+    def _extract_secrets(self, config_data: dict) -> dict[str, Any]:
+        secrets_data = {}
 
-    def _extract_secrets(self, validated_data: dict) -> tuple[dict, dict]:
+        for section, fields in self.SENSITIVE_FIELDS.items():
+            if section in config_data:
+                for field in fields:
+                    if field in config_data[section]:
+                        secret_key = f"{section}_{field}"
+                        secrets_data[secret_key] = config_data[section].pop(field)
+                        config_data[section][field] = SecretReference(secret_key)
+
+        return secrets_data
+
+    def extract_and_prepare_for_export(
+        self, validated_data: dict
+    ) -> tuple[dict, dict]:
         import copy
 
         config_data = copy.deepcopy(validated_data)
         secrets_data = {}
 
-        for section, fields in self.secret_fields.items():
+        for section, fields in self.SENSITIVE_FIELDS.items():
             if section in config_data:
-                section_data = config_data[section]
-                if isinstance(section_data, dict):
-                    for field in fields:
-                        if field in section_data:
-                            secret_key = f"{section}_{field}"
-                            secret_value = section_data.pop(field)
-                            
-                            if isinstance(secret_value, SecretStr):
-                                secrets_data[secret_key] = secret_value.get_secret_value()
-                            else:
-                                secrets_data[secret_key] = secret_value
-                            
-                            section_data[field] = SecretReference(secret_key)
+                for field in fields:
+                    if field in config_data[section]:
+                        secret_key = f"{section}_{field}"
+                        secrets_data[secret_key] = config_data[section].pop(field)
+                        config_data[section][field] = SecretReference(secret_key)
 
         return config_data, secrets_data
 
-    def extract_from_environment(self) -> tuple[dict[str, Any], dict[str, Any]]:
-        env_data = EnvironmentReader.read_all()
-        parsed_data = self._parse_environment_to_dict(env_data)
-        
-        try:
-            validated_model = self.model_class(**parsed_data)
-            validated_data = validated_model.model_dump()
-            return self._extract_secrets(validated_data)
-        except ValidationError as e:
-            logger.error(f"Validation failed during extract_from_environment: {e}")
-            raise
-    
     def write_yaml_files(
         self,
         config_data: dict,
@@ -326,15 +298,7 @@ class ConfigurationMigrator:
         config_file: str,
         secrets_file: str,
     ) -> None:
-        self._write_yaml_files(config_data, secrets_data, config_file, secrets_file)
-    
-    def _write_yaml_files(
-        self,
-        config_data: dict,
-        secrets_data: dict,
-        config_file: str,
-        secrets_file: str,
-    ) -> None:
+        
         config_dir = path.dirname(config_file)
         if config_dir and not path.exists(config_dir):
             makedirs(config_dir, exist_ok=True)
