@@ -355,7 +355,7 @@ class ConfigurationMigrator:
                     Dumper=ConfigDumper,
                 )
             logger.info(f"Configuration written to {config_file}")
-        except Exception as e:
+        except (OSError, yaml.YAMLError) as e:
             logger.error(f"Error writing configuration file {config_file}: {e}")
             raise
 
@@ -374,6 +374,6 @@ class ConfigurationMigrator:
                     f"IMPORTANT: {secrets_file} contains sensitive data. "
                     f"Keep it secure and do not commit it to version control!"
                 )
-            except Exception as e:
+            except (OSError, yaml.YAMLError) as e:
                 logger.error(f"Error writing secrets file {secrets_file}: {e}")
                 raise

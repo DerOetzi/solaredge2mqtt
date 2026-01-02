@@ -113,7 +113,7 @@ class ConfigurationLoader:
             
             return validated_model
                 
-        except Exception as e:
+        except (ValidationError, OSError, yaml.YAMLError) as e:
             logger.error(
                 f"Migration failed: {e}. "
                 f"Please check your environment variables and try again."
