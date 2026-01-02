@@ -12,7 +12,8 @@ class TestMonitoringSettings:
         """Test MonitoringSettings default values."""
         settings = MonitoringSettings()
 
-        assert settings.site_id is None
+        assert isinstance(settings.site_id, SecretStr)
+        assert settings.site_id.get_secret_value() is None
         assert settings.username is None
         assert settings.password is None
         assert settings.retain is False
@@ -26,7 +27,7 @@ class TestMonitoringSettings:
             retain=True,
         )
 
-        assert settings.site_id == "12345"
+        assert settings.site_id.get_secret_value() == "12345"
         assert settings.username == "test_user"
         assert settings.password.get_secret_value() == "test_password"
         assert settings.retain is True

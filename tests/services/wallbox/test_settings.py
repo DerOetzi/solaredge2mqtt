@@ -14,7 +14,8 @@ class TestWallboxSettings:
 
         assert settings.host is None
         assert settings.password is None
-        assert settings.serial is None
+        assert isinstance(settings.serial, SecretStr)
+        assert settings.serial.get_secret_value() is None
         assert settings.retain is False
 
     def test_wallbox_settings_custom_values(self):
@@ -28,7 +29,7 @@ class TestWallboxSettings:
 
         assert settings.host == "192.168.1.50"
         assert settings.password.get_secret_value() == "wallbox_password"
-        assert settings.serial == "WB123456"
+        assert settings.serial.get_secret_value() == "WB123456"
         assert settings.retain is True
 
     def test_wallbox_settings_is_configured_true(self):

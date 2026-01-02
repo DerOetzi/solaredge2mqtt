@@ -10,5 +10,11 @@ class WallboxSettings(BaseModel):
     @property
     def is_configured(self) -> bool:
         return all(
-            [self.host is not None, self.password is not None, self.serial is not None]
+            [
+                self.host is not None,
+                self.password is not None
+                and self.password.get_secret_value() is not None,
+                self.serial is not None
+                and self.serial.get_secret_value() is not None,
+            ]
         )

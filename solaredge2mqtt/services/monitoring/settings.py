@@ -11,8 +11,10 @@ class MonitoringSettings(BaseModel):
     def is_configured(self) -> bool:
         return all(
             [
-                self.site_id is not None,
+                self.site_id is not None
+                and self.site_id.get_secret_value() is not None,
                 self.username is not None,
-                self.password is not None,
+                self.password is not None
+                and self.password.get_secret_value() is not None,
             ]
         )
