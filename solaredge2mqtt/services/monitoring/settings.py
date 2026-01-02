@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field, SecretStr
 
 
 class MonitoringSettings(BaseModel):
-    site_id: str = Field(None)
+    site_id: SecretStr = SecretStr(None)
     username: str = Field(None)
     password: SecretStr = Field(None)
     retain: bool = Field(False)

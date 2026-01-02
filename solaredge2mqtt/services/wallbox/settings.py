@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field, SecretStr
 class WallboxSettings(BaseModel):
     host: str = Field(None)
     password: SecretStr = Field(None)
-    serial: str = Field(None)
+    serial: SecretStr = SecretStr(None)
     retain: bool = Field(False)
 
     @property
