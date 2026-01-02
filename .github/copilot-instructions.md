@@ -161,3 +161,6 @@ docker compose up -d
 - As this is an international project, ensure all code comments and documentation are in English
 - Follow the project's directory structure and naming conventions
 - Maintain consistency with existing code patterns and style
+- All imports must be explicit; avoid wildcard imports
+- All imports have to be at the top of the file, grouped by standard library, third-party, and local imports
+- Ensure all new code is covered by unit tests located in the `tests/` directory
