@@ -6,6 +6,7 @@ from pathlib import Path
 import yaml
 
 from solaredge2mqtt.core.settings.migrator import ConfigurationMigrator
+from solaredge2mqtt.core.settings.models import ServiceSettings
 
 
 class TestConfigurationMigrator:
@@ -21,42 +22,42 @@ class TestConfigurationMigrator:
         assert key == "follower"
         assert pos == 7  # Index of 'r', last character (no digits)
 
-    def test_convert_string_to_type(self):
+    def test_convert_to_type(self):
         """Test converting string values to appropriate Python types."""
+        migrator = ConfigurationMigrator()
+        
         # Test boolean conversion
-        assert ConfigurationMigrator._convert_string_to_type("true") is True
-        assert ConfigurationMigrator._convert_string_to_type("True") is True
-        assert ConfigurationMigrator._convert_string_to_type("TRUE") is True
-        assert ConfigurationMigrator._convert_string_to_type("yes") is True
-        assert ConfigurationMigrator._convert_string_to_type("on") is True
+        assert migrator._convert_to_type("true", bool) is True
+        assert migrator._convert_to_type("True", bool) is True
+        assert migrator._convert_to_type("TRUE", bool) is True
+        assert migrator._convert_to_type("yes", bool) is True
+        assert migrator._convert_to_type("on", bool) is True
 
-        assert ConfigurationMigrator._convert_string_to_type("false") is False
-        assert ConfigurationMigrator._convert_string_to_type("False") is False
-        assert ConfigurationMigrator._convert_string_to_type("FALSE") is False
-        assert ConfigurationMigrator._convert_string_to_type("no") is False
-        assert ConfigurationMigrator._convert_string_to_type("off") is False
+        assert migrator._convert_to_type("false", bool) is False
+        assert migrator._convert_to_type("False", bool) is False
+        assert migrator._convert_to_type("FALSE", bool) is False
+        assert migrator._convert_to_type("no", bool) is False
+        assert migrator._convert_to_type("off", bool) is False
 
-        # Test integer conversion (including 0 and 1)
-        assert ConfigurationMigrator._convert_string_to_type("0") == 0
-        assert ConfigurationMigrator._convert_string_to_type("1") == 1
-        assert ConfigurationMigrator._convert_string_to_type("5") == 5
-        assert ConfigurationMigrator._convert_string_to_type("1502") == 1502
-        assert ConfigurationMigrator._convert_string_to_type("-10") == -10
+        # Test integer conversion
+        assert migrator._convert_to_type("0", int) == 0
+        assert migrator._convert_to_type("1", int) == 1
+        assert migrator._convert_to_type("5", int) == 5
+        assert migrator._convert_to_type("1502", int) == 1502
+        assert migrator._convert_to_type("-10", int) == -10
 
         # Test float conversion
-        assert ConfigurationMigrator._convert_string_to_type("3.14") == 3.14
-        assert ConfigurationMigrator._convert_string_to_type("1.5") == 1.5
+        assert migrator._convert_to_type("3.14", float) == 3.14
+        assert migrator._convert_to_type("1.5", float) == 1.5
 
-        # Test string passthrough
-        assert (
-            ConfigurationMigrator._convert_string_to_type("192.168.1.100")
-            == "192.168.1.100"
-        )
-        assert ConfigurationMigrator._convert_string_to_type("mqtt") == "mqtt"
-        assert ConfigurationMigrator._convert_string_to_type("hello") == "hello"
+        # Test string passthrough (when type is str, keep as string)
+        assert migrator._convert_to_type("192.168.1.100", str) == "192.168.1.100"
+        assert migrator._convert_to_type("mqtt", str) == "mqtt"
+        assert migrator._convert_to_type("hello", str) == "hello"
+        assert migrator._convert_to_type("12345", str) == "12345"  # site_id case
 
         # Test empty string
-        assert ConfigurationMigrator._convert_string_to_type("") == ""
+        assert migrator._convert_to_type("", str) == ""
 
     def test_insert_nested_key_simple(self):
         """Test inserting a simple key-value pair."""
@@ -268,16 +269,18 @@ class TestConfigurationMigrator:
             "SE2MQTT_MODBUS__BATTERY1": "false",
             "SE2MQTT_ENERGY__RETAIN": "false",
             "SE2MQTT_MQTT__BROKER": "mqtt.example.com",
+            "SE2MQTT_MQTT__PASSWORD": "secret123",
+            "SE2MQTT_MONITORING__SITE_ID": "12345",  # String type that looks like int
         }
 
         # Mock environment variables
         for key, value in env_vars.items():
             monkeypatch.setenv(key, value)
 
-        migrator = ConfigurationMigrator()
+        migrator = ConfigurationMigrator(model_class=ServiceSettings)
         config_data, secrets_data = migrator.extract_from_environment()
 
-        # Verify types are correct (not strings)
+        # Verify types are correct based on Pydantic model
         assert config_data["modbus"]["host"] == "192.168.1.100"  # String
         assert config_data["modbus"]["port"] == 5020  # Integer
         assert config_data["modbus"]["timeout"] == 1  # Integer
@@ -285,6 +288,11 @@ class TestConfigurationMigrator:
         assert config_data["modbus"]["battery"] == [True, False]  # Booleans
         assert config_data["energy"]["retain"] is False  # Boolean
         assert config_data["mqtt"]["broker"] == "mqtt.example.com"  # String
+        
+        # site_id should be string (not converted to int) because model defines it as str
+        # It's extracted to secrets, so check it there
+        assert secrets_data["monitoring_site_id"] == "12345"  # String
+        assert isinstance(secrets_data["monitoring_site_id"], str)
 
         # Write to YAML and verify no quotes on booleans
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -307,6 +315,8 @@ class TestConfigurationMigrator:
             assert "'5020'" not in yaml_text
 
             # Verify the actual boolean/integer values appear correctly
+            assert "meter:" in yaml_text or "meter: " in yaml_text
+            assert "retain: false" in yaml_text
             assert "retain: false" in yaml_text
             assert "port: 5020" in yaml_text
             assert "timeout: 1" in yaml_text

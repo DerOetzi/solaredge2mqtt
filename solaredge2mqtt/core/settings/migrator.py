@@ -1,9 +1,11 @@
 
 
 from os import environ, listdir, makedirs, path
-from typing import Generator
+from typing import Any, Generator, get_args, get_origin
 
 import yaml
+from pydantic import BaseModel
+from pydantic.fields import FieldInfo
 
 from solaredge2mqtt.core.logging import logger
 
@@ -105,49 +107,105 @@ class ConfigurationMigrator:
         "weather": ["api_key"],
     }
 
-    def extract_from_environment(self) -> tuple[dict[str, any], dict[str, any]]:
-        
+    def __init__(self, model_class: type[BaseModel] | None = None):
+        self.model_class = model_class
+        self._field_types_cache: dict[str, type] = {}
+        if model_class:
+            self._build_field_types_map(model_class)
+
+    def _build_field_types_map(
+        self, model: type[BaseModel], prefix: str = ""
+    ) -> None:
+        for field_name, field_info in model.model_fields.items():
+            field_path = f"{prefix}.{field_name}" if prefix else field_name
+            field_type = field_info.annotation
+            
+            origin = get_origin(field_type)
+            
+            if origin is list:
+                args = get_args(field_type)
+                if args:
+                    list_item_type = args[0]
+                    self._field_types_cache[field_path] = list_item_type
+                else:
+                    self._field_types_cache[field_path] = str
+            elif origin is type(None) or origin is Any:
+                args = get_args(field_type)
+                if args:
+                    actual_type = args[0] if args[0] is not type(None) else (args[1] if len(args) > 1 else str)
+                    self._field_types_cache[field_path] = actual_type
+                    
+                    if isinstance(actual_type, type) and issubclass(actual_type, BaseModel):
+                        self._build_field_types_map(actual_type, field_path)
+            else:
+                self._field_types_cache[field_path] = field_type
+                
+                if isinstance(field_type, type) and issubclass(field_type, BaseModel):
+                    self._build_field_types_map(field_type, field_path)
+
+    def extract_from_environment(self) -> tuple[dict[str, Any], dict[str, Any]]:
         env_data = EnvironmentReader.read_all()
         config_data = {}
 
         for key, value in env_data.items():
             key = key.lower().strip()[8:]
             subkeys = key.split("__")
-            typed_value = self._convert_string_to_type(value.strip())
+            
+            field_path = ".".join(subkeys)
+            field_type = self._get_field_type(field_path)
+            
+            typed_value = self._convert_to_type(value.strip(), field_type)
             self._insert_nested_key(config_data, subkeys, typed_value)
 
         secrets_data = self._extract_secrets(config_data)
 
         return config_data, secrets_data
 
-    @staticmethod
-    def _convert_string_to_type(value: str) -> any:
+    def _get_field_type(self, field_path: str) -> type:
+        parts = field_path.split(".")
         
+        for i in range(len(parts), 0, -1):
+            path_to_check = ".".join(parts[:i])
+            
+            if path_to_check.endswith(tuple(str(d) for d in range(10))):
+                base_path = path_to_check.rstrip("0123456789")
+                if base_path in self._field_types_cache:
+                    return self._field_types_cache[base_path]
+            
+            if path_to_check in self._field_types_cache:
+                return self._field_types_cache[path_to_check]
+        
+        return str
+
+    def _convert_to_type(self, value: str, target_type: type) -> Any:
         if not value:
             return value
-
-        value_lower = value.lower()
-        if value_lower in ("true", "yes", "on"):
-            return True
-        if value_lower in ("false", "no", "off"):
-            return False
-
-        try:
-            return int(value)
-        except ValueError:
-            pass
-
-        try:
-            return float(value)
-        except ValueError:
-            pass
-
+        
+        if target_type == bool or target_type is bool:
+            value_lower = value.lower()
+            if value_lower in ("true", "yes", "on"):
+                return True
+            if value_lower in ("false", "no", "off"):
+                return False
+            return bool(value)
+        
+        if target_type == int or target_type is int:
+            try:
+                return int(value)
+            except ValueError:
+                return value
+        
+        if target_type == float or target_type is float:
+            try:
+                return float(value)
+            except ValueError:
+                return value
+        
         return value
 
     def _insert_nested_key(
-        self, container: dict, keys: list[str], value: any
+        self, container: dict, keys: list[str], value: Any
     ) -> None:
-        
         key, i = self._identify_key_and_position(keys)
         key, idx, next_container = self._get_or_initialize_nested_container(
             container, key, i
@@ -158,7 +216,6 @@ class ConfigurationMigrator:
 
     @staticmethod
     def _identify_key_and_position(keys: list[str]) -> tuple[str, int]:
-        
         key = keys[0]
         for i in range(len(key) - 1, -1, -1):
             if not key[i].isdigit():
@@ -169,7 +226,6 @@ class ConfigurationMigrator:
     def _get_or_initialize_nested_container(
         container: dict, key: str, i: int
     ) -> tuple[str, int | str, dict | list]:
-        
         prefix, idx = key[: i + 1], key[i + 1 :]
         if idx.isdigit():
             key, idx = prefix, int(idx)
@@ -186,14 +242,13 @@ class ConfigurationMigrator:
 
     def _insert_value_in_container(
         self,
-        container: dict[str, any],
+        container: dict[str, Any],
         keys: list[str],
-        value: any,
+        value: Any,
         key: str,
         idx: int | str,
         next_container: dict | list,
     ) -> None:
-        
         if len(keys) == 1:
             if isinstance(next_container, dict):
                 if isinstance(container[key], list):
@@ -205,8 +260,7 @@ class ConfigurationMigrator:
         else:
             self._insert_nested_key(next_container, keys[1:], value)
 
-    def _extract_secrets(self, config_data: dict) -> dict[str, any]:
-        
+    def _extract_secrets(self, config_data: dict) -> dict[str, Any]:
         secrets_data = {}
 
         for section, fields in self.SENSITIVE_FIELDS.items():
@@ -222,7 +276,6 @@ class ConfigurationMigrator:
     def extract_and_prepare_for_export(
         self, validated_data: dict
     ) -> tuple[dict, dict]:
-        
         import copy
 
         config_data = copy.deepcopy(validated_data)

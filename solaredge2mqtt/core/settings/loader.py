@@ -97,7 +97,9 @@ class ConfigurationLoader:
 
     @staticmethod
     def _migrate_from_environment():
-        migrator = ConfigurationMigrator()
+        from solaredge2mqtt.core.settings.models import ServiceSettings
+        
+        migrator = ConfigurationMigrator(model_class=ServiceSettings)
         
         env_config_data, env_secrets_data = migrator.extract_from_environment()
         
