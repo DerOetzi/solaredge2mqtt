@@ -35,14 +35,14 @@ if FORECAST_AVAILABLE:
 LOCAL_TZ = get_localzone_name()
 
 
-async def _run_service() -> None:
-    service = Service()
+async def _run_service(config_dir: str = "config") -> None:
+    service = Service(config_dir)
     await service.run()
 
 
-def run():
+def run(config_dir: str = "config"):
     try:
-        asyncio.run(_run_service())
+        asyncio.run(_run_service(config_dir))
     except ConfigurationException:
         logger.error("Configuration error")
     except asyncio.CancelledError:
@@ -52,8 +52,8 @@ def run():
 
 
 class Service:
-    def __init__(self):
-        self.settings = service_settings()
+    def __init__(self, config_dir: str = "config"):
+        self.settings = service_settings(config_dir)
         initialize_logging(self.settings.logging_level)
         logger.debug(self.settings)
 

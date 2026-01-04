@@ -41,7 +41,7 @@ Repository = "https://github.com/DerOetzi/solaredge2mqtt"
 Issues = "https://github.com/DerOetzi/solaredge2mqtt/issues"
 
 [project.scripts]
-solaredge2mqtt = "solaredge2mqtt.service:run"
+solaredge2mqtt = "solaredge2mqtt.__main__:main"
 solaredge2mqtt-migrate = "migrate_config:main"
 
 [project.optional-dependencies]

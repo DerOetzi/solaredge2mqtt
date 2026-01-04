@@ -8,11 +8,6 @@ from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.settings.migrator import ConfigurationMigrator
 from solaredge2mqtt.core.settings.models import ServiceSettings
 
-DOCKER_SECRETS_DIR = "/run/secrets"
-CONFIG_DIR = "config"
-CONFIG_FILE = "config/configuration.yml"
-SECRETS_FILE = "config/secrets.yml"
-
 
 class SecretLoader(yaml.SafeLoader):
     secrets: dict[str, Any] = {}
@@ -29,7 +24,7 @@ def secret_constructor(loader: SecretLoader, node: yaml.ScalarNode) -> Any:
         return value
     except (KeyError, TypeError):
         raise ValueError(
-            f"Secret '{secret_key}' not found in {SECRETS_FILE}. "
+            f"Secret '{secret_key}' not found in secrets file. "
             f"Please ensure the secret is defined."
         )
 
@@ -40,33 +35,42 @@ SecretLoader.add_constructor("!secret", secret_constructor)
 
 class ConfigurationLoader:
     @staticmethod
-    def load_configuration(override_data: dict[str, any] = None):
-        config_exists = path.exists(CONFIG_FILE)
+    def load_configuration(
+        config_dir: str = "config", override_data: dict[str, any] = None
+    ):
+        config_file = path.join(config_dir, "configuration.yml")
+        secrets_file = path.join(config_dir, "secrets.yml")
+        
+        config_exists = path.exists(config_file)
 
         if not config_exists:
             logger.info(
-                f"{CONFIG_FILE} not found. "
+                f"{config_file} not found. "
                 "Performing automatic migration from environment variables."
             )
-            return ConfigurationLoader._migrate_from_environment()
+            return ConfigurationLoader._migrate_from_environment(
+                config_file, secrets_file
+            )
 
-        if ConfigurationLoader._is_file_empty(CONFIG_FILE):
+        if ConfigurationLoader._is_file_empty(config_file):
             logger.info(
-                f"{CONFIG_FILE} is empty. "
+                f"{config_file} is empty. "
                 "Performing automatic migration from environment variables."
             )
-            return ConfigurationLoader._migrate_from_environment()
-
-        if path.exists(SECRETS_FILE):
-            SecretLoader.secrets = ConfigurationLoader._load_yaml_file(
-                SECRETS_FILE
+            return ConfigurationLoader._migrate_from_environment(
+                config_file, secrets_file
             )
-            logger.info(f"Loaded secrets from {SECRETS_FILE}")
+
+        if path.exists(secrets_file):
+            SecretLoader.secrets = ConfigurationLoader._load_yaml_file(
+                secrets_file
+            )
+            logger.info(f"Loaded secrets from {secrets_file}")
 
         config_data = ConfigurationLoader._load_yaml_file(
-            CONFIG_FILE, use_secret_loader=True
+            config_file, use_secret_loader=True
         )
-        logger.info(f"Loaded configuration from {CONFIG_FILE}")
+        logger.info(f"Loaded configuration from {config_file}")
 
         if override_data:
             config_data = ConfigurationLoader._deep_merge(
@@ -86,7 +90,8 @@ class ConfigurationLoader:
 
     @staticmethod
     def _load_yaml_file(
-        filepath: str, use_secret_loader: bool = False
+        filepath: str,
+        use_secret_loader: bool = False,
     ) -> dict[str, any]:
 
         try:
@@ -104,17 +109,17 @@ class ConfigurationLoader:
             raise
 
     @staticmethod
-    def _migrate_from_environment():
+    def _migrate_from_environment(config_file: str, secrets_file: str):
         migrator = ConfigurationMigrator(model_class=ServiceSettings)
 
         try:
             validated_model = migrator.migrate()
 
-            migrator.export_to_yaml(validated_model, CONFIG_FILE, SECRETS_FILE)
+            migrator.export_to_yaml(validated_model, config_file, secrets_file)
 
             logger.info(
-                f"Migration complete. Created {CONFIG_FILE} and "
-                f"{SECRETS_FILE}. Configuration validated through "
+                f"Migration complete. Created {config_file} and "
+                f"{secrets_file}. Configuration validated through "
                 f"Pydantic model."
             )
 

@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-from functools import lru_cache
-
 from solaredge2mqtt.core.settings.loader import ConfigurationLoader
 from solaredge2mqtt.core.settings.models import ServiceSettings
 
 
-@lru_cache()
-def service_settings() -> ServiceSettings:
-    return ConfigurationLoader.load_configuration()
+def service_settings(config_dir: str = "config") -> ServiceSettings:
+    return ConfigurationLoader.load_configuration(config_dir)

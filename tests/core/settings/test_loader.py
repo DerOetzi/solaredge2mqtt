@@ -289,19 +289,7 @@ class TestSecretLoader:
             )
 
             # Load configuration
-            with patch(
-                "solaredge2mqtt.core.settings.loader.CONFIG_FILE",
-                str(config_file),
-            ):
-                with patch(
-                    "solaredge2mqtt.core.settings.loader.SECRETS_FILE",
-                    str(secrets_file),
-                ):
-                    with patch(
-                        "solaredge2mqtt.core.settings.loader.path.exists"
-                    ) as mock_exists:
-                        mock_exists.return_value = True
-                        result = ConfigurationLoader.load_configuration()
+            result = ConfigurationLoader.load_configuration(tmpdir)
 
             assert result.modbus.host == "192.168.1.100"
             assert result.mqtt.broker == "mqtt.example.com"
@@ -325,19 +313,7 @@ class TestSecretLoader:
             )
 
             # Load configuration
-            with patch(
-                "solaredge2mqtt.core.settings.loader.CONFIG_FILE",
-                str(config_file),
-            ):
-                with patch(
-                    "solaredge2mqtt.core.settings.loader.SECRETS_FILE",
-                    str(secrets_file),
-                ):
-                    with patch(
-                        "solaredge2mqtt.core.settings.loader.path.exists"
-                    ) as mock_exists:
-                        mock_exists.return_value = True
-                        result = ConfigurationLoader.load_configuration()
+            result = ConfigurationLoader.load_configuration(tmpdir)
 
             assert result.modbus.host == "192.168.1.100"
             assert result.mqtt.broker == "mqtt.example.com"
@@ -357,21 +333,9 @@ class TestSecretLoader:
             )
 
             # Load configuration should raise error
-            with patch(
-                "solaredge2mqtt.core.settings.loader.CONFIG_FILE",
-                str(config_file),
-            ):
-                with patch(
-                    "solaredge2mqtt.core.settings.loader.SECRETS_FILE",
-                    str(secrets_file),
-                ):
-                    with patch(
-                        "solaredge2mqtt.core.settings.loader.path.exists"
-                    ) as mock_exists:
-                        mock_exists.return_value = True
-                        try:
-                            ConfigurationLoader.load_configuration()
-                            raise AssertionError("Expected ValueError for missing secret")
-                        except ValueError as e:
-                            assert "mqtt_password" in str(e)
-                            assert "not found" in str(e)
+            try:
+                ConfigurationLoader.load_configuration(tmpdir)
+                raise AssertionError("Expected ValueError for missing secret")
+            except ValueError as e:
+                assert "mqtt_password" in str(e)
+                assert "not found" in str(e)
