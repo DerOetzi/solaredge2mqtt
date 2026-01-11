@@ -2,11 +2,33 @@
 
 import tempfile
 from pathlib import Path
+from typing import Any
 
 import yaml
 
 from solaredge2mqtt.core.settings.migrator import ConfigurationMigrator
 from solaredge2mqtt.core.settings.models import ServiceSettings
+
+
+def _has_none_values(obj: Any) -> bool:
+    """
+    Helper function to check if an object contains any None values.
+    
+    Recursively checks dictionaries, lists, and nested structures.
+    
+    Args:
+        obj: The object to check
+        
+    Returns:
+        True if any None values are found, False otherwise
+    """
+    if obj is None:
+        return True
+    if isinstance(obj, dict):
+        return any(v is None or _has_none_values(v) for v in obj.values())
+    if isinstance(obj, list):
+        return any(item is None or _has_none_values(item) for item in obj)
+    return False
 
 
 class TestConfigurationMigrator:
@@ -307,17 +329,8 @@ class TestConfigurationMigrator:
         assert "b" not in cleaned["nested_list"][0]
         assert "empty_after_clean" not in cleaned
 
-        # Verify no None values remain
-        def has_none(obj):
-            if obj is None:
-                return True
-            if isinstance(obj, dict):
-                return any(v is None or has_none(v) for v in obj.values())
-            if isinstance(obj, list):
-                return any(item is None or has_none(item) for item in obj)
-            return False
-
-        assert not has_none(cleaned)
+        # Verify no None values remain using shared helper
+        assert not _has_none_values(cleaned)
 
     def test_extract_from_environment_excludes_none(self, monkeypatch):
         """
@@ -341,18 +354,9 @@ class TestConfigurationMigrator:
         migrator = ConfigurationMigrator(model_class=ServiceSettings)
         config_data, secrets_data = migrator.extract_from_environment()
 
-        # Verify no None values in extracted data
-        def has_none(obj):
-            if obj is None:
-                return True
-            if isinstance(obj, dict):
-                return any(v is None or has_none(v) for v in obj.values())
-            if isinstance(obj, list):
-                return any(item is None or has_none(item) for item in obj)
-            return False
-
-        assert not has_none(config_data)
-        assert not has_none(secrets_data)
+        # Verify no None values in extracted data using shared helper
+        assert not _has_none_values(config_data)
+        assert not _has_none_values(secrets_data)
 
         # Write to YAML and verify no null in the file
         with tempfile.TemporaryDirectory() as tmpdir:
