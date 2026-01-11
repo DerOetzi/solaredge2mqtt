@@ -19,11 +19,20 @@ def _get_default_cache_dir() -> str:
     Get the default cache directory for forecast data.
     
     Returns /app/cache in Docker containers, otherwise uses platformdirs.
+    Detection is based on the presence of /.dockerenv file or
+    DOCKER_CONTAINER environment variable.
     """
-    docker_cache = Path("/app/cache")
-    if docker_cache.parent.exists() and docker_cache.parent.name == "app":
-        # We're likely in a Docker container with /app directory
-        return str(docker_cache)
+    from os import getenv
+    
+    # Check for Docker environment indicators
+    is_docker = (
+        Path("/.dockerenv").exists()
+        or getenv("DOCKER_CONTAINER") == "true"
+    )
+    
+    if is_docker:
+        return "/app/cache"
+    
     # Use platform-specific user cache directory
     return str(Path(platformdirs.user_cache_dir("se2mqtt_forecast")))
 

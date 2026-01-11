@@ -366,15 +366,16 @@ class ConfigurationMigrator:
             Cleaned object without None values
         """
         if isinstance(obj, dict):
-            return {
-                k: ConfigurationMigrator._remove_null_values(v)
-                for k, v in obj.items()
-                if v is not None
-                and not (
-                    isinstance(v, dict)
-                    and not ConfigurationMigrator._remove_null_values(v)
-                )
-            }
+            result = {}
+            for k, v in obj.items():
+                if v is None:
+                    continue
+                cleaned_value = ConfigurationMigrator._remove_null_values(v)
+                # Skip empty dicts that result from removing all None values
+                if isinstance(cleaned_value, dict) and not cleaned_value:
+                    continue
+                result[k] = cleaned_value
+            return result
         elif isinstance(obj, list):
             return [
                 ConfigurationMigrator._remove_null_values(item)
