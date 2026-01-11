@@ -14,11 +14,25 @@ from pydantic import (
 from solaredge2mqtt.core.logging import logger
 
 
+def _get_default_cache_dir() -> str:
+    """
+    Get the default cache directory for forecast data.
+    
+    Returns /app/cache in Docker containers, otherwise uses platformdirs.
+    """
+    docker_cache = Path("/app/cache")
+    if docker_cache.parent.exists() and docker_cache.parent.name == "app":
+        # We're likely in a Docker container with /app directory
+        return str(docker_cache)
+    # Use platform-specific user cache directory
+    return str(Path(platformdirs.user_cache_dir("se2mqtt_forecast")))
+
+
 class ForecastSettings(BaseModel):
     enable: bool = Field(False)
     hyperparametertuning: bool = Field(False)
     cachingdir: DirectoryPath | None = Field(
-        default=str(Path(platformdirs.user_cache_dir("se2mqtt_forecast")))
+        default_factory=_get_default_cache_dir
     )
     retain: bool = Field(False)
 
@@ -45,6 +59,8 @@ class ForecastSettings(BaseModel):
         chmod(path, 0o700)
 
         if path.stat().st_mode & 0o077:
-            raise ValueError(f"Insecure cache directory permissions: {path}")
+            raise ValueError(
+                f"Insecure cache directory permissions: {path}"
+            )
 
         return str(path)

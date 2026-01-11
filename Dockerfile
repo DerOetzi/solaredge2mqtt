@@ -44,8 +44,8 @@ WORKDIR /app
 
 RUN set -eux && \
     adduser --uid 1000 --disabled-password --gecos '' solaredge2mqtt && \
-    mkdir -p /app/config /home/solaredge2mqtt/.cache/se2mqtt_forecast && \
-    chown solaredge2mqtt:solaredge2mqtt /app/config /home/solaredge2mqtt/.cache/se2mqtt_forecast
+    mkdir -p /app/config /app/cache && \
+    chown solaredge2mqtt:solaredge2mqtt /app/config /app/cache
 
 COPY --chown=root:solaredge2mqtt --chmod=755 --from=buildimage /venv /venv
 COPY --chown=root:solaredge2mqtt --chmod=755 \
