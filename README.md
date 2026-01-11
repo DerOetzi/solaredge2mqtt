@@ -84,98 +84,34 @@ solaredge2mqtt --help
 
 ### Migration from Environment Variables
 
-**⚠️ Breaking Change**: Starting with version 2.0.0, SolarEdge2MQTT uses YAML configuration files instead of environment variables.
+**⚠️ Breaking Change**: Starting with version **2.3.0**, SolarEdge2MQTT uses YAML configuration files instead of environment variables.
 
-If you're upgrading from a previous version that used environment variables, `.env` files, or Docker secrets, SolarEdge2MQTT provides an automatic and manual migration path.
+If you're upgrading from a previous version that used environment variables, `.env` files, or Docker secrets, SolarEdge2MQTT provides automatic and manual migration paths.
 
-#### Automatic Migration
+**📖 For detailed migration instructions, see the [Migration Guide](MIGRATION_GUIDE.md)**
 
-When you start the service for the first time after upgrading, if no YAML configuration files exist (or they're empty), the service will:
+The migration guide covers:
+- ✅ Automatic migration on first startup
+- ✅ Manual migration with the CLI tool
+- ✅ Docker-specific migration procedures
+- ✅ Environment variable to YAML mapping
+- ✅ Post-migration verification
+- ✅ Troubleshooting common issues
 
-1. **Check for environment variables** from:
-   - Current environment variables
-   - `.env` file (if present)
-   - Docker secrets in `/run/secrets/` (if present)
+**Quick Migration Overview:**
 
-2. **If environment variables are found**:
-   - Automatically create `configuration.yml` and `secrets.yml` in your config directory
-   - Separate sensitive values into `secrets.yml`
-   - Use `!secret` tags in `configuration.yml` to reference secrets
-   - The service will then start normally with your migrated configuration
+When you start the service after upgrading, it will automatically:
+1. Detect existing environment variables from `.env` files, environment, or Docker secrets
+2. Create `configuration.yml` and `secrets.yml` in your config directory
+3. Separate sensitive values into `secrets.yml` with secure permissions
+4. Start normally with your migrated configuration
 
-3. **If no environment variables are found** (new installation):
-   - Copy example files to your config directory
-   - Exit with a helpful message asking you to configure the files
-   - Start the service again after editing the configuration
-
-#### Manual Migration
-
-For more control over the migration process, use the migration CLI tool:
-
+For more control, use the migration tool:
 ```bash
-# Migrate from .env file to config directory
-solaredge2mqtt-migrate --input .env --output-dir config
-
-# Preview changes without writing files
-solaredge2mqtt-migrate --input .env --output-dir config --dry-run
-
-# Create backups of existing files before migration
 solaredge2mqtt-migrate --input .env --output-dir config --backup
 ```
 
-**Migration options:**
-- `--input PATH`: Path to .env file (default: `.env`)
-- `--output-dir PATH`: Output directory for YAML files (default: `config`)
-- `--dry-run`: Preview changes without writing files
-- `--backup`: Create timestamped backups of existing configuration files
-
-#### Docker Migration
-
-For Docker users migrating from environment variables:
-
-**Option 1: Use the migration tool**
-```bash
-# Run migration tool in a container
-docker run --rm -v $(pwd)/config:/app/config \
-    ghcr.io/deroetzi/solaredge2mqtt:latest \
-    solaredge2mqtt-migrate --input .env --output-dir config --backup
-```
-
-**Option 2: Let the service auto-migrate**
-1. Mount the config volume: `-v $(pwd)/config:/app/config`
-2. Keep your environment variables or `.env` file for the first run
-3. Start the container - it will automatically create YAML files
-4. After successful migration, remove the environment variables from your docker-compose.yml or docker run command
-5. Restart the container - it will now use the YAML configuration
-
-#### Environment Variable Mapping
-
-Environment variables are converted to YAML structure using double underscores (`__`) as separators:
-
-```bash
-# Environment variable format
-SE2MQTT_MODBUS__HOST=192.168.1.100
-SE2MQTT_MQTT__BROKER=mqtt.example.com
-SE2MQTT_MQTT__PASSWORD=secret123
-
-# Converts to YAML
-modbus:
-  host: 192.168.1.100
-mqtt:
-  broker: mqtt.example.com
-  password: !secret mqtt_password  # Automatically moved to secrets.yml
-
-# And secrets.yml
-mqtt_password: "secret123"
-```
-
-#### Post-Migration
-
-After successful migration:
-1. **Verify** the generated `configuration.yml` and `secrets.yml` files
-2. **Test** that the service starts correctly with the new configuration
-3. **Remove** old environment variables, `.env` files, or Docker secrets
-4. **Backup** your new YAML configuration files
+**[→ Read the full Migration Guide](MIGRATION_GUIDE.md)**
 
 ### Secret References
 
