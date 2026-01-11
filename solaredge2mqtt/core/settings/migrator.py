@@ -1,4 +1,4 @@
-from os import environ, listdir, makedirs, path
+from os import chmod, environ, listdir, makedirs, path
 from typing import Any, get_args, get_origin
 
 import yaml
@@ -463,7 +463,6 @@ class ConfigurationMigrator:
 
         if secrets_data:
             try:
-                import os
                 with open(secrets_file, "w", encoding="utf-8") as f:
                     yaml.safe_dump(
                         secrets_data,
@@ -472,7 +471,7 @@ class ConfigurationMigrator:
                         sort_keys=False,
                         allow_unicode=True,
                     )
-                os.chmod(secrets_file, 0o600)
+                chmod(secrets_file, 0o600)
                 logger.info(f"Secrets written to {secrets_file}")
                 logger.warning(
                     f"IMPORTANT: {secrets_file} contains sensitive data. "

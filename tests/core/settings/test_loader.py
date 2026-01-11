@@ -266,6 +266,55 @@ class TestConfigurationLoader:
 
         assert result is False
 
+    def test_copy_example_files_success(self):
+        """Test copying example files to target locations."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_file = Path(tmpdir) / "configuration.yml"
+            secrets_file = Path(tmpdir) / "secrets.yml"
+            
+            # Copy example files
+            ConfigurationLoader._copy_example_files(
+                str(config_file), str(secrets_file)
+            )
+            
+            # Check files were created
+            assert config_file.exists()
+            assert secrets_file.exists()
+            
+            # Check secrets file has correct permissions (600)
+            import stat
+            secrets_stat = secrets_file.stat()
+            # On Unix: should be -rw-------
+            # Just check it's not world/group readable
+            assert not (secrets_stat.st_mode & stat.S_IRGRP)
+            assert not (secrets_stat.st_mode & stat.S_IROTH)
+
+    @patch("solaredge2mqtt.core.settings.loader.EnvironmentReader.read_all")
+    @patch("solaredge2mqtt.core.settings.loader.path.exists")
+    def test_migrate_from_environment_no_env_vars(
+        self, mock_exists, mock_read_all
+    ):
+        """Test migration when no environment variables exist (new install)."""
+        mock_exists.return_value = False
+        mock_read_all.return_value = {}  # No environment variables
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_file = Path(tmpdir) / "configuration.yml"
+            secrets_file = Path(tmpdir) / "secrets.yml"
+            
+            # Should exit with code 0 after copying examples
+            try:
+                ConfigurationLoader._migrate_from_environment(
+                    str(config_file), str(secrets_file)
+                )
+                raise AssertionError("Expected sys.exit(0)")
+            except SystemExit as e:
+                assert e.code == 0
+                
+            # Check example files were copied
+            assert config_file.exists()
+            assert secrets_file.exists()
+
 
 
 class TestSecretLoader:

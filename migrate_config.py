@@ -9,6 +9,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent))
 
 from solaredge2mqtt.core.settings.migrator import ConfigurationMigrator
+from solaredge2mqtt.core.settings.models import ServiceSettings
 
 def main():
     
