@@ -314,7 +314,7 @@ class ConfigurationMigrator:
         config_data, secrets_data = self._extract_secrets(validated_data)
 
         config_data = self._ensure_proper_types(config_data, model)
-        
+
         # Remove any remaining None values from nested structures
         config_data = self._remove_null_values(config_data)
 

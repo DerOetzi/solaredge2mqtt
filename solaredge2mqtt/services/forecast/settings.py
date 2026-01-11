@@ -1,5 +1,5 @@
 
-from os import chmod
+from os import chmod, getenv
 from pathlib import Path
 
 import platformdirs
@@ -22,12 +22,9 @@ def _get_default_cache_dir() -> str:
     Detection is based on the presence of /.dockerenv file or
     DOCKER_CONTAINER environment variable.
     """
-    from os import getenv
-    
     # Check for Docker environment indicators
     is_docker = (
-        Path("/.dockerenv").exists()
-        or getenv("DOCKER_CONTAINER") == "true"
+        Path("/.dockerenv").exists() or getenv("DOCKER_CONTAINER") == "true"
     )
     
     if is_docker:
