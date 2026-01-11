@@ -1,0 +1,111 @@
+# SolarEdge2MQTT Configuration File
+# This file contains all non-sensitive configuration settings.
+# Sensitive values (passwords, tokens, API keys) should be placed in secrets.yml
+
+# Interval between requests in seconds
+interval: 5
+
+# Set logging level to DEBUG, INFO (default), WARNING, ERROR, CRITICAL
+logging_level: INFO
+
+# Location settings (required for weather and forecast features)
+# location:
+#   latitude: 52.520008
+#   longitude: 13.404954
+
+# Modbus configuration (required)
+modbus:
+  host: 192.168.1.100  # IP address of your SolarEdge inverter
+  port: 1502           # Port of your inverter
+  timeout: 1           # Timeout for the modbus connection in seconds
+  unit: 1              # Modbus unit address
+  
+  # Enable or disable detection of meters (default: true)
+  meter:
+    - true  # meter0
+    - true  # meter1
+    - true  # meter2
+  
+  # Enable or disable detection of batteries (default: true)
+  battery:
+    - true  # battery0
+    - true  # battery1
+  
+  # Check grid status (requires extra hardware like Export+Import meter)
+  check_grid_status: false
+  
+  # Advanced power controls (enabled, disabled, or disable)
+  advanced_power_controls: disabled
+  
+  # Follower inverters (for cascading setups)
+  # follower:
+  #   - unit: 2
+  #     meter: [false, false, false]
+  #     battery: [false, false]
+
+# MQTT configuration (required)
+mqtt:
+  client_id: solaredge2mqtt     # MQTT client identifier
+  broker: mqtt.example.com      # IP address of your MQTT broker
+  port: 1883                    # Port of your MQTT broker
+  username: mqtt_user           # Username for MQTT broker
+  password: !secret mqtt_password  # Reference to secrets.yml
+  topic_prefix: solaredge       # Prefix for MQTT topics
+  retain: false                 # Retain MQTT messages
+
+# Powerflow configuration
+powerflow:
+  external_production: false  # Set to true if you have additional producers
+  retain: false               # Retain MQTT messages
+
+# Energy calculation settings
+energy:
+  retain: false  # Retain MQTT messages
+
+# Price settings for energy calculation
+prices:
+  consumption: 0.30  # Price per kWh for energy from grid
+  delivery: 0.08     # Price per kWh for energy delivered to grid
+
+# SolarEdge Monitoring Platform (optional)
+# monitoring:
+#   site_id: !secret monitoring_site_id  # Reference to secrets.yml
+#   username: "user@example.com"
+#   password: !secret monitoring_password  # Reference to secrets.yml
+#   retain: false
+
+# SolarEdge Wallbox (optional)
+# wallbox:
+#   host: 192.168.1.101
+#   password: !secret wallbox_password  # Reference to secrets.yml
+#   serial: !secret wallbox_serial  # Reference to secrets.yml
+#   retain: false
+
+# Home Assistant Auto Discovery (optional)
+# homeassistant:
+#   enable: true
+#   topic_prefix: homeassistant
+#   retain: false
+
+# InfluxDB configuration (optional)
+# influxdb:
+#   host: http://localhost
+#   port: 8086
+#   token: !secret influxdb_token  # Reference to secrets.yml
+#   org: my_org
+#   bucket: solaredge
+#   retention: 63072000      # Retention for aggregated data in seconds (2 years)
+#   retention_raw: 25        # Retention for raw data in hours
+
+# Weather configuration (optional, requires location)
+# weather:
+#   api_key: !secret weather_api_key  # Reference to secrets.yml
+#   language: en
+#   retain: false
+
+# Forecast configuration (optional, requires weather and InfluxDB)
+# forecast:
+#   enable: false
+#   hyperparametertuning: false
+#   cachingdir: ~/.cache/se2mqtt_forecast
+#   retain: false

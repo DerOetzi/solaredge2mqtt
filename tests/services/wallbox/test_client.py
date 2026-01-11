@@ -5,9 +5,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
+from solaredge2mqtt.core.exceptions import (
+    ConfigurationException,
+    InvalidDataException,
+)
 from solaredge2mqtt.services.wallbox import WallboxClient
-from solaredge2mqtt.services.wallbox.events import WallboxReadEvent
 from solaredge2mqtt.services.wallbox.settings import WallboxSettings
 
 
@@ -16,7 +18,8 @@ def wallbox_settings():
     """Create WallboxSettings for testing."""
     settings = MagicMock(spec=WallboxSettings)
     settings.host = "192.168.1.100"
-    settings.serial = "CHARGER123"
+    settings.serial = MagicMock()
+    settings.serial.get_secret_value.return_value = "CHARGER123"
     settings.password = MagicMock()
     settings.password.get_secret_value.return_value = "test_password"
     settings.retain = False
@@ -27,7 +30,7 @@ def wallbox_settings():
 def mock_http_client():
     """Mock HTTP client methods."""
     with patch.object(WallboxClient, "_get", new_callable=AsyncMock) as mock_get, \
-         patch.object(WallboxClient, "_post", new_callable=AsyncMock) as mock_post:
+            patch.object(WallboxClient, "_post", new_callable=AsyncMock) as mock_post:
         yield mock_get, mock_post
 
 

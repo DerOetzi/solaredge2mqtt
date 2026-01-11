@@ -3,14 +3,10 @@ services:
   solaredge2mqtt:
     container_name: solaredge2mqtt
     image: ghcr.io/deroetzi/solaredge2mqtt:latest
-    secrets:
-      - se2mqtt_mqtt__password
-    # - se2mqtt_monitoring__password
-    # - se2mqtt_wallbox__password
-    # - se2mqtt_influxdb__token
-    # - se2mqtt_weather__api_key
-    env_file: 
-      - .env
+    volumes:
+      - ./config:/app/config
+    environment:
+      - TZ=Europe/Berlin
     restart: unless-stopped
 
   grafana:
@@ -52,18 +48,8 @@ services:
       default:
 
 
-secrets:
-  se2mqtt_mqtt__password:
-    file: .secrets/mqtt_password
-
-#  se2mqtt_monitoring__password:
-#    file: .secrets/monitoring_password
-
-#  se2mqtt_wallbox__password:
-#    file: .secrets/wallbox_password
-
-#  se2mqtt_influxdb__token:
-#    file: .secrets/influxdb_token
-
-#  se2mqtt_weather__api_key:
-#    file: .secrets/owm_api_key
+# Configuration is now managed via YAML files in ./config/
+# See config/configuration.yml.example and config/secrets.yml.example for reference
+# 
+# For migration from environment variables or .env files:
+# The service will automatically create YAML files on first run if they don't exist

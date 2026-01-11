@@ -69,7 +69,8 @@ class WallboxClient(HTTPClientAsync):
             async with asyncio.timeout(5):
                 response = await self._get(
                     WALLBOX_URL.format(
-                        host=self.settings.host, serial=self.settings.serial
+                        host=self.settings.host,
+                        serial=self.settings.serial.get_secret_value(),
                     ),
                     headers={
                         "Authorization": f"Bearer {self.authorization.access_token}"},

@@ -87,7 +87,9 @@ class MonitoringSite(HTTPClientAsync):
 
             async with asyncio.timeout(10):
                 result = await self._get(
-                    LOGICAL_URL.format(site_id=self.settings.site_id),
+                    LOGICAL_URL.format(
+                        site_id=self.settings.site_id.get_secret_value()
+                    ),
                     headers={
                         "Content-Type": CONTENT_TYPE_FORM_URLENCODED,
                         "X-CSRF-TOKEN": self.get_cookie("CSRF-TOKEN"),
@@ -189,7 +191,7 @@ class MonitoringSite(HTTPClientAsync):
                 playback_data = await self._post(
                     POWER_PUBLIC_URL,
                     data={
-                        "fieldId": self.settings.site_id,
+                        "fieldId": self.settings.site_id.get_secret_value(),
                         "timeUnit": 4,
                         "CSRF": self.get_cookie("CSRF-TOKEN"),
                     },

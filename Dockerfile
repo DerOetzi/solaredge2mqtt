@@ -43,7 +43,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN set -eux && \
-    adduser --uid 1000 --disabled-password --gecos '' solaredge2mqtt 
+    adduser --uid 1000 --disabled-password --gecos '' solaredge2mqtt && \
+    mkdir -p /app/config && \
+    chown solaredge2mqtt:solaredge2mqtt /app/config
 
 COPY --chown=root:solaredge2mqtt --chmod=755 --from=buildimage /venv /venv
 COPY --chown=root:solaredge2mqtt --chmod=755 \
@@ -52,5 +54,7 @@ COPY --chown=root:solaredge2mqtt --chmod=755 \
     pyproject.toml README.md LICENSE ./
 
 USER solaredge2mqtt
+
+VOLUME ["/app/config"]
 
 CMD ["python3", "-m", "solaredge2mqtt"]

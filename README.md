@@ -47,41 +47,163 @@ If you like this project, I would appreciate a small contribution.
 
 ## Configuration
 
-You can download [.env.example](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/.env.example) and rename it to `.env`. Inside, you can modify the default configuration values to meet your needs in this file.
+SolarEdge2MQTT uses YAML-based configuration files for easy and structured setup. Configuration is stored in two files:
 
-Configure the service using environment variables. The available options are listed below for customization:
+- **`configuration.yml`**: Contains all non-sensitive settings
+- **`secrets.yml`**: Contains sensitive data (passwords, tokens, API keys)
+
+### Quick Start
+
+For new installations, the service will automatically create example configuration files on first run if they don't exist. Simply start the service and it will guide you through the setup process.
+
+### Configuration Files
+
+You can download example configuration files to get started:
+- [configuration.yml.example](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/configuration.yml.example)
+- [secrets.yml.example](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/secrets.yml.example)
+
+**Setup steps:**
+1. Create a `config/` directory (or use `--config-dir` to specify a different location)
+2. Copy the example files and rename them to `configuration.yml` and `secrets.yml`
+3. Edit both files with your specific settings
+
+### Configurable Configuration Directory
+
+By default, SolarEdge2MQTT looks for configuration files in the `config/` directory. You can specify a different location using the `--config-dir` argument:
+
+```bash
+# Use default config directory (./config/)
+solaredge2mqtt
+
+# Use custom config directory
+solaredge2mqtt --config-dir /etc/solaredge2mqtt
+
+# Show help
+solaredge2mqtt --help
+```
+
+### Migration from Environment Variables
+
+**⚠️ Breaking Change**: Starting with version **2.3.0**, SolarEdge2MQTT uses YAML configuration files instead of environment variables.
+
+If you're upgrading from a previous version that used environment variables, `.env` files, or Docker secrets, SolarEdge2MQTT provides automatic and manual migration paths.
+
+**📖 For detailed migration instructions, see the [Migration Guide](MIGRATION_GUIDE.md)**
+
+The migration guide covers:
+- ✅ Automatic migration on first startup
+- ✅ Manual migration with the CLI tool
+- ✅ Docker-specific migration procedures
+- ✅ Environment variable to YAML mapping
+- ✅ Post-migration verification
+- ✅ Troubleshooting common issues
+
+**Quick Migration Overview:**
+
+When you start the service after upgrading, it will automatically:
+1. Detect existing environment variables from `.env` files, environment, or Docker secrets
+2. Create `configuration.yml` and `secrets.yml` in your config directory
+3. Separate sensitive values into `secrets.yml` with secure permissions
+4. Start normally with your migrated configuration
+
+For more control, use the migration tool:
+```bash
+solaredge2mqtt-migrate --input .env --output-dir config --backup
+```
+
+**[→ Read the full Migration Guide](MIGRATION_GUIDE.md)**
+
+### Secret References
+
+To keep sensitive data secure, use the `!secret` tag in your configuration. This tag references values stored in `secrets.yml`:
+
+```yaml
+# configuration.yml
+mqtt:
+  broker: mqtt.example.com
+  password: !secret mqtt_password
+
+# secrets.yml
+mqtt_password: "your_actual_password"
+```
+
+**Benefits of using secrets.yml:**
+- Sensitive data is separated from main configuration
+- `secrets.yml` is automatically created with restrictive 600 permissions
+- Easy to exclude from version control
+- Can be managed separately in deployment pipelines
+
+The migration tool automatically identifies sensitive fields (passwords, tokens, API keys, serial numbers, site IDs) and moves them to `secrets.yml`.
+
+The available configuration options are listed below:
 
 ### Basic configuration
 
-- **SE2MQTT_INTERVAL**: The frequency (in seconds) of data retrieval requests. Default is every 5 seconds.
-- **SE2MQTT_LOGGING_LEVEL**: Adjust the verbosity of logs. Options include DEBUG, INFO, WARNING, ERROR, and CRITICAL.
-- **SE2MQTT_LOCATION\_\_LATITUDE** and **SE2MQTT_LOCATION\_\_LONGITUDE**: Specify your location to enable weather and forecast services. These settings are essential for accurate environmental data and PV production forecasts.
-- **SE2MQTT_POWERFLOW__EXTERNAL_PRODUCTION**: Set this to true if you have any additional producers to skip some validations. Default is false
+```yaml
+# Interval between data retrieval requests (in seconds)
+interval: 5
+
+# Logging verbosity: DEBUG, INFO, WARNING, ERROR, or CRITICAL
+logging_level: INFO
+
+# Location for weather and forecast services
+location:
+  latitude: 52.520008
+  longitude: 13.404954
+
+# Set to true if you have additional producers
+powerflow:
+  external_production: false
+```
 
 ### Basic Modbus configuration
 
-- **SE2MQTT_MODBUS__HOST**: The IP address of your SolarEdge inverter.
-- **SE2MQTT_MODBUS__PORT**: The port on which your inverter's Modbus is accessible. Default is 1502.
-- **SE2MQTT_MODBUS__TIMEOUT**: The timeout (in seconds) for Modbus connections. A lower value makes the system more responsive but may lead to incomplete data in environments with poor network conditions.
-- **SE2MQTT_MODBUS__UNIT**: The unit address for Modbus communication. Default is 1.
-- **SE2MQTT_MODBUS__METER0, METER1, METER2**: Enable or disable detection of meters. Default is true.
-- **SE2MQTT_MODBUS__BATTERY0, BATTERY1**: Enable or disable detection of batteries. Default is true.
-- **SE2MQTT_MODBUS__CHECK_GRID_STATUS**: Check whether the system is on grid (not available without extra hardware like an Export+Import meter). Default is false.
+```yaml
+modbus:
+  host: 192.168.1.100  # IP address of your SolarEdge inverter
+  port: 1502           # Modbus port (default: 1502)
+  timeout: 1           # Connection timeout in seconds
+  unit: 1              # Unit address (default: 1)
+  
+  # Enable or disable meter detection (default: true)
+  meter:
+    - true  # meter0
+    - true  # meter1
+    - true  # meter2
+  
+  # Enable or disable battery detection (default: true)
+  battery:
+    - true  # battery0
+    - true  # battery1
+  
+  # Check grid status (requires extra hardware)
+  check_grid_status: false
+```
 
 ### Leader/follower setup
 
 SolarEdge inverters support a cascading setup, where one inverter acts as the leader and up to ten others act as followers.
 
 - For the leader inverter, use the basic Modbus settings described above.
-- For each follower inverter, use the additional follower-specific parameters as shown below.
+- For each follower inverter, add them to the configuration as shown below.
 
-Example for configuring the first follower:
+```yaml
+modbus:
+  # Leader configuration
+  host: 192.168.1.100
+  port: 1502
+  
+  # Follower inverters
+  follower:
+    - unit: 2
+      meter: [false, false, false]
+      battery: [false, false]
+    - unit: 3
+      meter: [true, false, false]
+      battery: [true, false]
+```
 
-- **SE2MQTT_MODBUS__FOLLOWER0__UNIT**: The unit address for Modbus communication.
-- **SE2MQTT_MODBUS__FOLLOWER0__METER0, METER1, METER2**: Enable or disable detection of meters. Default is false.
-- **SE2MQTT_MODBUS__FOLLOWER0__BATTERY0, BATTERY1**: Enable or disable detection of batteries. Default is false.
-
-You can configure up to 11 inverters in total: one leader and up to 10 followers (FOLLOWER0 through FOLLOWER9). Each configured inverter will report:
+You can configure up to 11 inverters in total: one leader and up to 10 followers. Each configured inverter will report:
 
 - individual power flow data
 - individual energy data (if enabled)
@@ -92,152 +214,355 @@ This setup allows for comprehensive multi-inverter support in systems with casca
 
 ### MQTT configuration
 
-- **SE2MQTT_MQTT\_\_CLIENT_ID**: Identifier for the MQTT client, defaults to 'solaredge2mqtt'.
-- **SE2MQTT_MQTT\_\_BROKER**: The IP address of your MQTT broker.
-- **SE2MQTT_MQTT\_\_PORT**: The port your MQTT broker listens on. Default is 1883.
-- **SE2MQTT_MQTT\_\_USERNAME** and **SE2MQTT_MQTT\_\_PASSWORD**: Credentials for connecting to your MQTT broker. It's recommended to use secrets for the password if deploying with Docker.
-- **SE2MQTT_MQTT\_\_TOPIC_PREFIX**: The prefix used for MQTT topics. Defaults to 'solaredge'.
+```yaml
+mqtt:
+  client_id: solaredge2mqtt        # MQTT client identifier
+  broker: mqtt.example.com         # IP address of MQTT broker
+  port: 1883                       # MQTT port (default: 1883)
+  username: mqtt_user              # MQTT username
+  password: !secret mqtt_password  # Use !secret to reference secrets.yml
+  topic_prefix: solaredge          # MQTT topic prefix
+```
+
+**Note**: Store your password securely in `secrets.yml`:
+```yaml
+# secrets.yml
+mqtt_password: "your_actual_password"
+```
 ### Retain Configuration
 
-By default, all messages are not retained. However, you can configure the retain flag for each message type individually:
+By default, MQTT messages are not retained. You can configure the retain flag for each message type:
 
-- **SE2MQTT_ENERGY__RETAIN**: Default is `false`.
-- **SE2MQTT_FORECAST__RETAIN**: Default is `false`.
-- **SE2MQTT_HOMEASSISTANT__RETAIN**: Default is `false`.
-- **SE2MQTT_MODBUS__RETAIN**: Default is `false`.
-- **SE2MQTT_MONITORING__RETAIN**: Default is `false`.
-- **SE2MQTT_POWERFLOW__RETAIN**: Default is `false`.
-- **SE2MQTT_WALLBOX__RETAIN**: Default is `false`.
-- **SE2MQTT_WEATHER__RETAIN**: Default is `false`.
+```yaml
+energy:
+  retain: false
 
-This configuration allows you to control whether specific MQTT messages should be retained by the broker.
+forecast:
+  retain: false
+
+homeassistant:
+  retain: false
+
+monitoring:
+  retain: false
+
+powerflow:
+  retain: false
+
+wallbox:
+  retain: false
+
+weather:
+  retain: false
+```
 
 ### Monitoring
 
-To enable panel energy and power value retrieval from the SolarEdge monitoring platform, you must configure:
+To enable panel energy and power value retrieval from the SolarEdge monitoring platform:
 
-- **SE2MQTT_MONITORING\_\_SITE_ID**: Your site ID as registered on the SolarEdge platform.
-- **SE2MQTT_MONITORING\_\_USERNAME**: Your username for the SolarEdge monitoring platform.
-- **SE2MQTT_MONITORING\_\_PASSWORD**: Your password. Ensure to use Docker secrets or a secure method to protect this information.
+```yaml
+monitoring:
+  site_id: !secret monitoring_site_id     # Your SolarEdge site ID (store in secrets.yml)
+  username: "user@example.com"             # SolarEdge platform username
+  password: !secret monitoring_password    # Store in secrets.yml
+  retain: false
+```
+
+Remember to add the site_id and password to `secrets.yml`:
+```yaml
+# secrets.yml
+monitoring_site_id: "12345678"
+monitoring_password: "your_monitoring_password"
+```
 
 ### Wallbox
 
-For monitoring SolarEdge Wallbox, provide:
+For monitoring SolarEdge Wallbox:
 
-- **SE2MQTT_WALLBOX\_\_HOST**: The IP address of your Wallbox.
-- **SE2MQTT_WALLBOX\_\_PASSWORD**: The admin password for Wallbox web UI access.
-- **SE2MQTT_WALLBOX\_\_SERIAL**: The serial number of your Wallbox.
+```yaml
+wallbox:
+  host: 192.168.1.101                     # Wallbox IP address
+  password: !secret wallbox_password      # Admin password (store in secrets.yml)
+  serial: !secret wallbox_serial          # Wallbox serial number (store in secrets.yml)
+  retain: false
+```
+
+Add the password and serial to `secrets.yml`:
+```yaml
+# secrets.yml
+wallbox_password: "your_wallbox_admin_password"
+wallbox_serial: "ABC123456"
+```
 
 ### Home Assistant Auto Discovery
 
-If you want Home Assistant to auto discover the data SolarEdge2MQTT provides, you can enable this here.
+Enable Home Assistant auto discovery:
 
-- **SE2MQTT_HOMEASSISTANT\_\_ENABLE**: Set to true to enable the auto discovery
-- **SE2MQTT_HOMEASSISTANT\_\_TOPIC_PREFIX**: By default Home Assistant MQTT integration listens to subtopics of homeassistant
+```yaml
+homeassistant:
+  enable: true                 # Enable auto discovery
+  topic_prefix: homeassistant  # MQTT discovery topic prefix
+  retain: false
+```
 
-_If you want to remove things, just disable the feature, then restart SolarEdge2MQTT first and after it restart Home Assistant,_
+_To remove entities, disable the feature, restart SolarEdge2MQTT first, then restart Home Assistant._
 
 ### InfluxDB
 
-Configure your InfluxDB settings with these environment variables to store monitoring data effectively:
+Configure InfluxDB for data storage:
 
-- **SE2MQTT_INFLUXDB\_\_HOST**: Specify the host of your InfluxDB instance (e.g., http://localhost). Default is None.
-- **SE2MQTT_INFLUXDB\_\_PORT**: The port number on which your InfluxDB instance is running. The default value is 8086.
-- **SE2MQTT_INFLUXDB\_\_TOKEN**: Your access token for InfluxDB. It is imperative to use this token securely, especially when deploying with Docker. The token requires full access since the service will be managing necessary buckets and tasks. Default is None.
-- **SE2MQTT_INFLUXDB\_\_ORG**: The ID of your organization within InfluxDB. Default is None.
-- **SE2MQTT_INFLUXDB\_\_BUCKET**: The name of the bucket where the data will be saved. Default bucket name is solaredge.
-- **SE2MQTT_INFLUXDB\_\_RETENTION_RAW**: The retention policy for raw data in hours. This setting defines how long the raw power values are stored in InfluxDB. Default is 25 hours.
-- **SE2MQTT_INFLUXDB\_\_RETENTION**: The retention policy for aggregated data in seconds. This sets how long the aggregated data will be stored in InfluxDB, with the default being 2 years (63072000 seconds).
-  These configurations allow you to tailor the InfluxDB storage for your SolarEdge monitoring data, ensuring that you have the flexibility to define how long the data should be retained both in raw and aggregated forms.
+```yaml
+influxdb:
+  host: http://localhost           # InfluxDB host
+  port: 8086                       # InfluxDB port (default: 8086)
+  token: !secret influxdb_token    # Access token (store in secrets.yml)
+  org: my_org                      # Organization ID
+  bucket: solaredge                # Bucket name (default: solaredge)
+  retention_raw: 25                # Raw data retention in hours
+  retention: 63072000              # Aggregated data retention in seconds (2 years)
+```
+
+Add the token to `secrets.yml`:
+```yaml
+# secrets.yml
+influxdb_token: "your_influxdb_token_with_full_access"
+```
+
+**Note**: The token requires full access as the service manages buckets and tasks.
 
 ### Price Configuration
 
-To calculate your savings and earnings, you can specify the amount you pay for consumption and the amount you receive for delivery per kilowatt-hour (kWh). Please note, this feature is only operational in conjunction with InfluxDB.
+Calculate savings and earnings by specifying energy costs. Requires InfluxDB.
 
-- **SE2MQTT_PRICES\_\_CONSUMPTION**: Set the price you pay per 1 kWh for energy received from the grid.
-- **SE2MQTT_PRICES\_\_DELIVERY**: Set the price you receive per 1 kWh for energy delivered to the grid.
-
-These additional settings allow for a comprehensive analysis of your energy production and usage, enabling you not just to monitor energy flow but also understand the financial aspects of your energy generation and consumption.
+```yaml
+prices:
+  consumption: 0.30  # Price paid per kWh from grid
+  delivery: 0.08     # Price received per kWh delivered to grid
+```
 
 ### Weather
 
-Leverage real-time weather data in your SolarEdge2MQTT service by integrating with OpenWeatherMap. This feature enriches your service with accurate environmental conditions, which can be essential for detailed energy production analysis.
+Integrate real-time weather data from OpenWeatherMap:
 
-- **SE2MQTT_WEATHER\_\_API_KEY**: Securely set your OpenWeatherMap OneCall API key here. For enhanced security, it's recommended to use this key as a secret within Docker environments.
-- **SE2MQTT_WEATHER\_\_LANGUAGE**: Customize the language for weather data retrieved from the API. The default setting is English (en).
+```yaml
+weather:
+  api_key: !secret weather_api_key  # OpenWeatherMap API key (store in secrets.yml)
+  language: en                       # Language for weather data (default: en)
+  retain: false
+```
 
-To access current weather data, ensure you have an OpenWeatherMap account, an API key, and a [subscription](https://home.openweathermap.org/subscriptions) to the One-Call API. Visit [OpenWeatherMap](https://openweathermap.org/) for more information on obtaining these prerequisites.
+Add the API key to `secrets.yml`:
+```yaml
+# secrets.yml
+weather_api_key: "your_openweathermap_api_key"
+```
+
+To access weather data, you need an OpenWeatherMap account, an API key, and a [subscription](https://home.openweathermap.org/subscriptions) to the One-Call API. Visit [OpenWeatherMap](https://openweathermap.org/) for more information.
 
 ### Forecast
 
-The SolarEdge2MQTT service features an integrated machine learning component designed to forecast PV production for the current and following day. For optimal functionality, confirm that your settings for [location](https://github.com/DerOetzi/solaredge2mqtt/blob/main/README.md#basic-configuration), [InfluxDB](https://github.com/DerOetzi/solaredge2mqtt/blob/main/README.md#influxdb) and [weather](https://github.com/DerOetzi/solaredge2mqtt/blob/main/README.md#weather) are correctly configured.
+The service features machine learning-based PV production forecasting. Requires [location](#basic-configuration), [InfluxDB](#influxdb), and [weather](#weather) configuration.
 
-- **SE2MQTT_FORECAST\_\_ENABLE**: Activate the machine learning-based forecast feature by setting this to true. The default is false.
-- **SE2MQTT_FORECAST\_\_HYPERPARAMETERTUNING**: Optimize forecast accuracy by enabling hyperparameter tuning. Note that this process is computationally intensive and may not be suitable for devices with limited processing power, such as Raspberry Pi. The default setting is false.
-- **SE2MQTT_FORECAST\_\_CACHINGDIR**: Directory for caching forecast pipeline results. The default is <USER_CACHE_DIR>/se2mqtt_forecast
+```yaml
+forecast:
+  enable: false                      # Enable forecasting (default: false)
+  hyperparametertuning: false        # Enable hyperparameter tuning (CPU intensive)
+  cachingdir: ~/.cache/se2mqtt_forecast  # Cache directory for pipeline results
+  retain: false
+```
 
-**Precondition for Forecasting**: Before a forecast can be made, a minimum of 60 hours of training data must be collected. These data serve as the basis for model training and are crucial for prediction accuracy. Ensure that the service has had sufficient time to collect data before expecting forecast activation.
+**Prerequisites**:
+- Minimum 60 hours of training data must be collected before forecasting begins
+- Data recording must be consistent (gaps longer than an hour prevent training data collection)
 
-**Note on Training Data Collection**: If the service goes without recording production data for longer than an hour, it will be unable to save training data. It's essential to ensure consistent data recording to maintain the integrity of the training process and ensure accurate forecasting.
-
-> **Note**: The forecast service is not available for `arm/v7` architectures due to compatibility issues with certain dependencies. This feature is automatically disabled, and the Docker image for this architecture does not include the forecast functionality.
-
-_Your experience and feedback, especially regarding forecast accuracy and performance on low-powered devices, are highly valued. This continuous improvement effort aims to enhance the predictive capabilities of the SolarEdge2MQTT service for all users._
+> **Note**: Forecast service is not available for `arm/v7` architectures due to dependency compatibility issues.
 
 ## Running the service
 
-Each of these methods provides a different level of control and isolation, catering to various use cases from development and testing to full-scale production deployment.
+Each method provides different levels of control and isolation, suitable for various use cases from development to production deployment.
 
 ### In the Console
 
-For users looking to run SolarEdge2MQTT directly within their console, which is ideal for testing or development environments, follow these steps:
+For development and testing environments:
 
-1. **Preparation**: Ensure you have Python installed on your system. The service is compatible with Python >=3.10.
-2. **Installation**: If you haven't already, install the service using pip with the command 
-```bash
-pip install -U solaredge2mqtt
-```
-This command fetches the latest version and installs all necessary dependencies. 
+1. **Preparation**: Ensure Python >=3.11, <=3.13 is installed.
 
-To enable the forecast service, install the package with the `forecast` extras:
+2. **Installation**: 
+   ```bash
+   pip install -U solaredge2mqtt
+   ```
+   
+   For forecast functionality:
+   ```bash
+   pip install -U solaredge2mqtt[forecast]
+   ```
 
-```bash
-pip install -U solaredge2mqtt[forecast]
-```
+3. **Configuration**: 
+   - Create a `config/` directory (or use a custom location with `--config-dir`)
+   - Download [configuration.yml.example](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/configuration.yml.example) and save as `config/configuration.yml`
+   - Download [secrets.yml.example](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/secrets.yml.example) and save as `config/secrets.yml`
+   - Edit both files with your specific settings
 
-This ensures all necessary dependencies for the forecasting feature are installed.
+4. **Execution**: 
+   ```bash
+   # Use default config directory (./config/)
+   solaredge2mqtt
+   
+   # Use custom config directory
+   solaredge2mqtt --config-dir /path/to/config
+   ```
 
-3. **Environment Configuration**: Copy the [.env.example](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/.env.example) file to a new file named `.env`. Open this file in a text editor and adjust the environment variables to match your system and preferences. This includes setting up your MQTT broker, InfluxDB credentials, and any other service configurations as detailed in the README.
-4. **Execution**: With your environment configured, run the command solaredge2mqtt in your terminal. The service will start and begin operating based on the settings you've specified in the .env file.
+**New Installation Flow**: On first run without configuration files, the service will automatically copy example files to your config directory and exit with instructions. Edit the files and run again.
+
+**Migration from older versions**: If you have an existing `.env` file, the service will automatically create YAML configuration files in the `config/` directory on first run. See the [Migration section](#migration-from-environment-variables) for details.
 
 ### With Docker
 
-Docker offers a more isolated and scalable approach to deploying the SolarEdge2MQTT service. To run the service using Docker:
+Docker provides an isolated deployment approach with persistent configuration storage:
 
-1. **Docker Installation**: Ensure Docker is installed and running on your system. Docker is available for various operating systems and provides detailed installation guides on its website.
-2. **Pulling the Docker Image**: Execute the command `docker pull ghcr.io/deroetzi/solaredge2mqtt:latest` to download the latest Docker image of the service.
-3. **Running the Container**: Use the docker run command to start the service. Include environment variable flags (-e) for each configuration option you need to specify. For example:
+1. **Pull the Image**: 
+   ```bash
+   docker pull ghcr.io/deroetzi/solaredge2mqtt:latest
+   ```
 
-```
-docker run --name solaredge2mqtt --rm \
-    -e "SE2MQTT_MODBUS__HOST=<INVERTER_IP>" \
-    -e "SE2MQTT_MQTT__BROKER=<BROKER_IP>" \
-    -e "TZ=Europe/Berlin" \
-    ghcr.io/deroetzi/solaredge2mqtt:latest
-```
+2. **Prepare Configuration Directory**:
+   ```bash
+   mkdir -p config
+   ```
 
-Replace <INVERTER_IP> and <BROKER_IP> with your specific values. Add any additional environment variables as needed.
+3. **Running with YAML configuration** (recommended):
+   
+   **First time setup:**
+   ```bash
+   # Download example files
+   curl -o config/configuration.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/configuration.yml.example
+   curl -o config/secrets.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/secrets.yml.example
+   
+   # Edit the files with your settings
+   nano config/configuration.yml
+   nano config/secrets.yml
+   
+   # Run the container
+   docker run -d --name solaredge2mqtt \
+       -v $(pwd)/config:/app/config \
+       -e "TZ=Europe/Berlin" \
+       --restart unless-stopped \
+       ghcr.io/deroetzi/solaredge2mqtt:latest
+   ```
+   
+   **Alternative - Auto-setup on first run:**
+   ```bash
+   # Run without configuration files
+   docker run -d --name solaredge2mqtt \
+       -v $(pwd)/config:/app/config \
+       -e "TZ=Europe/Berlin" \
+       --restart unless-stopped \
+       ghcr.io/deroetzi/solaredge2mqtt:latest
+   
+   # The service will create example files in config/ and exit
+   # Edit the files, then restart:
+   docker restart solaredge2mqtt
+   ```
+
+4. **Migrating from environment variables**:
+   
+   If you're upgrading from an older version that used environment variables:
+   
+   ```bash
+   # Option 1: Auto-migrate on first run
+   docker run -d --name solaredge2mqtt \
+       -v $(pwd)/config:/app/config \
+       -e "SE2MQTT_MODBUS__HOST=<INVERTER_IP>" \
+       -e "SE2MQTT_MQTT__BROKER=<BROKER_IP>" \
+       -e "SE2MQTT_MQTT__PASSWORD=<PASSWORD>" \
+       -e "TZ=Europe/Berlin" \
+       --restart unless-stopped \
+       ghcr.io/deroetzi/solaredge2mqtt:latest
+   ```
+   
+   The service will detect environment variables and create YAML files automatically in `config/`. After verifying the migration, restart without the environment variables:
+   
+   ```bash
+   docker stop solaredge2mqtt
+   docker rm solaredge2mqtt
+   docker run -d --name solaredge2mqtt \
+       -v $(pwd)/config:/app/config \
+       -e "TZ=Europe/Berlin" \
+       --restart unless-stopped \
+       ghcr.io/deroetzi/solaredge2mqtt:latest
+   ```
+   
+   ```bash
+   # Option 2: Use migration tool
+   docker run --rm \
+       -v $(pwd)/config:/app/config \
+       -v $(pwd)/.env:/app/.env:ro \
+       ghcr.io/deroetzi/solaredge2mqtt:latest \
+       solaredge2mqtt-migrate --input .env --output-dir config --backup
+   ```
+
+5. **View Logs**:
+   ```bash
+   docker logs solaredge2mqtt -f
+   ```
+
+6. **Stop Service**:
+   ```bash
+   docker stop solaredge2mqtt
+   docker rm solaredge2mqtt
+   ```
 
 ### With Docker Compose
 
-For a more advanced deployment, especially when integrating with other services like MQTT brokers or InfluxDB, Docker Compose facilitates managing multi-container Docker applications:
+For multi-container deployments with persistent configuration:
 
-1. **Docker Compose Installation**: Ensure Docker Compose is installed on your system. It's typically included with Docker Desktop for Windows and Mac but may require separate installation on Linux.
-2. **Configuration**: Obtain the [docker-compose.yml](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/docker-compose.yml) file from the SolarEdge2MQTT GitHub repository. Edit this file to include your specific environment variables and any other services you wish to integrate.
-3. **Environment File**: Similar to running in the console, copy the [.env.example](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/.env.example) file to `.env` and adjust the settings to fit your setup.
-4. **Execution**: Run `docker compose up -d` to start the service in detached mode. This command reads your `docker-compose.yml` and `.env` file, setting up your SolarEdge2MQTT service along with any other specified services.
+1. **Download Files**: Get the docker-compose.yml and example configuration files:
+   ```bash
+   # Download docker-compose.yml
+   curl -o docker-compose.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/docker-compose.yml
+   
+   # Create config directory and download examples
+   mkdir -p config
+   curl -o config/configuration.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/configuration.yml.example
+   curl -o config/secrets.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/secrets.yml.example
+   ```
 
-Stopping the Service: When you need to stop the service, use `docker compose down` to gracefully stop and remove the containers defined in your Docker Compose file. Use `docker logs solaredge2mqtt -f` to show live logs.
+2. **Configure**: Edit your configuration files:
+   ```bash
+   nano config/configuration.yml
+   nano config/secrets.yml
+   ```
+
+3. **Start Service**: 
+   ```bash
+   docker compose up -d
+   ```
+
+4. **View Logs**: 
+   ```bash
+   docker compose logs solaredge2mqtt -f
+   ```
+
+5. **Stop Service**: 
+   ```bash
+   docker compose down
+   ```
+
+**New Installation**: The `docker-compose.yml` file now uses a volume mount for the config directory (`./config:/app/config`). On first run without configuration files, the service will create example files and exit. Edit them and restart with `docker compose up -d`.
+
+**Migration from older versions**: 
+
+If you're upgrading from an older version that used `.env` files or environment variables:
+
+- **Automatic Migration**: Keep your `.env` file or environment variables in `docker-compose.yml` for the first run. The service will detect them and create YAML configuration files in the `config/` directory. After verifying the migration works, remove the environment variables from `docker-compose.yml` and restart.
+
+- **Manual Migration**: Use the migration tool before starting:
+  ```bash
+  docker compose run --rm solaredge2mqtt solaredge2mqtt-migrate --input .env --output-dir config --backup
+  docker compose up -d
+  ```
+
+**Full-Stack Example**: For a complete deployment with InfluxDB and Grafana, see [examples/docker-compose-full-stack.yaml](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/examples/docker-compose-full-stack.yaml)
 
 [buymecoffee-link]: https://www.buymeacoffee.com/deroetzik
 [buymecoffee-shield]: https://www.buymeacoffee.com/assets/img/custom_images/yellow_img.png

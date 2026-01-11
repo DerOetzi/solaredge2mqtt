@@ -196,7 +196,7 @@ def settings_factory(monkeypatch):
     def factory(**overrides):
         settings = build_settings(**overrides)
         monkeypatch.setattr(
-            service_module, "service_settings", lambda: settings)
+            service_module, "service_settings", lambda config_dir="config": settings)
         return settings
 
     return factory
@@ -222,7 +222,7 @@ async def test__run_service_invokes_service_run(monkeypatch):
     lifecycle = {}
 
     class StubService:
-        def __init__(self):
+        def __init__(self, config_dir="config"):
             lifecycle["created"] = True
 
         async def run(self):
@@ -238,7 +238,7 @@ async def test__run_service_invokes_service_run(monkeypatch):
 def test_run_invokes_asyncio_run(monkeypatch):
     captured = {}
 
-    async def dummy_run():
+    async def dummy_run(config_dir="config"):
         return None
 
     monkeypatch.setattr(service_module, "_run_service", dummy_run)
