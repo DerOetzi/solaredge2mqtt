@@ -71,7 +71,7 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["solaredge2mqtt*"]
-exclude = ["tests*", "config"]
+exclude = ["tests*"]
 
 [tool.setuptools]
 py-modules = ["migrate_config"]
