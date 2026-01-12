@@ -353,15 +353,15 @@ class ConfigurationMigrator:
     def _is_simple_type(value: Any) -> bool:
         """Check if value is a simple type that needs no conversion."""
         return isinstance(value, (list, bool, int, float, SecretReference))
-    
+
     @staticmethod
     def _remove_null_values(obj: Any) -> Any:
         """
         Recursively remove None values from nested dictionaries and lists.
-        
+
         Args:
             obj: The object to clean (dict, list, or other)
-            
+
         Returns:
             Cleaned object without None values
         """
@@ -476,8 +476,15 @@ class ConfigurationMigrator:
     ) -> None:
         config_dir = path.dirname(config_file)
         if config_dir and not path.exists(config_dir):
-            makedirs(config_dir, exist_ok=True)
-            logger.info(f"Created config directory: {config_dir}")
+            try:
+                makedirs(config_dir, exist_ok=True)
+                logger.info(f"Created config directory: {config_dir}")
+            except PermissionError as e:
+                logger.error(
+                    f"Permission denied creating directory {config_dir}: {e}"
+                )
+                self._log_permission_help(config_dir)
+                raise
 
         try:
             with open(config_file, "w", encoding="utf-8") as f:
@@ -490,6 +497,13 @@ class ConfigurationMigrator:
                     Dumper=ConfigDumper,
                 )
             logger.info(f"Configuration written to {config_file}")
+        except PermissionError as e:
+            logger.error(
+                f"Permission denied writing configuration file "
+                f"{config_file}: {e}"
+            )
+            self._log_permission_help(config_dir)
+            raise
         except Exception as e:
             logger.error(
                 f"Error writing configuration file {config_file}: {e}"
@@ -510,8 +524,42 @@ class ConfigurationMigrator:
                 logger.info(f"Secrets written to {secrets_file}")
                 logger.warning(
                     f"IMPORTANT: {secrets_file} contains sensitive data. "
-                    f"Keep it secure and do not commit it to version control!"
+                    f"Keep it secure and do not commit it to version "
+                    f"control!"
                 )
+            except PermissionError as e:
+                logger.error(
+                    f"Permission denied writing secrets file "
+                    f"{secrets_file}: {e}"
+                )
+                self._log_permission_help(config_dir)
+                raise
             except Exception as e:
                 logger.error(f"Error writing secrets file {secrets_file}: {e}")
                 raise
+
+    @staticmethod
+    def _log_permission_help(config_dir: str) -> None:
+        """Log helpful information for fixing permission issues."""
+        logger.error("")
+        logger.error("=" * 70)
+        logger.error("PERMISSION ERROR - Unable to write configuration files")
+        logger.error("=" * 70)
+        logger.error("")
+        logger.error("The configuration directory is not writable.")
+        logger.error(f"Directory: {config_dir}")
+        logger.error("")
+        logger.error("Solutions:")
+        logger.error("")
+        logger.error("1. If using Docker, set FIX_PERMISSIONS=true:")
+        logger.error("   environment:")
+        logger.error("     - FIX_PERMISSIONS=true")
+        logger.error("")
+        logger.error("2. Fix permissions manually on the host:")
+        logger.error(f"   sudo chown -R 1000:1000 {config_dir}")
+        logger.error("")
+        logger.error("3. Create configuration files manually before starting:")
+        logger.error("   Copy examples from solaredge2mqtt/config/*.example")
+        logger.error("")
+        logger.error("=" * 70)
+        logger.error("")
