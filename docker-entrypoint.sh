@@ -29,4 +29,4 @@ fix_permissions "/app/cache" "solaredge2mqtt:solaredge2mqtt" || true
 
 # Always switch to solaredge2mqtt user before executing the main command
 echo "Switching to solaredge2mqtt user..."
-exec su-exec solaredge2mqtt "$@"
+exec gosu solaredge2mqtt "$@"

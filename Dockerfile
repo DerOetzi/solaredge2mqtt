@@ -44,7 +44,7 @@ WORKDIR /app
 
 RUN set -eux && \
     apt-get update && \
-    apt-get install -y --no-install-recommends su-exec && \
+    apt-get install -y --no-install-recommends gosu && \
     rm -rf /var/lib/apt/lists/* && \
     adduser --uid 1000 --disabled-password --gecos '' solaredge2mqtt && \
     mkdir -p /app/config /app/cache && \
