@@ -59,8 +59,6 @@ COPY --chown=root:solaredge2mqtt --chmod=755 \
     pyproject.toml README.md LICENSE ./
 COPY --chown=root:root --chmod=755 docker-entrypoint.sh /usr/local/bin/
 
-USER solaredge2mqtt
-
 VOLUME ["/app/config"]
 
 ENTRYPOINT ["docker-entrypoint.sh"]

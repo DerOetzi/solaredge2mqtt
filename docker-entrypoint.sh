@@ -28,34 +28,38 @@ fix_permissions() {
     fi
 }
 
-# Check if running as root with environment variable to allow permission fixes
-if [ "${FIX_PERMISSIONS:-false}" = "true" ] && [ "$(id -u)" -eq 0 ]; then
+# Only run as root - if not root, something is wrong with the setup
+if [ "$(id -u)" -ne 0 ]; then
+    echo "ERROR: Entrypoint must run as root to manage permissions"
+    echo "Remove 'USER' directive from Dockerfile or ensure container starts as root"
+    exit 1
+fi
+
+# Check if FIX_PERMISSIONS is enabled
+if [ "${FIX_PERMISSIONS:-false}" = "true" ]; then
     echo "FIX_PERMISSIONS enabled, attempting to fix directory permissions..."
     fix_permissions "/app/config" "solaredge2mqtt:solaredge2mqtt" || true
     fix_permissions "/app/cache" "solaredge2mqtt:solaredge2mqtt" || true
+else
+    # Just check permissions and warn if needed
+    if [ ! -w "/app/config" ]; then
+        echo "WARNING: /app/config is not writable."
+        echo "This may cause issues during configuration migration."
+        echo ""
+        echo "To fix this, either:"
+        echo "1. Set FIX_PERMISSIONS=true in your docker-compose.yml"
+        echo "2. Manually fix permissions: chown -R 1000:1000 ./config"
+        echo "3. Create config files manually before starting the container"
+        echo ""
+    fi
     
-    # Switch to solaredge2mqtt user
-    echo "Switching to solaredge2mqtt user..."
-    exec su-exec solaredge2mqtt "$@"
+    if [ ! -w "/app/cache" ]; then
+        echo "WARNING: /app/cache is not writable."
+        echo "This may prevent forecast caching from working."
+        echo ""
+    fi
 fi
 
-# If not root or FIX_PERMISSIONS not set, just check permissions
-if [ ! -w "/app/config" ]; then
-    echo "WARNING: /app/config is not writable."
-    echo "This may cause issues during configuration migration."
-    echo ""
-    echo "To fix this, either:"
-    echo "1. Set FIX_PERMISSIONS=true in your docker-compose.yml"
-    echo "2. Manually fix permissions: chown -R 1000:1000 ./config"
-    echo "3. Create config files manually before starting the container"
-    echo ""
-fi
-
-if [ ! -w "/app/cache" ]; then
-    echo "WARNING: /app/cache is not writable."
-    echo "This may prevent forecast caching from working."
-    echo ""
-fi
-
-# Execute the main command
-exec "$@"
+# Always switch to solaredge2mqtt user before executing the main command
+echo "Switching to solaredge2mqtt user..."
+exec su-exec solaredge2mqtt "$@"
