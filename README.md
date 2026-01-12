@@ -416,151 +416,20 @@ For development and testing environments:
 
 **Migration from older versions**: If you have an existing `.env` file, the service will automatically create YAML configuration files in the `config/` directory on first run. See the [Migration section](#migration-from-environment-variables) for details.
 
-### With Docker
+## Docker Deployment
 
-Docker provides an isolated deployment approach with persistent configuration storage:
+For Docker and Docker Compose deployment instructions, see the **[Docker Deployment Guide](DOCKER.md)**.
 
-1. **Pull the Image**: 
-   ```bash
-   docker pull ghcr.io/deroetzi/solaredge2mqtt:latest
-   ```
+The Docker deployment guide covers:
+- Running with Docker
+- Running with Docker Compose
+- Automatic permission handling
+- Migration from environment variables
+- Troubleshooting
 
-2. **Prepare Configuration Directory**:
-   ```bash
-   mkdir -p config
-   ```
+## Installation Examples
 
-3. **Running with YAML configuration** (recommended):
-   
-   **First time setup:**
-   ```bash
-   # Download example files
-   curl -o config/configuration.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/configuration.yml.example
-   curl -o config/secrets.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/secrets.yml.example
-   
-   # Edit the files with your settings
-   nano config/configuration.yml
-   nano config/secrets.yml
-   
-   # Run the container
-   docker run -d --name solaredge2mqtt \
-       -v $(pwd)/config:/app/config \
-       -e "TZ=Europe/Berlin" \
-       --restart unless-stopped \
-       ghcr.io/deroetzi/solaredge2mqtt:latest
-   ```
-   
-   **Alternative - Auto-setup on first run:**
-   ```bash
-   # Run without configuration files
-   docker run -d --name solaredge2mqtt \
-       -v $(pwd)/config:/app/config \
-       -e "TZ=Europe/Berlin" \
-       --restart unless-stopped \
-       ghcr.io/deroetzi/solaredge2mqtt:latest
-   
-   # The service will create example files in config/ and exit
-   # Edit the files, then restart:
-   docker restart solaredge2mqtt
-   ```
-
-4. **Migrating from environment variables**:
-   
-   If you're upgrading from an older version that used environment variables:
-   
-   ```bash
-   # Option 1: Auto-migrate on first run
-   docker run -d --name solaredge2mqtt \
-       -v $(pwd)/config:/app/config \
-       -e "SE2MQTT_MODBUS__HOST=<INVERTER_IP>" \
-       -e "SE2MQTT_MQTT__BROKER=<BROKER_IP>" \
-       -e "SE2MQTT_MQTT__PASSWORD=<PASSWORD>" \
-       -e "TZ=Europe/Berlin" \
-       --restart unless-stopped \
-       ghcr.io/deroetzi/solaredge2mqtt:latest
-   ```
-   
-   The service will detect environment variables and create YAML files automatically in `config/`. After verifying the migration, restart without the environment variables:
-   
-   ```bash
-   docker stop solaredge2mqtt
-   docker rm solaredge2mqtt
-   docker run -d --name solaredge2mqtt \
-       -v $(pwd)/config:/app/config \
-       -e "TZ=Europe/Berlin" \
-       --restart unless-stopped \
-       ghcr.io/deroetzi/solaredge2mqtt:latest
-   ```
-   
-   ```bash
-   # Option 2: Use migration tool
-   docker run --rm \
-       -v $(pwd)/config:/app/config \
-       -v $(pwd)/.env:/app/.env:ro \
-       ghcr.io/deroetzi/solaredge2mqtt:latest \
-       solaredge2mqtt-migrate --input .env --output-dir config --backup
-   ```
-
-5. **View Logs**:
-   ```bash
-   docker logs solaredge2mqtt -f
-   ```
-
-6. **Stop Service**:
-   ```bash
-   docker stop solaredge2mqtt
-   docker rm solaredge2mqtt
-   ```
-
-### With Docker Compose
-
-For multi-container deployments with persistent configuration:
-
-1. **Download Files**: Get the docker-compose.yml and example configuration files:
-   ```bash
-   # Download docker-compose.yml
-   curl -o docker-compose.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/docker-compose.yml
-   
-   # Create config directory and download examples
-   mkdir -p config
-   curl -o config/configuration.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/configuration.yml.example
-   curl -o config/secrets.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/secrets.yml.example
-   ```
-
-2. **Configure**: Edit your configuration files:
-   ```bash
-   nano config/configuration.yml
-   nano config/secrets.yml
-   ```
-
-3. **Start Service**: 
-   ```bash
-   docker compose up -d
-   ```
-
-4. **View Logs**: 
-   ```bash
-   docker compose logs solaredge2mqtt -f
-   ```
-
-5. **Stop Service**: 
-   ```bash
-   docker compose down
-   ```
-
-**New Installation**: The `docker-compose.yml` file now uses a volume mount for the config directory (`./config:/app/config`). On first run without configuration files, the service will create example files and exit. Edit them and restart with `docker compose up -d`.
-
-**Migration from older versions**: 
-
-If you're upgrading from an older version that used `.env` files or environment variables:
-
-- **Automatic Migration**: Keep your `.env` file or environment variables in `docker-compose.yml` for the first run. The service will detect them and create YAML configuration files in the `config/` directory. After verifying the migration works, remove the environment variables from `docker-compose.yml` and restart.
-
-- **Manual Migration**: Use the migration tool before starting:
-  ```bash
-  docker compose run --rm solaredge2mqtt solaredge2mqtt-migrate --input .env --output-dir config --backup
-  docker compose up -d
-  ```
+Below are installation examples for running the service directly (without Docker).
 
 **Full-Stack Example**: For a complete deployment with InfluxDB and Grafana, see [examples/docker-compose-full-stack.yaml](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/examples/docker-compose-full-stack.yaml)
 

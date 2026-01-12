@@ -43,9 +43,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN set -eux && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends gosu && \
+    rm -rf /var/lib/apt/lists/* && \
     adduser --uid 1000 --disabled-password --gecos '' solaredge2mqtt && \
     mkdir -p /app/config /app/cache && \
     chown solaredge2mqtt:solaredge2mqtt /app/config /app/cache && \
+    chmod 755 /app/config && \
     chmod 700 /app/cache
 
 COPY --chown=root:solaredge2mqtt --chmod=755 --from=buildimage /venv /venv
@@ -53,9 +57,9 @@ COPY --chown=root:solaredge2mqtt --chmod=755 \
     solaredge2mqtt/ ./solaredge2mqtt/
 COPY --chown=root:solaredge2mqtt --chmod=755 \
     pyproject.toml README.md LICENSE ./
-
-USER solaredge2mqtt
+COPY --chown=root:root --chmod=755 docker-entrypoint.sh /usr/local/bin/
 
 VOLUME ["/app/config"]
 
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["python3", "-m", "solaredge2mqtt"]

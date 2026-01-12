@@ -239,9 +239,12 @@ class ConfigurationMigrator:
         key, idx, next_container = self._get_or_initialize_nested_container(
             container, key, i
         )
-        self._insert_value_in_container(
-            container, keys, value, key, idx, next_container
-        )
+        
+        # Insert value or recurse deeper
+        if len(keys) == 1:
+            self._set_final_value(container, key, idx, value)
+        else:
+            self._insert_nested_key(next_container, keys[1:], value)
 
     @staticmethod
     def _identify_key_and_position(keys: list[str]) -> tuple[str, int]:
@@ -281,20 +284,6 @@ class ConfigurationMigrator:
         if key not in container or not isinstance(container[key], dict):
             container[key] = {}
         return key, key, container[key]
-
-    def _insert_value_in_container(
-        self,
-        container: dict[str, Any],
-        keys: list[str],
-        value: Any,
-        key: str,
-        idx: int | str,
-        next_container: dict | list,
-    ) -> None:
-        if len(keys) == 1:
-            self._set_final_value(container, key, idx, value)
-        else:
-            self._insert_nested_key(next_container, keys[1:], value)
 
     @staticmethod
     def _set_final_value(
@@ -353,15 +342,15 @@ class ConfigurationMigrator:
     def _is_simple_type(value: Any) -> bool:
         """Check if value is a simple type that needs no conversion."""
         return isinstance(value, (list, bool, int, float, SecretReference))
-    
+
     @staticmethod
     def _remove_null_values(obj: Any) -> Any:
         """
         Recursively remove None values from nested dictionaries and lists.
-        
+
         Args:
             obj: The object to clean (dict, list, or other)
-            
+
         Returns:
             Cleaned object without None values
         """
@@ -476,8 +465,14 @@ class ConfigurationMigrator:
     ) -> None:
         config_dir = path.dirname(config_file)
         if config_dir and not path.exists(config_dir):
-            makedirs(config_dir, exist_ok=True)
-            logger.info(f"Created config directory: {config_dir}")
+            try:
+                makedirs(config_dir, exist_ok=True)
+                logger.info(f"Created config directory: {config_dir}")
+            except PermissionError as e:
+                logger.error(
+                    f"Permission denied creating directory {config_dir}: {e}"
+                )
+                raise
 
         try:
             with open(config_file, "w", encoding="utf-8") as f:
@@ -490,6 +485,12 @@ class ConfigurationMigrator:
                     Dumper=ConfigDumper,
                 )
             logger.info(f"Configuration written to {config_file}")
+        except PermissionError as e:
+            logger.error(
+                f"Permission denied writing configuration file "
+                f"{config_file}: {e}"
+            )
+            raise
         except Exception as e:
             logger.error(
                 f"Error writing configuration file {config_file}: {e}"
@@ -510,8 +511,15 @@ class ConfigurationMigrator:
                 logger.info(f"Secrets written to {secrets_file}")
                 logger.warning(
                     f"IMPORTANT: {secrets_file} contains sensitive data. "
-                    f"Keep it secure and do not commit it to version control!"
+                    f"Keep it secure and do not commit it to version "
+                    f"control!"
                 )
+            except PermissionError as e:
+                logger.error(
+                    f"Permission denied writing secrets file "
+                    f"{secrets_file}: {e}"
+                )
+                raise
             except Exception as e:
                 logger.error(f"Error writing secrets file {secrets_file}: {e}")
                 raise

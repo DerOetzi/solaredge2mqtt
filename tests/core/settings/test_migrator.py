@@ -13,12 +13,12 @@ from solaredge2mqtt.core.settings.models import ServiceSettings
 def _has_none_values(obj: Any) -> bool:
     """
     Helper function to check if an object contains any None values.
-    
+
     Recursively checks dictionaries, lists, and nested structures.
-    
+
     Args:
         obj: The object to check
-        
+
     Returns:
         True if any None values are found, False otherwise
     """
@@ -40,7 +40,9 @@ class TestConfigurationMigrator:
         assert key == "meter0"
         assert pos == 4  # Index of 'r', last non-digit character
 
-        key, pos = ConfigurationMigrator._identify_key_and_position(["follower"])
+        key, pos = ConfigurationMigrator._identify_key_and_position(
+            ["follower"]
+        )
         assert key == "follower"
         assert pos == 7
 
@@ -58,10 +60,14 @@ class TestConfigurationMigrator:
         migrator = ConfigurationMigrator(ServiceSettings)
         container = {}
 
-        migrator._insert_nested_key(container, ["modbus", "host"], "192.168.1.100")
+        migrator._insert_nested_key(
+            container, ["modbus", "host"], "192.168.1.100"
+        )
         migrator._insert_nested_key(container, ["modbus", "port"], "1502")
 
-        assert container == {"modbus": {"host": "192.168.1.100", "port": "1502"}}
+        assert container == {
+            "modbus": {"host": "192.168.1.100", "port": "1502"}
+        }
 
     def test_insert_nested_key_with_array(self):
         """Test inserting nested key-value pairs with array indices."""
@@ -104,7 +110,9 @@ class TestConfigurationMigrator:
         assert isinstance(config_data["mqtt"]["password"], SecretReference)
         assert config_data["mqtt"]["password"].secret_key == "mqtt_password"
         assert isinstance(config_data["weather"]["api_key"], SecretReference)
-        assert config_data["weather"]["api_key"].secret_key == "weather_api_key"
+        assert (
+            config_data["weather"]["api_key"].secret_key == "weather_api_key"
+        )
         assert isinstance(config_data["influxdb"]["token"], SecretReference)
         assert config_data["influxdb"]["token"].secret_key == "influxdb_token"
 
@@ -255,7 +263,8 @@ class TestConfigurationMigrator:
             "SE2MQTT_ENERGY__RETAIN": "false",
             "SE2MQTT_MQTT__BROKER": "mqtt.example.com",
             "SE2MQTT_MQTT__PASSWORD": "secret123",
-            "SE2MQTT_MONITORING__SITE_ID": "12345",  # String type that looks like int
+            # String type that looks like int
+            "SE2MQTT_MONITORING__SITE_ID": "12345",
         }
 
         # Mock environment variables
@@ -269,12 +278,17 @@ class TestConfigurationMigrator:
         assert config_data["modbus"]["host"] == "192.168.1.100"  # String
         assert config_data["modbus"]["port"] == 5020  # Integer
         assert config_data["modbus"]["timeout"] == 1  # Integer
-        assert config_data["modbus"]["meter"] == [True, False, False]  # Booleans
+        assert config_data["modbus"]["meter"] == [
+            True,
+            False,
+            False,
+        ]  # Booleans
         assert config_data["modbus"]["battery"] == [True, False]  # Booleans
         assert config_data["energy"]["retain"] is False  # Boolean
         assert config_data["mqtt"]["broker"] == "mqtt.example.com"  # String
-        
-        # site_id should be string (not converted to int) because model defines it as str
+
+        # site_id should be string (not converted to int) because
+        # model defines it as str
         # It's extracted to secrets, so check it there
         assert secrets_data["monitoring_site_id"] == "12345"  # String
         assert isinstance(secrets_data["monitoring_site_id"], str)
@@ -335,7 +349,7 @@ class TestConfigurationMigrator:
     def test_extract_from_environment_excludes_none(self, monkeypatch):
         """
         Test that extract_from_environment excludes None values.
-        
+
         This ensures configuration files don't have 'null' entries for
         optional fields that weren't configured.
         """
@@ -372,3 +386,62 @@ class TestConfigurationMigrator:
                 assert "null" not in yaml_text.lower()
                 assert ": ~" not in yaml_text
 
+    def test_write_yaml_files_permission_error_on_directory(self):
+        """Test handling of permission error when creating directory."""
+        migrator = ConfigurationMigrator(model_class=ServiceSettings)
+
+        # Use minimal valid config data directly
+        config_data = {
+            "interval": 5,
+            "modbus": {"host": "192.168.1.100", "port": 1502},
+        }
+        secrets_data = {}
+
+        # Try to write to a directory we can't create
+        with tempfile.TemporaryDirectory() as tmpdir:
+            readonly_dir = Path(tmpdir) / "readonly"
+            readonly_dir.mkdir()
+            readonly_dir.chmod(0o444)  # Read-only
+
+            config_file = readonly_dir / "subdir" / "configuration.yml"
+            secrets_file = readonly_dir / "subdir" / "secrets.yml"
+
+            import pytest
+
+            with pytest.raises(PermissionError):
+                migrator.write_yaml_files(
+                    config_data,
+                    secrets_data,
+                    str(config_file),
+                    str(secrets_file),
+                )
+
+    def test_write_yaml_files_permission_error_on_file(self):
+        """Test handling of permission error when writing file."""
+        migrator = ConfigurationMigrator(model_class=ServiceSettings)
+
+        # Use minimal valid config data directly
+        config_data = {
+            "interval": 5,
+            "modbus": {"host": "192.168.1.100", "port": 1502},
+        }
+        secrets_data = {}
+
+        # Try to write to a read-only file
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_file = Path(tmpdir) / "configuration.yml"
+            secrets_file = Path(tmpdir) / "secrets.yml"
+
+            # Create a read-only file
+            config_file.touch()
+            config_file.chmod(0o444)
+
+            import pytest
+
+            with pytest.raises(PermissionError):
+                migrator.write_yaml_files(
+                    config_data,
+                    secrets_data,
+                    str(config_file),
+                    str(secrets_file),
+                )
