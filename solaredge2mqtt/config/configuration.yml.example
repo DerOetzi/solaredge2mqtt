@@ -107,5 +107,6 @@ prices:
 # forecast:
 #   enable: false
 #   hyperparametertuning: false
-#   cachingdir: ~/.cache/se2mqtt_forecast
+#   # cachingdir: /app/cache  # For Docker (default)
+#   # cachingdir: ~/.cache/se2mqtt_forecast  # For non-Docker systems
 #   retain: false

@@ -309,11 +309,14 @@ class ConfigurationMigrator:
     def export_to_yaml(
         self, model: BaseModel, config_file: str, secrets_file: str
     ) -> None:
-        validated_data = model.model_dump()
+        validated_data = model.model_dump(exclude_none=True)
 
         config_data, secrets_data = self._extract_secrets(validated_data)
 
         config_data = self._ensure_proper_types(config_data, model)
+
+        # Remove any remaining None values from nested structures
+        config_data = self._remove_null_values(config_data)
 
         self._write_yaml_files(
             config_data, secrets_data, config_file, secrets_file
@@ -350,6 +353,36 @@ class ConfigurationMigrator:
     def _is_simple_type(value: Any) -> bool:
         """Check if value is a simple type that needs no conversion."""
         return isinstance(value, (list, bool, int, float, SecretReference))
+    
+    @staticmethod
+    def _remove_null_values(obj: Any) -> Any:
+        """
+        Recursively remove None values from nested dictionaries and lists.
+        
+        Args:
+            obj: The object to clean (dict, list, or other)
+            
+        Returns:
+            Cleaned object without None values
+        """
+        if isinstance(obj, dict):
+            result = {}
+            for k, v in obj.items():
+                if v is None:
+                    continue
+                cleaned_value = ConfigurationMigrator._remove_null_values(v)
+                # Skip empty dicts that result from removing all None values
+                if isinstance(cleaned_value, dict) and not cleaned_value:
+                    continue
+                result[k] = cleaned_value
+            return result
+        elif isinstance(obj, list):
+            return [
+                ConfigurationMigrator._remove_null_values(item)
+                for item in obj
+                if item is not None
+            ]
+        return obj
 
     def _extract_secrets(self, validated_data: dict) -> tuple[dict, dict]:
         import copy
@@ -409,11 +442,13 @@ class ConfigurationMigrator:
 
         try:
             validated_model = self.model_class(**parsed_data)
-            validated_data = validated_model.model_dump()
+            validated_data = validated_model.model_dump(exclude_none=True)
             config_data, secrets_data = self._extract_secrets(validated_data)
             config_data = self._ensure_proper_types(
                 config_data, validated_model
             )
+            # Remove any remaining None values from nested structures
+            config_data = self._remove_null_values(config_data)
             return config_data, secrets_data
         except ValidationError as e:
             logger.error(

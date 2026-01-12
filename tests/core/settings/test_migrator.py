@@ -2,11 +2,33 @@
 
 import tempfile
 from pathlib import Path
+from typing import Any
 
 import yaml
 
 from solaredge2mqtt.core.settings.migrator import ConfigurationMigrator
 from solaredge2mqtt.core.settings.models import ServiceSettings
+
+
+def _has_none_values(obj: Any) -> bool:
+    """
+    Helper function to check if an object contains any None values.
+    
+    Recursively checks dictionaries, lists, and nested structures.
+    
+    Args:
+        obj: The object to check
+        
+    Returns:
+        True if any None values are found, False otherwise
+    """
+    if obj is None:
+        return True
+    if isinstance(obj, dict):
+        return any(v is None or _has_none_values(v) for v in obj.values())
+    if isinstance(obj, list):
+        return any(item is None or _has_none_values(item) for item in obj)
+    return False
 
 
 class TestConfigurationMigrator:
@@ -283,3 +305,70 @@ class TestConfigurationMigrator:
             assert "retain: false" in yaml_text
             assert "port: 5020" in yaml_text
             assert "timeout: 1" in yaml_text
+
+    def test_remove_null_values(self):
+        """Test that null values are removed from nested structures."""
+        test_data = {
+            "simple_field": "value",
+            "null_field": None,
+            "nested": {"field1": "value1", "field2": None, "field3": "value3"},
+            "list": [1, None, 3, None, 5],
+            "nested_list": [{"a": 1, "b": None}, None, {"c": 3}],
+            "empty_after_clean": {"all_null": None, "another_null": None},
+        }
+
+        cleaned = ConfigurationMigrator._remove_null_values(test_data)
+
+        # Verify structure
+        assert "simple_field" in cleaned
+        assert "null_field" not in cleaned
+        assert "nested" in cleaned
+        assert "field2" not in cleaned["nested"]
+        assert cleaned["list"] == [1, 3, 5]
+        assert len(cleaned["nested_list"]) == 2
+        assert "b" not in cleaned["nested_list"][0]
+        assert "empty_after_clean" not in cleaned
+
+        # Verify no None values remain using shared helper
+        assert not _has_none_values(cleaned)
+
+    def test_extract_from_environment_excludes_none(self, monkeypatch):
+        """
+        Test that extract_from_environment excludes None values.
+        
+        This ensures configuration files don't have 'null' entries for
+        optional fields that weren't configured.
+        """
+        # Set up minimal environment (many optional fields not set)
+        env_vars = {
+            "SE2MQTT_INTERVAL": "10",
+            "SE2MQTT_MODBUS__HOST": "192.168.1.100",
+            "SE2MQTT_MODBUS__PORT": "1502",
+            "SE2MQTT_MQTT__BROKER": "mqtt.example.com",
+            "SE2MQTT_MQTT__PORT": "1883",
+        }
+
+        for key, value in env_vars.items():
+            monkeypatch.setenv(key, value)
+
+        migrator = ConfigurationMigrator(model_class=ServiceSettings)
+        config_data, secrets_data = migrator.extract_from_environment()
+
+        # Verify no None values in extracted data using shared helper
+        assert not _has_none_values(config_data)
+        assert not _has_none_values(secrets_data)
+
+        # Write to YAML and verify no null in the file
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_file = Path(tmpdir) / "configuration.yml"
+            secrets_file = Path(tmpdir) / "secrets.yml"
+
+            migrator.write_yaml_files(
+                config_data, secrets_data, str(config_file), str(secrets_file)
+            )
+
+            with open(config_file, "r", encoding="utf-8") as f:
+                yaml_text = f.read()
+                assert "null" not in yaml_text.lower()
+                assert ": ~" not in yaml_text
+
