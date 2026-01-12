@@ -12,14 +12,20 @@ fix_permissions() {
     fi
     
     # Get current owner of the directory
-    current_owner=$(stat -c '%U:%G' "$dir" 2>/dev/null || echo "unknown:unknown")
+    current_owner=$(stat -c '%U:%G' "$dir" 2>/dev/null || echo "stat-failed:stat-failed")
     
     # Fix permissions if owner is not correct
     if [ "$current_owner" != "$required_owner" ]; then
         echo "Fixing ownership for $dir (current: $current_owner, required: $required_owner)"
-        chown -R "$required_owner" "$dir"
+        if ! chown -R "$required_owner" "$dir"; then
+            echo "WARNING: Failed to change ownership of $dir" >&2
+            return 1
+        fi
         # Set proper directory permissions for access
-        chmod -R 755 "$dir"
+        if ! chmod -R 755 "$dir"; then
+            echo "WARNING: Failed to set permissions on $dir" >&2
+            return 1
+        fi
     fi
 }
 
