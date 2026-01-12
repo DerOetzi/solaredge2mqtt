@@ -512,6 +512,62 @@ Docker provides an isolated deployment approach with persistent configuration st
    docker rm solaredge2mqtt
    ```
 
+#### Docker Permission Issues
+
+When using Docker volumes to mount the `config/` directory, you may encounter permission errors during configuration migration or when the service tries to write configuration files. This happens because the container runs as user ID 1000 (`solaredge2mqtt`), but the mounted directory may be owned by a different user on the host.
+
+**Symptoms:**
+- `[Errno 13] Permission denied` when writing configuration files
+- Configuration migration fails with permission errors
+- Service cannot create or update configuration files
+
+**Solutions:**
+
+**Option 1: Fix permissions on the host (Recommended)**
+```bash
+# Change ownership of the config directory to UID 1000
+sudo chown -R 1000:1000 ./config
+```
+
+**Option 2: Use FIX_PERMISSIONS environment variable**
+
+The container includes an entrypoint script that can automatically fix permissions if started as root and then switch to the `solaredge2mqtt` user:
+
+```bash
+docker run -d --name solaredge2mqtt \
+    -v $(pwd)/config:/app/config \
+    -e "FIX_PERMISSIONS=true" \
+    -e "TZ=Europe/Berlin" \
+    --restart unless-stopped \
+    ghcr.io/deroetzi/solaredge2mqtt:latest
+```
+
+Or with Docker Compose, add to your `docker-compose.yml`:
+```yaml
+services:
+  solaredge2mqtt:
+    environment:
+      - FIX_PERMISSIONS=true
+```
+
+**Option 3: Create configuration files manually**
+
+Download and edit the configuration files on your host before starting the container:
+```bash
+mkdir -p config
+curl -o config/configuration.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/configuration.yml.example
+curl -o config/secrets.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/secrets.yml.example
+
+# Edit the files
+nano config/configuration.yml
+nano config/secrets.yml
+
+# Fix permissions
+sudo chown -R 1000:1000 ./config
+```
+
+**Note:** The container will display helpful warning messages if it detects permission issues, guiding you through the resolution process.
+
 ### With Docker Compose
 
 For multi-container deployments with persistent configuration:
