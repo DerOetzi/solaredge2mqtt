@@ -263,7 +263,8 @@ class TestConfigurationMigrator:
             "SE2MQTT_ENERGY__RETAIN": "false",
             "SE2MQTT_MQTT__BROKER": "mqtt.example.com",
             "SE2MQTT_MQTT__PASSWORD": "secret123",
-            "SE2MQTT_MONITORING__SITE_ID": "12345",  # String type that looks like int
+            # String type that looks like int
+            "SE2MQTT_MONITORING__SITE_ID": "12345",
         }
 
         # Mock environment variables
@@ -286,7 +287,8 @@ class TestConfigurationMigrator:
         assert config_data["energy"]["retain"] is False  # Boolean
         assert config_data["mqtt"]["broker"] == "mqtt.example.com"  # String
 
-        # site_id should be string (not converted to int) because model defines it as str
+        # site_id should be string (not converted to int) because
+        # model defines it as str
         # It's extracted to secrets, so check it there
         assert secrets_data["monitoring_site_id"] == "12345"  # String
         assert isinstance(secrets_data["monitoring_site_id"], str)

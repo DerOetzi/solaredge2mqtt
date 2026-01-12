@@ -239,9 +239,12 @@ class ConfigurationMigrator:
         key, idx, next_container = self._get_or_initialize_nested_container(
             container, key, i
         )
-        self._insert_value_in_container(
-            container, keys, value, key, idx, next_container
-        )
+        
+        # Insert value or recurse deeper
+        if len(keys) == 1:
+            self._set_final_value(container, key, idx, value)
+        else:
+            self._insert_nested_key(next_container, keys[1:], value)
 
     @staticmethod
     def _identify_key_and_position(keys: list[str]) -> tuple[str, int]:
@@ -281,20 +284,6 @@ class ConfigurationMigrator:
         if key not in container or not isinstance(container[key], dict):
             container[key] = {}
         return key, key, container[key]
-
-    def _insert_value_in_container(
-        self,
-        container: dict[str, Any],
-        keys: list[str],
-        value: Any,
-        key: str,
-        idx: int | str,
-        next_container: dict | list,
-    ) -> None:
-        if len(keys) == 1:
-            self._set_final_value(container, key, idx, value)
-        else:
-            self._insert_nested_key(next_container, keys[1:], value)
 
     @staticmethod
     def _set_final_value(
