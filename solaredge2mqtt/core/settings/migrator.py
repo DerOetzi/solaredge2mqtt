@@ -540,26 +540,7 @@ class ConfigurationMigrator:
 
     @staticmethod
     def _log_permission_help(config_dir: str) -> None:
-        """Log helpful information for fixing permission issues."""
-        logger.error("")
-        logger.error("=" * 70)
-        logger.error("PERMISSION ERROR - Unable to write configuration files")
-        logger.error("=" * 70)
-        logger.error("")
-        logger.error("The configuration directory is not writable.")
-        logger.error(f"Directory: {config_dir}")
-        logger.error("")
-        logger.error("Solutions:")
-        logger.error("")
-        logger.error("1. If using Docker, set FIX_PERMISSIONS=true:")
-        logger.error("   environment:")
-        logger.error("     - FIX_PERMISSIONS=true")
-        logger.error("")
-        logger.error("2. Fix permissions manually on the host:")
-        logger.error(f"   sudo chown -R 1000:1000 {config_dir}")
-        logger.error("")
-        logger.error("3. Create configuration files manually before starting:")
-        logger.error("   Copy examples from solaredge2mqtt/config/*.example")
-        logger.error("")
-        logger.error("=" * 70)
-        logger.error("")
+        """Log permission error for configuration directory."""
+        logger.error(
+            f"Configuration directory is not writable: {config_dir}"
+        )
