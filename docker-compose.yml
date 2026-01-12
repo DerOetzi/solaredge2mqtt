@@ -6,8 +6,6 @@ services:
       - ./config:/app/config
     environment:
       - TZ=Europe/Berlin
-      # Uncomment to automatically fix permissions (requires starting as root)
-      # - FIX_PERMISSIONS=true
     restart: unless-stopped
 
 # Configuration is now managed via YAML files in ./config/
@@ -16,7 +14,5 @@ services:
 # For migration from environment variables or .env files:
 # The service will automatically create YAML files on first run if they don't exist
 #
-# IMPORTANT: Permission Issues
-# If you encounter permission errors, ensure the ./config directory is owned by UID 1000:
-#   sudo chown -R 1000:1000 ./config
-# Alternatively, set FIX_PERMISSIONS=true in the environment section above
+# Permissions are automatically handled by the container at startup
+# For more information, see DOCKER.md
