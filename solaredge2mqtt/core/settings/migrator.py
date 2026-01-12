@@ -483,7 +483,6 @@ class ConfigurationMigrator:
                 logger.error(
                     f"Permission denied creating directory {config_dir}: {e}"
                 )
-                self._log_permission_help(config_dir)
                 raise
 
         try:
@@ -502,7 +501,6 @@ class ConfigurationMigrator:
                 f"Permission denied writing configuration file "
                 f"{config_file}: {e}"
             )
-            self._log_permission_help(config_dir)
             raise
         except Exception as e:
             logger.error(
@@ -532,15 +530,7 @@ class ConfigurationMigrator:
                     f"Permission denied writing secrets file "
                     f"{secrets_file}: {e}"
                 )
-                self._log_permission_help(config_dir)
                 raise
             except Exception as e:
                 logger.error(f"Error writing secrets file {secrets_file}: {e}")
                 raise
-
-    @staticmethod
-    def _log_permission_help(config_dir: str) -> None:
-        """Log permission error for configuration directory."""
-        logger.error(
-            f"Configuration directory is not writable: {config_dir}"
-        )
