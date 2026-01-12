@@ -11,15 +11,17 @@ fix_permissions() {
         mkdir -p "$dir"
     fi
     
-    # Check if we can write to the directory
-    if [ -w "$dir" ]; then
-        return 0
+    # Get current owner of the directory
+    current_owner=$(stat -c '%U:%G' "$dir" 2>/dev/null || echo "")
+    
+    # Fix permissions if owner is not correct
+    if [ "$current_owner" != "$required_owner" ]; then
+        echo "Fixing ownership for $dir (current: $current_owner, required: $required_owner)"
+        chown -R "$required_owner" "$dir"
     fi
     
-    # Fix permissions
-    echo "Fixing permissions for $dir"
-    chown -R "$required_owner" "$dir"
-    chmod -R 755 "$dir"
+    # Ensure directory is writable by owner
+    chmod -R u+w "$dir"
 }
 
 # Always attempt to fix permissions automatically
