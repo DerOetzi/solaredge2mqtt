@@ -1,10 +1,3 @@
-"""
-    This module, service.py, is part of the SolarEdge2MQTT service, which reads data 
-    from a SolarEdge inverter and publishes it to an MQTT broker. It uses the asyncio 
-    library for asynchronous I/O and the aiomqtt library for MQTT communication. 
-    The module also includes a run function to initialize and start the service.
-"""
-
 import asyncio
 import platform
 import signal
@@ -24,7 +17,9 @@ from solaredge2mqtt.core.settings import service_settings
 from solaredge2mqtt.core.timer import Timer
 from solaredge2mqtt.services.energy import EnergyService
 from solaredge2mqtt.services.forecast import FORECAST_AVAILABLE
-from solaredge2mqtt.services.homeassistant import HomeAssistantDiscovery
+from solaredge2mqtt.services.homeassistant.service import (
+    HomeAssistantDiscovery,
+)
 from solaredge2mqtt.services.monitoring import MonitoringSite
 from solaredge2mqtt.services.powerflow import PowerflowService
 from solaredge2mqtt.services.weather import WeatherClient
@@ -126,7 +121,9 @@ class Service:
         finally:
             await self.shutdown()
 
-    def _register_signal_handlers(self, loop: asyncio.AbstractEventLoop) -> None:
+    def _register_signal_handlers(
+        self, loop: asyncio.AbstractEventLoop
+    ) -> None:
         for signum in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(signum, self.cancel)
 

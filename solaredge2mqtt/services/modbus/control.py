@@ -7,10 +7,14 @@ from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import MQTTReceivedEvent
 from solaredge2mqtt.services.modbus.events import ModbusWriteEvent
 from solaredge2mqtt.services.modbus.models.base import ModbusUnitRole
-from solaredge2mqtt.services.modbus.models.inputs import ModbusPowerControlInput
+from solaredge2mqtt.services.modbus.models.inputs import (
+    ModbusPowerControlInput,
+)
 from solaredge2mqtt.services.modbus.models.inverter import ModbusInverter
 from solaredge2mqtt.services.modbus.settings import AdvancedControlsSettings
-from solaredge2mqtt.services.modbus.sunspec.inverter import SunSpecPowerControlRegister
+from solaredge2mqtt.services.modbus.sunspec.inverter import (
+    SunSpecPowerControlRegister,
+)
 
 if TYPE_CHECKING:
     from solaredge2mqtt.core.settings.models import ServiceSettings
