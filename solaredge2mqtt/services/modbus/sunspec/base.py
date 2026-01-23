@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pymodbus.client import ModbusTcpClient
 
+from solaredge2mqtt.core.exceptions import InvalidRegisterDataException
+from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.models import EnumModel
 from solaredge2mqtt.services.modbus.sunspec.values import (
     SunSpecInputData,
@@ -33,7 +35,9 @@ class SunSpecRequestRegisterBundle:
         current_bundle = cls()
 
         for register in [
-            reg for reg in sorted_registers if not required_only or reg.required
+            reg
+            for reg in sorted_registers
+            if not required_only or reg.required
         ]:
             if (
                 current_bundle.length > 0
@@ -164,9 +168,28 @@ class SunSpecRegister(EnumModel):
     def decode_response(
         self, registers: list[int], data: dict[str, SunSpecPayload]
     ) -> dict[str, SunSpecPayload]:
-        value = ModbusTcpClient.convert_from_registers(
-            registers, self.value_type.data_type, word_order=self.wordorder()
-        )
+        try:
+            value = ModbusTcpClient.convert_from_registers(
+                registers,
+                self.value_type.data_type,
+                word_order=self.wordorder()
+            )
+        except UnicodeDecodeError as e:
+            logger.error(
+                f"Failed to decode register '{self.identifier}' at "
+                f"address {self.address}: {e}"
+            )
+            logger.debug(
+                f"Raw register values for '{self.identifier}' "
+                f"(address {self.address}, type {self.value_type.name}): "
+                f"{registers}"
+            )
+            raise InvalidRegisterDataException(
+                register_id=self.identifier,
+                address=self.address,
+                raw_values=registers,
+                original_error=e,
+            ) from e
 
         if self.value_type == SunSpecValueType.STRING:
             value = value.strip("\x00").rstrip()

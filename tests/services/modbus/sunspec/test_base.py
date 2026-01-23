@@ -1,9 +1,10 @@
 """Tests for modbus sunspec base module."""
 
-from unittest.mock import MagicMock
+from unittest.mock import patch
 
 import pytest
 
+from solaredge2mqtt.core.exceptions import InvalidRegisterDataException
 from solaredge2mqtt.services.modbus.sunspec.base import (
     SunSpecOffset,
     SunSpecRegister,
@@ -38,7 +39,10 @@ class TestSunSpecRegister:
             TEST_REG = "test_reg", 40000, SunSpecValueType.UINT16, True
 
         # UINT16 has length 1
-        assert TestRegister.TEST_REG.end_address == TestRegister.TEST_REG.address + 1
+        assert (
+            TestRegister.TEST_REG.end_address
+            == TestRegister.TEST_REG.address + 1
+        )
 
     def test_register_value_type(self):
         """Test register value_type property."""
@@ -102,9 +106,12 @@ class TestSunSpecRegister:
             TEST_REG = "test_reg", 40000, SunSpecValueType.STRING, True, 8
 
         data = {}
-        # Simulate string decoding (ModbusTcpClient returns string with nulls)
-        # The actual decoding depends on ModbusTcpClient, but we test null strip
-        result = TestRegister.TEST_REG.decode_response([0x5465, 0x7374, 0x0000, 0x0000], data)
+        # Simulate string decoding (ModbusTcpClient returns string with
+        # nulls). The actual decoding depends on ModbusTcpClient, but we
+        # test null strip
+        result = TestRegister.TEST_REG.decode_response(
+            [0x5465, 0x7374, 0x0000, 0x0000], data
+        )
 
         assert "test_reg" in result
 
@@ -119,6 +126,100 @@ class TestSunSpecRegister:
         result = TestRegister.TEST_REG.decode_response([0xFFFF], data)
 
         assert result["test_reg"] is False
+
+    @patch("solaredge2mqtt.services.modbus.sunspec.base.logger")
+    @patch(
+        "pymodbus.client.ModbusTcpClient.convert_from_registers",
+        side_effect=UnicodeDecodeError(
+            "utf-8", b"\xc2", 5, 6, "invalid continuation byte"
+        ),
+    )
+    def test_register_decode_response_unicode_error(
+        self, mock_convert, mock_logger
+    ):
+        """Test register decode_response handles UnicodeDecodeError."""
+
+        class TestRegister(SunSpecRegister):
+            TEST_REG = "test_reg", 40123, SunSpecValueType.STRING, True, 16
+
+        data = {"existing_key": "existing_value"}
+        invalid_registers = [
+            0x5465,
+            0x7374,
+            0xC200,
+            0x0000,
+            0x0000,
+            0x0000,
+            0x0000,
+            0x0000,
+        ]
+
+        # Should raise InvalidRegisterDataException after logging
+        with pytest.raises(InvalidRegisterDataException) as exc_info:
+            TestRegister.TEST_REG.decode_response(
+                invalid_registers, data
+            )
+
+        # Verify exception attributes
+        exception = exc_info.value
+        assert exception.register_id == "test_reg"
+        assert exception.address == 40123
+        assert exception.raw_values == invalid_registers
+        assert isinstance(exception.original_error, UnicodeDecodeError)
+
+        # Should have logged 1 error and 1 debug (after SonarQube fixes)
+        assert mock_logger.error.call_count == 1
+        assert mock_logger.debug.call_count == 1
+
+        # Verify error message contains key information
+        error_call = mock_logger.error.call_args[0][0]
+        assert "Failed to decode register" in error_call
+        assert "test_reg" in error_call
+        assert "40123" in error_call
+
+        # Verify debug message contains raw register values
+        debug_call = mock_logger.debug.call_args_list[0][0][0]
+        assert "test_reg" in debug_call
+        assert str(invalid_registers) in debug_call
+
+    @patch("solaredge2mqtt.services.modbus.sunspec.base.logger")
+    @patch(
+        "pymodbus.client.ModbusTcpClient.convert_from_registers",
+        side_effect=UnicodeDecodeError(
+            "utf-8", b"\xc2", 0, 1, "invalid start byte"
+        ),
+    )
+    def test_register_decode_response_unicode_error_empty_data(
+        self, mock_convert, mock_logger
+    ):
+        """Test UnicodeDecodeError handling with empty initial data."""
+
+        class TestRegister(SunSpecRegister):
+            MANUFACTURER = (
+                "c_manufacturer",
+                40123,
+                SunSpecValueType.STRING,
+                True,
+                16,
+            )
+
+        data = {}
+
+        # Should raise InvalidRegisterDataException after logging
+        with pytest.raises(InvalidRegisterDataException) as exc_info:
+            TestRegister.MANUFACTURER.decode_response(
+                [0xC200, 0x0000], data
+            )
+
+        # Verify exception attributes
+        exception = exc_info.value
+        assert exception.register_id == "c_manufacturer"
+        assert exception.address == 40123
+
+        # Should have logged appropriate messages
+        assert mock_logger.error.call_count == 1
+        assert mock_logger.debug.call_count == 1
+
 
     def test_register_encode_request_int(self):
         """Test register encode_request for integer."""
@@ -203,8 +304,8 @@ class TestSunSpecRequestRegisterBundle:
         """Test bundle end_address property."""
 
         class TestRegister(SunSpecRegister):
-            REG1 = "reg1", 40005, SunSpecValueType.UINT16, True  # end = 40006
-            REG2 = "reg2", 40002, SunSpecValueType.UINT16, True  # end = 40003
+            REG1 = "reg1", 40005, SunSpecValueType.UINT16, True  # end to 40006
+            REG2 = "reg2", 40002, SunSpecValueType.UINT16, True  # end to 40003
 
         bundle = SunSpecRequestRegisterBundle()
         bundle.add_register(TestRegister.REG1)
@@ -217,14 +318,13 @@ class TestSunSpecRequestRegisterBundle:
         """Test bundle length property."""
 
         class TestRegister(SunSpecRegister):
-            REG1 = "reg1", 40002, SunSpecValueType.UINT16, True  # end = 40003
-            REG2 = "reg2", 40005, SunSpecValueType.UINT16, True  # end = 40006
+            REG1 = "reg1", 40002, SunSpecValueType.UINT16, True  # end to 40003
+            REG2 = "reg2", 40005, SunSpecValueType.UINT16, True  # end to 40006
 
         bundle = SunSpecRequestRegisterBundle()
         bundle.add_register(TestRegister.REG1)
         bundle.add_register(TestRegister.REG2)
 
-        # Length = end_address - address = 40006 - 40002 = 4
         assert bundle.length == 4
 
     def test_from_registers_single_bundle(self):
@@ -240,7 +340,8 @@ class TestSunSpecRequestRegisterBundle:
         assert len(bundles) == 1
 
     def test_from_registers_multiple_bundles(self):
-        """Test from_registers creates multiple bundles for distant registers."""
+        """Test from_registers creates multiple bundles for distant
+        registers."""
 
         class TestRegister(SunSpecRegister):
             REG1 = "reg1", 40000, SunSpecValueType.UINT16, True
