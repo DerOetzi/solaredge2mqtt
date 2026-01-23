@@ -1,7 +1,13 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from solaredge2mqtt.core.events.events import BaseEvent
-from solaredge2mqtt.services.modbus.models.unit import ModbusUnit
-from solaredge2mqtt.services.modbus.sunspec.base import SunSpecRegister
-from solaredge2mqtt.services.modbus.sunspec.values import SunSpecInputData
+
+if TYPE_CHECKING:
+    from solaredge2mqtt.services.modbus.models.unit import ModbusUnit
+    from solaredge2mqtt.services.modbus.sunspec.base import SunSpecRegister
+    from solaredge2mqtt.services.modbus.sunspec.values import SunSpecInputData
 
 
 class ModbusUnitsReadEvent(BaseEvent):
