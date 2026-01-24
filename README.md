@@ -168,8 +168,8 @@ modbus:
   # Enable or disable meter detection (default: true)
   meter:
     - true  # meter0
-    - true  # meter1
-    - true  # meter2
+    - false  # meter1
+    - false  # meter2
   
   # Enable or disable battery detection (default: true)
   battery:
@@ -426,6 +426,48 @@ The Docker deployment guide covers:
 - Automatic permission handling
 - Migration from environment variables
 - Troubleshooting
+
+## Troubleshooting
+
+### Invalid Register Data / UnicodeDecodeError on Meter Detection
+
+**Symptom:** You see error messages like:
+```
+ERROR: Skipping meter2 due to invalid register data in device info
+ERROR: Failed to decode register 'c_manufacturer' at address 40123: 'utf-8' codec can't decode byte...
+```
+
+**Cause:** This typically occurs when:
+- A meter position is configured but no physical meter is installed
+- The meter is reporting uninitialized or corrupted data
+- There is a communication issue with the meter
+
+**Solution:**
+
+If you **do not have a meter installed** at this position (e.g., meter2), you can disable its detection in your configuration:
+
+1. Open `config/configuration.yml`
+2. Find the `modbus` section
+3. Set the corresponding meter array element to `false`:
+
+```yaml
+modbus:
+  # ... other settings ...
+  meter:
+    - true   # meter0 (index 0)
+    - false  # meter1 (index 1) - disable if not installed
+    - false  # meter2 (index 2) - disable if not installed
+```
+
+4. Restart the service
+
+If you **do have a meter installed** at this position:
+- Check the physical connection between the inverter and meter
+- Verify the meter is powered and functioning
+- Check inverter logs for communication errors
+- Consider contacting SolarEdge support if the issue persists
+
+**Note:** The service will continue to operate and monitor other devices even when a meter fails to respond. Only the problematic meter will be skipped.
 
 ## Installation Examples
 

@@ -21,8 +21,32 @@ class ModbusUnitSettings(BaseModel):
     @model_validator(mode='before')
     @classmethod
     def fill_defaults(cls, values: dict) -> dict:
-        values = cls._fill_defaults_array("meter", values, 3)
+        # Set meter defaults: meter0=true, meter1=false, meter2=false
+        values = cls._fill_defaults_array_with_pattern(
+            "meter", values, [True, False, False]
+        )
         values = cls._fill_defaults_array("battery", values, 2)
+
+        return values
+
+    @staticmethod
+    def _fill_defaults_array_with_pattern(
+        key: str, values: dict, defaults: list[bool]
+    ) -> dict:
+        """Fill array with specific default pattern."""
+        if key not in values or not isinstance(values[key], list):
+            values[key] = defaults.copy()
+        else:
+            for i, value in enumerate(values[key][:len(defaults)]):
+                if isinstance(value, str):
+                    values[key][i] = value.lower() == "true"
+                elif isinstance(value, bool):
+                    values[key][i] = value
+                else:
+                    values[key][i] = defaults[i]
+
+            if len(values[key]) < len(defaults):
+                values[key].extend(defaults[len(values[key]):])
 
         return values
 

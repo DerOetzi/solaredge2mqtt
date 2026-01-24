@@ -20,11 +20,13 @@ modbus:
   timeout: 1           # Timeout for the modbus connection in seconds
   unit: 1              # Modbus unit address
   
-  # Enable or disable detection of meters (default: true)
+  # Enable or disable detection of meters
+  # meter0 is typically the export/import meter (default: true)
+  # meter1 and meter2 are often not installed (default: false)
   meter:
-    - true  # meter0
-    - true  # meter1
-    - true  # meter2
+    - true   # meter0 (index 0)
+    - false  # meter1 (index 1) - disable if not installed
+    - false  # meter2 (index 2) - disable if not installed
   
   # Enable or disable detection of batteries (default: true)
   battery:

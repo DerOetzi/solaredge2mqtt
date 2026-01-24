@@ -152,8 +152,9 @@ class TestLogMeterDetectionError:
         assert "Skipping meter1" in error_call
         assert "invalid register data" in error_call
 
-        # Check that info logs were called
-        assert mock_logger.info.call_count >= 2
+        # Check that info logs were called (now 4: address, inverter info, 
+        # communication issue, and configuration hint)
+        assert mock_logger.info.call_count == 4
 
         # Find info calls
         info_calls = [
@@ -172,6 +173,14 @@ class TestLogMeterDetectionError:
             for call in info_calls
         )
         assert inverter_info_logged
+        
+        # Check configuration hint is logged with array index format
+        config_hint_logged = any(
+            "disable detection in configuration.yml" in call
+            and "modbus.meter[1]" in call
+            for call in info_calls
+        )
+        assert config_hint_logged
 
     @patch("solaredge2mqtt.services.modbus.logger")
     def test_log_meter_detection_error_without_meter_address(
@@ -202,9 +211,9 @@ class TestLogMeterDetectionError:
             meter_id, inverter_raw, exception
         )
 
-        # Should still log error and info
+        # Should still log error and info (now 4 info logs)
         assert mock_logger.error.call_count == 1
-        assert mock_logger.info.call_count >= 2
+        assert mock_logger.info.call_count == 4
 
         # meter2 should still be logged (with None value from .get())
         info_calls = [
@@ -213,6 +222,14 @@ class TestLogMeterDetectionError:
         meter2_logged = any("meter2" in call for call in info_calls)
         # Should use .get() which returns None, logged as "meter2=None"
         assert meter2_logged
+        
+        # Check configuration hint is logged for meter2 with array index
+        config_hint_logged = any(
+            "disable detection in configuration.yml" in call
+            and "modbus.meter[2]" in call
+            for call in info_calls
+        )
+        assert config_hint_logged
 
 
 class TestDetectMetersExceptionHandling:

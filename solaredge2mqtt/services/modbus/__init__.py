@@ -174,6 +174,7 @@ class Modbus:
             unit_settings.meter[meter.idx]
             and meter.identifier in inverter_raw
             and inverter_raw[meter.identifier] > 0
+            and inverter_raw[meter.identifier] < 1000
         )
 
     @staticmethod
@@ -182,8 +183,7 @@ class Modbus:
     ):
         """Log detailed information when meter detection fails."""
         logger.error(
-            f"Skipping {meter_id} due to invalid register data in "
-            f"device info",
+            f"Skipping {meter_id} due to invalid register data in device info",
             exc_info=error,
         )
         meter_address = inverter_raw.get(meter_id, "unknown")
@@ -198,6 +198,13 @@ class Modbus:
         logger.info(
             f"This likely indicates a communication issue with "
             f"{meter_id} or that it is reporting uninitialized data"
+        )
+        # Extract meter index from identifier (e.g., "meter0" -> 0)
+        meter_idx = meter_id.replace("meter", "")
+        logger.info(
+            f"If no meter is installed at this position, you can "
+            f"disable detection in configuration.yml: "
+            f"Set modbus.meter[{meter_idx}] to false"
         )
 
     async def _detect_batteries(
@@ -424,8 +431,8 @@ class Modbus:
 
         logger.info(
             LOGGING_DEVICE_INFO
-            + ": {status}, AC {power_ac} W, DC {power_dc} W, {energytotal} kWh, "
-            + "Grid status {grid_status}, ",
+            + ": {status}, AC {power_ac} W, DC {power_dc} W, "
+            + "{energytotal} kWh, Grid status {grid_status}, ",
             unit_key=inverter_data.info.unit_key(":"),
             device="inverter",
             info=inverter_data.info,
