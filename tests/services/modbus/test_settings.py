@@ -40,8 +40,10 @@ class TestModbusUnitSettings:
         """Test that meter array is filled with defaults."""
         settings = ModbusUnitSettings()
 
-        # Default should be True for all meters
-        assert all(m is True for m in settings.meter)
+        # Default should be True for meter0, False for meter1 and meter2
+        assert settings.meter[0] is True
+        assert settings.meter[1] is False
+        assert settings.meter[2] is False
 
     def test_modbus_unit_settings_battery_defaults_filled(self):
         """Test that battery array is filled with defaults."""
@@ -74,9 +76,9 @@ class TestModbusUnitSettings:
 
         assert len(settings.meter) == 3
         assert settings.meter[0] is False
-        # Remaining should be defaults
-        assert settings.meter[1] is True
-        assert settings.meter[2] is True
+        # Remaining should be pattern defaults (False for meter1 and meter2)
+        assert settings.meter[1] is False
+        assert settings.meter[2] is False
 
 
 class TestModbusSettings:

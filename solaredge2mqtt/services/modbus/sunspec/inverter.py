@@ -88,7 +88,12 @@ class SunSpecInverterRegister(SunSpecRegister):
     FREQUENCY_SCALE = "frequency_scale", 40086, SunSpecValueType.INT16, True
 
     POWER_APPARENT = "power_apparent", 40087, SunSpecValueType.INT16, True
-    POWER_APPARENT_SCALE = "power_apparent_scale", 40088, SunSpecValueType.INT16, True
+    POWER_APPARENT_SCALE = (
+        "power_apparent_scale",
+        40088,
+        SunSpecValueType.INT16,
+        True,
+    )
 
     POWER_REACTIVE = "power_reactive", 40089, SunSpecValueType.INT16, True
     POWER_REACTIVE_SCALE = (
@@ -99,10 +104,20 @@ class SunSpecInverterRegister(SunSpecRegister):
     )
 
     POWER_FACTOR = "power_factor", 40091, SunSpecValueType.INT16, True
-    POWER_FACTOR_SCALE = "power_factor_scale", 40092, SunSpecValueType.INT16, True
+    POWER_FACTOR_SCALE = (
+        "power_factor_scale",
+        40092,
+        SunSpecValueType.INT16,
+        True
+    )
 
     ENERGY_TOTAL = "energy_total", 40093, SunSpecValueType.UINT32, True
-    ENERGY_TOTAL_SCALE = "energy_total_scale", 40095, SunSpecValueType.INT16, True
+    ENERGY_TOTAL_SCALE = (
+        "energy_total_scale",
+        40095,
+        SunSpecValueType.INT16,
+        True
+    )
 
     CURRENT_DC = "current_dc", 40096, SunSpecValueType.UINT16, True
     CURRENT_DC_SCALE = "current_dc_scale", 40097, SunSpecValueType.INT16, True
@@ -114,7 +129,12 @@ class SunSpecInverterRegister(SunSpecRegister):
     POWER_DC_SCALE = "power_dc_scale", 40101, SunSpecValueType.INT16, True
 
     TEMPERATURE = "temperature", 40103, SunSpecValueType.INT16, True
-    TEMPERATURE_SCALE = "temperature_scale", 40106, SunSpecValueType.INT16, True
+    TEMPERATURE_SCALE = (
+        "temperature_scale",
+        40106,
+        SunSpecValueType.INT16,
+        True
+    )
 
     STATUS = "status", 40107, SunSpecValueType.UINT16, True
     VENDOR_STATUS = "vendor_status", 40108, SunSpecValueType.UINT16
@@ -126,7 +146,12 @@ class SunSpecGridStatusRegister(SunSpecRegister):
 
 class SunSpecPowerControlRegister(SunSpecRegister):
     RRCR_STATE = "rrcr_state", 61440, SunSpecValueType.UINT16, True
-    ACTIVE_POWER_LIMIT = "active_power_limit", 61441, SunSpecValueType.UINT16, True
+    ACTIVE_POWER_LIMIT = (
+        "active_power_limit",
+        61441,
+        SunSpecValueType.UINT16,
+        True
+    )
     COSPHI = "cosphi", 61442, SunSpecValueType.FLOAT32, False
 
     COMMIT_POWER_CONTROL_SETTINGS = (
@@ -149,11 +174,17 @@ class SunSpecPowerControlRegister(SunSpecRegister):
         True
     )
 
-    REACTIVE_POWER_CONFIG = "reactive_power_config", 61700, SunSpecValueType.INT32, True
+    REACTIVE_POWER_CONFIG = (
+        "reactive_power_config",
+        61700,
+        SunSpecValueType.INT32,
+        True
+    )
     REACTIVE_POWER_RESPONSE_TIME = (
         "reactive_power_response_time",
         61702,
-        SunSpecValueType.UINT32, True
+        SunSpecValueType.UINT32,
+        True
     )
 
     def decode_response(
@@ -172,7 +203,12 @@ class SunSpecPowerControlRegister(SunSpecRegister):
 
 
 class SunSpecSiteLimitRegister(SunSpecRegister):
-    EXPORT_CONTROL_MODE = "export_control_mode", 57344, SunSpecValueType.UINT16, True
+    EXPORT_CONTROL_MODE = (
+        "export_control_mode",
+        57344,
+        SunSpecValueType.UINT16,
+        True
+    )
     EXPORT_CONTROL_LIMIT_MODE = (
         "export_control_limit_mode",
         57345,
