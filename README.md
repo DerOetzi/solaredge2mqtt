@@ -679,6 +679,8 @@ pip install -U solaredge2mqtt
 sudo mkdir -p /etc/solaredge2mqtt
 sudo curl -o /etc/solaredge2mqtt/configuration.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/configuration.yml.example
 sudo curl -o /etc/solaredge2mqtt/secrets.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/secrets.yml.example
+# Restrict access to secrets file (contains sensitive credentials)
+sudo chmod 600 /etc/solaredge2mqtt/secrets.yml
 sudo nano /etc/solaredge2mqtt/configuration.yml
 sudo nano /etc/solaredge2mqtt/secrets.yml
 
