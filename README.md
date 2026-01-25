@@ -511,6 +511,9 @@ mkdir -p config
 curl -o config/configuration.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/configuration.yml.example
 curl -o config/secrets.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/secrets.yml.example
 
+# Protect secrets file (recommended: only readable by owner)
+chmod 600 config/secrets.yml
+
 # Edit configuration files
 # Enable forecast in configuration.yml:
 #   forecast:
@@ -557,6 +560,9 @@ mkdir -p config
 curl -o config/configuration.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/configuration.yml.example
 curl -o config/secrets.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/secrets.yml.example
 
+# Protect secrets file (recommended: only readable by owner)
+chmod 600 config/secrets.yml
+
 # Edit configuration files
 nano config/configuration.yml
 nano config/secrets.yml
@@ -597,6 +603,9 @@ curl -o docker-compose.yml https://raw.githubusercontent.com/DerOetzi/solaredge2
 mkdir -p config
 curl -o config/configuration.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/configuration.yml.example
 curl -o config/secrets.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/secrets.yml.example
+
+# Protect secrets file (recommended: only readable by owner)
+chmod 600 config/secrets.yml
 
 # Edit configuration
 nano config/configuration.yml
