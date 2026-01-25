@@ -471,9 +471,278 @@ If you **do have a meter installed** at this position:
 
 ## Installation Examples
 
-Below are installation examples for running the service directly (without Docker).
+This section provides practical examples for different deployment scenarios, from simple console installations to complete Docker-based stacks.
 
-**Full-Stack Example**: For a complete deployment with InfluxDB and Grafana, see [examples/docker-compose-full-stack.yaml](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/examples/docker-compose-full-stack.yaml)
+### Console Installation Examples
+
+#### Example 1: Basic Console Installation
+
+Minimal setup for testing or development without forecast support:
+
+```bash
+# Install the package
+pip install -U solaredge2mqtt
+
+# Create and configure
+mkdir -p config
+curl -o config/configuration.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/configuration.yml.example
+curl -o config/secrets.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/secrets.yml.example
+
+# Protect secrets file (recommended: only readable by owner)
+chmod 600 config/secrets.yml
+# Edit configuration files with your settings
+nano config/configuration.yml
+nano config/secrets.yml
+
+# Run the service
+solaredge2mqtt
+```
+
+#### Example 2: Console Installation with Forecast Support
+
+Complete installation including machine learning forecast capabilities:
+
+```bash
+# Install with forecast support
+pip install -U solaredge2mqtt[forecast]
+
+# Create and configure
+mkdir -p config
+curl -o config/configuration.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/configuration.yml.example
+curl -o config/secrets.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/secrets.yml.example
+
+# Protect secrets file (recommended: only readable by owner)
+chmod 600 config/secrets.yml
+
+# Edit configuration files
+# Enable forecast in configuration.yml:
+#   forecast:
+#     enable: true
+nano config/configuration.yml
+nano config/secrets.yml
+
+# Run the service
+solaredge2mqtt
+```
+
+#### Example 3: Console with Custom Config Directory
+
+Using a system-wide configuration directory:
+
+```bash
+# Install the package
+pip install -U solaredge2mqtt
+
+# Create custom config directory
+sudo mkdir -p /etc/solaredge2mqtt
+sudo curl -o /etc/solaredge2mqtt/configuration.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/configuration.yml.example
+sudo curl -o /etc/solaredge2mqtt/secrets.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/secrets.yml.example
+
+# Edit configuration files
+sudo nano /etc/solaredge2mqtt/configuration.yml
+sudo nano /etc/solaredge2mqtt/secrets.yml
+
+# Run with custom config directory
+solaredge2mqtt --config-dir /etc/solaredge2mqtt
+```
+
+### Docker Installation Examples
+
+#### Example 4: Basic Docker Installation
+
+Simple Docker deployment with persistent configuration:
+
+```bash
+# Create config directory
+mkdir -p config
+
+# Download configuration examples
+curl -o config/configuration.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/configuration.yml.example
+curl -o config/secrets.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/secrets.yml.example
+
+# Protect secrets file (recommended: only readable by owner)
+chmod 600 config/secrets.yml
+
+# Edit configuration files
+nano config/configuration.yml
+nano config/secrets.yml
+
+# Run the container
+docker run -d --name solaredge2mqtt \
+    -v $(pwd)/config:/app/config \
+    -e "TZ=Europe/Berlin" \
+    --restart unless-stopped \
+    ghcr.io/deroetzi/solaredge2mqtt:latest
+
+# View logs
+docker logs solaredge2mqtt -f
+```
+
+#### Example 5: Basic Docker Compose
+
+Minimal `docker-compose.yml` for standalone deployment:
+
+```yaml
+services:
+  solaredge2mqtt:
+    container_name: solaredge2mqtt
+    image: ghcr.io/deroetzi/solaredge2mqtt:latest
+    volumes:
+      - ./config:/app/config
+    environment:
+      - TZ=Europe/Berlin
+    restart: unless-stopped
+```
+
+**Setup and run:**
+```bash
+# Download the compose file
+curl -o docker-compose.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/docker-compose.yml
+
+# Prepare configuration
+mkdir -p config
+curl -o config/configuration.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/configuration.yml.example
+curl -o config/secrets.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/secrets.yml.example
+
+# Protect secrets file (recommended: only readable by owner)
+chmod 600 config/secrets.yml
+
+# Edit configuration
+nano config/configuration.yml
+nano config/secrets.yml
+
+# Start the service
+docker compose up -d
+
+# View logs
+docker compose logs solaredge2mqtt -f
+```
+
+#### Example 6: Full-Stack Docker Compose with InfluxDB and Grafana
+
+Complete monitoring and visualization stack:
+
+```yaml
+services:
+  solaredge2mqtt:
+    container_name: solaredge2mqtt
+    image: ghcr.io/deroetzi/solaredge2mqtt:latest
+    volumes:
+      - ./config:/app/config
+    environment:
+      - TZ=Europe/Berlin
+    restart: unless-stopped
+
+  influxdb:
+    image: influxdb:latest
+    container_name: influxdb
+    ports:
+      - "8086:8086"
+    volumes:
+      - "./data:/var/lib/influxdb2"
+    restart: always
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - "grafana:/var/lib/grafana"
+    restart: always
+
+volumes:
+  grafana:
+```
+
+**For the complete full-stack example with advanced features**, see [examples/docker-compose-full-stack.yaml](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/examples/docker-compose-full-stack.yaml)
+
+### Systemd Service Example (Linux)
+
+#### Example 7: Running as a System Service
+
+Create a systemd service for automatic startup on Linux systems:
+
+**Create service file** `/etc/systemd/system/solaredge2mqtt.service`:
+```ini
+[Unit]
+Description=SolarEdge 2 MQTT Service
+After=network.target
+
+[Service]
+Type=simple
+User=yourusername
+WorkingDirectory=/etc/solaredge2mqtt
+ExecStart=/usr/local/bin/solaredge2mqtt --config-dir /etc/solaredge2mqtt
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**Setup and enable:**
+```bash
+# Install the service
+pip install -U solaredge2mqtt
+
+# Prepare configuration
+sudo mkdir -p /etc/solaredge2mqtt
+sudo curl -o /etc/solaredge2mqtt/configuration.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/configuration.yml.example
+sudo curl -o /etc/solaredge2mqtt/secrets.yml https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/solaredge2mqtt/config/secrets.yml.example
+# Restrict access to secrets file (contains sensitive credentials)
+sudo chmod 600 /etc/solaredge2mqtt/secrets.yml
+sudo nano /etc/solaredge2mqtt/configuration.yml
+sudo nano /etc/solaredge2mqtt/secrets.yml
+
+# Enable and start the service
+sudo systemctl daemon-reload
+sudo systemctl enable solaredge2mqtt
+sudo systemctl start solaredge2mqtt
+
+# Check status and logs
+sudo systemctl status solaredge2mqtt
+sudo journalctl -u solaredge2mqtt -f
+```
+
+### Migration Example
+
+#### Example 8: Migrating from Environment Variables
+
+If you're upgrading from an older version using environment variables:
+
+```bash
+# Your old .env file will be automatically detected
+# Run the service once to migrate
+solaredge2mqtt
+
+# The service creates configuration.yml and secrets.yml in config/
+# Review the migrated files
+cat config/configuration.yml
+cat config/secrets.yml
+
+# Make any necessary adjustments
+nano config/configuration.yml
+
+# Restart the service (now using YAML configuration)
+solaredge2mqtt
+```
+
+For Docker migrations, see the [Docker Deployment Guide](DOCKER.md).
+
+### Quick Start Examples by Use Case
+
+**Just want to monitor my inverter?**  
+→ Use [Example 1](#example-1-basic-console-installation) or [Example 4](#example-4-basic-docker-installation)
+
+**Need production forecasting?**  
+→ Use [Example 2](#example-2-console-installation-with-forecast-support) (requires InfluxDB and weather configuration)
+
+**Want historical data and dashboards?**  
+→ Use [Example 6](#example-6-full-stack-docker-compose-with-influxdb-and-grafana)
+
+**Running on a server permanently?**  
+→ Use [Example 7](#example-7-running-as-a-system-service) (systemd) or [Example 5](#example-5-basic-docker-compose) (Docker)
 
 [buymecoffee-link]: https://www.buymeacoffee.com/deroetzik
 [buymecoffee-shield]: https://www.buymeacoffee.com/assets/img/custom_images/yellow_img.png
