@@ -661,7 +661,7 @@ After=network.target
 [Service]
 Type=simple
 User=yourusername
-WorkingDirectory=/home/yourusername/solaredge2mqtt
+WorkingDirectory=/etc/solaredge2mqtt
 ExecStart=/usr/local/bin/solaredge2mqtt --config-dir /etc/solaredge2mqtt
 Restart=always
 RestartSec=10
