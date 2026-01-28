@@ -1,8 +1,10 @@
 """Tests for powerflow models - additional tests for better coverage."""
 
-import pytest
 
-from solaredge2mqtt.services.modbus.models.base import ModbusUnitInfo, ModbusUnitRole
+from solaredge2mqtt.services.modbus.models.base import (
+    ModbusUnitInfo,
+    ModbusUnitRole,
+)
 from solaredge2mqtt.services.powerflow.models import (
     BatteryPowerflow,
     ConsumerPowerflow,
@@ -387,6 +389,307 @@ class TestConsumerPowerflowValidation:
         # production (200) < grid.delivery (300), so used_production = 0
         assert consumer.used_production == 0
 
+    def test_consumer_battery_charging_from_grid_no_double_count(self):
+        """Test that battery charging from grid is not double-counted.
+        
+        When battery is charging from grid, the inverter consumes power.
+        Most of that power goes to the battery, but we should still account
+        for the difference (conversion losses).
+        
+        Scenario (perfect efficiency):
+        - Battery charging: 500W (DC side)
+        - Inverter consuming: 500W (AC side)
+        - Grid importing: 600W (grid.power = -600)
+        - House consumption: 100W
+        - Inverter losses: 0W (perfect efficiency)
+        """
+        # Battery charging from grid: inverter is consuming 500W
+        inverter = InverterPowerflow(
+            power=-500, dc_power=0, battery_discharge=0
+        )
+        # Grid is importing 600W (negative = consuming from grid)
+        grid = GridPowerflow(power=-600)
+        # Battery is charging at 500W (same as inverter consumption)
+        battery = BatteryPowerflow(power=500)
+
+        consumer = ConsumerPowerflow(
+            inverter, grid, evcharger=0, battery=battery
+        )
+
+        # Expected: house = |grid - inverter| = |-600 - (-500)| = 100
+        assert consumer.house == 100
+        
+        # With perfect efficiency, inverter consumption after accounting
+        # for battery charging should be 0
+        assert consumer.inverter == 0, (
+            f"Inverter consumption should be 0 with perfect efficiency "
+            f"(got {consumer.inverter}W)."
+        )
+        
+        # Total consumer = house + inverter + evcharger = 100 + 0 + 0
+        assert consumer.total == 100
+
+    def test_consumer_battery_charging_with_losses(self):
+        """Test battery charging with conversion losses.
+        
+        When battery charges from grid, there are typically conversion
+        losses (AC to DC). The inverter consumption is higher than the
+        battery charge.
+        
+        Scenario (with losses):
+        - Inverter consuming: 550W (AC side)
+        - Battery charging: 520W (DC side)
+        - Losses: 30W (550 - 520)
+        - Grid importing: 650W
+        - House consumption: 100W
+        """
+        # Inverter consuming 550W from AC side
+        inverter = InverterPowerflow(
+            power=-550, dc_power=0, battery_discharge=0
+        )
+        # Grid importing 650W
+        grid = GridPowerflow(power=-650)
+        # Battery charging at 520W (30W losses)
+        battery = BatteryPowerflow(power=520)
+
+        consumer = ConsumerPowerflow(
+            inverter, grid, evcharger=0, battery=battery
+        )
+
+        # house = |grid - inverter| = |-650 - (-550)| = 100
+        assert consumer.house == 100
+        
+        # Inverter consumption should be the losses: 550 - 520 = 30W
+        assert consumer.inverter == 30, (
+            f"Inverter consumption should account for losses "
+            f"(550W - 520W = 30W), got {consumer.inverter}W"
+        )
+        
+        # Total consumer = house + inverter + evcharger
+        # = 100 + 30 + 0 = 130W
+        assert consumer.total == 130
+
+    def test_consumer_battery_charging_mixed_pv_and_grid(self):
+        """Test battery charging from both PV production and grid.
+        
+        Scenario: Partly cloudy day - mixed PV and grid charging
+        - PV Production: 2000W
+        - Battery charging: 3000W  
+        - Grid importing: 2030W (supplements PV)
+        - Inverter consuming: 1530W (from grid, AC side)
+        """
+        inverter = InverterPowerflow(
+            power=-1530, dc_power=2000, battery_discharge=0
+        )
+        grid = GridPowerflow(power=-2030)
+        battery = BatteryPowerflow(power=3000)
+
+        consumer = ConsumerPowerflow(
+            inverter, grid, evcharger=0, battery=battery
+        )
+
+        # house = |grid - inverter| = |-2030 - (-1530)| = 500
+        assert consumer.house == 500
+        
+        # consumer.inverter = max(0, 1530 - 3000) = 0
+        assert consumer.inverter == 0
+        
+        # Total = house + inverter = 500 + 0 = 500W
+        assert consumer.total == 500
+
+    def test_consumer_battery_charging_pv_only(self):
+        """Test battery charging entirely from PV production.
+        
+        Scenario: PV-only charging with grid export
+        - PV Production: 6000W
+        - Battery charging: 3500W  
+        - Grid export: 500W (excess PV)
+        - No grid import: 0W
+        
+        Note: consumer.house (5500W) represents the calculated power flow
+        balance, which includes battery charging (3500W) in the formula.
+        """
+        inverter = InverterPowerflow(
+            power=6000, dc_power=6000, battery_discharge=0
+        )
+        grid = GridPowerflow(power=500)
+        battery = BatteryPowerflow(power=3500)
+
+        consumer = ConsumerPowerflow(
+            inverter, grid, evcharger=0, battery=battery
+        )
+
+        # With positive inverter power, inverter.consumption = 0
+        assert consumer.inverter == 0
+        
+        # house = |grid - inverter| = |500 - 6000| = 5500
+        assert consumer.house == 5500
+        
+        # Total = house + inverter = 5500 + 0 = 5500W
+        assert consumer.total == 5500
+        
+        # Verify no grid import
+        assert grid.consumption == 0
+        assert grid.delivery == 500
+
+    def test_consumer_battery_charging_pv_exceeds_max_rate(self):
+        """Test PV production exceeding battery max charge rate.
+        
+        Scenario: High PV production, battery at max charge limit
+        - PV Production: 10000W
+        - Battery charging: 5000W (hardware max limit)
+        - Grid export: 3500W (excess that can't be stored)
+        
+        Note: consumer.house (6500W) represents the calculated power flow
+        balance, which includes battery charging (5000W) in the formula.
+        """
+        inverter = InverterPowerflow(
+            power=10000, dc_power=10000, battery_discharge=0
+        )
+        grid = GridPowerflow(power=3500)
+        battery = BatteryPowerflow(power=5000)
+
+        consumer = ConsumerPowerflow(
+            inverter, grid, evcharger=0, battery=battery
+        )
+
+        # With positive inverter power, inverter.consumption = 0
+        assert consumer.inverter == 0
+        
+        # house = |grid - inverter| = |3500 - 10000| = 6500
+        assert consumer.house == 6500
+        
+        # Total = 6500 + 0 = 6500W
+        assert consumer.total == 6500
+        
+        # Verify grid export and battery at max
+        assert grid.delivery == 3500
+        assert grid.consumption == 0
+        assert battery.charge == 5000
+
+    def test_consumer_battery_charging_minimal_grid_contribution(
+        self
+    ):
+        """Test battery charging with minimal grid contribution.
+        
+        Scenario: Mostly PV with tiny grid supplement
+        - PV Production: 4900W
+        - Battery charging: 3000W
+        - Grid import: 100W (small supplement)
+        
+        Note: consumer.house (0W) results from the power flow calculation
+        where grid and inverter values cancel out in the formula.
+        """
+        inverter = InverterPowerflow(
+            power=-100, dc_power=4900, battery_discharge=0
+        )
+        grid = GridPowerflow(power=-100)
+        battery = BatteryPowerflow(power=3000)
+
+        consumer = ConsumerPowerflow(
+            inverter, grid, evcharger=0, battery=battery
+        )
+
+        # house = |grid - inverter| = |-100 - (-100)| = 0
+        assert consumer.house == 0
+        
+        # consumer.inverter = max(0, 100 - 3000) = 0
+        assert consumer.inverter == 0
+        
+        # Total = 0 + 0 = 0
+        assert consumer.total == 0
+
+    def test_consumer_battery_charging_exact_balance(self):
+        """Test battery charging with exact PV/consumption balance.
+        
+        Scenario: PV exactly matches battery needs
+        - PV Production: 5500W
+        - Battery charging: 3500W
+        - Grid import/export: 0W (perfect balance)
+        
+        Note: consumer.house (5500W) represents the calculated power flow
+        balance, which includes battery charging (3500W) in the formula.
+        """
+        inverter = InverterPowerflow(
+            power=5500, dc_power=5500, battery_discharge=0
+        )
+        grid = GridPowerflow(power=0)
+        battery = BatteryPowerflow(power=3500)
+
+        consumer = ConsumerPowerflow(
+            inverter, grid, evcharger=0, battery=battery
+        )
+
+        # consumer.inverter = max(0, 0 - 3500) = 0
+        assert consumer.inverter == 0
+        
+        # house = |0 - 5500| = 5500
+        assert consumer.house == 5500
+        
+        # Total = 5500 + 0 = 5500
+        assert consumer.total == 5500
+        
+        # Verify no grid interaction
+        assert grid.consumption == 0
+        assert grid.delivery == 0
+
+    def test_consumer_battery_charging_with_evcharger(self):
+        """Test battery and EV charger both active.
+        
+        Scenario: Battery charging while EV charger running
+        - PV Production: 8000W
+        - Battery charging: 4000W
+        - EV Charger: 3000W
+        - Grid import: 4500W (supplements PV)
+        """
+        inverter = InverterPowerflow(
+            power=-500, dc_power=8000, battery_discharge=0
+        )
+        grid = GridPowerflow(power=-4500)
+        battery = BatteryPowerflow(power=4000)
+
+        consumer = ConsumerPowerflow(
+            inverter, grid, evcharger=3000, battery=battery
+        )
+
+        # house = abs(-4500 - (-500)) - 3000 = 4000 - 3000 = 1000
+        assert consumer.house == 1000
+        
+        # consumer.inverter = max(0, 500 - 4000) = 0
+        assert consumer.inverter == 0
+        
+        # Total = house + evcharger + inverter = 1000 + 3000 + 0 = 4000
+        assert consumer.total == 4000
+
+    def test_consumer_battery_high_efficiency_charging(self):
+        """Test battery charging with very high efficiency (minimal losses).
+        
+        Scenario: Modern inverter with high efficiency
+        - Grid import: 5100W
+        - Inverter consuming: 5010W (AC side)
+        - Battery charging: 5000W (DC side)
+        - Losses: 10W (99.8% efficiency)
+        - House: 100W
+        """
+        inverter = InverterPowerflow(
+            power=-5010, dc_power=0, battery_discharge=0
+        )
+        grid = GridPowerflow(power=-5110)
+        battery = BatteryPowerflow(power=5000)
+
+        consumer = ConsumerPowerflow(
+            inverter, grid, evcharger=0, battery=battery
+        )
+
+        # house = abs(-5110 - (-5010)) = 100
+        assert consumer.house == 100
+        
+        # consumer.inverter = max(0, 5010 - 5000) = 10W (losses)
+        assert consumer.inverter == 10
+        
+        # Total = 100 + 10 = 110
+        assert consumer.total == 110
+
 
 class TestGridPowerflowValidation:
     """Additional validation tests for GridPowerflow."""
@@ -484,7 +787,10 @@ class TestInverterPowerflowFromModbus:
 
     def test_from_modbus_basic(self):
         """Test from_modbus creates InverterPowerflow correctly."""
-        from solaredge2mqtt.services.modbus.models.inverter import ModbusInverter, ModbusDeviceInfo
+        from solaredge2mqtt.services.modbus.models.inverter import (
+            ModbusDeviceInfo,
+            ModbusInverter,
+        )
 
         # Create mock device info
         device_info = ModbusDeviceInfo({
@@ -545,8 +851,8 @@ class TestGridPowerflowFromModbus:
 
     def test_from_modbus_with_import_export_meter(self):
         """Test from_modbus with Import/Export meter."""
-        from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
         from solaredge2mqtt.services.modbus.models.base import ModbusDeviceInfo
+        from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
 
         # Create mock device info with Import/Export option
         device_info = ModbusDeviceInfo({

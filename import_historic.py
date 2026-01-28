@@ -94,7 +94,8 @@ def create_powerflow(columns, row):
         evcharger = 0
 
     consumer = ConsumerPowerflow(
-        inverter=inverter, grid=grid, evcharger=evcharger)
+        inverter=inverter, grid=grid, evcharger=evcharger, battery=battery
+    )
 
     pv_production = round(pv_production)
 
