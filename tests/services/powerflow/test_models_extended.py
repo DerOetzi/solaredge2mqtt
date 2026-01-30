@@ -908,3 +908,477 @@ class TestBatteryPowerflowFromModbus:
         result = BatteryPowerflow.from_modbus({})
 
         assert result.power == 0
+
+
+class TestPowerflowFromModbus:
+    """Tests for Powerflow.from_modbus method - PV production calculation."""
+
+    def test_from_modbus_negative_dc_power_with_battery_charging(self):
+        """Test PV production when dc_power is negative (grid charging battery).
+
+        Scenario: Battery charging from grid + some PV production
+        - dc_power: -4493W (AC→DC conversion)
+        - battery.charge: 4998W
+        - Expected pv_production: 505W (4998 - 4493)
+        """
+        from solaredge2mqtt.services.modbus.models.base import (
+            ModbusDeviceInfo,
+        )
+        from solaredge2mqtt.services.modbus.models.battery import (
+            ModbusBattery,
+        )
+        from solaredge2mqtt.services.modbus.models.inverter import (
+            ModbusInverter,
+        )
+        from solaredge2mqtt.services.modbus.models.unit import ModbusUnit
+
+        device_info = ModbusDeviceInfo({
+            "c_manufacturer": "SolarEdge",
+            "c_model": "SE10K",
+            "c_version": "1.0.0",
+            "c_serialnumber": "INV12345",
+        })
+
+        inverter_data = ModbusInverter(
+            device_info,
+            {
+                "status": 4,
+                "power_ac": -4426,
+                "power_ac_scale": 0,
+                "current": 20,
+                "current_scale": 0,
+                "l1_voltage": 230,
+                "l2_voltage": 230,
+                "l3_voltage": 230,
+                "l1n_voltage": 230,
+                "l2n_voltage": 230,
+                "l3n_voltage": 230,
+                "voltage_scale": 0,
+                "frequency": 50,
+                "frequency_scale": -2,
+                "power_apparent": 4500,
+                "power_apparent_scale": 0,
+                "power_reactive": 100,
+                "power_reactive_scale": 0,
+                "power_factor": 98,
+                "power_factor_scale": -2,
+                "energy_total": 1000,
+                "energy_total_scale": 0,
+                "current_dc": 18,
+                "current_dc_scale": 0,
+                "voltage_dc": 250,
+                "voltage_dc_scale": 0,
+                "power_dc": -4493,
+                "power_dc_scale": 0,
+                "temperature": 25,
+                "temperature_scale": 0,
+            }
+        )
+
+        battery_device_info = ModbusDeviceInfo({
+            "c_manufacturer": "SolarEdge",
+            "c_model": "Battery",
+            "c_version": "1.0.0",
+            "c_serialnumber": "BAT12345",
+        })
+
+        battery_data = ModbusBattery(
+            battery_device_info,
+            {
+                "status": 3,
+                "instantaneous_voltage": 500,
+                "instantaneous_current": 10,
+                "instantaneous_power": 4998,
+                "soe": 50.0,
+                "soh": 100.0,
+            }
+        )
+
+        unit_info = ModbusUnitInfo(
+            key="test",
+            unit=1,
+            role=ModbusUnitRole.LEADER,
+        )
+
+        unit = ModbusUnit(
+            info=unit_info,
+            inverter=inverter_data,
+            meters={},
+            batteries={"battery1": battery_data},
+        )
+
+        result = Powerflow.from_modbus(unit)
+
+        assert result.pv_production == 505
+
+    def test_from_modbus_positive_dc_power_with_battery_charging(self):
+        """Test PV production with positive dc_power and battery charging.
+
+        Scenario: PV only charging, some power to loads/grid
+        - dc_power: 1000W
+        - battery.charge: 2000W
+        - Expected pv_production: 3000W (1000 + 2000)
+        """
+        from solaredge2mqtt.services.modbus.models.base import (
+            ModbusDeviceInfo,
+        )
+        from solaredge2mqtt.services.modbus.models.battery import (
+            ModbusBattery,
+        )
+        from solaredge2mqtt.services.modbus.models.inverter import (
+            ModbusInverter,
+        )
+        from solaredge2mqtt.services.modbus.models.unit import ModbusUnit
+
+        device_info = ModbusDeviceInfo({
+            "c_manufacturer": "SolarEdge",
+            "c_model": "SE10K",
+            "c_version": "1.0.0",
+            "c_serialnumber": "INV12345",
+        })
+
+        inverter_data = ModbusInverter(
+            device_info,
+            {
+                "status": 4,
+                "power_ac": 1000,
+                "power_ac_scale": 0,
+                "current": 5,
+                "current_scale": 0,
+                "l1_voltage": 230,
+                "l2_voltage": 230,
+                "l3_voltage": 230,
+                "l1n_voltage": 230,
+                "l2n_voltage": 230,
+                "l3n_voltage": 230,
+                "voltage_scale": 0,
+                "frequency": 50,
+                "frequency_scale": -2,
+                "power_apparent": 1100,
+                "power_apparent_scale": 0,
+                "power_reactive": 50,
+                "power_reactive_scale": 0,
+                "power_factor": 95,
+                "power_factor_scale": -2,
+                "energy_total": 1000,
+                "energy_total_scale": 0,
+                "current_dc": 12,
+                "current_dc_scale": 0,
+                "voltage_dc": 250,
+                "voltage_dc_scale": 0,
+                "power_dc": 1000,
+                "power_dc_scale": 0,
+                "temperature": 25,
+                "temperature_scale": 0,
+            }
+        )
+
+        battery_device_info = ModbusDeviceInfo({
+            "c_manufacturer": "SolarEdge",
+            "c_model": "Battery",
+            "c_version": "1.0.0",
+            "c_serialnumber": "BAT12345",
+        })
+
+        battery_data = ModbusBattery(
+            battery_device_info,
+            {
+                "status": 3,
+                "instantaneous_voltage": 500,
+                "instantaneous_current": 4,
+                "instantaneous_power": 2000,
+                "soe": 50.0,
+                "soh": 100.0,
+            }
+        )
+
+        unit_info = ModbusUnitInfo(
+            key="test",
+            unit=1,
+            role=ModbusUnitRole.LEADER,
+        )
+
+        unit = ModbusUnit(
+            info=unit_info,
+            inverter=inverter_data,
+            meters={},
+            batteries={"battery1": battery_data},
+        )
+
+        result = Powerflow.from_modbus(unit)
+
+        assert result.pv_production == 3000
+
+    def test_from_modbus_battery_discharging_with_pv(self):
+        """Test PV production with battery discharging.
+
+        Scenario: Battery discharging + PV producing
+        - dc_power: 4000W (net DC→AC)
+        - battery.discharge: 1000W
+        - Expected pv_production: 3000W (4000 - 1000)
+        """
+        from solaredge2mqtt.services.modbus.models.base import (
+            ModbusDeviceInfo,
+        )
+        from solaredge2mqtt.services.modbus.models.battery import (
+            ModbusBattery,
+        )
+        from solaredge2mqtt.services.modbus.models.inverter import (
+            ModbusInverter,
+        )
+        from solaredge2mqtt.services.modbus.models.unit import ModbusUnit
+
+        device_info = ModbusDeviceInfo({
+            "c_manufacturer": "SolarEdge",
+            "c_model": "SE10K",
+            "c_version": "1.0.0",
+            "c_serialnumber": "INV12345",
+        })
+
+        inverter_data = ModbusInverter(
+            device_info,
+            {
+                "status": 4,
+                "power_ac": 4000,
+                "power_ac_scale": 0,
+                "current": 17,
+                "current_scale": 0,
+                "l1_voltage": 230,
+                "l2_voltage": 230,
+                "l3_voltage": 230,
+                "l1n_voltage": 230,
+                "l2n_voltage": 230,
+                "l3n_voltage": 230,
+                "voltage_scale": 0,
+                "frequency": 50,
+                "frequency_scale": -2,
+                "power_apparent": 4100,
+                "power_apparent_scale": 0,
+                "power_reactive": 100,
+                "power_reactive_scale": 0,
+                "power_factor": 98,
+                "power_factor_scale": -2,
+                "energy_total": 1000,
+                "energy_total_scale": 0,
+                "current_dc": 16,
+                "current_dc_scale": 0,
+                "voltage_dc": 250,
+                "voltage_dc_scale": 0,
+                "power_dc": 4000,
+                "power_dc_scale": 0,
+                "temperature": 25,
+                "temperature_scale": 0,
+            }
+        )
+
+        battery_device_info = ModbusDeviceInfo({
+            "c_manufacturer": "SolarEdge",
+            "c_model": "Battery",
+            "c_version": "1.0.0",
+            "c_serialnumber": "BAT12345",
+        })
+
+        battery_data = ModbusBattery(
+            battery_device_info,
+            {
+                "status": 2,
+                "instantaneous_voltage": 500,
+                "instantaneous_current": -2,
+                "instantaneous_power": -1000,
+                "soe": 50.0,
+                "soh": 100.0,
+            }
+        )
+
+        unit_info = ModbusUnitInfo(
+            key="test",
+            unit=1,
+            role=ModbusUnitRole.LEADER,
+        )
+
+        unit = ModbusUnit(
+            info=unit_info,
+            inverter=inverter_data,
+            meters={},
+            batteries={"battery1": battery_data},
+        )
+
+        result = Powerflow.from_modbus(unit)
+
+        assert result.pv_production == 3000
+
+    def test_from_modbus_pv_only_no_battery_activity(self):
+        """Test PV production with no battery activity.
+
+        Scenario: Pure PV production, no battery charging/discharging
+        - dc_power: 5000W
+        - battery.charge: 0W
+        - battery.discharge: 0W
+        - Expected pv_production: 5000W
+        """
+        from solaredge2mqtt.services.modbus.models.base import (
+            ModbusDeviceInfo,
+        )
+        from solaredge2mqtt.services.modbus.models.inverter import (
+            ModbusInverter,
+        )
+        from solaredge2mqtt.services.modbus.models.unit import ModbusUnit
+
+        device_info = ModbusDeviceInfo({
+            "c_manufacturer": "SolarEdge",
+            "c_model": "SE10K",
+            "c_version": "1.0.0",
+            "c_serialnumber": "INV12345",
+        })
+
+        inverter_data = ModbusInverter(
+            device_info,
+            {
+                "status": 4,
+                "power_ac": 5000,
+                "power_ac_scale": 0,
+                "current": 22,
+                "current_scale": 0,
+                "l1_voltage": 230,
+                "l2_voltage": 230,
+                "l3_voltage": 230,
+                "l1n_voltage": 230,
+                "l2n_voltage": 230,
+                "l3n_voltage": 230,
+                "voltage_scale": 0,
+                "frequency": 50,
+                "frequency_scale": -2,
+                "power_apparent": 5100,
+                "power_apparent_scale": 0,
+                "power_reactive": 100,
+                "power_reactive_scale": 0,
+                "power_factor": 98,
+                "power_factor_scale": -2,
+                "energy_total": 1000,
+                "energy_total_scale": 0,
+                "current_dc": 20,
+                "current_dc_scale": 0,
+                "voltage_dc": 250,
+                "voltage_dc_scale": 0,
+                "power_dc": 5000,
+                "power_dc_scale": 0,
+                "temperature": 25,
+                "temperature_scale": 0,
+            }
+        )
+
+        unit_info = ModbusUnitInfo(
+            key="test",
+            unit=1,
+            role=ModbusUnitRole.LEADER,
+        )
+
+        unit = ModbusUnit(
+            info=unit_info,
+            inverter=inverter_data,
+            meters={},
+            batteries={},
+        )
+
+        result = Powerflow.from_modbus(unit)
+
+        assert result.pv_production == 5000
+
+    def test_from_modbus_negative_pv_clamped_to_zero(self):
+        """Test that negative PV production is clamped to zero.
+
+        Scenario: Edge case where calculation results in negative value
+        - dc_power: -5000W
+        - battery.charge: 3000W
+        - Calculated: -5000 + 3000 = -2000W
+        - Expected pv_production: 0W (clamped)
+        """
+        from solaredge2mqtt.services.modbus.models.base import (
+            ModbusDeviceInfo,
+        )
+        from solaredge2mqtt.services.modbus.models.battery import (
+            ModbusBattery,
+        )
+        from solaredge2mqtt.services.modbus.models.inverter import (
+            ModbusInverter,
+        )
+        from solaredge2mqtt.services.modbus.models.unit import ModbusUnit
+
+        device_info = ModbusDeviceInfo({
+            "c_manufacturer": "SolarEdge",
+            "c_model": "SE10K",
+            "c_version": "1.0.0",
+            "c_serialnumber": "INV12345",
+        })
+
+        inverter_data = ModbusInverter(
+            device_info,
+            {
+                "status": 4,
+                "power_ac": -5000,
+                "power_ac_scale": 0,
+                "current": 22,
+                "current_scale": 0,
+                "l1_voltage": 230,
+                "l2_voltage": 230,
+                "l3_voltage": 230,
+                "l1n_voltage": 230,
+                "l2n_voltage": 230,
+                "l3n_voltage": 230,
+                "voltage_scale": 0,
+                "frequency": 50,
+                "frequency_scale": -2,
+                "power_apparent": 5100,
+                "power_apparent_scale": 0,
+                "power_reactive": 100,
+                "power_reactive_scale": 0,
+                "power_factor": 98,
+                "power_factor_scale": -2,
+                "energy_total": 1000,
+                "energy_total_scale": 0,
+                "current_dc": 20,
+                "current_dc_scale": 0,
+                "voltage_dc": 250,
+                "voltage_dc_scale": 0,
+                "power_dc": -5000,
+                "power_dc_scale": 0,
+                "temperature": 25,
+                "temperature_scale": 0,
+            }
+        )
+
+        battery_device_info = ModbusDeviceInfo({
+            "c_manufacturer": "SolarEdge",
+            "c_model": "Battery",
+            "c_version": "1.0.0",
+            "c_serialnumber": "BAT12345",
+        })
+
+        battery_data = ModbusBattery(
+            battery_device_info,
+            {
+                "status": 3,
+                "instantaneous_voltage": 500,
+                "instantaneous_current": 6,
+                "instantaneous_power": 3000,
+                "soe": 50.0,
+                "soh": 100.0,
+            }
+        )
+
+        unit_info = ModbusUnitInfo(
+            key="test",
+            unit=1,
+            role=ModbusUnitRole.LEADER,
+        )
+
+        unit = ModbusUnit(
+            info=unit_info,
+            inverter=inverter_data,
+            meters={},
+            batteries={"battery1": battery_data},
+        )
+
+        result = Powerflow.from_modbus(unit)
+
+        assert result.pv_production == 0

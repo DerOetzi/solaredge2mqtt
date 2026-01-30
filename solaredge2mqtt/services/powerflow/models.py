@@ -49,11 +49,10 @@ class Powerflow(Component):
         grid = GridPowerflow.from_modbus(unit.meters)
         battery = BatteryPowerflow.from_modbus(unit.batteries)
 
-        if inverter_data.ac.power.actual > 0:
-            pv_production = int(inverter_data.dc.power + battery.power)
-            if pv_production < 0:
-                pv_production = 0
-        else:
+        pv_production = int(
+            inverter_data.dc.power + battery.charge - battery.discharge
+        )
+        if pv_production < 0:
             pv_production = 0
 
         inverter = InverterPowerflow.from_modbus(inverter_data, battery)
