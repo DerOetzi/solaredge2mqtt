@@ -11,7 +11,10 @@ from solaredge2mqtt.core.models import Solaredge2MQTTBaseModel
 from solaredge2mqtt.services.homeassistant.models import (
     HomeAssistantSensorType as HASensor,
 )
-from solaredge2mqtt.services.modbus.models.base import ModbusUnitInfo, ModbusUnitRole
+from solaredge2mqtt.services.modbus.models.base import (
+    ModbusUnitInfo,
+    ModbusUnitRole,
+)
 from solaredge2mqtt.services.modbus.models.battery import ModbusBattery
 from solaredge2mqtt.services.modbus.models.inverter import ModbusInverter
 from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
@@ -46,16 +49,15 @@ class Powerflow(Component):
         grid = GridPowerflow.from_modbus(unit.meters)
         battery = BatteryPowerflow.from_modbus(unit.batteries)
 
-        if inverter_data.ac.power.actual > 0:
-            pv_production = int(inverter_data.dc.power + battery.power)
-            if pv_production < 0:
-                pv_production = 0
-        else:
+        pv_production = int(
+            inverter_data.dc.power + battery.charge - battery.discharge
+        )
+        if pv_production < 0:
             pv_production = 0
 
         inverter = InverterPowerflow.from_modbus(inverter_data, battery)
 
-        consumer = ConsumerPowerflow(inverter, grid, evcharger)
+        consumer = ConsumerPowerflow(inverter, grid, evcharger, battery)
 
         return Powerflow(
             unit=unit.info,
@@ -90,6 +92,7 @@ class Powerflow(Component):
             inverter=inverter,
             grid=grid,
             evcharger=sum(p.consumer.evcharger for p in powerflows.values()),
+            battery=battery,
         )
 
         pv_production = sum(p.pv_production for p in powerflows.values())
@@ -357,7 +360,11 @@ class ConsumerPowerflow(Solaredge2MQTTBaseModel):
     battery_factor: SkipJsonSchema[float] = Field(exclude=True)
 
     def __init__(
-        self, inverter: InverterPowerflow, grid: GridPowerflow, evcharger: int
+        self,
+        inverter: InverterPowerflow,
+        grid: GridPowerflow,
+        evcharger: int,
+        battery: BatteryPowerflow | None = None,
     ):
         house = int(abs(grid.power - inverter.power)) - evcharger
 
@@ -368,10 +375,16 @@ class ConsumerPowerflow(Solaredge2MQTTBaseModel):
         else:
             used_production = 0
 
+        inverter_consumption = inverter.consumption
+        if battery is not None and battery.charge > 0:
+            inverter_consumption = max(
+                0, inverter.consumption - battery.charge
+            )
+
         super().__init__(
             house=house,
             evcharger=evcharger,
-            inverter=inverter.consumption,
+            inverter=inverter_consumption,
             used_production=used_production,
             battery_factor=battery_factor,
         )
