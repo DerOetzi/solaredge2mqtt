@@ -45,6 +45,7 @@ jobs:
         python-version:
           - "3.11"
           - "3.12"
+          - "3.13"
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -81,7 +82,7 @@ jobs:
         run: python -m pytest --cov=solaredge2mqtt --cov-report=xml:coverage.xml --tb=short
 
       - name: SonarCloud Scan
-        if: ${{ matrix.python-version == '3.12' }}
+        if: ${{ matrix.python-version == '3.13' }}
         uses: SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -97,13 +98,13 @@ jobs:
             dist
 
       - name: Publish package to pypi
-        if: ${{github.event_name == 'release' && matrix.python-version == '3.12'}}
+        if: ${{github.event_name == 'release' && matrix.python-version == '3.13'}}
         uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e
         with:
           packages-dir: dist/
 
       - name: Publish assets to github
-        if: ${{github.event_name == 'release' && matrix.python-version == '3.12'}}
+        if: ${{github.event_name == 'release' && matrix.python-version == '3.13'}}
         uses: svenstaro/upload-release-action@6b7fa9f267e90b50a19fef07b3596790bb941741
         with:
           repo_token: ${{ github.token }}
