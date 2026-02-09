@@ -14,7 +14,7 @@
         "**/__pycache__": true
     },
     "git.alwaysSignOff": true,
-    "python.analysis.typeCheckingMode": "off",
+    "python.analysis.typeCheckingMode": "standard",
     "python.analysis.autoImportCompletions": true,
     "python.terminal.useEnvFile": true,
     "sonarlint.connectedMode.project": {
