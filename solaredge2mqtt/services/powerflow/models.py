@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, ClassVar
 
 from influxdb_client import Point
-from pydantic import Field, computed_field
+from pydantic import Field, PrivateAttr, computed_field
 from pydantic.json_schema import SkipJsonSchema
 
 from solaredge2mqtt.core.logging import logger
@@ -76,17 +76,36 @@ class Powerflow(Component):
             role=ModbusUnitRole.CUMULATED,
         )
 
+        # Sum the computed properties from individual inverters
+        summed_production = sum(
+            p.inverter.production for p in powerflows.values()
+        )
+        summed_battery_production = sum(
+            p.inverter.battery_production for p in powerflows.values()
+        )
+        summed_pv_production = sum(
+            p.inverter.pv_production for p in powerflows.values()
+        )
+
         inverter = InverterPowerflow(
             power=sum(p.inverter.power for p in powerflows.values()),
             dc_power=sum(p.inverter.dc_power for p in powerflows.values()),
             battery_discharge=sum(
-                p.inverter.battery_discharge for p in powerflows.values()),
+                p.inverter.battery_discharge for p in powerflows.values()
+            ),
         )
 
+        # Set explicit values using private attributes
+        inverter._explicit_production = summed_production
+        inverter._explicit_battery_production = summed_battery_production
+        inverter._explicit_pv_production = summed_pv_production
+
         grid = GridPowerflow(
-            power=sum(p.grid.power for p in powerflows.values()))
+            power=sum(p.grid.power for p in powerflows.values())
+        )
         battery = BatteryPowerflow(
-            power=sum(p.battery.power for p in powerflows.values()))
+            power=sum(p.battery.power for p in powerflows.values())
+        )
 
         consumer = ConsumerPowerflow(
             inverter=inverter,
@@ -112,8 +131,8 @@ class Powerflow(Component):
         if self.pv_production < 0:
             logger.warning("PV production is negative")
         elif (
-            not external_production and
-            self.consumer.used_production + self.grid.delivery
+            not external_production
+            and self.consumer.used_production + self.grid.delivery
             != self.inverter.production
         ):
             logger.warning(
@@ -203,9 +222,14 @@ class Powerflow(Component):
 
 class InverterPowerflow(Solaredge2MQTTBaseModel):
     power: SkipJsonSchema[int]
-    dc_power: int = Field(
-        **HASensor.POWER_W.field("Power DC", "solar-power"))
+    dc_power: int = Field(**HASensor.POWER_W.field("Power DC", "solar-power"))
     battery_discharge: SkipJsonSchema[int] = Field(exclude=True)
+
+    # Optional explicit values for computed properties
+    # (used in cumulated powerflow)
+    _explicit_production: int | None = PrivateAttr(default=None)
+    _explicit_battery_production: int | None = PrivateAttr(default=None)
+    _explicit_pv_production: int | None = PrivateAttr(default=None)
 
     @staticmethod
     def from_modbus(
@@ -237,6 +261,8 @@ class InverterPowerflow(Solaredge2MQTTBaseModel):
     @computed_field(**HASensor.POWER_W.field("Production"))
     @property
     def production(self) -> int:
+        if self._explicit_production is not None:
+            return self._explicit_production
         return self.power if self.power > 0 else 0
 
     @computed_field(
@@ -244,16 +270,23 @@ class InverterPowerflow(Solaredge2MQTTBaseModel):
     )
     @property
     def battery_production(self) -> int:
+        if self._explicit_battery_production is not None:
+            return self._explicit_battery_production
         battery_production = 0
         if self.production > 0 and self.battery_factor > 0:
             battery_production = int(
-                round(self.production * self.battery_factor))
+                round(self.production * self.battery_factor)
+            )
             battery_production = min(battery_production, self.production)
         return battery_production
 
-    @computed_field(**HASensor.POWER_W.field("PV production", "sun-angle-outline"))
+    @computed_field(
+        **HASensor.POWER_W.field("PV production", "sun-angle-outline")
+    )
     @property
     def pv_production(self) -> int:
+        if self._explicit_pv_production is not None:
+            return self._explicit_pv_production
         return self.production - self.battery_production
 
     @property
@@ -292,7 +325,9 @@ class GridPowerflow(Solaredge2MQTTBaseModel):
     def consumption(self) -> int:
         return abs(self.power) if self.power < 0 else 0
 
-    @computed_field(**HASensor.POWER_W.field("Delivery", "transmission-tower-export"))
+    @computed_field(
+        **HASensor.POWER_W.field("Delivery", "transmission-tower-export")
+    )
     @property
     def delivery(self) -> int:
         return self.power if self.power > 0 else 0
@@ -314,7 +349,9 @@ class BatteryPowerflow(Solaredge2MQTTBaseModel):
     power: SkipJsonSchema[int]
 
     @staticmethod
-    def from_modbus(batteries_data: dict[str, ModbusBattery]) -> BatteryPowerflow:
+    def from_modbus(
+        batteries_data: dict[str, ModbusBattery],
+    ) -> BatteryPowerflow:
         batteries_power = 0
         for battery in batteries_data.values():
             batteries_power += battery.power
@@ -326,7 +363,9 @@ class BatteryPowerflow(Solaredge2MQTTBaseModel):
     def charge(self) -> int:
         return self.power if self.power > 0 else 0
 
-    @computed_field(**HASensor.POWER_W.field("Discharge", "battery-minus-outline"))
+    @computed_field(
+        **HASensor.POWER_W.field("Discharge", "battery-minus-outline")
+    )
     @property
     def discharge(self) -> int:
         return abs(self.power) if self.power < 0 else 0
@@ -350,12 +389,14 @@ class ConsumerPowerflow(Solaredge2MQTTBaseModel):
     )
 
     evcharger: int = Field(
-        0, **HASensor.POWER_W.field("EV-Charger", "ev-station"))
+        0, **HASensor.POWER_W.field("EV-Charger", "ev-station")
+    )
 
     inverter: int = Field(**HASensor.POWER_W.field("Inverter"))
 
     used_production: int = Field(
-        0, **HASensor.POWER_W.field("Used production"))
+        0, **HASensor.POWER_W.field("Used production")
+    )
 
     battery_factor: SkipJsonSchema[float] = Field(exclude=True)
 
@@ -402,7 +443,8 @@ class ConsumerPowerflow(Solaredge2MQTTBaseModel):
         battery_production = 0
         if self.used_production > 0 and self.battery_factor > 0:
             battery_production = int(
-                round(self.used_production * self.battery_factor))
+                round(self.used_production * self.battery_factor)
+            )
             battery_production = min(battery_production, self.used_production)
         return battery_production
 
