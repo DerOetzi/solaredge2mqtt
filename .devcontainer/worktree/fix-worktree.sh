@@ -18,7 +18,7 @@ if [ -f .git ] && [ ! -d .git ]; then
         WORKTREE_NAME=$(basename "$GITDIR")
         
         # Create relative path pointing to .repo
-        RELATIVE_PATH="../.repo/.git/worktrees/$WORKTREE_NAME"
+        RELATIVE_PATH="../.repo/worktrees/$WORKTREE_NAME"
         
         # Update .git file
         echo "gitdir: $RELATIVE_PATH" > .git
