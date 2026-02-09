@@ -129,7 +129,8 @@ env.bak/
 venv.bak/
 
 # Configuration files (use .example templates)
-config/*.yml
+config/**/*
+config
 
 # Spyder project settings
 .spyderproject
