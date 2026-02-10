@@ -3,13 +3,7 @@ from os import chmod, getenv
 from pathlib import Path
 
 import platformdirs
-from pydantic import (
-    BaseModel,
-    DirectoryPath,
-    Field,
-    ValidationInfo,
-    field_validator,
-)
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 from solaredge2mqtt.core.logging import logger
 
@@ -17,7 +11,7 @@ from solaredge2mqtt.core.logging import logger
 def _get_default_cache_dir() -> str:
     """
     Get the default cache directory for forecast data.
-    
+
     Returns /app/cache in Docker containers, otherwise uses platformdirs.
     Detection is based on the presence of /.dockerenv file or
     DOCKER_CONTAINER environment variable.
@@ -26,10 +20,10 @@ def _get_default_cache_dir() -> str:
     is_docker = (
         Path("/.dockerenv").exists() or getenv("DOCKER_CONTAINER") == "true"
     )
-    
+
     if is_docker:
         return "/app/cache"
-    
+
     # Use platform-specific user cache directory
     return str(Path(platformdirs.user_cache_dir("se2mqtt_forecast")))
 
@@ -37,7 +31,7 @@ def _get_default_cache_dir() -> str:
 class ForecastSettings(BaseModel):
     enable: bool = Field(False)
     hyperparametertuning: bool = Field(False)
-    cachingdir: DirectoryPath | None = Field(
+    cachingdir: str | None = Field(
         default_factory=_get_default_cache_dir
     )
     retain: bool = Field(False)
