@@ -15,7 +15,6 @@ set -e
 # ============================================================================
 
 GITHUB_REPO="git@github.com:DerOetzi/solaredge2mqtt.git"
-GITHUB_RAW_BASE="https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/main"
 SCRIPT_NAME="manage-worktrees.sh"
 
 # Save script paths at the very beginning
@@ -55,17 +54,17 @@ warning() {
 # ============================================================================
 
 resolve_absolute_path() {
-    local PATH_INPUT=$1
+    local INPUT_PATH=$1
     
     # Expand tilde
-    PATH_INPUT="${PATH_INPUT/#\~/$HOME}"
+    INPUT_PATH="${INPUT_PATH/#\~/$HOME}"
     
-    if [ -d "$PATH_INPUT" ]; then
-        echo "$(cd "$PATH_INPUT" && pwd)"
-    elif [ -d "$(dirname "$PATH_INPUT")" ]; then
-        echo "$(cd "$(dirname "$PATH_INPUT")" && pwd)/$(basename "$PATH_INPUT")"
+    if [ -d "$INPUT_PATH" ]; then
+        echo "$(cd "$INPUT_PATH" && pwd)"
+    elif [ -d "$(dirname "$INPUT_PATH")" ]; then
+        echo "$(cd "$(dirname "$INPUT_PATH")" && pwd)/$(basename "$INPUT_PATH")"
     else
-        echo "$PATH_INPUT"
+        echo "$INPUT_PATH"
     fi
 }
 
@@ -102,7 +101,7 @@ detect_project_root() {
 }
 
 check_repo_exists() {
-    info "check repo exists"
+    info "Check repo exists"
     [ -z "$PROJECT_ROOT" ] && error "Project root not set"
     [ ! -d "$REPO_DIR" ] && error ".repo directory not found at $REPO_DIR\n\nRun: $SCRIPT_NAME setup <directory>"
     return 0
@@ -113,7 +112,8 @@ check_repo_exists() {
 # ============================================================================
 
 configure_bare_repository() {
-    cd "$REPO_DIR"
+    cd "$REPO_DIR" || \
+        error "Failed to change to repository directory: $REPO_DIR"
     
     local CURRENT_REFSPEC=$(git config --get remote.origin.fetch || echo "")
     local DESIRED_REFSPEC="+refs/heads/*:refs/remotes/origin/*"
@@ -130,7 +130,7 @@ set_branch_upstream() {
     local WORKTREE_PATH=$2
     local REMOTE_REF=${3:-origin/$BRANCH_NAME}
     
-    cd "$WORKTREE_PATH"
+    cd "$WORKTREE_PATH" || error "Failed to change to worktree directory"
     
     if git rev-parse --abbrev-ref --symbolic-full-name @{u} &>/dev/null; then
         local CURRENT_UPSTREAM=$(git rev-parse --abbrev-ref --symbolic-full-name @{u})
@@ -330,7 +330,8 @@ setup_config_directory() {
 
 prompt_yes_no() {
     local PROMPT=$1
-    read -p "$PROMPT (y/N): " -n 1 -r
+    local REPLY
+    read -p "$PROMPT (y/N): " -n 1 -r REPLY
     echo
     [[ $REPLY =~ ^[Yy]$ ]]
 }
@@ -345,6 +346,14 @@ handle_existing_directory() {
     else
         warning "Directory '$DIR' exists but is not a worktree"
         if prompt_yes_no "Remove and recreate?"; then
+            # Validate that DIR is within PROJECT_ROOT for safety
+            local REAL_DIR=$(cd "$DIR" && pwd)
+            local REAL_PROJECT_ROOT=$(cd "$PROJECT_ROOT" && pwd)
+            
+            if [[ "$REAL_DIR" != "$REAL_PROJECT_ROOT"/* ]]; then
+                error "Safety check failed: Directory is not within project root"
+            fi
+            
             rm -rf "$DIR"
             return 0
         else
@@ -532,8 +541,8 @@ cmd_list_remote() {
     echo "🌐 Remote branches:"
     echo ""
     
-    git branch -r --format='%(refname:short)' | sed 's/origin\///' | while read branch; do
-        local STATUS=""
+    git branch -r --format='%(refname:short)' | sed 's/origin\///' | while read -r branch; do
+        STATUS=""
         git worktree list | grep -q "\\[$branch\\]" && STATUS=" (checked out)"
         echo "  $branch$STATUS"
     done
@@ -571,7 +580,7 @@ Manage git worktrees in a bare repository setup for parallel branch development.
 SETUP:
   curl -O https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/main/scripts/manage-worktrees.sh
   chmod +x manage-worktrees.sh
-  ./manage-worktrees.sh setup ~/Projekte/solaredge2mqtt
+  ./manage-worktrees.sh setup ~/projects/solaredge2mqtt
 
 COMMANDS:
   setup <dir>              Setup bare repository
@@ -585,7 +594,7 @@ COMMANDS:
   help                     Show this help
 
 STRUCTURE:
-  ~/Projekte/solaredge2mqtt/
+  ~/projects/solaredge2mqtt/
   ├── .repo/               # Bare repository
   ├── config/              # Shared configuration
   │   ├── configuration.yml

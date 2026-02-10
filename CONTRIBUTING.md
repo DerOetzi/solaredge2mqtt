@@ -100,8 +100,9 @@ After setup, your project structure looks like this:
 3. **Work normally:**
    - All git commands work as expected
    - The devcontainer automatically fixes worktree paths on startup
-   - Configuration files in `../config/` are shared across all worktrees you can use them by executing 
-     `ln -s ../config .` in the workspace directory.
+   - Configuration files in `../config/` are shared across all worktrees.
+     You can use them by executing `ln -s ../config .` in the workspace
+     directory.
 
 #### Creating New Worktrees
 
