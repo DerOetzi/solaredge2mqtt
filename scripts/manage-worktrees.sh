@@ -130,7 +130,8 @@ set_branch_upstream() {
     local WORKTREE_PATH=$2
     local REMOTE_REF=${3:-origin/$BRANCH_NAME}
     
-    cd "$WORKTREE_PATH" || error "Failed to change to worktree directory"
+    cd "$WORKTREE_PATH" || \
+        error "Failed to change to worktree directory: $WORKTREE_PATH"
     
     if git rev-parse --abbrev-ref --symbolic-full-name @{u} &>/dev/null; then
         local CURRENT_UPSTREAM=$(git rev-parse --abbrev-ref --symbolic-full-name @{u})
@@ -347,8 +348,16 @@ handle_existing_directory() {
         warning "Directory '$DIR' exists but is not a worktree"
         if prompt_yes_no "Remove and recreate?"; then
             # Validate that DIR is within PROJECT_ROOT for safety
-            local REAL_DIR=$(cd "$DIR" && pwd)
-            local REAL_PROJECT_ROOT=$(cd "$PROJECT_ROOT" && pwd)
+            local REAL_DIR
+            local REAL_PROJECT_ROOT
+
+            if ! REAL_DIR="$(cd "$DIR" 2>/dev/null && pwd -P)"; then
+                error "Safety check failed: Cannot resolve directory '$DIR'"
+            fi
+
+            if ! REAL_PROJECT_ROOT="$(cd "$PROJECT_ROOT" 2>/dev/null && pwd -P)"; then
+                error "Safety check failed: Cannot resolve project root '$PROJECT_ROOT'"
+            fi
             
             if [[ "$REAL_DIR" != "$REAL_PROJECT_ROOT"/* ]]; then
                 error "Safety check failed: Directory is not within project root"
@@ -541,9 +550,13 @@ cmd_list_remote() {
     echo "🌐 Remote branches:"
     echo ""
     
+    # Cache worktree list once to avoid repeated calls
+    local WORKTREE_LIST=$(git worktree list)
+    local STATUS
+    
     git branch -r --format='%(refname:short)' | sed 's/origin\///' | while read -r branch; do
         STATUS=""
-        git worktree list | grep -q "\\[$branch\\]" && STATUS=" (checked out)"
+        echo "$WORKTREE_LIST" | grep -q "\\[$branch\\]" && STATUS=" (checked out)"
         echo "  $branch$STATUS"
     done
 }
