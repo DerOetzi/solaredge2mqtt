@@ -36,37 +36,54 @@ This workflow is designed for maintainers who work on multiple branches simultan
 
 #### Initial Setup
 
+This workflow uses the `manage-worktrees.sh` helper script that automates the entire worktree setup and management process.
+
+**Step 1: Download the helper script**
+
 ```bash
-# 1. Create directory structure
-mkdir -p ~/projects/solaredge2mqtt
+curl -O https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/main/scripts/manage-worktrees.sh
+chmod +x manage-worktrees.sh
+```
+
+**Step 2: Run setup**
+
+```bash
+./manage-worktrees.sh setup ~/projects/solaredge2mqtt
+```
+
+This single command will:
+- Create the directory structure
+- Clone the repository as bare
+- Set up the main worktree
+- Create a shared `config/` directory with example configuration files
+- Install the script in your project root for easy access
+
+**Step 3: Configure your settings**
+
+```bash
 cd ~/projects/solaredge2mqtt
-
-# 2. Clone as bare repository
-git clone --bare git@github.com:DerOetzi/solaredge2mqtt.git .repo
-
-# 3. Create worktrees for branches you want to work on
-cd .repo
-git worktree add ../main main
-git worktree add ../feature-xyz feature-xyz
+nano config/configuration.yml  # Edit with your settings
+nano config/secrets.yml         # Add your credentials
 ```
 
 #### Directory Structure
 
+After setup, your project structure looks like this:
+
 ```
 ~/projects/solaredge2mqtt/
-├── .repo/              # Bare repository (git data only)
+├── .repo/                    # Bare repository (git data only)
 │   ├── .git/
-│   │   └── worktrees/  # Worktree metadata
+│   │   └── worktrees/        # Worktree metadata
 │   └── ...
-├── main/               # Worktree for main branch
+├── config/                   # Shared configuration
+│   ├── configuration.yml     # Main settings
+│   └── secrets.yml           # Credentials
+├── manage-worktrees.sh       # Helper script (symlinked)
+├── main/                     # Worktree for main branch
 │   ├── .devcontainer/
-│   ├── .git            # File pointing to .repo/.git/worktrees/main
+│   ├── .git                  # File pointing to .repo/.git/worktrees/main
 │   └── ...
-├── feature-xyz/        # Worktree for feature branch
-│   ├── .devcontainer/
-│   ├── .git            # File pointing to .repo/.git/worktrees/feature-xyz
-│   └── ...
-└── ...                 # Additional worktrees
 ```
 
 #### Opening a Worktree in VS Code
@@ -83,30 +100,78 @@ git worktree add ../feature-xyz feature-xyz
 3. **Work normally:**
    - All git commands work as expected
    - The devcontainer automatically fixes worktree paths on startup
+   - Configuration files in `../config/` are shared across all worktrees.
+     You can use them by executing `ln -s ../config .` in the workspace
+     directory.
 
 #### Creating New Worktrees
 
-**Manual method:**
+**For a new or existing branch:**
+
 ```bash
-cd ~projects/solaredge2mqtt/.repo
-git worktree add ../my-feature my-feature
+cd ~/projects/solaredge2mqtt
+./manage-worktrees.sh add feature-xyz
+```
+
+The script automatically:
+- Checks if the branch exists locally or remotely
+- Creates tracking branches for remote branches
+- Creates new branches if they don't exist
+- Uses relative paths for portability
+
+**For reviewing a Pull Request:**
+
+```bash
+./manage-worktrees.sh add-pr 298
+```
+
+This creates a `pr-298/` worktree with the PR's code, ready to review.
+
+**Custom worktree name:**
+
+```bash
+./manage-worktrees.sh add feature/complex-name simple-name
 ```
 
 #### Removing Worktrees
 
 ```bash
-cd ~/projects/solaredge2mqtt/.repo
-git worktree remove ../my-feature
-
-# If the worktree directory is already deleted:
-git worktree prune
+cd ~/projects/solaredge2mqtt
+./manage-worktrees.sh remove feature-xyz
 ```
 
-#### Listing Active Worktrees
+This safely removes the worktree and cleans up git metadata.
+
+#### Managing Your Worktrees
+
+**List all active worktrees:**
 
 ```bash
-cd ~/projects/solaredge2mqtt/.repo
-git worktree list
+./manage-worktrees.sh list
+```
+
+**List available remote branches:**
+
+```bash
+./manage-worktrees.sh list-remote
+```
+
+**Fetch latest updates:**
+
+```bash
+./manage-worktrees.sh fetch
+```
+
+**Clean up stale worktree entries:**
+
+```bash
+./manage-worktrees.sh prune
+```
+
+**Get help:**
+
+```bash
+./manage-worktrees.sh help
 ```
 
 ---
