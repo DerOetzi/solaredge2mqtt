@@ -115,11 +115,19 @@ configure_bare_repository() {
     cd "$REPO_DIR" || \
         error "Failed to change to repository directory: $REPO_DIR"
     
-    local CURRENT_REFSPEC=$(git config --get remote.origin.fetch || echo "")
+    local CURRENT_REFSPEC=$(git config --get remote.origin.fetch || \
+        echo "")
     local DESIRED_REFSPEC="+refs/heads/*:refs/remotes/origin/*"
     
     [ "$CURRENT_REFSPEC" != "$DESIRED_REFSPEC" ] && \
         git config remote.origin.fetch "$DESIRED_REFSPEC"
+    
+    # Add PR fetch refspec to enable git pull in PR worktrees
+    if ! git config --get-all remote.origin.fetch | \
+        grep -q "refs/pull"; then
+        git config --add remote.origin.fetch \
+            "+refs/pull/*/head:refs/remotes/origin/pr/*"
+    fi
     
     git config fetch.prune true 2>/dev/null || true
     git config core.bare true 2>/dev/null || true
@@ -531,13 +539,15 @@ cmd_add_pr() {
     
     info "Fetching PR from GitHub..."
     local BRANCH_NAME="pr-$PR_NUMBER"
+    
+    # Fetch PR - the refspec configuration ensures it goes to
+    # refs/remotes/origin/pr/$PR_NUMBER for tracking
     git fetch origin "pull/$PR_NUMBER/head:$BRANCH_NAME"
     
     echo ""
-    # Don't set upstream for PRs - they can't be pulled like regular
-    # branches since they exist at refs/pull/*/head, not refs/heads/*
-    # To update: git fetch origin pull/<PR>/head:<branch>
-    WORKTREE_PATH=$(create_worktree "$BRANCH_NAME" "$WORKTREE_NAME" "")
+    # Set upstream to origin/pr/$PR_NUMBER for git pull support
+    WORKTREE_PATH=$(create_worktree "$BRANCH_NAME" "$WORKTREE_NAME" \
+        "origin/pr/$PR_NUMBER")
     
     echo ""
     info "Next: code $WORKTREE_PATH"
