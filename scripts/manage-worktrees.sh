@@ -128,22 +128,43 @@ configure_bare_repository() {
 set_branch_upstream() {
     local BRANCH_NAME=$1
     local WORKTREE_PATH=$2
-    local REMOTE_REF=${3:-origin/$BRANCH_NAME}
+    local DESIRED_UPSTREAM=${3:-origin/$BRANCH_NAME}
     
     cd "$WORKTREE_PATH" || \
-        error "Failed to change to worktree directory: $WORKTREE_PATH"
+        error "Failed to change to worktree directory: \
+$WORKTREE_PATH"
     
-    if git rev-parse --abbrev-ref --symbolic-full-name @{u} &>/dev/null; then
-        local CURRENT_UPSTREAM=$(git rev-parse --abbrev-ref --symbolic-full-name @{u})
-        info "Upstream already set: $CURRENT_UPSTREAM"
-        return 0
+    # Check if the correct upstream is already set
+    if git rev-parse --abbrev-ref --symbolic-full-name \
+        @{u} &>/dev/null; then
+        local CURRENT_UPSTREAM
+        CURRENT_UPSTREAM=$(git rev-parse --abbrev-ref \
+            --symbolic-full-name @{u})
+        if [ "$CURRENT_UPSTREAM" = "$DESIRED_UPSTREAM" ]; then
+            info "Upstream correctly set: $CURRENT_UPSTREAM"
+            return 0
+        else
+            info "Updating upstream from $CURRENT_UPSTREAM to \
+$DESIRED_UPSTREAM"
+        fi
     fi
     
-    if git show-ref --verify --quiet "refs/remotes/$REMOTE_REF"; then
-        git branch --set-upstream-to="$REMOTE_REF" "$BRANCH_NAME"
-        success "Upstream configured: $REMOTE_REF"
+    # Verify the desired upstream exists
+    if ! git show-ref --verify --quiet \
+        "refs/remotes/$DESIRED_UPSTREAM"; then
+        warning "Remote ref $DESIRED_UPSTREAM not found, \
+skipping upstream configuration"
+        return 1
+    fi
+    
+    # Set or update the upstream
+    if git branch --set-upstream-to="$DESIRED_UPSTREAM" \
+        "$BRANCH_NAME" 2>/dev/null; then
+        success "Upstream configured: $DESIRED_UPSTREAM"
+        return 0
     else
-        warning "Remote ref $REMOTE_REF not found"
+        warning "Failed to set upstream to $DESIRED_UPSTREAM"
+        return 1
     fi
 }
 
@@ -188,8 +209,9 @@ create_worktree_from_remote() {
     local REMOTE_REF=$3
     
     info "Creating local branch from $REMOTE_REF"
-    git worktree add --track -b "$BRANCH_NAME" "../$WORKTREE_NAME" "$REMOTE_REF"
-    set_branch_upstream "$BRANCH_NAME" "$PROJECT_ROOT/$WORKTREE_NAME" "$REMOTE_REF"
+    git worktree add --track -b "$BRANCH_NAME" "../$WORKTREE_NAME" \
+        "$REMOTE_REF"
+    # Upstream configuration now handled centrally in create_worktree
 }
 
 create_new_worktree() {
@@ -209,14 +231,28 @@ create_worktree() {
     
     local WORKTREE_PATH="$PROJECT_ROOT/$WORKTREE_NAME"
     
+    # Create the worktree using the appropriate method
     if branch_exists_locally "$BRANCH_NAME"; then
-        create_worktree_from_existing_branch "$BRANCH_NAME" "$WORKTREE_NAME"
-    elif [ -n "$REMOTE_REF" ] && branch_exists_remotely "$BRANCH_NAME" "$(dirname "$REMOTE_REF")"; then
-        create_worktree_from_remote "$BRANCH_NAME" "$WORKTREE_NAME" "$REMOTE_REF"
+        create_worktree_from_existing_branch "$BRANCH_NAME" \
+            "$WORKTREE_NAME"
+    elif [ -n "$REMOTE_REF" ] && \
+         branch_exists_remotely "$BRANCH_NAME" \
+         "$(dirname "$REMOTE_REF")"; then
+        create_worktree_from_remote "$BRANCH_NAME" "$WORKTREE_NAME" \
+            "$REMOTE_REF"
     elif branch_exists_remotely "$BRANCH_NAME" "origin"; then
-        create_worktree_from_remote "$BRANCH_NAME" "$WORKTREE_NAME" "origin/$BRANCH_NAME"
+        create_worktree_from_remote "$BRANCH_NAME" "$WORKTREE_NAME" \
+            "origin/$BRANCH_NAME"
     else
         create_new_worktree "$BRANCH_NAME" "$WORKTREE_NAME"
+    fi
+    
+    # Always ensure upstream is configured after worktree creation
+    local DESIRED_UPSTREAM="${REMOTE_REF:-origin/$BRANCH_NAME}"
+    if git show-ref --verify --quiet \
+        "refs/remotes/$DESIRED_UPSTREAM"; then
+        set_branch_upstream "$BRANCH_NAME" "$WORKTREE_PATH" \
+            "$DESIRED_UPSTREAM"
     fi
     
     convert_git_to_relative "$WORKTREE_PATH"
