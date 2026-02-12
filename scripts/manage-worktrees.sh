@@ -532,10 +532,11 @@ cmd_add_pr() {
     info "Fetching PR from GitHub..."
     local BRANCH_NAME="pr-$PR_NUMBER"
     git fetch origin "pull/$PR_NUMBER/head:$BRANCH_NAME"
-    git fetch origin "pull/$PR_NUMBER/head:refs/remotes/origin/pr-$PR_NUMBER" 2>/dev/null || true
     
     echo ""
-    WORKTREE_PATH=$(create_worktree "$BRANCH_NAME" "$WORKTREE_NAME" "origin/pr-$PR_NUMBER")
+    # Don't set upstream for PRs - they can't be pulled like regular
+    # branches since they exist at refs/pull/*/head, not refs/heads/*
+    WORKTREE_PATH=$(create_worktree "$BRANCH_NAME" "$WORKTREE_NAME" "")
     
     echo ""
     info "Next: code $WORKTREE_PATH"
