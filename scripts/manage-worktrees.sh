@@ -540,11 +540,9 @@ cmd_add_pr() {
     info "Fetching PR from GitHub..."
     local BRANCH_NAME="pr-$PR_NUMBER"
     
-    # Fetch PR to create local branch
-    git fetch origin "pull/$PR_NUMBER/head:$BRANCH_NAME"
-    
-    # Fetch PR to tracking ref to enable git pull
+    # Fetch PR to both local branch and tracking ref in one operation
     git fetch origin \
+        "pull/$PR_NUMBER/head:$BRANCH_NAME" \
         "refs/pull/$PR_NUMBER/head:refs/remotes/origin/pr/$PR_NUMBER"
     
     echo ""
