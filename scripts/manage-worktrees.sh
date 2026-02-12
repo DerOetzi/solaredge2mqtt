@@ -536,6 +536,7 @@ cmd_add_pr() {
     echo ""
     # Don't set upstream for PRs - they can't be pulled like regular
     # branches since they exist at refs/pull/*/head, not refs/heads/*
+    # To update: git fetch origin pull/<PR>/head:<branch>
     WORKTREE_PATH=$(create_worktree "$BRANCH_NAME" "$WORKTREE_NAME" "")
     
     echo ""
