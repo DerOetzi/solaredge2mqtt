@@ -540,9 +540,12 @@ cmd_add_pr() {
     info "Fetching PR from GitHub..."
     local BRANCH_NAME="pr-$PR_NUMBER"
     
-    # Fetch PR - the refspec configuration ensures it goes to
-    # refs/remotes/origin/pr/$PR_NUMBER for tracking
+    # Fetch PR to create local branch
     git fetch origin "pull/$PR_NUMBER/head:$BRANCH_NAME"
+    
+    # Fetch again to populate the tracking ref via the refspec
+    # This ensures refs/remotes/origin/pr/$PR_NUMBER exists
+    git fetch origin
     
     echo ""
     # Set upstream to origin/pr/$PR_NUMBER for git pull support
