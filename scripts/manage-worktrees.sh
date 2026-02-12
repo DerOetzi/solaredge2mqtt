@@ -248,12 +248,10 @@ create_worktree() {
     fi
     
     # Always ensure upstream is configured after worktree creation
+    # set_branch_upstream handles validation internally
     local DESIRED_UPSTREAM="${REMOTE_REF:-origin/$BRANCH_NAME}"
-    if git show-ref --verify --quiet \
-        "refs/remotes/$DESIRED_UPSTREAM"; then
-        set_branch_upstream "$BRANCH_NAME" "$WORKTREE_PATH" \
-            "$DESIRED_UPSTREAM"
-    fi
+    set_branch_upstream "$BRANCH_NAME" "$WORKTREE_PATH" \
+        "$DESIRED_UPSTREAM" || true
     
     convert_git_to_relative "$WORKTREE_PATH"
     success "Worktree created at: $WORKTREE_PATH"
