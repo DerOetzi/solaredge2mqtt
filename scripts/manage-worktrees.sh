@@ -124,7 +124,7 @@ configure_bare_repository() {
     
     # Add PR fetch refspec to enable git pull in PR worktrees
     if ! git config --get-all remote.origin.fetch | \
-        grep -qF '+refs/pull/*/head:'; then
+        grep -qF '+refs/pull/*/head:refs/remotes/origin/pr/*'; then
         git config --add remote.origin.fetch \
             "+refs/pull/*/head:refs/remotes/origin/pr/*"
     fi
