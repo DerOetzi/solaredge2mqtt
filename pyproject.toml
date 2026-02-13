@@ -27,7 +27,7 @@ dependencies = [
     "influxdb-client==1.50.0",
     "jsonref==1.1.0",
     "loguru==0.7.3",
-    "platformdirs==4.5.1",
+    "platformdirs==4.7.0",
     "pydantic==2.12.5",
     "pyjwt==2.11.0",
     "pymodbus==3.11.4",
