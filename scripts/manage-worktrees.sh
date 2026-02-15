@@ -173,8 +173,8 @@ skipping upstream configuration"
         git config "branch.$BRANCH_NAME.remote" "origin"
         git config "branch.$BRANCH_NAME.merge" \
             "refs/pull/$PR_NUMBER/head"
-        success "Upstream configured: $DESIRED_UPSTREAM \
-(refs/pull/$PR_NUMBER/head)"
+        success "Upstream configured: $DESIRED_UPSTREAM"
+        info "  → refs/pull/$PR_NUMBER/head"
         return 0
     fi
     
