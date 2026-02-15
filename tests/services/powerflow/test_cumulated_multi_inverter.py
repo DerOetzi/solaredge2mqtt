@@ -326,7 +326,7 @@ class TestMultiInverterCumulation:
         # Verify cumulated values match sum of individual values
         # power = 500 + (-100) = 400 (net power output)
         assert cumulated.inverter.power == 400
-        
+
         # Production and consumption should be summed from individuals
         expected_production = (
             pf1.inverter.production + pf2.inverter.production
