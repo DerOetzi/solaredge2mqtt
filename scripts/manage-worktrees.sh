@@ -115,12 +115,13 @@ configure_bare_repository() {
     cd "$REPO_DIR" || \
         error "Failed to change to repository directory: $REPO_DIR"
     
-    local CURRENT_REFSPEC=$(git config --get remote.origin.fetch || \
-        echo "")
     local DESIRED_REFSPEC="+refs/heads/*:refs/remotes/origin/*"
     
-    [ "$CURRENT_REFSPEC" != "$DESIRED_REFSPEC" ] && \
-        git config remote.origin.fetch "$DESIRED_REFSPEC"
+    # Check if the base refspec exists, add if not
+    if ! git config --get-all remote.origin.fetch | \
+        grep -qF "$DESIRED_REFSPEC"; then
+        git config --add remote.origin.fetch "$DESIRED_REFSPEC"
+    fi
     
     # Add PR fetch refspec to enable git pull in PR worktrees
     if ! git config --get-all remote.origin.fetch | \
