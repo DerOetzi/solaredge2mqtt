@@ -166,7 +166,19 @@ skipping upstream configuration"
         return 1
     fi
     
-    # Set or update the upstream
+    # Check if this is a PR branch (origin/pr/*)
+    if [[ "$DESIRED_UPSTREAM" =~ ^origin/pr/([0-9]+)$ ]]; then
+        local PR_NUMBER="${BASH_REMATCH[1]}"
+        # For PR branches, set remote and merge explicitly
+        git config "branch.$BRANCH_NAME.remote" "origin"
+        git config "branch.$BRANCH_NAME.merge" \
+            "refs/pull/$PR_NUMBER/head"
+        success "Upstream configured: $DESIRED_UPSTREAM \
+(refs/pull/$PR_NUMBER/head)"
+        return 0
+    fi
+    
+    # Set or update the upstream for regular branches
     if git branch --set-upstream-to="$DESIRED_UPSTREAM" \
         "$BRANCH_NAME" 2>/dev/null; then
         success "Upstream configured: $DESIRED_UPSTREAM"
