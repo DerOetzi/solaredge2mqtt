@@ -76,11 +76,37 @@ class Powerflow(Component):
             role=ModbusUnitRole.CUMULATED,
         )
 
+        # Sum computed properties directly for accurate cumulation
+        cumulated_production = sum(
+            p.inverter.production for p in powerflows.values()
+        )
+        cumulated_consumption = sum(
+            p.inverter.consumption for p in powerflows.values()
+        )
+        cumulated_battery_production = sum(
+            p.inverter.battery_production for p in powerflows.values()
+        )
+        cumulated_pv_production = sum(
+            p.inverter.pv_production for p in powerflows.values()
+        )
+
+        # Sum raw values for fields that don't have complex calculations
+        cumulated_power = sum(p.inverter.power for p in powerflows.values())
+        cumulated_dc_power = sum(
+            p.inverter.dc_power for p in powerflows.values()
+        )
+        cumulated_battery_discharge = sum(
+            p.inverter.battery_discharge for p in powerflows.values()
+        )
+
         inverter = InverterPowerflow(
-            power=sum(p.inverter.power for p in powerflows.values()),
-            dc_power=sum(p.inverter.dc_power for p in powerflows.values()),
-            battery_discharge=sum(
-                p.inverter.battery_discharge for p in powerflows.values()),
+            power=cumulated_power,
+            dc_power=cumulated_dc_power,
+            battery_discharge=cumulated_battery_discharge,
+            override_production=cumulated_production,
+            override_consumption=cumulated_consumption,
+            override_battery_production=cumulated_battery_production,
+            override_pv_production=cumulated_pv_production,
         )
 
         grid = GridPowerflow(
@@ -206,6 +232,12 @@ class InverterPowerflow(Solaredge2MQTTBaseModel):
     dc_power: int = Field(
         **HASensor.POWER_W.field("Power DC", "solar-power"))
     battery_discharge: SkipJsonSchema[int] = Field(exclude=True)
+    
+    # Optional overrides for cumulated powerflows (excluded from JSON)
+    override_production: int | None = Field(None, exclude=True)
+    override_consumption: int | None = Field(None, exclude=True)
+    override_battery_production: int | None = Field(None, exclude=True)
+    override_pv_production: int | None = Field(None, exclude=True)
 
     @staticmethod
     def from_modbus(
@@ -232,11 +264,15 @@ class InverterPowerflow(Solaredge2MQTTBaseModel):
     @computed_field(**HASensor.POWER_W.field("Consumption"))
     @property
     def consumption(self) -> int:
+        if self.override_consumption is not None:
+            return self.override_consumption
         return abs(self.power) if self.power < 0 else 0
 
     @computed_field(**HASensor.POWER_W.field("Production"))
     @property
     def production(self) -> int:
+        if self.override_production is not None:
+            return self.override_production
         return self.power if self.power > 0 else 0
 
     @computed_field(
@@ -244,6 +280,8 @@ class InverterPowerflow(Solaredge2MQTTBaseModel):
     )
     @property
     def battery_production(self) -> int:
+        if self.override_battery_production is not None:
+            return self.override_battery_production
         battery_production = 0
         if self.production > 0 and self.battery_factor > 0:
             battery_production = int(
@@ -254,6 +292,8 @@ class InverterPowerflow(Solaredge2MQTTBaseModel):
     @computed_field(**HASensor.POWER_W.field("PV production", "sun-angle-outline"))
     @property
     def pv_production(self) -> int:
+        if self.override_pv_production is not None:
+            return self.override_pv_production
         return self.production - self.battery_production
 
     @property
