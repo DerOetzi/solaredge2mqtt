@@ -115,11 +115,20 @@ configure_bare_repository() {
     cd "$REPO_DIR" || \
         error "Failed to change to repository directory: $REPO_DIR"
     
-    local CURRENT_REFSPEC=$(git config --get remote.origin.fetch || echo "")
     local DESIRED_REFSPEC="+refs/heads/*:refs/remotes/origin/*"
     
-    [ "$CURRENT_REFSPEC" != "$DESIRED_REFSPEC" ] && \
-        git config remote.origin.fetch "$DESIRED_REFSPEC"
+    # Check if the base refspec exists, add if not
+    if ! git config --get-all remote.origin.fetch | \
+        grep -qF "$DESIRED_REFSPEC"; then
+        git config --add remote.origin.fetch "$DESIRED_REFSPEC"
+    fi
+    
+    # Add PR fetch refspec to enable git pull in PR worktrees
+    if ! git config --get-all remote.origin.fetch | \
+        grep -qF '+refs/pull/*/head:refs/remotes/origin/pr/*'; then
+        git config --add remote.origin.fetch \
+            "+refs/pull/*/head:refs/remotes/origin/pr/*"
+    fi
     
     git config fetch.prune true 2>/dev/null || true
     git config core.bare true 2>/dev/null || true
@@ -128,22 +137,55 @@ configure_bare_repository() {
 set_branch_upstream() {
     local BRANCH_NAME=$1
     local WORKTREE_PATH=$2
-    local REMOTE_REF=${3:-origin/$BRANCH_NAME}
+    local DESIRED_UPSTREAM=${3:-origin/$BRANCH_NAME}
     
     cd "$WORKTREE_PATH" || \
-        error "Failed to change to worktree directory: $WORKTREE_PATH"
+        error "Failed to change to worktree directory: \
+$WORKTREE_PATH"
     
-    if git rev-parse --abbrev-ref --symbolic-full-name @{u} &>/dev/null; then
-        local CURRENT_UPSTREAM=$(git rev-parse --abbrev-ref --symbolic-full-name @{u})
-        info "Upstream already set: $CURRENT_UPSTREAM"
+    # Check if the correct upstream is already set
+    if git rev-parse --abbrev-ref --symbolic-full-name \
+        @{u} &>/dev/null; then
+        local CURRENT_UPSTREAM
+        CURRENT_UPSTREAM=$(git rev-parse --abbrev-ref \
+            --symbolic-full-name @{u})
+        if [ "$CURRENT_UPSTREAM" = "$DESIRED_UPSTREAM" ]; then
+            info "Upstream correctly set: $CURRENT_UPSTREAM"
+            return 0
+        else
+            info "Updating upstream from $CURRENT_UPSTREAM to \
+$DESIRED_UPSTREAM"
+        fi
+    fi
+    
+    # Verify the desired upstream exists
+    if ! git show-ref --verify --quiet \
+        "refs/remotes/$DESIRED_UPSTREAM"; then
+        warning "Remote ref $DESIRED_UPSTREAM not found, \
+skipping upstream configuration"
+        return 1
+    fi
+    
+    # Check if this is a PR branch (origin/pr/*)
+    if [[ "$DESIRED_UPSTREAM" =~ ^origin/pr/([0-9]+)$ ]]; then
+        local PR_NUMBER="${BASH_REMATCH[1]}"
+        # For PR branches, set remote and merge explicitly
+        git config "branch.$BRANCH_NAME.remote" "origin"
+        git config "branch.$BRANCH_NAME.merge" \
+            "refs/pull/$PR_NUMBER/head"
+        success "Upstream configured: $DESIRED_UPSTREAM"
+        info "  → refs/pull/$PR_NUMBER/head"
         return 0
     fi
     
-    if git show-ref --verify --quiet "refs/remotes/$REMOTE_REF"; then
-        git branch --set-upstream-to="$REMOTE_REF" "$BRANCH_NAME"
-        success "Upstream configured: $REMOTE_REF"
+    # Set or update the upstream for regular branches
+    if git branch --set-upstream-to="$DESIRED_UPSTREAM" \
+        "$BRANCH_NAME" 2>/dev/null; then
+        success "Upstream configured: $DESIRED_UPSTREAM"
+        return 0
     else
-        warning "Remote ref $REMOTE_REF not found"
+        warning "Failed to set upstream to $DESIRED_UPSTREAM"
+        return 1
     fi
 }
 
@@ -188,8 +230,9 @@ create_worktree_from_remote() {
     local REMOTE_REF=$3
     
     info "Creating local branch from $REMOTE_REF"
-    git worktree add --track -b "$BRANCH_NAME" "../$WORKTREE_NAME" "$REMOTE_REF"
-    set_branch_upstream "$BRANCH_NAME" "$PROJECT_ROOT/$WORKTREE_NAME" "$REMOTE_REF"
+    git worktree add --track -b "$BRANCH_NAME" "../$WORKTREE_NAME" \
+        "$REMOTE_REF"
+    # Upstream configuration now handled centrally in create_worktree
 }
 
 create_new_worktree() {
@@ -209,15 +252,27 @@ create_worktree() {
     
     local WORKTREE_PATH="$PROJECT_ROOT/$WORKTREE_NAME"
     
+    # Create the worktree using the appropriate method
     if branch_exists_locally "$BRANCH_NAME"; then
-        create_worktree_from_existing_branch "$BRANCH_NAME" "$WORKTREE_NAME"
-    elif [ -n "$REMOTE_REF" ] && branch_exists_remotely "$BRANCH_NAME" "$(dirname "$REMOTE_REF")"; then
-        create_worktree_from_remote "$BRANCH_NAME" "$WORKTREE_NAME" "$REMOTE_REF"
+        create_worktree_from_existing_branch "$BRANCH_NAME" \
+            "$WORKTREE_NAME"
+    elif [ -n "$REMOTE_REF" ] && \
+         branch_exists_remotely "$BRANCH_NAME" \
+         "$(dirname "$REMOTE_REF")"; then
+        create_worktree_from_remote "$BRANCH_NAME" "$WORKTREE_NAME" \
+            "$REMOTE_REF"
     elif branch_exists_remotely "$BRANCH_NAME" "origin"; then
-        create_worktree_from_remote "$BRANCH_NAME" "$WORKTREE_NAME" "origin/$BRANCH_NAME"
+        create_worktree_from_remote "$BRANCH_NAME" "$WORKTREE_NAME" \
+            "origin/$BRANCH_NAME"
     else
         create_new_worktree "$BRANCH_NAME" "$WORKTREE_NAME"
     fi
+    
+    # Always ensure upstream is configured after worktree creation
+    # set_branch_upstream handles validation internally
+    local DESIRED_UPSTREAM="${REMOTE_REF:-origin/$BRANCH_NAME}"
+    set_branch_upstream "$BRANCH_NAME" "$WORKTREE_PATH" \
+        "$DESIRED_UPSTREAM" || true
     
     convert_git_to_relative "$WORKTREE_PATH"
     success "Worktree created at: $WORKTREE_PATH"
@@ -497,11 +552,16 @@ cmd_add_pr() {
     
     info "Fetching PR from GitHub..."
     local BRANCH_NAME="pr-$PR_NUMBER"
-    git fetch origin "pull/$PR_NUMBER/head:$BRANCH_NAME"
-    git fetch origin "pull/$PR_NUMBER/head:refs/remotes/origin/pr-$PR_NUMBER" 2>/dev/null || true
+    
+    # Fetch PR to both local branch and tracking ref in one operation
+    git fetch origin \
+        "pull/$PR_NUMBER/head:$BRANCH_NAME" \
+        "refs/pull/$PR_NUMBER/head:refs/remotes/origin/pr/$PR_NUMBER"
     
     echo ""
-    WORKTREE_PATH=$(create_worktree "$BRANCH_NAME" "$WORKTREE_NAME" "origin/pr-$PR_NUMBER")
+    # Set upstream to origin/pr/$PR_NUMBER for git pull support
+    WORKTREE_PATH=$(create_worktree "$BRANCH_NAME" "$WORKTREE_NAME" \
+        "origin/pr/$PR_NUMBER")
     
     echo ""
     info "Next: code $WORKTREE_PATH"
