@@ -23,7 +23,7 @@ dependencies = [
     "aiohttp==3.13.3",
     "aiomqtt==2.5.0",
     "astral==3.2",
-    "ephem==4.2",
+    "ephem==4.2.1",
     "influxdb-client==1.50.0",
     "jsonref==1.1.0",
     "loguru==0.7.3",
