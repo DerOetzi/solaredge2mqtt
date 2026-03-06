@@ -23,14 +23,14 @@ dependencies = [
     "aiohttp==3.13.3",
     "aiomqtt==2.5.0",
     "astral==3.2",
-    "ephem==4.2",
+    "ephem==4.2.1",
     "influxdb-client==1.50.0",
     "jsonref==1.1.0",
     "loguru==0.7.3",
-    "platformdirs==4.5.1",
+    "platformdirs==4.9.2",
     "pydantic==2.12.5",
     "pyjwt==2.11.0",
-    "pymodbus==3.11.4",
+    "pymodbus==3.12.1",
     "pyyaml==6.0.3",
     "tzlocal==5.3.1",
 ]
@@ -56,9 +56,9 @@ dev = [
 ]
 forecast = [
     "numpy==2.4.2",
-    "pandas==3.0.0",
+    "pandas==3.0.1",
     "scikit-learn==1.8.0",
-    "scipy==1.17.0"
+    "scipy==1.17.1"
 ]
 
 [build-system]
@@ -101,12 +101,7 @@ skip-magic-trailing-comma = false
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-python_files = ["test_*.py"]
-python_functions = ["test_*"]
 addopts = "-v --tb=short"
-filterwarnings = [
-    "ignore::DeprecationWarning",
-]
 
 [tool.coverage.run]
 source = ["solaredge2mqtt"]
