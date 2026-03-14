@@ -8,6 +8,9 @@ class MQTTSettings(BaseModel):
     username: str | None = Field(None)
     password: SecretStr | None = Field(None)
     topic_prefix: str = Field("solaredge")
+    use_tls: bool = Field(False)
+    ca_certs: str | None = Field(None)
+    tls_verify: bool | None = Field(True)
 
     @property
     def kargs(self) -> dict[str, str]:

@@ -54,6 +54,9 @@ mqtt:
   password: !secret mqtt_password  # Reference to secrets.yml
   topic_prefix: solaredge       # Prefix for MQTT topics
   retain: false                 # Retain MQTT messages
+# use_tls: false                # MQTT over TLS
+# ca_certs: path_to_CA          # Path to trusted CA boundle - usefull for self sign certificates
+# tls_verify: true              # Verify mqtt certificate. If set to false ignore certificate expiration, CN missmatch, etc.
 
 # Powerflow configuration
 powerflow:
