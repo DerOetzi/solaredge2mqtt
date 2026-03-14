@@ -1,7 +1,8 @@
 import json
 from asyncio import Queue, QueueFull
+import ssl
 
-from aiomqtt import Client, Message, Will
+from aiomqtt import Client, Message, Will, TLSParameters
 from pydantic import BaseModel, ValidationError
 
 from solaredge2mqtt.core.events import EventBus
@@ -22,6 +23,11 @@ class MQTTClient(Client):
         self.port = settings.port
 
         self.topic_prefix = settings.topic_prefix
+        tls_params = TLSParameters(
+            # Self-signed cert or CA PEM
+            ca_certs=settings.ca_certs if settings.ca_certs else None,
+            cert_reqs=ssl.CERT_REQUIRED if settings.tls_verify == True else ssl.CERT_NONE,
+        ) if settings.use_tls else None
 
         logger.info(
             "Using MQTT broker: {broker}:{port}",
@@ -44,6 +50,7 @@ class MQTTClient(Client):
             self.broker,
             self.port,
             will=will,
+            tls_params=tls_params,
             **settings.kargs,
         )
 
