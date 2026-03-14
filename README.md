@@ -222,6 +222,9 @@ mqtt:
   username: mqtt_user              # MQTT username
   password: !secret mqtt_password  # Use !secret to reference secrets.yml
   topic_prefix: solaredge          # MQTT topic prefix
+  use_tls: false                   # Enable TLS encryption (default: false)
+  ca_certs: /path/to/ca.pem        # Path to CA certificate bundle
+  tls_verify: true                 # Verify TLS certificates (default: true)
 ```
 
 **Note**: Store your password securely in `secrets.yml`:
