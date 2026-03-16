@@ -1,13 +1,18 @@
 
-from influxdb_client import Point
+from typing import Any
+
+from influxdb_client.client.write.point import Point
 from pydantic import Field
 
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.services.homeassistant.models import (
     HomeAssistantSensorType as HASensor,
 )
-from solaredge2mqtt.services.modbus.models.base import ModbusComponent, ModbusDeviceInfo
-from solaredge2mqtt.services.modbus.sunspec.values import BATTERY_STATUS_MAP
+from solaredge2mqtt.services.modbus.models.base import ModbusComponent
+from solaredge2mqtt.services.modbus.sunspec.values import (
+    BATTERY_STATUS_MAP,
+    SunSpecPayload,
+)
 
 
 class ModbusBattery(ModbusComponent):
@@ -23,29 +28,23 @@ class ModbusBattery(ModbusComponent):
     state_of_health: float = Field(
         **HASensor.BATTERY.field("state of health"))
 
-    def __init__(self, info: ModbusDeviceInfo, data: dict[str, str | int]) -> None:
-        status = data["status"]
-        if status in BATTERY_STATUS_MAP:
-            status_text = BATTERY_STATUS_MAP[data["status"]]
+    @classmethod
+    def extract_sunspec_payload(cls, payload: SunSpecPayload) -> dict[str, Any]:
+        values = {
+            "status": int(payload["status"]),
+            "current": round(float(payload["instantaneous_current"]), 2),
+            "voltage": round(float(payload["instantaneous_voltage"]), 2),
+            "power": round(float(payload["instantaneous_power"]), 2),
+            "state_of_charge": round(float(payload["soe"]), 2),
+            "state_of_health": round(float(payload["soh"]), 2),
+        }
+
+        if values["status"] in BATTERY_STATUS_MAP:
+            values["status_text"] = BATTERY_STATUS_MAP[values["status"]]
         else:
-            status_text = "Unknown"
+            values["status_text"] = "Unknown"
 
-        current = round(data["instantaneous_current"], 2)
-        voltage = round(data["instantaneous_voltage"], 2)
-        power = round(data["instantaneous_power"], 2)
-        state_of_charge = round(data["soe"], 2)
-        state_of_health = round(data["soh"], 2)
-
-        super().__init__(
-            info=info,
-            status=status,
-            status_text=status_text,
-            current=current,
-            voltage=voltage,
-            power=power,
-            state_of_charge=state_of_charge,
-            state_of_health=state_of_health,
-        )
+        return values
 
     @property
     def is_valid(self) -> bool:
@@ -69,10 +68,10 @@ class ModbusBattery(ModbusComponent):
         point.field("state_of_charge", self.state_of_charge)
         point.field("state_of_health", self.state_of_health)
 
-        if self.has_unit:
+        if self.info.unit:
             point.tag("unit", self.info.unit.key)
 
         return point
 
-    def homeassistant_device_info_with_name(self, name: str) -> dict[str, any]:
+    def homeassistant_device_info_with_name(self, name: str) -> dict[str, Any]:
         return self.info.homeassistant_device_info(name)

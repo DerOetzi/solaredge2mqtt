@@ -1,7 +1,7 @@
 """Tests for WeatherClient with mocking."""
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from aiohttp import ClientResponseError, RequestInfo
@@ -79,7 +79,7 @@ class TestWeatherClientInit:
         self, mock_service_settings, mock_event_bus
     ):
         """Test WeatherClient subscribes to 10min interval event."""
-        client = WeatherClient(mock_service_settings, mock_event_bus)
+        WeatherClient(mock_service_settings, mock_event_bus)
 
         mock_event_bus.subscribe.assert_called()
 

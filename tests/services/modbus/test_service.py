@@ -73,7 +73,7 @@ class TestModbusInit:
         self, mock_service_settings, mock_event_bus
     ):
         """Test Modbus subscribes to write events."""
-        modbus = Modbus(mock_service_settings, mock_event_bus)
+        Modbus(mock_service_settings, mock_event_bus)
 
         mock_event_bus.subscribe.assert_called()
 
@@ -90,7 +90,9 @@ class TestModbusAsyncInit:
         modbus.detect_devices = AsyncMock()
         modbus.check_readable_registers = AsyncMock()
 
-        with patch("solaredge2mqtt.services.modbus.asyncio.sleep", new_callable=AsyncMock):
+        with patch(
+            "solaredge2mqtt.services.modbus.asyncio.sleep", new_callable=AsyncMock
+        ):
             await modbus.async_init()
 
         assert modbus.client is not None
@@ -165,7 +167,8 @@ class TestModbusReadFromModbus:
         mock_bundle.length = 10
 
         # Mock exception
-        mock_modbus_client.read_holding_registers.side_effect = ModbusException("Test error")
+        mock_modbus_client.read_holding_registers.side_effect = ModbusException(
+            "Test error")
 
         await modbus._read_from_modbus([mock_bundle], 1)
 
@@ -234,7 +237,7 @@ class TestModbusGetData:
             modbus._map_meters = MagicMock(return_value={})
             modbus._map_batteries = MagicMock(return_value={})
 
-            result = await modbus.get_data()
+            await modbus.get_data()
 
             # Should emit event
             mock_event_bus.emit.assert_called_once()
@@ -360,7 +363,8 @@ class TestModbusWriteToModbus:
         mock_register.name = "test_register"
         mock_register.encode_request.return_value = [1, 2, 3]
 
-        mock_modbus_client.write_registers.side_effect = ModbusException("Write error")
+        mock_modbus_client.write_registers.side_effect = ModbusException(
+            "Write error")
 
         # Should not raise, just log error
         await modbus._write_to_modbus(mock_register, 100)

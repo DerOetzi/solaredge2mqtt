@@ -3,6 +3,8 @@
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from solaredge2mqtt.core.logging.models import LoggingLevelEnum
 from solaredge2mqtt.core.settings.loader import ConfigurationLoader
 from solaredge2mqtt.core.settings.models import LocationSettings
@@ -15,14 +17,18 @@ class TestLocationSettings:
         """Test LocationSettings creation with valid data."""
         location = LocationSettings(latitude=52.520008, longitude=13.404954)
 
-        assert location.latitude == 52.520008
-        assert location.longitude == 13.404954
+        assert location.latitude == pytest.approx(52.520008)
+        assert location.longitude == pytest.approx(13.404954)
 
     def test_location_settings_validation(self):
         """Test LocationSettings validation."""
         try:
-            LocationSettings(latitude="invalid", longitude=13.404954)
-            raise AssertionError("Expected validation error for invalid latitude")
+            LocationSettings(
+                latitude="invalid",  # pyright: ignore[reportArgumentType]
+                longitude=13.404954
+            )
+            raise AssertionError(
+                "Expected validation error for invalid latitude")
         except (ValueError, TypeError):
             pass
 
@@ -92,9 +98,9 @@ class TestServiceSettings:
 
             settings = ConfigurationLoader.load_configuration(tmpdir)
 
-            assert settings.is_location_configured is True
-            assert settings.location.latitude == 52.520008
-            assert settings.location.longitude == 13.404954
+            assert settings.location.is_configured is True
+            assert settings.location.latitude == pytest.approx(52.520008)
+            assert settings.location.longitude == pytest.approx(13.404954)
 
     def test_is_location_configured_false(self):
         """Test is_location_configured returns False when location is not set."""
@@ -109,8 +115,9 @@ class TestServiceSettings:
 
             settings = ConfigurationLoader.load_configuration(tmpdir)
 
-            assert settings.is_location_configured is False
-            assert settings.location is None
+            assert settings.location.is_configured is False
+            assert settings.location.latitude is None
+            assert settings.location.longitude is None
 
     def test_is_influxdb_configured_true(self):
         """Test is_influxdb_configured returns True when influxdb is set."""
@@ -132,7 +139,7 @@ class TestServiceSettings:
 
             settings = ConfigurationLoader.load_configuration(tmpdir)
 
-            assert settings.is_influxdb_configured is True
+            assert settings.influxdb.is_configured is True
             assert settings.influxdb.host == "http://localhost"
 
     def test_is_influxdb_configured_false(self):
@@ -148,8 +155,11 @@ class TestServiceSettings:
 
             settings = ConfigurationLoader.load_configuration(tmpdir)
 
-            assert settings.is_influxdb_configured is False
-            assert settings.influxdb is None
+            assert settings.influxdb.is_configured is False
+            assert settings.influxdb.host is None
+            assert settings.influxdb.port == 8086
+            assert settings.influxdb.token is None
+            assert settings.influxdb.org is None
 
     def test_is_weather_configured_requires_location(self):
         """Test is_weather_configured returns False when location is not set."""
@@ -169,8 +179,8 @@ class TestServiceSettings:
             settings = ConfigurationLoader.load_configuration(tmpdir)
 
             # Weather configured but location not, returns False
-            assert settings.is_weather_configured is False
-            assert settings.is_location_configured is False
+            assert settings.is_weather_enabled is False
+            assert settings.location.is_configured is False
 
     def test_is_forecast_configured_requires_location_and_weather(self):
         """Test is_forecast_configured requires both location and weather."""
@@ -188,7 +198,7 @@ class TestServiceSettings:
             settings = ConfigurationLoader.load_configuration(tmpdir)
 
             # Forecast enabled but missing location and weather
-            assert settings.is_forecast_configured is False
+            assert settings.is_forecast_enabled is False
 
     def test_default_values(self):
         """Test ServiceSettings has correct default values."""

@@ -1,11 +1,11 @@
 """Tests for core InfluxDBAsync module with mocking."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic import SecretStr
 
-from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.influxdb import InfluxDBAsync
 from solaredge2mqtt.core.influxdb.events import InfluxDBAggregatedEvent
 from solaredge2mqtt.core.influxdb.settings import InfluxDBSettings
@@ -18,7 +18,7 @@ def influxdb_settings():
     return InfluxDBSettings(
         host="localhost",
         port=8086,
-        token="test_token",
+        token=SecretStr("test_token"),
         org="test_org",
         bucket="test_bucket",
         retention=2592000,  # 30 days in seconds
@@ -69,7 +69,8 @@ class TestInfluxDBAsyncInit:
         self, influxdb_settings, price_settings, mock_event_bus, mock_influxdb_client
     ):
         """Test InfluxDBAsync initialization with event bus."""
-        influxdb = InfluxDBAsync(influxdb_settings, price_settings, mock_event_bus)
+        influxdb = InfluxDBAsync(
+            influxdb_settings, price_settings, mock_event_bus)
 
         assert influxdb.event_bus is mock_event_bus
         # Verify it subscribed to the 10min trigger event
@@ -91,7 +92,7 @@ class TestInfluxDBAsyncInitialize:
         self, influxdb_settings, price_settings, mock_influxdb_client
     ):
         """Test init method creates async client and initializes buckets."""
-        mock_sync, mock_async = mock_influxdb_client
+        mock_sync, _ = mock_influxdb_client
 
         influxdb = InfluxDBAsync(influxdb_settings, price_settings)
 
@@ -109,7 +110,7 @@ class TestInfluxDBAsyncInitialize:
         self, influxdb_settings, price_settings, mock_influxdb_client
     ):
         """Test initialize_buckets creates bucket when it doesn't exist."""
-        mock_sync, mock_async = mock_influxdb_client
+        mock_sync, _ = mock_influxdb_client
 
         mock_buckets_api = MagicMock()
         mock_buckets_api.find_bucket_by_name.return_value = None
@@ -124,7 +125,7 @@ class TestInfluxDBAsyncInitialize:
         self, influxdb_settings, price_settings, mock_influxdb_client
     ):
         """Test initialize_buckets updates bucket with different retention."""
-        mock_sync, mock_async = mock_influxdb_client
+        mock_sync, _ = mock_influxdb_client
 
         # Mock existing bucket with different retention
         mock_bucket = MagicMock()
@@ -145,7 +146,7 @@ class TestInfluxDBAsyncInitialize:
         self, influxdb_settings, price_settings, mock_influxdb_client
     ):
         """Test initialize_buckets doesn't update bucket with same retention."""
-        mock_sync, mock_async = mock_influxdb_client
+        mock_sync, _ = mock_influxdb_client
 
         # Mock existing bucket with same retention
         mock_bucket = MagicMock()
@@ -171,7 +172,7 @@ class TestInfluxDBAsyncWrite:
         self, influxdb_settings, price_settings, mock_influxdb_client
     ):
         """Test write_point writes single point."""
-        mock_sync, mock_async = mock_influxdb_client
+        _, mock_async = mock_influxdb_client
 
         mock_write_api = MagicMock()
         mock_write_api.write = AsyncMock()
@@ -191,7 +192,7 @@ class TestInfluxDBAsyncWrite:
         self, influxdb_settings, price_settings, mock_influxdb_client
     ):
         """Test write_points writes multiple points."""
-        mock_sync, mock_async = mock_influxdb_client
+        _, mock_async = mock_influxdb_client
 
         mock_write_api = MagicMock()
         mock_write_api.write = AsyncMock()
@@ -345,7 +346,8 @@ class TestInfluxDBAsyncLoop:
         mock_delete_api = MagicMock()
         mock_sync.delete_api.return_value = mock_delete_api
 
-        influxdb = InfluxDBAsync(influxdb_settings, price_settings, mock_event_bus)
+        influxdb = InfluxDBAsync(
+            influxdb_settings, price_settings, mock_event_bus)
         influxdb.client_async = mock_async
 
         # Cache the aggregate query

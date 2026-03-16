@@ -96,6 +96,8 @@ class SunSpecValueType(EnumModel):
             if datatype.value[0] == data_type:
                 return datatype
 
+        raise ValueError(f"Unsupported data type: {data_type}")
+
     @property
     def identifier(self) -> str:
         return self._identifier

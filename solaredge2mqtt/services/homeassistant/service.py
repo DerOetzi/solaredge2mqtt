@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.logging import logger
@@ -37,6 +37,7 @@ class HomeAssistantDiscovery:
         self, service_settings: ServiceSettings, event_bus: EventBus
     ) -> None:
         self.settings = service_settings
+
         self._send_entities: dict[str, HomeAssistantEntity] = {}
         logger.info("Home Assistant discovery enabled")
 
@@ -145,7 +146,7 @@ class HomeAssistantDiscovery:
     async def publish_component(
         self,
         component: Component,
-        device_info: dict[str, any],
+        device_info: dict[str, Any],
         state_topic: str,
     ) -> None:
         logger.trace(device_info)
@@ -173,7 +174,7 @@ class HomeAssistantDiscovery:
                     continue
 
             if (
-                self.settings.is_prices_configured
+                self.settings.prices.is_configured
                 and entity_info["ha_type"] == HomeAssistantSensorType.MONETARY
             ):
                 entity_info["unit"] = self.settings.prices.currency
@@ -202,22 +203,24 @@ class HomeAssistantDiscovery:
             )
 
     async def homeassistant_status(self, event: MQTTReceivedEvent) -> None:
-        if event.topic == self._status_topic:
-            status = event.input.status
-            if status == HomeAssistantStatus.ONLINE:
-                logger.info(
-                    "Home Assistant status changed to online resend discovery"
-                )
-                for topic, entity in self._send_entities.items():
-                    await self.event_bus.emit(
-                        MQTTPublishEvent(
-                            topic=topic,
-                            payload=entity,
-                            retain=self.settings.homeassistant.retain,
-                            topic_prefix=self.settings.homeassistant.topic_prefix,
-                            exclude_none=True,
-                        )
+        if event.topic != self._status_topic:
+            return
+
+        status = HomeAssistantStatusInput.model_validate(event.input).status
+        if status == HomeAssistantStatus.ONLINE:
+            logger.info(
+                "Home Assistant status changed to online resend discovery"
+            )
+            for topic, entity in self._send_entities.items():
+                await self.event_bus.emit(
+                    MQTTPublishEvent(
+                        topic=topic,
+                        payload=entity,
+                        retain=self.settings.homeassistant.retain,
+                        topic_prefix=self.settings.homeassistant.topic_prefix,
+                        exclude_none=True,
                     )
+                )
 
     @staticmethod
     def property_parser(prop, name: str, path: list[str]) -> dict | None:

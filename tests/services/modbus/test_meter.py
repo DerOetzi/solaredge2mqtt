@@ -1,28 +1,34 @@
 """Tests for modbus meter model module."""
 
+import pytest
+
 from solaredge2mqtt.services.modbus.models.base import (
     ModbusDeviceInfo,
     ModbusUnitInfo,
     ModbusUnitRole,
 )
 from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
+from solaredge2mqtt.services.modbus.sunspec.values import SunSpecPayload
 
 
 def make_device_info(with_unit: bool = False) -> ModbusDeviceInfo:
     """Create a ModbusDeviceInfo for testing."""
-    data = {
+    data: SunSpecPayload = {
         "c_manufacturer": "SolarEdge",
         "c_model": "SE-WNC-3Y-400-MB-K1",
         "c_version": "1.0.0",
         "c_serialnumber": "MTR123456",
         "c_sunspec_did": 203,
     }
-    if with_unit:
-        data["unit"] = ModbusUnitInfo(unit=1, key="leader", role=ModbusUnitRole.LEADER)
-    return ModbusDeviceInfo(data)
+
+    return ModbusDeviceInfo.from_sunspec_payload(
+        data,
+        ModbusUnitInfo(unit=1, key="leader", role=ModbusUnitRole.LEADER)
+        if with_unit else None
+    )
 
 
-def make_meter_data() -> dict:
+def make_meter_data() -> SunSpecPayload:
     """Create meter data for testing."""
     return {
         # Current data
@@ -66,14 +72,14 @@ class TestModbusMeter:
         info = make_device_info()
         data = make_meter_data()
 
-        meter = ModbusMeter(info, data)
+        meter = ModbusMeter.from_sunspec(info, data)
 
-        assert meter.current.actual == 30.0
-        assert meter.voltage.l1 == 230.0
-        assert meter.power.actual == 6900.0
-        assert meter.energy.totalexport == 100000.0
-        assert meter.energy.totalimport == 50000.0
-        assert meter.frequency == 50.0
+        assert meter.current.actual == pytest.approx(30.0)
+        assert meter.voltage.l1 == pytest.approx(230.0)
+        assert meter.power.actual == pytest.approx(6900.0)
+        assert meter.energy.totalexport == pytest.approx(100000.0)
+        assert meter.energy.totalimport == pytest.approx(50000.0)
+        assert meter.frequency == pytest.approx(50.0)
 
     def test_meter_component_constant(self):
         """Test meter COMPONENT constant."""
@@ -84,45 +90,44 @@ class TestModbusMeter:
         info = make_device_info()
         data = make_meter_data()
 
-        meter = ModbusMeter(info, data)
+        meter = ModbusMeter.from_sunspec(info, data)
 
-        assert meter.current.l1 == 10.0
-        assert meter.current.l2 == 10.0
-        assert meter.current.l3 == 10.0
+        assert meter.current.l1 == pytest.approx(10.0)
+        assert meter.current.l2 == pytest.approx(10.0)
+        assert meter.current.l3 == pytest.approx(10.0)
 
     def test_meter_voltage_phases(self):
         """Test meter voltage with phases."""
         info = make_device_info()
         data = make_meter_data()
 
-        meter = ModbusMeter(info, data)
+        meter = ModbusMeter.from_sunspec(info, data)
 
-        assert meter.voltage.l1 == 230.0
-        assert meter.voltage.l2 == 230.0
-        assert meter.voltage.l3 == 230.0
-        assert meter.voltage.l1n == 230.0
-        assert meter.voltage.l2n == 230.0
-        assert meter.voltage.l3n == 230.0
+        assert meter.voltage.l1 == pytest.approx(230.0)
+        assert meter.voltage.l2 == pytest.approx(230.0)
+        assert meter.voltage.l3 == pytest.approx(230.0)
+        assert meter.voltage.l1n == pytest.approx(230.0)
+        assert meter.voltage.l2n == pytest.approx(230.0)
+        assert meter.voltage.l3n == pytest.approx(230.0)
 
     def test_meter_power_values(self):
         """Test meter power values."""
         info = make_device_info()
         data = make_meter_data()
 
-        meter = ModbusMeter(info, data)
+        meter = ModbusMeter.from_sunspec(info, data)
 
-        assert meter.power.actual == 6900.0
-        assert meter.power.reactive == 100.0
-        assert meter.power.apparent == 6901.0
-        # 9500 * 10^-4 = 0.95
-        assert meter.power.factor == 0.95
+        assert meter.power.actual == pytest.approx(6900.0)
+        assert meter.power.reactive == pytest.approx(100.0)
+        assert meter.power.apparent == pytest.approx(6901.0)
+        assert meter.power.factor == pytest.approx(0.95)
 
     def test_meter_homeassistant_device_info_with_name(self):
         """Test homeassistant_device_info_with_name method."""
         info = make_device_info()
         data = make_meter_data()
 
-        meter = ModbusMeter(info, data)
+        meter = ModbusMeter.from_sunspec(info, data)
         ha_info = meter.homeassistant_device_info_with_name("Meter 1")
 
         assert ha_info["name"] == "SolarEdge Meter 1"
@@ -134,7 +139,7 @@ class TestModbusMeter:
         info = make_device_info(with_unit=True)
         data = make_meter_data()
 
-        meter = ModbusMeter(info, data)
+        meter = ModbusMeter.from_sunspec(info, data)
 
-        assert meter.info.has_unit is True
+        assert meter.info.unit is not None
         assert meter.info.unit.key == "leader"

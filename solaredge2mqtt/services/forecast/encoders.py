@@ -25,29 +25,34 @@ class BaseEncoder(BaseEstimator, TransformerMixin):
         self.features: list[str] | None = None
         self._feature_names_out: list[str] = []
 
-    def fit(self, x_vector: DataFrame, *_) -> BaseEncoder:
+    def fit(self, x_vector: DataFrame | Series, *_) -> BaseEncoder:
         if not hasattr(x_vector, "columns"):
             raise AttributeError("x_vector has no columns")
 
         self.features = x_vector.columns.tolist()
         return self
 
-    def _transform(self, x_vector: DataFrame) -> DataFrame:
+    def _transform(self, x_vector: DataFrame | Series) -> DataFrame | Series:
         if self.features is None:
-            raise AttributeError(f"Encoder {self.__class__} is not been fitted yet.")
+            raise AttributeError(
+                f"Encoder {self.__class__} is not been fitted yet.")
 
         if not hasattr(x_vector, "columns"):
             raise AttributeError("x_vector has no columns")
 
         if not all(feature in self.features for feature in x_vector.columns):
-            raise AttributeError(f"Columns {x_vector.columns} are not in the vector")
+            raise AttributeError(
+                f"Columns {x_vector.columns} are not in the vector")
 
         if not all(feature in x_vector.columns for feature in self.features):
-            raise AttributeError(f"Columns {self.features} are not in the vector")
+            raise AttributeError(
+                f"Columns {self.features} are not in the vector")
 
         return x_vector
 
-    def _save_feature_names_out(self, x_vector: DataFrame) -> DataFrame:
+    def _save_feature_names_out(
+        self, x_vector: DataFrame | Series
+    ) -> DataFrame | Series:
         self._feature_names_out = x_vector.columns.to_list()
         return x_vector
 
@@ -56,17 +61,21 @@ class BaseEncoder(BaseEstimator, TransformerMixin):
 
 
 class CategoricalEncoder(BaseEncoder):
-    def transform(self, x_vector: DataFrame) -> DataFrame:
+    def transform(self, x_vector: DataFrame | Series) -> DataFrame | Series:
         x_vector = self._transform(x_vector).astype("category")
         return self._save_feature_names_out(x_vector)
 
 
 class CyclicalEncoder(BaseEncoder):
-    def __init__(self, **cycle_lengths: dict[str, int]) -> None:
+    def __init__(self, **cycle_lengths: int) -> None:
         super().__init__()
         self.cycle_lengths: dict[str, int] = cycle_lengths
 
-    def transform(self, x_vector: DataFrame) -> DataFrame:
+    def transform(self, x_vector: DataFrame | Series) -> DataFrame | Series:
+        if self.features is None:
+            raise AttributeError(
+                f"Encoder {self.__class__} is not been fitted yet.")
+
         x_vector = self._transform(x_vector)
         for feature in self.features:
             cycle = self.cycle_lengths.get(feature, None)
@@ -85,8 +94,11 @@ class CyclicalEncoder(BaseEncoder):
 
     @staticmethod
     def transform_cycle_columns(
-        x_vector: DataFrame, prefix: str, cycle_vector: DataFrame, cycle_length: float
-    ) -> DataFrame:
+        x_vector: DataFrame | Series,
+        prefix: str,
+        cycle_vector: Series,
+        cycle_length: float,
+    ) -> DataFrame | Series:
         x_vector[f"{prefix}_cos"] = cos(2 * pi * cycle_vector / cycle_length)
         x_vector[f"{prefix}_sin"] = sin(2 * pi * cycle_vector / cycle_length)
 
@@ -98,7 +110,11 @@ class TimeEncoder(BaseEncoder):
         super().__init__()
         self.season_starts: dict[int, dict[str, datetime]] = {}
 
-    def transform(self, x_vector: DataFrame) -> DataFrame:
+    def transform(self, x_vector: DataFrame | Series) -> DataFrame | Series:
+        if self.features is None:
+            raise AttributeError(
+                f"Encoder {self.__class__} is not been fitted yet.")
+
         x_vector = self._transform(x_vector)
         for feature in self.features:
             x_vector = CyclicalEncoder.transform_cycle_columns(
@@ -168,12 +184,16 @@ class SunEncoder(BaseEncoder):
             "name",
             "region",
             timezone=LOCAL_TZ,
-            latitude=location.latitude,
-            longitude=location.longitude,
+            latitude=location.latitude_value,
+            longitude=location.longitude_value,
         )
 
-    def transform(self, x_vector: DataFrame) -> DataFrame:
+    def transform(self, x_vector: DataFrame | Series) -> DataFrame | Series:
         x_vector = self._transform(x_vector)
+
+        if self.features is None:
+            raise AttributeError(
+                f"Encoder {self.__class__} is not been fitted yet.")
 
         for feature in self.features:
             time_key = f"{feature}_time"
@@ -189,7 +209,8 @@ class SunEncoder(BaseEncoder):
             x_vector = CyclicalEncoder.transform_cycle_columns(
                 x_vector,
                 f"{feature}_azimuth",
-                x_vector[time_key].apply(lambda x: azimuth(self._location.observer, x)),
+                x_vector[time_key].apply(
+                    lambda x: azimuth(self._location.observer, x)),
                 360,
             )
 

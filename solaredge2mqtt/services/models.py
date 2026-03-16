@@ -1,26 +1,11 @@
-from typing import ClassVar
+from abc import abstractmethod
+from typing import ClassVar, TypeVar
 
 from solaredge2mqtt.core.models import Solaredge2MQTTBaseModel
 
 
-class ComponentValueGroup(Solaredge2MQTTBaseModel):
-    @staticmethod
-    def scale_value(
-        data: dict[str, str | int],
-        value_key: str,
-        scale_key: str | None = None,
-        digits: int = 2,
-    ) -> float:
-        if scale_key is None:
-            scale_key = f"{value_key}_scale"
-
-        value = int(data[value_key])
-        scale = int(data[scale_key])
-
-        return round(value * 10**scale, digits)
-
-
-class Component(ComponentValueGroup):
+class Component(Solaredge2MQTTBaseModel):
+    # TODO : Remove SOURCE and COMPONENT
     COMPONENT: ClassVar[str] = "unknown"
     SOURCE: ClassVar[str | None] = None
 
@@ -28,7 +13,7 @@ class Component(ComponentValueGroup):
     def influxdb_tags(self) -> dict[str, str]:
         return {
             "component": self.COMPONENT,
-            "source": self.SOURCE,
+            "source": self.SOURCE or "",
         }
 
     def mqtt_topic(self) -> str:
@@ -39,6 +24,10 @@ class Component(ComponentValueGroup):
 
         return topic
 
+    @abstractmethod
+    def homeassistant_device_info(self) -> dict[str, str]:
+        pass
+
     def __str__(self) -> str:
         if self.SOURCE:
             name = f"{self.SOURCE}: {self.COMPONENT}"
@@ -46,3 +35,6 @@ class Component(ComponentValueGroup):
             name = self.COMPONENT
 
         return name
+
+
+TComponent = TypeVar("TComponent", bound=Component)

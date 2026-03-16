@@ -61,7 +61,7 @@ class TestMonitoringSiteInit:
 
     def test_subscribes_to_events(self, mock_monitoring_settings, mock_event_bus):
         """Test MonitoringSite subscribes to 15min interval event."""
-        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, None)
+        MonitoringSite(mock_monitoring_settings, mock_event_bus, None)
 
         mock_event_bus.subscribe.assert_called()
 

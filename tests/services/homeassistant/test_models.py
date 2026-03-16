@@ -1,16 +1,12 @@
 """Tests for homeassistant models module."""
 
-import hashlib
-import base64
 
-import pytest
 
 from solaredge2mqtt.services.homeassistant.models import (
     HomeAssistantBaseModel,
     HomeAssistantBinarySensorType,
     HomeAssistantDevice,
     HomeAssistantEntity,
-    HomeAssistantEntityBaseType,
     HomeAssistantNumberType,
     HomeAssistantSensorType,
     HomeAssistantStatus,

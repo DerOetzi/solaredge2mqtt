@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TypeAlias
 
 from pydantic import Field, field_serializer, model_serializer
 
 from solaredge2mqtt.core.models import Solaredge2MQTTBaseModel
+
+WeatherData: TypeAlias = dict[
+    str,
+    str | float | int | datetime | None,
+]
 
 
 class OpenWeatherMapOneCallBase(Solaredge2MQTTBaseModel):
@@ -33,20 +39,22 @@ class OpenWeatherMapSnow(OpenWeatherMapRain):
 
 class OpenWeatherMapBaseData(Solaredge2MQTTBaseModel):
     dt: datetime
-    temp: float | None = Field(None)
-    feels_like: float | None = Field(None)
-    pressure: int | None = Field(None)
-    humidity: int | None = Field(None)
-    dew_point: float | None = Field(None)
-    uvi: float | None = Field(None)
-    clouds: int | None = Field(None)
-    visibility: int | None = Field(None)
-    wind_speed: float | None = Field(None)
-    wind_deg: int | None = Field(None)
-    wind_gust: float | None = Field(None)
+    temp: float | None = Field(default=None)
+    feels_like: float | None = Field(default=None)
+    pressure: int | None = Field(default=None)
+    humidity: int | None = Field(default=None)
+    dew_point: float | None = Field(default=None)
+    uvi: float | None = Field(default=None)
+    clouds: int | None = Field(default=None)
+    visibility: int | None = Field(default=None)
+    wind_speed: float | None = Field(default=None)
+    wind_deg: int | None = Field(default=None)
+    wind_gust: float | None = Field(default=None)
     weather: list[OpenWeatherMapCondition]
-    rain: OpenWeatherMapRain = Field(OpenWeatherMapRain())
-    snow: OpenWeatherMapSnow = Field(OpenWeatherMapSnow())
+    rain: OpenWeatherMapRain = Field(
+        default=OpenWeatherMapRain(**{"1h": 0.0, "timestamp": None}))
+    snow: OpenWeatherMapSnow = Field(
+        default=OpenWeatherMapSnow(**{"1h": 0.0, "timestamp": None}))
 
     @property
     def localtime(self) -> datetime:
@@ -78,8 +86,9 @@ class OpenWeatherMapBaseData(Solaredge2MQTTBaseModel):
     ) -> OpenWeatherMapCondition:
         return weather[0]
 
-    def model_dump_estimation_data(self) -> dict[str, str | float | int | None]:
-        model_dict = self.model_dump(exclude=["weather", "dt"], exclude_none=True)
+    def model_dump_estimation_data(self) -> WeatherData:
+        model_dict = self.model_dump(
+            exclude={"weather", "dt"}, exclude_none=True)
         model_dict["weather_id"] = self.weather[0].id
         model_dict["weather_main"] = self.weather[0].main
         return model_dict

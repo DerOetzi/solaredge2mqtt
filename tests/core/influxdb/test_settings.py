@@ -51,7 +51,7 @@ class TestInfluxDBSettings:
         settings = InfluxDBSettings(
             host="influxdb.example.com",
             port=8087,
-            token="my_token",
+            token=SecretStr("my_token"),
             org="my_org",
             bucket="custom_bucket",
             retention=SECONDS_PER_YEAR,
@@ -60,6 +60,7 @@ class TestInfluxDBSettings:
 
         assert settings.host == "influxdb.example.com"
         assert settings.port == 8087
+        assert settings.token is not None
         assert settings.token.get_secret_value() == "my_token"
         assert settings.org == "my_org"
         assert settings.bucket == "custom_bucket"
@@ -89,22 +90,22 @@ class TestInfluxDBSettings:
         settings = InfluxDBSettings(
             host="http://localhost",
             port=8086,
-            token="my_token",
+            token=SecretStr("my_token"),
             org="my_org",
         )
 
         params = settings.client_params
 
-        assert params["url"] == "http://localhost:8086"
-        assert params["token"] == "my_token"
-        assert params["org"] == "my_org"
+        assert params.url == "http://localhost:8086"
+        assert params.token == "my_token"
+        assert params.org == "my_org"
 
     def test_influxdb_settings_is_configured_true(self):
         """Test is_configured returns True when all required fields set."""
         settings = InfluxDBSettings(
             host="localhost",
             port=8086,
-            token="my_token",
+            token=SecretStr("my_token"),
             org="my_org",
         )
 
@@ -113,7 +114,7 @@ class TestInfluxDBSettings:
     def test_influxdb_settings_is_configured_false_no_host(self):
         """Test is_configured returns False without host."""
         settings = InfluxDBSettings(
-            token="my_token",
+            token=SecretStr("my_token"),
             org="my_org",
         )
 
@@ -132,14 +133,14 @@ class TestInfluxDBSettings:
         """Test is_configured returns False without org."""
         settings = InfluxDBSettings(
             host="localhost",
-            token="my_token",
+            token=SecretStr("my_token"),
         )
 
         assert settings.is_configured is False
 
     def test_influxdb_settings_token_is_secret(self):
         """Test that token is a SecretStr."""
-        settings = InfluxDBSettings(token="my_secret_token")
+        settings = InfluxDBSettings(token=SecretStr("my_secret_token"))
 
         assert isinstance(settings.token, SecretStr)
         assert str(settings.token) != "my_secret_token"  # Should be masked

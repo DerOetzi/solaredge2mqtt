@@ -97,7 +97,10 @@ class TestBaseInputField:
             field1: str
 
         with pytest.raises(Exception):
-            TestInput(field1="value", extra_field="should_fail")
+            TestInput(
+                field1="value",
+                extra_field="should_fail"  # pyright: ignore[reportCallIssue]
+            )
 
     def test_base_input_field_valid(self):
         """Test that BaseInputField accepts valid fields."""
@@ -175,7 +178,7 @@ class TestBaseField:
 
         result = TestField.POWER.field(
             "Power Value",
-            json_schema_extra={"unit": "W"},
+            unit="W",
         )
 
         assert result["title"] == "Power Value"

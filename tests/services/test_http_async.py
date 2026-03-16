@@ -18,6 +18,7 @@ class TestHTTPClientAsync:
         assert client.service == "TestService"
         assert client.session is None
 
+    @pytest.mark.asyncio
     async def test_init_creates_session(self):
         """Test init method creates session."""
         client = HTTPClientAsync("TestService")
@@ -30,6 +31,7 @@ class TestHTTPClientAsync:
         # Cleanup
         await client.close()
 
+    @pytest.mark.asyncio
     async def test_init_does_not_recreate_session(self):
         """Test init does not recreate existing session."""
         client = HTTPClientAsync("TestService")
@@ -43,6 +45,7 @@ class TestHTTPClientAsync:
         # Cleanup
         await client.close()
 
+    @pytest.mark.asyncio
     async def test_close_closes_session(self):
         """Test close method closes session."""
         client = HTTPClientAsync("TestService")
@@ -52,6 +55,7 @@ class TestHTTPClientAsync:
 
         assert client.session is None
 
+    @pytest.mark.asyncio
     async def test_close_no_session(self):
         """Test close method handles no session gracefully."""
         client = HTTPClientAsync("TestService")
@@ -76,6 +80,7 @@ class TestHTTPClientAsync:
 
         assert result is None
 
+    @pytest.mark.asyncio
     async def test_get_cookie_with_session_no_cookie(self):
         """Test get_cookie returns None when cookie doesn't exist."""
         client = HTTPClientAsync("TestService")
@@ -88,13 +93,16 @@ class TestHTTPClientAsync:
         # Cleanup
         await client.close()
 
+    @pytest.mark.asyncio
     async def test_cookie_exists_with_session_cookie_present(self):
         """Test cookie_exists returns True when cookie exists."""
         client = HTTPClientAsync("TestService")
         client.init()
 
         # Manually add a cookie
-        client.session.cookie_jar.update_cookies({"CSRF-TOKEN": "test_token"})
+        if client.session is not None:
+            client.session.cookie_jar.update_cookies(
+                {"CSRF-TOKEN": "test_token"})
 
         result = client.cookie_exists("CSRF-TOKEN")
 
@@ -103,13 +111,16 @@ class TestHTTPClientAsync:
         # Cleanup
         await client.close()
 
+    @pytest.mark.asyncio
     async def test_get_cookie_returns_value(self):
         """Test get_cookie returns cookie value when exists."""
         client = HTTPClientAsync("TestService")
         client.init()
 
         # Manually add a cookie
-        client.session.cookie_jar.update_cookies({"CSRF-TOKEN": "test_token_value"})
+        if client.session is not None:
+            client.session.cookie_jar.update_cookies(
+                {"CSRF-TOKEN": "test_token_value"})
 
         result = client.get_cookie("CSRF-TOKEN")
 
@@ -118,6 +129,7 @@ class TestHTTPClientAsync:
         # Cleanup
         await client.close()
 
+    @pytest.mark.asyncio
     async def test_handle_response_success_json(self):
         """Test _handle_response returns JSON for successful response."""
         client = HTTPClientAsync("TestService")
@@ -131,6 +143,7 @@ class TestHTTPClientAsync:
         assert result == {"key": "value"}
         mock_response.json.assert_called_once()
 
+    @pytest.mark.asyncio
     async def test_handle_response_success_text(self):
         """Test _handle_response returns text when expect_json=False."""
         client = HTTPClientAsync("TestService")
@@ -144,6 +157,7 @@ class TestHTTPClientAsync:
         assert result == "plain text response"
         mock_response.text.assert_called_once()
 
+    @pytest.mark.asyncio
     async def test_handle_response_error(self):
         """Test _handle_response raises on HTTP error."""
         client = HTTPClientAsync("TestService")
@@ -160,6 +174,7 @@ class TestHTTPClientAsync:
         with pytest.raises(aiohttp.ClientResponseError):
             await client._handle_response(mock_response)
 
+    @pytest.mark.asyncio
     async def test_get_success(self):
         """Test _get method returns data on success."""
         client = HTTPClientAsync("TestService")
@@ -180,6 +195,7 @@ class TestHTTPClientAsync:
 
         assert result == {"data": "test"}
 
+    @pytest.mark.asyncio
     async def test_get_connection_error_returns_none(self):
         """Test _get returns None on connection error."""
         client = HTTPClientAsync("TestService")
@@ -195,6 +211,7 @@ class TestHTTPClientAsync:
 
         assert result is None
 
+    @pytest.mark.asyncio
     async def test_get_with_401_calls_login(self):
         """Test _get calls login callback on 401 response."""
         client = HTTPClientAsync("TestService")
@@ -227,6 +244,7 @@ class TestHTTPClientAsync:
         login_callback.assert_called_once()
         assert result == {"data": "success"}
 
+    @pytest.mark.asyncio
     async def test_post_success_json(self):
         """Test _post method returns JSON data on success."""
         client = HTTPClientAsync("TestService")
@@ -250,6 +268,7 @@ class TestHTTPClientAsync:
 
         assert result == {"result": "ok"}
 
+    @pytest.mark.asyncio
     async def test_post_success_text(self):
         """Test _post method returns text when expect_json=False."""
         client = HTTPClientAsync("TestService")
@@ -274,6 +293,7 @@ class TestHTTPClientAsync:
 
         assert result == "plain text"
 
+    @pytest.mark.asyncio
     async def test_post_connection_error_returns_none(self):
         """Test _post returns None on connection error."""
         client = HTTPClientAsync("TestService")
@@ -289,6 +309,7 @@ class TestHTTPClientAsync:
 
         assert result is None
 
+    @pytest.mark.asyncio
     async def test_post_with_403_calls_login(self):
         """Test _post calls login callback on 403 response."""
         client = HTTPClientAsync("TestService")

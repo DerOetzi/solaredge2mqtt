@@ -9,7 +9,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent))
 
 from solaredge2mqtt.core.settings.migrator import ConfigurationMigrator
-from solaredge2mqtt.core.settings.models import ServiceSettings
+
 
 def main():
     
@@ -70,7 +70,7 @@ def main():
     print("Starting migration...")
     print(f"Reading configuration from environment variables and {args.input}")
 
-    migrator = ConfigurationMigrator(ServiceSettings)
+    migrator = ConfigurationMigrator()
     config_data, secrets_data = migrator.extract_from_environment()
 
     if args.dry_run:

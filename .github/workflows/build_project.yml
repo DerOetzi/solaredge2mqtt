@@ -77,12 +77,27 @@ jobs:
 
       - name: Install package with dev dependencies
         run: pip install -e ".[dev,forecast]"
+        
+      - name: Lint with ruff
+        run: ruff check .
 
       - name: Run tests with coverage
         run: python -m pytest --cov=solaredge2mqtt --cov-report=xml:coverage.xml --tb=short
+        
+      - name: SonarCloud Scan skipped (external fork PR)
+        if: >-
+          ${{ matrix.python-version == '3.13' &&
+              github.event_name == 'pull_request' &&
+              github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          echo "::notice::SonarCloud Scan skipped: pull request originates from an external fork. SONAR_TOKEN is not available for fork PRs (GitHub security policy). Sonar analysis will run after the PR is merged to main or on internal branches."
 
       - name: SonarCloud Scan
         if: ${{ matrix.python-version == '3.13' }}
+        if: >-
+          ${{ matrix.python-version == '3.13' &&
+              (github.event_name != 'pull_request' ||
+               github.event.pull_request.head.repo.full_name == github.repository) }}
         uses: SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

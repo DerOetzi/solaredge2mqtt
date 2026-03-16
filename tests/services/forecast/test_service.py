@@ -12,6 +12,7 @@ from sklearn.pipeline import Pipeline
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import InvalidDataException
+from solaredge2mqtt.core.settings.models import LocationSettings
 from solaredge2mqtt.services.forecast.models import ForecasterType
 from solaredge2mqtt.services.forecast.service import (
     LOCAL_TZ,
@@ -20,6 +21,11 @@ from solaredge2mqtt.services.forecast.service import (
     PFISelector,
 )
 from solaredge2mqtt.services.forecast.settings import ForecastSettings
+from solaredge2mqtt.services.weather.events import WeatherUpdateEvent
+from solaredge2mqtt.services.weather.models import (
+    OpenWeatherMapCondition,
+    OpenWeatherMapForecastData,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -33,36 +39,34 @@ def mock_memory():
         yield mock
 
 
-class MockLocationSettings:
+class MockLocationSettings(LocationSettings):
     """Mock LocationSettings for testing."""
 
     def __init__(self, latitude=52.52, longitude=13.405):
-        self.latitude = latitude
-        self.longitude = longitude
+        super().__init__(latitude=latitude, longitude=longitude)
 
 
-class MockOpenWeatherMapForecastData:
+class MockOpenWeatherMapForecastData(OpenWeatherMapForecastData):
     """Mock OpenWeatherMapForecastData for testing."""
 
     def __init__(self, hour=12, year=2024, month=6, day=15):
-        self.hour = hour
-        self.year = year
-        self.month = month
-        self.day = day
+        if hour > 23:
+            day += 1
+            hour -= 24
 
-    def model_dump_estimation_data(self):
-        return {
-            "temp": 25.0,
-            "humidity": 50,
-            "clouds": 20,
-            "pressure": 1013,
-            "wind_speed": 5.0,
-            "wind_deg": 180,
-            "uvi": 5.0,
-            "pop": 0.1,
-            "weather_id": 800,
-            "weather_main": "Clear",
-        }
+        super().__init__(
+            dt=datetime(year, month, day, hour, tzinfo=timezone.utc),
+            temp=25.0,
+            humidity=50,
+            clouds=20,
+            pressure=1013,
+            wind_speed=5.0,
+            wind_deg=180,
+            uvi=5.0,
+            pop=0.1,
+            weather=[OpenWeatherMapCondition(
+                id=800, main="Clear", description="clear sky", icon="01d")]
+        )
 
 
 class MockWeatherData:
@@ -137,7 +141,7 @@ class TestForecastServiceWeatherUpdate:
         service = ForecastService(settings, location, event_bus, influxdb)
 
         weather_data = MockWeatherData()
-        event = MagicMock()
+        event = MagicMock(spec=WeatherUpdateEvent)
         event.weather = weather_data
 
         await service.weather_update(event)
@@ -155,7 +159,7 @@ class TestForecastServiceWeatherUpdate:
         service = ForecastService(settings, location, event_bus, influxdb)
 
         weather_data = MockWeatherData()
-        event = MagicMock()
+        event = MagicMock(spec=WeatherUpdateEvent)
         event.weather = weather_data
 
         await service.weather_update(event)
@@ -173,15 +177,24 @@ class TestForecastServiceWeatherUpdate:
 
         service = ForecastService(settings, location, event_bus, influxdb)
 
-        # Use current hour to ensure it's not removed
-        current_hour = dt_class.now().hour
-        hourly_data = [MockOpenWeatherMapForecastData(hour=current_hour)]
+        # Use the current UTC datetime to construct forecast data so the
+        # local-hour conversion inside the service matches what we expect.
+        now_utc = dt_class.now(timezone.utc)
+        now_local = now_utc.astimezone(LOCAL_TZ)
+        current_hour = now_local.hour
+        hourly_data = [MockOpenWeatherMapForecastData(
+            hour=now_utc.hour,
+            year=now_utc.year,
+            month=now_utc.month,
+            day=now_utc.day,
+        )]
         weather_data = MockWeatherData(hourly=hourly_data)
-        event = MagicMock()
+        event = MagicMock(spec=WeatherUpdateEvent)
         event.weather = weather_data
 
         await service.weather_update(event)
 
+        assert service.last_hour_forecast is not None
         assert current_hour in service.last_hour_forecast
         assert service.last_hour_forecast[current_hour] == hourly_data[0]
 
@@ -205,7 +218,7 @@ class TestForecastServiceWeatherUpdate:
         # Update with current hour 12
         hourly_data = [MockOpenWeatherMapForecastData(hour=12)]
         weather_data = MockWeatherData(hourly=hourly_data)
-        event = MagicMock()
+        event = MagicMock(spec=WeatherUpdateEvent)
         event.weather = weather_data
 
         with patch(
@@ -215,7 +228,8 @@ class TestForecastServiceWeatherUpdate:
             mock_now.hour = 12
             mock_dt.now.return_value = mock_now
             mock_now.astimezone.return_value = mock_now
-            mock_now.__sub__ = lambda self, x: MagicMock(hour=11)
+            mock_now.__sub__ = lambda self, x: MagicMock(
+                spec=["hour"], hour=11)
 
             await service.weather_update(event)
 
@@ -323,7 +337,7 @@ class TestForecastServiceForecastLoop:
             forecaster.model_pipeline = MagicMock()
 
         with pytest.raises(InvalidDataException) as exc_info:
-            await service.forecast_loop(None)
+            await service.forecast_loop(MagicMock())
 
         assert "Missing weather forecast" in exc_info.value.message
 
@@ -340,7 +354,7 @@ class TestForecastServiceForecastLoop:
         service = ForecastService(settings, location, event_bus, influxdb)
 
         # Create mock train that sets up forecasters as trained
-        async def mock_train_impl():
+        def mock_train_impl():
             """Mock train that sets up forecasters as trained."""
             for forecaster in service.forecasters.values():
                 mock_pipeline = MagicMock()
@@ -358,7 +372,7 @@ class TestForecastServiceForecastLoop:
         ]
 
         # forecast_loop should call train and then proceed
-        await service.forecast_loop(None)
+        await service.forecast_loop(MagicMock())
 
         service.train.assert_called_once()
 
@@ -399,9 +413,7 @@ class TestForecastServicePublishForecast:
             "power": [1000, 1200],
             "energy": [1.0, 1.2],
         })
-        forecast_data["_time"] = forecast_data["_time"].astype(
-            f"datetime64[ns, {LOCAL_TZ}]"
-        )
+        forecast_data["_time"] = forecast_data["_time"].dt.tz_convert(LOCAL_TZ)
 
         influxdb.query_dataframe = AsyncMock(return_value=forecast_data)
 
@@ -505,7 +517,9 @@ class TestForecasterTrain:
             "weather_id": [800] * 100,
             "weather_main": ["Clear"] * 100,
         })
-        data["time"] = data["time"].astype(f"datetime64[ns, {LOCAL_TZ}]")
+        data["time"] = data["time"].astype(
+            pd.DatetimeTZDtype(unit="ns", tz=LOCAL_TZ)
+        )
 
         forecaster.train(data)
 
@@ -704,7 +718,7 @@ class TestForecastServiceWritePeriodsToInfluxDB:
             ],
             "energy": [1.5, 2.0],
         })
-        periods["time"] = periods["time"].astype(f"datetime64[ns, {LOCAL_TZ}]")
+        periods["time"] = periods["time"].dt.tz_convert(LOCAL_TZ)
 
         await service._write_periods_to_influxdb(
             periods, ForecasterType.ENERGY
@@ -776,34 +790,3 @@ class TestForecastServiceAddLastHourPvProduction:
         assert result[ForecasterType.ENERGY.target_column] == pytest.approx(
             1.57
         )
-
-
-class TestForecasterHyperparameterTuning:
-    """Tests for Forecaster hyperparameter tuning."""
-
-    def test_hyperparametertuning_with_data(self):
-        """Test _hyperparametertuning method."""
-        location = MockLocationSettings()
-        settings = ForecastSettings(enable=True, hyperparametertuning=True)
-
-        forecaster = Forecaster(ForecasterType.ENERGY, location, settings)
-
-        # Create enough data
-        data = DataFrame({
-            "time": [
-                datetime.now(timezone.utc) + timedelta(hours=i)
-                for i in range(100)
-            ],
-            "energy": [100.0 + i for i in range(100)],
-            "clouds": [50] * 100,
-            "temp": [25.0] * 100,
-        })
-        data["time"] = data["time"].astype(f"datetime64[ns, {LOCAL_TZ}]")
-
-        y_vector = data["energy"]
-        pipeline = forecaster._prepare_model_pipeline(data.columns.to_list())
-
-        # This will do actual hyperparameter tuning (slow but tests the method)
-        result = forecaster._hyperparametertuning(data, y_vector, pipeline)
-
-        assert result is not None

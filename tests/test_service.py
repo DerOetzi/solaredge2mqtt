@@ -152,22 +152,23 @@ class LoggerSpy:
 
 
 def build_settings(**overrides):
+    is_influxdb_configured = overrides.pop("is_influxdb_configured", False)
+    is_homeassistant_configured = overrides.pop(
+        "is_homeassistant_configured", False)
     defaults = {
         "logging_level": "INFO",
         "interval": 1,
-        "influxdb": SimpleNamespace(),
-        "prices": SimpleNamespace(),
-        "energy": SimpleNamespace(),
-        "monitoring": SimpleNamespace(),
-        "weather": SimpleNamespace(),
-        "forecast": SimpleNamespace(),
-        "location": SimpleNamespace(),
+        "influxdb": SimpleNamespace(is_configured=is_influxdb_configured),
+        "prices": SimpleNamespace(is_configured=False),
+        "energy": SimpleNamespace(is_configured=False),
+        "monitoring": SimpleNamespace(is_configured=False),
+        "weather": SimpleNamespace(is_configured=False),
+        "forecast": SimpleNamespace(enable=False),
+        "location": SimpleNamespace(is_configured=False),
+        "homeassistant": SimpleNamespace(enable=is_homeassistant_configured),
         "mqtt": SimpleNamespace(),
-        "is_influxdb_configured": False,
-        "is_monitoring_configured": False,
-        "is_weather_configured": False,
-        "is_forecast_configured": False,
-        "is_homeassistant_configured": False,
+        "is_weather_enabled": False,
+        "is_forecast_enabled": False,
     }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
@@ -203,7 +204,7 @@ def settings_factory(monkeypatch):
 
 
 def test_service_skips_forecast_when_unavailable(monkeypatch, settings_factory):
-    settings_factory(is_forecast_configured=True)
+    settings_factory(is_forecast_enabled=True)
     monkeypatch.setattr(service_module, "FORECAST_AVAILABLE", False)
     logger_spy = LoggerSpy()
     monkeypatch.setattr(service_module, "logger", logger_spy)
@@ -622,7 +623,9 @@ async def test_main_loop_runs_once_on_cancel(monkeypatch, settings_factory):
 
 
 @pytest.mark.asyncio
-async def test_main_loop_initializes_influxdb_when_configured(monkeypatch, settings_factory):
+async def test_main_loop_initializes_influxdb_when_configured(
+    monkeypatch, settings_factory
+):
     settings_factory(is_influxdb_configured=True)
     service = service_module.Service()
 
@@ -649,7 +652,9 @@ async def test_main_loop_initializes_influxdb_when_configured(monkeypatch, setti
 
 
 @pytest.mark.asyncio
-async def test_main_loop_initializes_homeassistant_when_configured(monkeypatch, settings_factory):
+async def test_main_loop_initializes_homeassistant_when_configured(
+    monkeypatch, settings_factory
+):
     settings_factory(is_homeassistant_configured=True)
     service = service_module.Service()
 
@@ -676,7 +681,9 @@ async def test_main_loop_initializes_homeassistant_when_configured(monkeypatch, 
 
 
 @pytest.mark.asyncio
-async def test_main_loop_mqtt_error_breaks_when_already_cancelled(monkeypatch, settings_factory):
+async def test_main_loop_mqtt_error_breaks_when_already_cancelled(
+    monkeypatch, settings_factory
+):
     settings_factory()
     service = service_module.Service()
 
@@ -735,6 +742,7 @@ async def test_main_loop_retries_after_mqtt_error(monkeypatch, settings_factory)
 
     class FailingMQTT:
         def __init__(self, *args, **kwargs):
+            # No initialisation needed; connection behaviour is tested via __aenter__
             pass
 
         async def __aenter__(self):
@@ -744,7 +752,9 @@ async def test_main_loop_retries_after_mqtt_error(monkeypatch, settings_factory)
             return False
 
         async def publish_status_offline(self):
-            pass
+            # Intentionally empty: this test exercises retry handling for
+            # connection setup failures, so offline publishing is irrelevant.
+            return None
 
     monkeypatch.setattr(service_module, "MQTTClient", FailingMQTT)
 

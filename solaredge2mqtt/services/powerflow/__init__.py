@@ -34,7 +34,7 @@ class PowerflowService:
 
         self.wallbox = (
             WallboxClient(self.settings.wallbox, event_bus)
-            if self.settings.is_wallbox_configured
+            if self.settings.wallbox.is_configured
             else None
         )
 
@@ -48,7 +48,7 @@ class PowerflowService:
     async def async_init(self) -> None:
         await self.modbus.async_init()
 
-    async def calculate_powerflow(self, _) -> None:
+    async def calculate_powerflow(self, event: IntervalBaseTriggerEvent) -> None:
         units = await self.modbus.get_data()
 
         if "leader" not in units:
@@ -67,7 +67,7 @@ class PowerflowService:
 
         evcharger = 0
         wallbox_data = None
-        if self.settings.is_wallbox_configured:
+        if self.wallbox:
             try:
                 wallbox_data = await self.wallbox.get_data()
                 logger.trace(
@@ -190,5 +190,5 @@ class PowerflowService:
             await self.influxdb.write_points(points)
 
     async def close(self) -> None:
-        if self.settings.is_wallbox_configured:
+        if self.wallbox:
             await self.wallbox.close()

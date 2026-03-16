@@ -38,4 +38,4 @@ class Timer:
         timestamp -= self.base_interval
 
         if timestamp % 900 == 0:
-            await self.event_bus.emit(Interval15MinTriggerEvent)
+            await self.event_bus.emit(Interval15MinTriggerEvent())

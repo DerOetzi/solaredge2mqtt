@@ -43,7 +43,7 @@ class MonitoringSite(HTTPClientAsync):
     def _subscribe_events(self) -> None:
         self.event_bus.subscribe(Interval15MinTriggerEvent, self.get_data)
 
-    async def get_data(self, _):
+    async def get_data(self, event: Interval15MinTriggerEvent) -> None:
         energies = await self.get_modules_energy()
         powers = await self.get_modules_power()
 

@@ -162,7 +162,7 @@ class Powerflow(Component):
         return point
 
     def prepare_point_energy(
-        self, measurement: str = "energy", prices: PriceSettings = None
+        self, measurement: str = "energy", prices: PriceSettings | None = None
     ) -> Point:
         point = Point(measurement)
         for key, value in self.model_dump_influxdb().items():
@@ -204,7 +204,7 @@ class Powerflow(Component):
 class InverterPowerflow(Solaredge2MQTTBaseModel):
     power: SkipJsonSchema[int]
     dc_power: int = Field(
-        **HASensor.POWER_W.field("Power DC", "solar-power"))
+        **HASensor.POWER_W.field("Power DC", icon="solar-power"))
     battery_discharge: SkipJsonSchema[int] = Field(exclude=True)
 
     @staticmethod
@@ -240,7 +240,7 @@ class InverterPowerflow(Solaredge2MQTTBaseModel):
         return self.power if self.power > 0 else 0
 
     @computed_field(
-        **HASensor.POWER_W.field("Battery production", "home-battery-outline")
+        **HASensor.POWER_W.field("Battery production", icon="home-battery-outline")
     )
     @property
     def battery_production(self) -> int:
@@ -251,7 +251,7 @@ class InverterPowerflow(Solaredge2MQTTBaseModel):
             battery_production = min(battery_production, self.production)
         return battery_production
 
-    @computed_field(**HASensor.POWER_W.field("PV production", "sun-angle-outline"))
+    @computed_field(**HASensor.POWER_W.field("PV production", icon="sun-angle-outline"))
     @property
     def pv_production(self) -> int:
         return self.production - self.battery_production
@@ -286,13 +286,13 @@ class GridPowerflow(Solaredge2MQTTBaseModel):
         return GridPowerflow(power=round(grid))
 
     @computed_field(
-        **HASensor.POWER_W.field("Consumption", "transmission-tower-import")
+        **HASensor.POWER_W.field("Consumption", icon="transmission-tower-import")
     )
     @property
     def consumption(self) -> int:
         return abs(self.power) if self.power < 0 else 0
 
-    @computed_field(**HASensor.POWER_W.field("Delivery", "transmission-tower-export"))
+    @computed_field(**HASensor.POWER_W.field("Delivery", icon="transmission-tower-export"))
     @property
     def delivery(self) -> int:
         return self.power if self.power > 0 else 0
@@ -321,12 +321,12 @@ class BatteryPowerflow(Solaredge2MQTTBaseModel):
 
         return BatteryPowerflow(power=batteries_power)
 
-    @computed_field(**HASensor.POWER_W.field("Charge", "battery-plus-outline"))
+    @computed_field(**HASensor.POWER_W.field("Charge", icon="battery-plus-outline"))
     @property
     def charge(self) -> int:
         return self.power if self.power > 0 else 0
 
-    @computed_field(**HASensor.POWER_W.field("Discharge", "battery-minus-outline"))
+    @computed_field(**HASensor.POWER_W.field("Discharge", icon="battery-minus-outline"))
     @property
     def discharge(self) -> int:
         return abs(self.power) if self.power < 0 else 0
@@ -346,11 +346,11 @@ class BatteryPowerflow(Solaredge2MQTTBaseModel):
 
 class ConsumerPowerflow(Solaredge2MQTTBaseModel):
     house: int = Field(
-        **HASensor.POWER_W.field("House", "home-lightning-bolt-outline")
+        **HASensor.POWER_W.field("House", icon="home-lightning-bolt-outline")
     )
 
     evcharger: int = Field(
-        0, **HASensor.POWER_W.field("EV-Charger", "ev-station"))
+        0, **HASensor.POWER_W.field("EV-Charger", icon="ev-station"))
 
     inverter: int = Field(**HASensor.POWER_W.field("Inverter"))
 

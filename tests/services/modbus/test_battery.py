@@ -1,5 +1,7 @@
 """Tests for modbus battery model module."""
 
+import pytest
+
 from solaredge2mqtt.services.modbus.models.base import (
     ModbusDeviceInfo,
     ModbusUnitInfo,
@@ -17,9 +19,13 @@ def make_device_info(with_unit: bool = False) -> ModbusDeviceInfo:
         "c_serialnumber": "BAT123456",
         "c_sunspec_did": 802,
     }
-    if with_unit:
-        data["unit"] = ModbusUnitInfo(unit=1, key="leader", role=ModbusUnitRole.LEADER)
-    return ModbusDeviceInfo(data)
+
+    return ModbusDeviceInfo.from_sunspec_payload(
+        data,
+        unit=(
+            ModbusUnitInfo(unit=1, key="leader", role=ModbusUnitRole.LEADER)
+            if with_unit else None
+        ))
 
 
 def make_battery_data(
@@ -49,7 +55,7 @@ class TestModbusBattery:
         info = make_device_info()
         data = make_battery_data(status=4)
 
-        battery = ModbusBattery(info, data)
+        battery = ModbusBattery.from_sunspec(info, data)
 
         assert battery.status == 4
         assert battery.status_text == "Discharge"
@@ -59,7 +65,7 @@ class TestModbusBattery:
         info = make_device_info()
         data = make_battery_data(status=999)
 
-        battery = ModbusBattery(info, data)
+        battery = ModbusBattery.from_sunspec(info, data)
 
         assert battery.status == 999
         assert battery.status_text == "Unknown"
@@ -75,20 +81,20 @@ class TestModbusBattery:
             soh=98.224,
         )
 
-        battery = ModbusBattery(info, data)
+        battery = ModbusBattery.from_sunspec(info, data)
 
-        assert battery.current == 5.56
-        assert battery.voltage == 48.12
-        assert battery.power == 265.0
-        assert battery.state_of_charge == 75.56
-        assert battery.state_of_health == 98.22
+        assert battery.current == pytest.approx(5.56)
+        assert battery.voltage == pytest.approx(48.12)
+        assert battery.power == pytest.approx(265.0)
+        assert battery.state_of_charge == pytest.approx(75.56)
+        assert battery.state_of_health == pytest.approx(98.22)
 
     def test_battery_is_valid_with_valid_data(self):
         """Test is_valid returns True with valid data."""
         info = make_device_info()
         data = make_battery_data()
 
-        battery = ModbusBattery(info, data)
+        battery = ModbusBattery.from_sunspec(info, data)
 
         assert battery.is_valid is True
 
@@ -97,7 +103,7 @@ class TestModbusBattery:
         info = make_device_info()
         data = make_battery_data(soe=-1.0)
 
-        battery = ModbusBattery(info, data)
+        battery = ModbusBattery.from_sunspec(info, data)
 
         assert battery.is_valid is False
 
@@ -106,7 +112,7 @@ class TestModbusBattery:
         info = make_device_info()
         data = make_battery_data(soh=-1.0)
 
-        battery = ModbusBattery(info, data)
+        battery = ModbusBattery.from_sunspec(info, data)
 
         assert battery.is_valid is False
 
@@ -115,7 +121,7 @@ class TestModbusBattery:
         info = make_device_info()
         data = make_battery_data(current=-1000001.0)
 
-        battery = ModbusBattery(info, data)
+        battery = ModbusBattery.from_sunspec(info, data)
 
         assert battery.is_valid is False
 
@@ -124,7 +130,7 @@ class TestModbusBattery:
         info = make_device_info()
         data = make_battery_data()
 
-        battery = ModbusBattery(info, data)
+        battery = ModbusBattery.from_sunspec(info, data)
         point = battery.prepare_point()
 
         # Convert point to line protocol to verify fields
@@ -140,7 +146,7 @@ class TestModbusBattery:
         info = make_device_info()
         data = make_battery_data()
 
-        battery = ModbusBattery(info, data)
+        battery = ModbusBattery.from_sunspec(info, data)
         point = battery.prepare_point("custom_measurement")
 
         line = point.to_line_protocol()
@@ -151,7 +157,7 @@ class TestModbusBattery:
         info = make_device_info(with_unit=True)
         data = make_battery_data()
 
-        battery = ModbusBattery(info, data)
+        battery = ModbusBattery.from_sunspec(info, data)
         point = battery.prepare_point()
 
         line = point.to_line_protocol()
@@ -162,7 +168,7 @@ class TestModbusBattery:
         info = make_device_info()
         data = make_battery_data()
 
-        battery = ModbusBattery(info, data)
+        battery = ModbusBattery.from_sunspec(info, data)
         ha_info = battery.homeassistant_device_info_with_name("Battery 1")
 
         assert ha_info["name"] == "SolarEdge Battery 1"
@@ -186,5 +192,5 @@ class TestModbusBattery:
 
         for status, expected_text in status_map.items():
             data = make_battery_data(status=status)
-            battery = ModbusBattery(info, data)
+            battery = ModbusBattery.from_sunspec(info, data)
             assert battery.status_text == expected_text

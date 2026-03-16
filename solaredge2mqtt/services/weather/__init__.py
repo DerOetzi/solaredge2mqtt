@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from aiohttp import ClientResponseError
 
 from solaredge2mqtt.core.events import EventBus
-from solaredge2mqtt.core.exceptions import InvalidDataException
+from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.core.timer.events import Interval10MinTriggerEvent
@@ -34,18 +34,22 @@ class WeatherClient(HTTPClientAsync):
     def _subscribe_events(self):
         self.event_bus.subscribe(Interval10MinTriggerEvent, self.loop)
 
-    async def loop(self, _):
+    async def loop(self, event: Interval10MinTriggerEvent) -> None:
         weather = await self.get_weather()
         await self.event_bus.emit(WeatherUpdateEvent(weather))
         await self.event_bus.emit(
             MQTTPublishEvent(
                 "weather/current",
                 weather.current,
-                self.settings.retain,
+                self.settings is not None and self.settings.retain,
             )
         )
 
     async def get_weather(self) -> OpenWeatherMapOneCall:
+        if self.location is None or self.settings is None:
+            raise ConfigurationException("weather",
+                                         "Weather service is not properly configured")
+
         try:
             logger.info("Reading weather data from OpenWeatherMap")
             async with asyncio.timeout(7):
@@ -57,7 +61,7 @@ class WeatherClient(HTTPClientAsync):
                         "exclude": "minutely,daily,alerts",
                         "units": "metric",
                         "lang": self.settings.language,
-                        "appid": self.settings.api_key.get_secret_value(),
+                        "appid": self.settings.api_key_secret,
                     },
                 )
             logger.trace(result)

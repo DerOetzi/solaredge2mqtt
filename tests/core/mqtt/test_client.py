@@ -1,14 +1,11 @@
 """Tests for core MQTTClient module with mocking."""
 
 import asyncio
-import json
-from asyncio import Queue
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pydantic import BaseModel
 
-from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.models import BaseInputField
 from solaredge2mqtt.core.mqtt import MQTTClient
 from solaredge2mqtt.core.mqtt.events import (
@@ -16,7 +13,6 @@ from solaredge2mqtt.core.mqtt.events import (
     MQTTReceivedEvent,
     MQTTSubscribeEvent,
 )
-from solaredge2mqtt.core.mqtt.models import MAX_MQTT_PAYLOAD_SIZE
 from solaredge2mqtt.core.mqtt.settings import MQTTSettings
 
 

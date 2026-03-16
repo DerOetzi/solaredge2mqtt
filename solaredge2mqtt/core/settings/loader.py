@@ -43,11 +43,11 @@ SecretLoader.add_constructor("!secret", secret_constructor)
 class ConfigurationLoader:
     @staticmethod
     def load_configuration(
-        config_dir: str = "config", override_data: dict[str, any] = None
-    ):
+        config_dir: str = "config", override_data: dict[str, Any] | None = None
+    ) -> ServiceSettings:
         config_file = path.join(config_dir, "configuration.yml")
         secrets_file = path.join(config_dir, "secrets.yml")
-        
+
         config_exists = path.exists(config_file)
 
         if not config_exists:
@@ -116,10 +116,12 @@ class ConfigurationLoader:
             raise
 
     @staticmethod
-    def _migrate_from_environment(config_file: str, secrets_file: str):
+    def _migrate_from_environment(
+        config_file: str, secrets_file: str
+    ) -> ServiceSettings:
         # First check if there are any environment variables to migrate
         env_config = EnvironmentReader.read_all()
-        
+
         if not env_config:
             # No environment variables found - new installation scenario
             logger.info(
@@ -136,9 +138,9 @@ class ConfigurationLoader:
                 f"Please edit these files with your settings and restart."
             )
             sys_exit(0)
-        
+
         # Environment variables found, proceed with migration
-        migrator = ConfigurationMigrator(model_class=ServiceSettings)
+        migrator = ConfigurationMigrator()
 
         try:
             validated_model = migrator.migrate()
@@ -159,19 +161,19 @@ class ConfigurationLoader:
                 f"Please check your environment variables and try again."
             )
             raise
-    
+
     @staticmethod
     def _copy_example_files(config_file: str, secrets_file: str):
         """Copy example configuration files to target locations."""
         # Get the config directory from the target file path
         config_dir = path.dirname(config_file)
-        
+
         # Ensure the config directory exists
         Path(config_dir).mkdir(parents=True, exist_ok=True)
-        
+
         # Get example file paths from the package
         config_example, secrets_example = get_example_files()
-        
+
         try:
             if path.exists(config_example):
                 copy2(config_example, config_file)
@@ -182,7 +184,7 @@ class ConfigurationLoader:
                     f"Creating empty {config_file}"
                 )
                 Path(config_file).touch()
-            
+
             if path.exists(secrets_example):
                 copy2(secrets_example, secrets_file)
                 # Set restrictive permissions on secrets file
@@ -195,7 +197,7 @@ class ConfigurationLoader:
                 )
                 Path(secrets_file).touch()
                 Path(secrets_file).chmod(0o600)
-                
+
         except (OSError, IOError) as e:
             logger.error(f"Error copying example files: {e}")
             raise

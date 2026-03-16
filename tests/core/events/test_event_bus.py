@@ -35,12 +35,6 @@ class AwaitingTestEvent(BaseEvent):
 class TestEventBus:
     """Tests for EventBus class."""
 
-    def test_event_bus_initialization(self):
-        """Test EventBus initializes with empty listeners."""
-        bus = EventBus()
-        events = bus.subscribed_events
-        assert len(events) == 0
-
     def test_subscribe_single_event(self, event_bus):
         """Test subscribing to a single event."""
 

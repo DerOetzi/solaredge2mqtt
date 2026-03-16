@@ -27,24 +27,6 @@ class TestHomeAssistantSettings:
         assert settings.topic_prefix == "custom_ha"
         assert settings.retain is True
 
-    def test_homeassistant_settings_is_configured_true(self):
-        """Test is_configured returns True when enabled."""
-        settings = HomeAssistantSettings(enable=True)
-
-        assert settings.is_configured is True
-
-    def test_homeassistant_settings_is_configured_false(self):
-        """Test is_configured returns False when disabled."""
-        settings = HomeAssistantSettings(enable=False)
-
-        assert settings.is_configured is False
-
-    def test_homeassistant_settings_is_configured_default(self):
-        """Test is_configured with default settings."""
-        settings = HomeAssistantSettings()
-
-        assert settings.is_configured is False
-
     def test_homeassistant_settings_topic_prefix_custom(self):
         """Test custom topic prefix."""
         settings = HomeAssistantSettings(topic_prefix="my_ha_prefix")

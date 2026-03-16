@@ -5,9 +5,9 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from pydantic import SecretStr
 
 from solaredge2mqtt.core.settings.migrator import ConfigurationMigrator
-from solaredge2mqtt.core.settings.models import ServiceSettings
 
 
 def _has_none_values(obj: Any) -> bool:
@@ -48,7 +48,7 @@ class TestConfigurationMigrator:
 
     def test_insert_nested_key_simple(self):
         """Test inserting a simple key-value pair."""
-        migrator = ConfigurationMigrator(ServiceSettings)
+        migrator = ConfigurationMigrator()
         container = {}
 
         migrator._insert_nested_key(container, ["interval"], "5")
@@ -57,7 +57,7 @@ class TestConfigurationMigrator:
 
     def test_insert_nested_key_nested(self):
         """Test inserting nested key-value pairs."""
-        migrator = ConfigurationMigrator(ServiceSettings)
+        migrator = ConfigurationMigrator()
         container = {}
 
         migrator._insert_nested_key(
@@ -71,7 +71,7 @@ class TestConfigurationMigrator:
 
     def test_insert_nested_key_with_array(self):
         """Test inserting nested key-value pairs with array indices."""
-        migrator = ConfigurationMigrator(ServiceSettings)
+        migrator = ConfigurationMigrator()
         container = {}
 
         migrator._insert_nested_key(container, ["meter0"], "true")
@@ -82,12 +82,12 @@ class TestConfigurationMigrator:
 
     def test_extract_secrets(self):
         """Test extracting secrets from configuration."""
-        migrator = ConfigurationMigrator(ServiceSettings)
+        migrator = ConfigurationMigrator()
         config_data = {
             "mqtt": {
                 "broker": "mqtt.example.com",
                 "username": "user",
-                "password": "secret123",
+                "password": SecretStr("secret123"),
             },
             "weather": {"api_key": "api_key_123"},
             "influxdb": {"host": "http://localhost", "token": "token_123"},
@@ -124,7 +124,7 @@ class TestConfigurationMigrator:
 
     def test_extract_secrets_no_sensitive_data(self):
         """Test extracting secrets when there is no sensitive data."""
-        migrator = ConfigurationMigrator(ServiceSettings)
+        migrator = ConfigurationMigrator()
         config_data = {
             "mqtt": {"broker": "mqtt.example.com", "username": "user"},
             "modbus": {"host": "192.168.1.100"},
@@ -142,13 +142,14 @@ class TestConfigurationMigrator:
 
     def test_write_yaml_files(self):
         """Test writing configuration and secrets to YAML files."""
-        migrator = ConfigurationMigrator(ServiceSettings)
+        migrator = ConfigurationMigrator()
 
         config_data = {
             "interval": 5,
             "modbus": {"host": "192.168.1.100", "port": 1502},
         }
-        secrets_data = {"mqtt": {"password": "secret123"}}
+        test_password = "test_secret_password"  # noqa: S105
+        secrets_data = {"mqtt": {"password": test_password}}
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config_file = Path(tmpdir) / "configuration.yml"
@@ -173,7 +174,7 @@ class TestConfigurationMigrator:
 
     def test_write_yaml_files_no_secrets(self):
         """Test writing configuration when there are no secrets."""
-        migrator = ConfigurationMigrator(ServiceSettings)
+        migrator = ConfigurationMigrator()
 
         config_data = {
             "interval": 5,
@@ -197,7 +198,7 @@ class TestConfigurationMigrator:
 
     def test_yaml_output_format(self):
         """Test YAML output format (no quotes on booleans/secrets)."""
-        migrator = ConfigurationMigrator(ServiceSettings)
+        migrator = ConfigurationMigrator()
 
         config_data = {
             "interval": 5,
@@ -208,7 +209,7 @@ class TestConfigurationMigrator:
             },
             "mqtt": {"broker": "mqtt.example.com"},
         }
-        secrets_data = {"mqtt_password": "secret123"}
+        secrets_data = {"mqtt_password": "test_secret_password"}  # noqa: S105
 
         # Add secret references
         from solaredge2mqtt.core.settings.migrator import SecretReference
@@ -245,7 +246,7 @@ class TestConfigurationMigrator:
 
                 SecretLoader.secrets = secrets_data
                 loaded = yaml.load(f, Loader=SecretLoader)
-                assert loaded["mqtt"]["password"] == "secret123"
+                assert loaded["mqtt"]["password"] == "test_secret_password"  # noqa: S105
                 assert loaded["modbus"]["meter"] == [True, False, True]
 
     def test_extract_from_environment_with_type_conversion(self, monkeypatch):
@@ -262,7 +263,6 @@ class TestConfigurationMigrator:
             "SE2MQTT_MODBUS__BATTERY1": "false",
             "SE2MQTT_ENERGY__RETAIN": "false",
             "SE2MQTT_MQTT__BROKER": "mqtt.example.com",
-            "SE2MQTT_MQTT__PASSWORD": "secret123",
             # String type that looks like int
             "SE2MQTT_MONITORING__SITE_ID": "12345",
         }
@@ -271,7 +271,7 @@ class TestConfigurationMigrator:
         for key, value in env_vars.items():
             monkeypatch.setenv(key, value)
 
-        migrator = ConfigurationMigrator(model_class=ServiceSettings)
+        migrator = ConfigurationMigrator()
         config_data, secrets_data = migrator.extract_from_environment()
 
         # Verify types are correct based on Pydantic model
@@ -365,7 +365,7 @@ class TestConfigurationMigrator:
         for key, value in env_vars.items():
             monkeypatch.setenv(key, value)
 
-        migrator = ConfigurationMigrator(model_class=ServiceSettings)
+        migrator = ConfigurationMigrator()
         config_data, secrets_data = migrator.extract_from_environment()
 
         # Verify no None values in extracted data using shared helper
@@ -388,7 +388,7 @@ class TestConfigurationMigrator:
 
     def test_write_yaml_files_permission_error_on_directory(self):
         """Test handling of permission error when creating directory."""
-        migrator = ConfigurationMigrator(model_class=ServiceSettings)
+        migrator = ConfigurationMigrator()
 
         # Use minimal valid config data directly
         config_data = {
@@ -418,7 +418,7 @@ class TestConfigurationMigrator:
 
     def test_write_yaml_files_permission_error_on_file(self):
         """Test handling of permission error when writing file."""
-        migrator = ConfigurationMigrator(model_class=ServiceSettings)
+        migrator = ConfigurationMigrator()
 
         # Use minimal valid config data directly
         config_data = {

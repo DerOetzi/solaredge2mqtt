@@ -29,12 +29,12 @@ def _get_default_cache_dir() -> str:
 
 
 class ForecastSettings(BaseModel):
-    enable: bool = Field(False)
-    hyperparametertuning: bool = Field(False)
+    enable: bool = Field(default=False)
+    hyperparametertuning: bool = Field(default=False)
     cachingdir: str | None = Field(
         default_factory=_get_default_cache_dir
     )
-    retain: bool = Field(False)
+    retain: bool = Field(default=False)
 
     @property
     def is_configured(self) -> bool:

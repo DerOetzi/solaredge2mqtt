@@ -1,21 +1,25 @@
+from typing import Any
+
+
 class ConfigurationException(Exception):
-    def __init__(self, component: str, message: str, *args: any) -> None:
+    def __init__(self, component: str, message: str, *args: Any) -> None:
         self.component = component
         self.message = message
         super().__init__(*args)
 
 
 class InvalidDataException(Exception):
-    def __init__(self, message: str, *args: any) -> None:
+    def __init__(self, message: str, *args: Any) -> None:
         self.message = message
 
         super().__init__(*args)
 
 
+# TODO move to modbus service exceptions
 class InvalidRegisterDataException(Exception):
     """
     Exception raised when register data cannot be decoded properly.
-    
+
     This typically occurs when string registers contain invalid UTF-8 data,
     indicating a device communication issue or uninitialized register.
     """

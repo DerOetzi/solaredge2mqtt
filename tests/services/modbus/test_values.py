@@ -1,6 +1,8 @@
 """Tests for modbus values models module."""
 
 
+import pytest
+
 from solaredge2mqtt.services.modbus.models.values import (
     ModbusAC,
     ModbusACCurrent,
@@ -9,6 +11,7 @@ from solaredge2mqtt.services.modbus.models.values import (
     ModbusDC,
     ModbusEnergy,
 )
+from solaredge2mqtt.services.modbus.sunspec.values import SunSpecPayload
 
 
 class TestModbusACCurrent:
@@ -16,21 +19,21 @@ class TestModbusACCurrent:
 
     def test_ac_current_basic(self):
         """Test basic AC current creation."""
-        data = {
+        data: SunSpecPayload = {
             "current": 105,
             "current_scale": -1,
         }
 
-        current = ModbusACCurrent(data)
+        current = ModbusACCurrent.from_sunspec(data)
 
-        assert current.actual == 10.5
+        assert current.actual == pytest.approx(10.5)
         assert current.l1 is None
         assert current.l2 is None
         assert current.l3 is None
 
     def test_ac_current_with_phases(self):
         """Test AC current with phase data."""
-        data = {
+        data: SunSpecPayload = {
             "current": 300,
             "current_scale": -1,
             "l1_current": 100,
@@ -38,16 +41,16 @@ class TestModbusACCurrent:
             "l3_current": 100,
         }
 
-        current = ModbusACCurrent(data)
+        current = ModbusACCurrent.from_sunspec(data)
 
-        assert current.actual == 30.0
-        assert current.l1 == 10.0
-        assert current.l2 == 10.0
-        assert current.l3 == 10.0
+        assert current.actual == pytest.approx(30.0)
+        assert current.l1 == pytest.approx(10.0)
+        assert current.l2 == pytest.approx(10.0)
+        assert current.l3 == pytest.approx(10.0)
 
     def test_ac_current_with_scale(self):
         """Test AC current with scaling factor."""
-        data = {
+        data: SunSpecPayload = {
             "current": 1000,
             "current_scale": -1,
             "l1_current": 333,
@@ -55,12 +58,12 @@ class TestModbusACCurrent:
             "l3_current": 334,
         }
 
-        current = ModbusACCurrent(data)
+        current = ModbusACCurrent.from_sunspec(data)
 
-        assert current.actual == 100.0
-        assert current.l1 == 33.3
-        assert current.l2 == 33.3
-        assert current.l3 == 33.4
+        assert current.actual == pytest.approx(100.0)
+        assert current.l1 == pytest.approx(33.3)
+        assert current.l2 == pytest.approx(33.3)
+        assert current.l3 == pytest.approx(33.4)
 
 
 class TestModbusACVoltage:
@@ -68,9 +71,9 @@ class TestModbusACVoltage:
 
     def test_ac_voltage_empty(self):
         """Test AC voltage with no data."""
-        data = {}
+        data: SunSpecPayload = {}
 
-        voltage = ModbusACVoltage(data)
+        voltage = ModbusACVoltage.from_sunspec(data)
 
         assert voltage.l1 is None
         assert voltage.l2 is None
@@ -81,44 +84,44 @@ class TestModbusACVoltage:
 
     def test_ac_voltage_with_line_voltages(self):
         """Test AC voltage with line voltages."""
-        data = {
+        data: SunSpecPayload = {
             "l1_voltage": 230.0,
             "l2_voltage": 230.0,
             "l3_voltage": 230.0,
             "voltage_scale": 0,
         }
 
-        voltage = ModbusACVoltage(data)
+        voltage = ModbusACVoltage.from_sunspec(data)
 
-        assert voltage.l1 == 230.0
-        assert voltage.l2 == 230.0
-        assert voltage.l3 == 230.0
+        assert voltage.l1 == pytest.approx(230.0)
+        assert voltage.l2 == pytest.approx(230.0)
+        assert voltage.l3 == pytest.approx(230.0)
 
     def test_ac_voltage_with_neutral_voltages(self):
         """Test AC voltage with neutral voltages."""
-        data = {
+        data: SunSpecPayload = {
             "l1n_voltage": 230.0,
             "l2n_voltage": 230.0,
             "l3n_voltage": 230.0,
             "voltage_scale": 0,
         }
 
-        voltage = ModbusACVoltage(data)
+        voltage = ModbusACVoltage.from_sunspec(data)
 
-        assert voltage.l1n == 230.0
-        assert voltage.l2n == 230.0
-        assert voltage.l3n == 230.0
+        assert voltage.l1n == pytest.approx(230.0)
+        assert voltage.l2n == pytest.approx(230.0)
+        assert voltage.l3n == pytest.approx(230.0)
 
     def test_ac_voltage_with_scale(self):
         """Test AC voltage with scaling factor."""
-        data = {
+        data: SunSpecPayload = {
             "l1_voltage": 2300,
             "voltage_scale": -1,
         }
 
-        voltage = ModbusACVoltage(data)
+        voltage = ModbusACVoltage.from_sunspec(data)
 
-        assert voltage.l1 == 230.0
+        assert voltage.l1 == pytest.approx(230.0)
 
 
 class TestModbusACPower:
@@ -126,7 +129,7 @@ class TestModbusACPower:
 
     def test_ac_power_creation(self):
         """Test AC power creation."""
-        data = {
+        data: SunSpecPayload = {
             "power_ac": 5000,
             "power_ac_scale": 0,
             "power_reactive": 100,
@@ -137,17 +140,17 @@ class TestModbusACPower:
             "power_factor_scale": -4,
         }
 
-        power = ModbusACPower(data, "power_ac")
+        power = ModbusACPower.from_sunspec(data)
 
-        assert power.actual == 5000.0
-        assert power.reactive == 100.0
-        assert power.apparent == 5001.0
+        assert power.actual == pytest.approx(5000.0)
+        assert power.reactive == pytest.approx(100.0)
+        assert power.apparent == pytest.approx(5001.0)
         # 9500 * 10^-4 = 0.95
-        assert power.factor == 0.95
+        assert power.factor == pytest.approx(0.95)
 
     def test_ac_power_with_scale(self):
         """Test AC power with scaling factors."""
-        data = {
+        data: SunSpecPayload = {
             "power_ac": 50000,
             "power_ac_scale": -1,
             "power_reactive": 1000,
@@ -158,13 +161,13 @@ class TestModbusACPower:
             "power_factor_scale": -4,
         }
 
-        power = ModbusACPower(data, "power_ac")
+        power = ModbusACPower.from_sunspec(data)
 
-        assert power.actual == 5000.0
-        assert power.reactive == 100.0
-        assert power.apparent == 5001.0
+        assert power.actual == pytest.approx(5000.0)
+        assert power.reactive == pytest.approx(100.0)
+        assert power.apparent == pytest.approx(5001.0)
         # 9800 * 10^-4 = 0.98
-        assert power.factor == 0.98
+        assert power.factor == pytest.approx(0.98)
 
 
 class TestModbusAC:
@@ -172,7 +175,7 @@ class TestModbusAC:
 
     def test_ac_creation(self):
         """Test AC combined model creation."""
-        data = {
+        data: SunSpecPayload = {
             "current": 10.0,
             "current_scale": 0,
             "l1_current": 10.0,
@@ -188,11 +191,11 @@ class TestModbusAC:
             "frequency_scale": 0,
         }
 
-        ac = ModbusAC(data)
+        ac = ModbusAC.from_sunspec(data)
 
-        assert ac.current.actual == 10.0
-        assert ac.power.actual == 2300.0
-        assert ac.frequency == 50.0
+        assert ac.current.actual == pytest.approx(10.0)
+        assert ac.power.actual == pytest.approx(2300.0)
+        assert ac.frequency == pytest.approx(50.0)
 
 
 class TestModbusEnergy:
@@ -200,29 +203,29 @@ class TestModbusEnergy:
 
     def test_energy_creation(self):
         """Test energy model creation."""
-        data = {
+        data: SunSpecPayload = {
             "export_energy_active": 100000.0,
             "import_energy_active": 50000.0,
             "energy_active_scale": 0,
         }
 
-        energy = ModbusEnergy(data)
+        energy = ModbusEnergy.from_sunspec(data)
 
-        assert energy.totalexport == 100000.0
-        assert energy.totalimport == 50000.0
+        assert energy.totalexport == pytest.approx(100000.0)
+        assert energy.totalimport == pytest.approx(50000.0)
 
     def test_energy_with_scale(self):
         """Test energy with scaling factor."""
-        data = {
+        data: SunSpecPayload = {
             "export_energy_active": 1000,
             "import_energy_active": 500,
             "energy_active_scale": 3,
         }
 
-        energy = ModbusEnergy(data)
+        energy = ModbusEnergy.from_sunspec(data)
 
-        assert energy.totalexport == 1000000.0
-        assert energy.totalimport == 500000.0
+        assert energy.totalexport == pytest.approx(1000000.0)
+        assert energy.totalimport == pytest.approx(500000.0)
 
 
 class TestModbusDC:
@@ -230,7 +233,7 @@ class TestModbusDC:
 
     def test_dc_creation(self):
         """Test DC model creation."""
-        data = {
+        data: SunSpecPayload = {
             "current_dc": 10.0,
             "current_dc_scale": 0,
             "voltage_dc": 400.0,
@@ -239,15 +242,15 @@ class TestModbusDC:
             "power_dc_scale": 0,
         }
 
-        dc = ModbusDC(data)
+        dc = ModbusDC.from_sunspec(data)
 
-        assert dc.current == 10.0
-        assert dc.voltage == 400.0
-        assert dc.power == 4000.0
+        assert dc.current == pytest.approx(10.0)
+        assert dc.voltage == pytest.approx(400.0)
+        assert dc.power == pytest.approx(4000.0)
 
     def test_dc_with_scale(self):
         """Test DC with scaling factors."""
-        data = {
+        data: SunSpecPayload = {
             "current_dc": 100,
             "current_dc_scale": -1,
             "voltage_dc": 4000,
@@ -256,8 +259,8 @@ class TestModbusDC:
             "power_dc_scale": -1,
         }
 
-        dc = ModbusDC(data)
+        dc = ModbusDC.from_sunspec(data)
 
-        assert dc.current == 10.0
-        assert dc.voltage == 400.0
-        assert dc.power == 4000.0
+        assert dc.current == pytest.approx(10.0)
+        assert dc.voltage == pytest.approx(400.0)
+        assert dc.power == pytest.approx(4000.0)

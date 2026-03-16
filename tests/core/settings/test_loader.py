@@ -198,7 +198,9 @@ class TestConfigurationLoader:
 
     @patch("solaredge2mqtt.core.settings.loader.path.exists")
     @patch("solaredge2mqtt.core.settings.loader.ConfigurationLoader._is_file_empty")
-    def test_load_configuration_empty_file_triggers_migration(self, mock_is_empty, mock_exists):
+    def test_load_configuration_empty_file_triggers_migration(
+        self, mock_is_empty, mock_exists
+    ):
         """Test loading empty configuration file triggers migration."""
         mock_exists.return_value = True
         mock_is_empty.return_value = True
@@ -271,16 +273,16 @@ class TestConfigurationLoader:
         with tempfile.TemporaryDirectory() as tmpdir:
             config_file = Path(tmpdir) / "configuration.yml"
             secrets_file = Path(tmpdir) / "secrets.yml"
-            
+
             # Copy example files
             ConfigurationLoader._copy_example_files(
                 str(config_file), str(secrets_file)
             )
-            
+
             # Check files were created
             assert config_file.exists()
             assert secrets_file.exists()
-            
+
             # Check secrets file has correct permissions (600)
             import stat
             secrets_stat = secrets_file.stat()
@@ -297,11 +299,11 @@ class TestConfigurationLoader:
         """Test migration when no environment variables exist (new install)."""
         mock_exists.return_value = False
         mock_read_all.return_value = {}  # No environment variables
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
             config_file = Path(tmpdir) / "configuration.yml"
             secrets_file = Path(tmpdir) / "secrets.yml"
-            
+
             # Should exit with code 0 after copying examples
             try:
                 ConfigurationLoader._migrate_from_environment(
@@ -310,11 +312,10 @@ class TestConfigurationLoader:
                 raise AssertionError("Expected sys.exit(0)")
             except SystemExit as e:
                 assert e.code == 0
-                
+
             # Check example files were copied
             assert config_file.exists()
             assert secrets_file.exists()
-
 
 
 class TestSecretLoader:
@@ -342,6 +343,7 @@ class TestSecretLoader:
 
             assert result.modbus.host == "192.168.1.100"
             assert result.mqtt.broker == "mqtt.example.com"
+            assert result.mqtt.password is not None
             assert result.mqtt.password.get_secret_value() == "secret123"
 
     def test_secret_tag_nested(self):
@@ -366,6 +368,7 @@ class TestSecretLoader:
 
             assert result.modbus.host == "192.168.1.100"
             assert result.mqtt.broker == "mqtt.example.com"
+            assert result.mqtt.password is not None
             assert result.mqtt.password.get_secret_value() == "nested_secret"
 
     def test_secret_tag_missing_secret(self):

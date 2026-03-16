@@ -3,11 +3,12 @@ from __future__ import annotations
 import time
 from asyncio import Event, to_thread
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from joblib import Memory
 from numpy import percentile
-from pandas import DataFrame
+from numpy.typing import NDArray
+from pandas import DataFrame, to_datetime
 from sklearn import clone
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
@@ -15,7 +16,7 @@ from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.inspection import permutation_importance
 from sklearn.model_selection import GridSearchCV, TimeSeriesSplit, train_test_split
 from sklearn.pipeline import Pipeline
-from tzlocal import get_localzone_name
+from tzlocal import get_localzone
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import InvalidDataException
@@ -39,7 +40,7 @@ if TYPE_CHECKING:
     from solaredge2mqtt.core.settings.models import LocationSettings
 
 
-LOCAL_TZ = get_localzone_name()
+LOCAL_TZ = get_localzone()
 
 
 class ForecastService:
@@ -147,7 +148,7 @@ class ForecastService:
         for forecaster in self.forecasters.values():
             forecaster.train(data)
 
-    async def forecast_loop(self, _):
+    async def forecast_loop(self, event: Interval10MinTriggerEvent) -> None:
         if (
             not self.forecasters[ForecasterType.ENERGY].is_trained
             or not self.forecasters[ForecasterType.POWER].is_trained
@@ -176,7 +177,8 @@ class ForecastService:
         ]
 
         data = DataFrame(estimation_data_list)
-        data["time"] = data["time"].astype(f"datetime64[ns, {LOCAL_TZ}]")
+        data["time"] = to_datetime(
+            data["time"], utc=True).dt.tz_convert(LOCAL_TZ)
 
         for typed, forecaster in self.forecasters.items():
             predicted_data = await forecaster.predict(data)
@@ -260,10 +262,10 @@ class Forecaster:
         self.model_pipeline: Pipeline | None = None
         self.training_completed: Event = Event()
 
-        self.memory = (
+        self.memory: Memory | None = (
             Memory(settings.cachingdir, verbose=0)
             if settings.is_caching_enabled
-            else False
+            else None
         )
 
     def train(self, data: DataFrame) -> None:
@@ -294,7 +296,7 @@ class Forecaster:
         execution_time = time.time() - start_time
         self.training_completed.set()
 
-        transformed_features = self.model_pipeline[
+        transformed_features = self.model_pipeline.named_steps[
             "preprocessor"
         ].get_feature_names_out()
         logger.debug(
@@ -303,7 +305,7 @@ class Forecaster:
             features=", ".join(transformed_features),
         )
 
-        selected_features = self.model_pipeline[
+        selected_features = self.model_pipeline.named_steps[
             "feature_selector"
         ].important_features_.tolist()
         logger.info(
@@ -314,7 +316,7 @@ class Forecaster:
 
         logger.info(f"Training execution time: {execution_time:.2f} seconds")
 
-    def _hyperparametertuning(self, data, y_vector, pipeline):
+    def _hyperparametertuning(self, data, y_vector, pipeline) -> Pipeline:
         param_grid = {
             "model__max_iter": [100, 200, 300],
             "model__max_depth": [None, 5, 10],
@@ -414,6 +416,8 @@ class Forecaster:
         await self.training_completed.wait()
 
         predictions = self.model_pipeline.predict(data_for_prediction)
+        if isinstance(predictions, tuple):
+            predictions = predictions[0]
         data_for_prediction[self.typed.target_column] = predictions
         data_for_prediction[self.typed.target_column] = data_for_prediction[
             self.typed.target_column
@@ -441,7 +445,10 @@ class PFISelector(BaseEstimator, TransformerMixin):
             n_jobs=-1,
         )
 
-        self.feature_importances_ = results.importances_mean
+        self.feature_importances_ = cast(
+            NDArray,
+            results["importances_mean"],
+        )
 
         threshold_value = percentile(self.feature_importances_, 75)
 

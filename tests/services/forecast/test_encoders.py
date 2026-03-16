@@ -6,6 +6,7 @@ import pytest
 from numpy import isclose
 from pandas import DataFrame, Series
 
+from solaredge2mqtt.core.settings.models import LocationSettings
 from solaredge2mqtt.services.forecast.encoders import (
     BaseEncoder,
     CategoricalEncoder,
@@ -15,12 +16,11 @@ from solaredge2mqtt.services.forecast.encoders import (
 )
 
 
-class MockLocationSettings:
+class MockLocationSettings(LocationSettings):
     """Mock LocationSettings for testing."""
 
     def __init__(self, latitude=52.52, longitude=13.405):
-        self.latitude = latitude
-        self.longitude = longitude
+        super().__init__(latitude=latitude, longitude=longitude)
 
 
 class TestBaseEncoder:
@@ -141,13 +141,13 @@ class TestCyclicalEncoder:
 
     def test_cyclical_encoder_init(self):
         """Test CyclicalEncoder initialization."""
-        encoder = CyclicalEncoder(hour=24, month=12)
+        encoder = CyclicalEncoder(**{"hour": 24, "month": 12})
 
         assert encoder.cycle_lengths == {"hour": 24, "month": 12}
 
     def test_cyclical_encoder_transform(self):
         """Test CyclicalEncoder transform method."""
-        encoder = CyclicalEncoder(hour=24)
+        encoder = CyclicalEncoder(**{"hour": 24})
         df = DataFrame({"hour": [0, 6, 12, 18]})
         encoder.fit(df)
 
@@ -159,7 +159,7 @@ class TestCyclicalEncoder:
 
     def test_cyclical_encoder_values_at_boundaries(self):
         """Test CyclicalEncoder produces correct values at cycle boundaries."""
-        encoder = CyclicalEncoder(hour=24)
+        encoder = CyclicalEncoder(**{"hour": 24})
         df = DataFrame({"hour": [0, 12, 24]})
         encoder.fit(df)
 
@@ -175,7 +175,7 @@ class TestCyclicalEncoder:
 
     def test_cyclical_encoder_unknown_feature_raises(self):
         """Test CyclicalEncoder raises for unknown feature."""
-        encoder = CyclicalEncoder(known_feature=24)
+        encoder = CyclicalEncoder(**{"known_feature": 24})
         df = DataFrame({"unknown_feature": [1, 2, 3]})
         encoder.fit(df)
 
@@ -184,7 +184,7 @@ class TestCyclicalEncoder:
 
     def test_cyclical_encoder_get_params(self):
         """Test CyclicalEncoder get_params method."""
-        encoder = CyclicalEncoder(hour=24, month=12)
+        encoder = CyclicalEncoder(**{"hour": 24, "month": 12})
 
         params = encoder.get_params()
 

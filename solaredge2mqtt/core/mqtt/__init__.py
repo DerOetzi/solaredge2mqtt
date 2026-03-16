@@ -6,7 +6,7 @@ from pydantic import BaseModel, ValidationError
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.logging import logger
-from solaredge2mqtt.core.models import BaseInputField
+from solaredge2mqtt.core.models import BaseInputField, BaseInputScalarField
 from solaredge2mqtt.core.mqtt.events import (
     MQTTPublishEvent,
     MQTTReceivedEvent,
@@ -44,7 +44,7 @@ class MQTTClient(Client):
             self.broker,
             self.port,
             will=will,
-            **settings.kargs,
+            **settings.kargs.model_dump(),
         )
 
     def _subscribe_events(self) -> None:
@@ -108,8 +108,13 @@ class MQTTClient(Client):
 
             if isinstance(input_raw, dict):
                 parsed_input = model(**input_raw)
-            else:
+            elif issubclass(model, BaseInputScalarField):
                 parsed_input = model(input_raw)
+            else:
+                logger.warning(
+                    f"Received invalid payload type on topic: {topic}"
+                )
+                return
 
             await self.event_bus.emit(
                 MQTTReceivedEvent(topic, parsed_input)

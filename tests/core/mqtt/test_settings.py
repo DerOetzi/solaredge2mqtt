@@ -27,7 +27,7 @@ class TestMQTTSettings:
             broker="mqtt.example.com",
             port=8883,
             username="test_user",
-            password="secret123",
+            password=SecretStr("secret123"),
             topic_prefix="custom_prefix",
         )
 
@@ -35,6 +35,7 @@ class TestMQTTSettings:
         assert settings.broker == "mqtt.example.com"
         assert settings.port == 8883
         assert settings.username == "test_user"
+        assert settings.password is not None
         assert settings.password.get_secret_value() == "secret123"
         assert settings.topic_prefix == "custom_prefix"
 
@@ -43,36 +44,34 @@ class TestMQTTSettings:
         settings = MQTTSettings(broker="localhost")
         kargs = settings.kargs
 
-        assert kargs == {"identifier": "solaredge2mqtt"}
+        assert kargs.identifier == "solaredge2mqtt"
 
     def test_mqtt_settings_kargs_with_username_only(self):
         """Test kargs property with username only."""
         settings = MQTTSettings(broker="localhost", username="test_user")
         kargs = settings.kargs
 
-        assert kargs == {
-            "identifier": "solaredge2mqtt",
-            "username": "test_user",
-        }
+        assert kargs.identifier == "solaredge2mqtt"
+        assert kargs.username == "test_user"
 
     def test_mqtt_settings_kargs_with_full_credentials(self):
         """Test kargs property with full credentials."""
+        test_password = "test_secret_password"  # noqa: S105
         settings = MQTTSettings(
             broker="localhost",
             username="test_user",
-            password="secret123",
+            password=test_password,  # pyright: ignore[reportArgumentType]
         )
         kargs = settings.kargs
 
-        assert kargs == {
-            "identifier": "solaredge2mqtt",
-            "username": "test_user",
-            "password": "secret123",
-        }
+        assert kargs.identifier == "solaredge2mqtt"
+        assert kargs.username == "test_user"
+        assert kargs.password == test_password
 
     def test_mqtt_settings_password_is_secret(self):
         """Test that password is a SecretStr."""
-        settings = MQTTSettings(broker="localhost", password="secret123")
+        settings = MQTTSettings(
+            broker="localhost", password=SecretStr("secret123"))
 
         assert isinstance(settings.password, SecretStr)
         assert str(settings.password) != "secret123"  # Should be masked
@@ -80,11 +79,11 @@ class TestMQTTSettings:
     def test_mqtt_settings_required_broker(self):
         """Test that broker is required."""
         with pytest.raises(Exception):
-            MQTTSettings()
+            MQTTSettings()  # type: ignore
 
     def test_mqtt_settings_custom_client_id(self):
         """Test custom client_id in kargs."""
         settings = MQTTSettings(broker="localhost", client_id="my_client")
         kargs = settings.kargs
 
-        assert kargs["identifier"] == "my_client"
+        assert kargs.identifier == "my_client"

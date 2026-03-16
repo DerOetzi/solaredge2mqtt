@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from importlib import resources
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
-from influxdb_client import BucketRetentionRules, InfluxDBClient, Point
 from influxdb_client.client.bucket_api import BucketsApi
 from influxdb_client.client.delete_api import DeleteApi
+from influxdb_client.client.influxdb_client import InfluxDBClient
 from influxdb_client.client.influxdb_client_async import InfluxDBClientAsync
 from influxdb_client.client.query_api_async import QueryApiAsync
+from influxdb_client.client.write.point import Point
+from influxdb_client.domain.bucket_retention_rules import BucketRetentionRules
 from tzlocal import get_localzone_name
 
 from solaredge2mqtt.core.events import EventBus
@@ -37,20 +39,22 @@ class InfluxDBAsync:
         self.prices: PriceSettings = prices
 
         self.event_bus = event_bus
-        if self.event_bus:
-            self._subscribe_events()
+        self._subscribe_events()
 
         self.client_async: InfluxDBClientAsync | None = None
         self.client_sync: InfluxDBClient = InfluxDBClient(
-            **self.settings.client_params)
+            **self.settings.client_params.model_dump())
 
         self.flux_cache: dict[str, str] = {}
 
     def _subscribe_events(self) -> None:
-        self.event_bus.subscribe(Interval10MinTriggerEvent, self.loop)
+        if self.event_bus:
+            self.event_bus.subscribe(Interval10MinTriggerEvent, self.loop)
 
     def init(self) -> None:
-        self.client_async = InfluxDBClientAsync(**self.settings.client_params)
+        self.client_async = InfluxDBClientAsync(
+            **self.settings.client_params.model_dump()
+        )
 
         self.initialize_buckets()
 
@@ -79,7 +83,7 @@ class InfluxDBAsync:
     def buckets_api(self) -> BucketsApi:
         return self.client_sync.buckets_api()
 
-    async def loop(self, _) -> None:
+    async def loop(self, event: Interval10MinTriggerEvent) -> None:
         now = datetime.now(tz=timezone.utc).replace(
             minute=0, second=0, microsecond=0)
 
@@ -103,6 +107,9 @@ class InfluxDBAsync:
 
     @property
     def query_api(self) -> QueryApiAsync:
+        if self.client_async is None:
+            raise RuntimeError("InfluxDB client not initialized")
+
         return self.client_async.query_api()
 
     def delete_from_measurements(
@@ -130,13 +137,16 @@ class InfluxDBAsync:
         await self.write_points([point])
 
     async def write_points(self, points: list[Point]) -> None:
+        if self.client_async is None:
+            raise RuntimeError("InfluxDB client not initialized")
+
         await self.client_async.write_api().write(
             bucket=self.bucket_name, record=points
         )
 
     async def query_timeunit(
         self, period: HistoricPeriod, measurement: str
-    ) -> list[dict[str, any]] | None:
+    ) -> list[dict[str, Any]] | None:
         results = await self.query(
             period.query.query, {"UNIT": period.unit,
                                  "MEASUREMENT": measurement}
@@ -145,14 +155,14 @@ class InfluxDBAsync:
         return results if len(results) > 0 else None
 
     async def query_first(
-        self, query_name: str, additional_replacements: dict[str, any] | None = None
-    ) -> dict[str, any] | None:
+        self, query_name: str, additional_replacements: dict[str, Any] | None = None
+    ) -> dict[str, Any] | None:
         result = await self.query(query_name, additional_replacements)
         return result[0] if len(result) > 0 else None
 
     async def query(
-        self, query_name: str, additional_replacements: dict[str, any] | None = None
-    ) -> list[dict[str, any]]:
+        self, query_name: str, additional_replacements: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
 
         tables = await self.query_api.query(
             self._get_flux_query(query_name, additional_replacements)
@@ -160,14 +170,17 @@ class InfluxDBAsync:
         return [record.values for table in tables for record in table.records]
 
     async def query_dataframe(
-        self, query_name: str, additional_replacements: dict[str, any] | None = None
+        self, query_name: str, additional_replacements: dict[str, Any] | None = None
     ) -> DataFrame:
-        return await self.query_api.query_data_frame(
-            self._get_flux_query(query_name, additional_replacements)
+        return cast(
+            "DataFrame",
+            await self.query_api.query_data_frame(
+                self._get_flux_query(query_name, additional_replacements)
+            ),
         )
 
     def _get_flux_query(
-        self, query_name: str, additional_replacements: dict[str, any] | None = None
+        self, query_name: str, additional_replacements: dict[str, Any] | None = None
     ) -> str:
         if query_name not in self.flux_cache:
             with resources.files(__package__).joinpath(

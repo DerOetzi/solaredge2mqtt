@@ -54,12 +54,12 @@ class TestWallboxClientLogin:
         self, wallbox_settings, mock_event_bus, mock_http_client
     ):
         """Test successful login."""
-        mock_get, mock_post = mock_http_client
+        _, mock_post = mock_http_client
 
         # Mock successful login response
         mock_post.return_value = {
-            "accessToken": "test_access_token_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjk5OTk5OTk5OTl9.signature",
-            "refreshToken": "test_refresh_token_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjk5OTk5OTk5OTl9.signature",
+            "accessToken": "test_access_token_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjk5OTk5OTk5OTl9.signature",  # noqa: E501
+            "refreshToken": "test_refresh_token_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjk5OTk5OTk5OTl9.signature",  # noqa: E501
         }
 
         client = WallboxClient(wallbox_settings, mock_event_bus)

@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 
+from solaredge2mqtt.core.exceptions import ConfigurationException
 from solaredge2mqtt.core.influxdb.settings import InfluxDBSettings
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.logging.models import LoggingLevelEnum
@@ -20,92 +21,76 @@ from solaredge2mqtt.services.weather.settings import WeatherSettings
 
 
 class LocationSettings(BaseModel):
-    latitude: float
-    longitude: float
+    latitude: float | None = Field(default=None)
+    longitude: float | None = Field(default=None)
+
+    @property
+    def latitude_value(self) -> float:
+        if self.latitude is None:
+            raise ConfigurationException(
+                "location", "Latitude is not configured")
+
+        return self.latitude
+
+    @property
+    def longitude_value(self) -> float:
+        if self.longitude is None:
+            raise ConfigurationException(
+                "location", "Longitude is not configured")
+
+        return self.longitude
+
+    @property
+    def is_configured(self) -> bool:
+        return self.latitude is not None and self.longitude is not None
 
 
 class ServiceSettings(BaseModel):
-    interval: int = Field(5)
-    logging_level: LoggingLevelEnum = LoggingLevelEnum.INFO
+    interval: int = Field(default=5)
+    logging_level: LoggingLevelEnum = Field(default=LoggingLevelEnum.INFO)
 
     modbus: ModbusSettings
     mqtt: MQTTSettings
 
-    powerflow: PowerflowSettings = PowerflowSettings()
-    energy: EnergySettings = EnergySettings()
+    powerflow: PowerflowSettings = Field(default=PowerflowSettings())
+    energy: EnergySettings = Field(default=EnergySettings())
 
-    location: LocationSettings | None = None
-    prices: PriceSettings = PriceSettings()
+    location: LocationSettings = Field(default=LocationSettings())
+    prices: PriceSettings = Field(default=PriceSettings())
 
-    monitoring: MonitoringSettings | None = None
-    wallbox: WallboxSettings | None = None
+    monitoring: MonitoringSettings = Field(default=MonitoringSettings())
+    wallbox: WallboxSettings = Field(default=WallboxSettings())
 
-    influxdb: InfluxDBSettings | None = None
+    influxdb: InfluxDBSettings = Field(default=InfluxDBSettings())
 
-    weather: WeatherSettings | None = None
+    weather: WeatherSettings = Field(default=WeatherSettings())
 
-    forecast: ForecastSettings | None = None
+    forecast: ForecastSettings = Field(default=ForecastSettings())
 
-    homeassistant: HomeAssistantSettings | None = None
-
-    @property
-    def is_location_configured(self) -> bool:
-        return self.location is not None
+    homeassistant: HomeAssistantSettings = Field(
+        default=HomeAssistantSettings())
 
     @property
-    def is_prices_configured(self) -> bool:
-        return self.prices is not None and self.prices.is_configured
-
-    @property
-    def is_monitoring_configured(self) -> bool:
-        return self.monitoring is not None and self.monitoring.is_configured
-
-    @property
-    def is_wallbox_configured(self) -> bool:
-        return self.wallbox is not None and self.wallbox.is_configured
-
-    @property
-    def is_influxdb_configured(self) -> bool:
-        return self.influxdb is not None and self.influxdb.is_configured
-
-    @property
-    def is_weather_configured(self) -> bool:
-        is_configured = self.weather is not None and self.weather.is_configured
-
-        if is_configured and not self.is_location_configured:
+    def is_weather_enabled(self) -> bool:
+        if (self.weather.is_configured
+                and not self.location.is_configured):
             logger.warning(
                 "Weather settings are configured but location is not "
-                "configured."
+                "configured. Weather service will not be initialized."
             )
-            is_configured = False
 
-        return is_configured
+            return False
+
+        return self.weather.is_configured
 
     @property
-    def is_forecast_configured(self) -> bool:
-        is_configured = (
-            self.forecast is not None and self.forecast.is_configured
-        )
-
-        if is_configured and not self.is_location_configured:
+    def is_forecast_enabled(self) -> bool:
+        if self.forecast.enable and not self.is_weather_enabled:
             logger.warning(
-                "Forecast settings are configured but location is not "
-                "configured."
+                "Forecast settings are enabled but weather service is not "
+                "configured. Forecast service will not be initialized."
             )
-            is_configured = False
 
-        if is_configured and not self.is_weather_configured:
-            logger.warning(
-                "Forecast settings are configured but weather is not "
-                "configured."
-            )
-            is_configured = False
+            return False
 
-        return is_configured
-
-    @property
-    def is_homeassistant_configured(self) -> bool:
-        return (
-            self.homeassistant is not None
-            and self.homeassistant.is_configured
-        )
+        return self.forecast.enable

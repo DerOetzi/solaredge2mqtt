@@ -1,10 +1,13 @@
 from pydantic import Field
 
-from solaredge2mqtt.core.models import BaseInputField, BaseInputFieldEnumModel
+from solaredge2mqtt.core.models import (
+    BaseInputFieldEnumModel,
+    BaseInputScalarField,
+)
 
 
-class ModbusActivePowerLimitInput(BaseInputField):
-    limit: int = Field(min=0, max=100)
+class ModbusActivePowerLimitInput(BaseInputScalarField):
+    limit: int = Field(ge=0, le=100)
 
 
 class ModbusPowerControlInput(BaseInputFieldEnumModel):

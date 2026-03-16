@@ -1,43 +1,61 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Awaitable, Callable
+from typing import Any, Awaitable, Protocol, overload
 
 from aiomqtt import MqttError
 
-from solaredge2mqtt.core.events.events import BaseEvent
+from solaredge2mqtt.core.events.events import BaseEvent, TEvent, TEventContra
 from solaredge2mqtt.core.exceptions import InvalidDataException
 from solaredge2mqtt.core.logging import logger
 
-Listener = Callable[[BaseEvent], Awaitable[None]]
+
+class Listener(Protocol[TEventContra]):
+    def __call__(self, event: TEventContra) -> Awaitable[None]: ...
+
+
+AnyListener = Listener[Any]
 
 
 class EventBus:
     def __init__(self) -> None:
-        self._listeners: dict[str, list[Listener]] = {}
+        self._listeners: dict[str, list[AnyListener]] = {}
         self._subscribed_events: dict[str, type[BaseEvent]] = {}
         self._tasks: set[asyncio.Task] = set()
         self._critical_error: BaseException | None = None
 
+    @overload
+    def subscribe(self, event: list[type[TEvent]], listener: Listener[TEvent]) -> None:
+        ...
+
+    @overload
+    def subscribe(self, event: type[TEvent], listener: Listener[TEvent]) -> None:
+        ...
+
     def subscribe(
         self,
-        event: type[BaseEvent] | list[type[BaseEvent]],
-        listener: Listener,
+        event: type[TEvent] | list[type[TEvent]],
+        listener: Listener[TEvent],
     ) -> None:
         if isinstance(event, list):
             for _event in event:
                 self.subscribe(_event, listener)
             return
+
         event_key = event.event_key()
         logger.info(f"Event subscribed: {event_key}")
         self._listeners.setdefault(event_key, []).append(listener)
         self._subscribed_events[event_key] = event
 
     @property
-    def subscribed_events(self) -> list[type[BaseEvent]]:
-        return list(self._subscribed_events.values())
+    def subscribed_events(self) -> set[type[BaseEvent]]:
+        return set(self._subscribed_events.values())
 
-    def unsubscribe(self, event: type[BaseEvent], listener: Listener) -> None:
+    def unsubscribe(
+        self,
+        event: TEvent,
+        listener: Listener[TEvent],
+    ) -> None:
         event_key = event.event_key()
         if event_key in self._listeners:
             try:
@@ -48,7 +66,10 @@ class EventBus:
                 self._listeners.pop(event_key, None)
                 self._subscribed_events.pop(event_key, None)
 
-    def unsubscribe_all(self, event: type[BaseEvent]) -> None:
+    def unsubscribe_all(
+        self,
+        event: type[TEvent]
+    ) -> None:
         event_key = event.event_key()
         if event_key in self._listeners:
             self._listeners.pop(event_key, None)
@@ -74,7 +95,7 @@ class EventBus:
             task.add_done_callback(self._handle_task_done)
 
     async def _notify_listeners(
-        self, event: BaseEvent, listeners: list[Listener]
+        self, event: BaseEvent, listeners: list[AnyListener]
     ) -> None:
         results = await asyncio.gather(
             *(self._notify_listener(listener, event)
@@ -87,7 +108,7 @@ class EventBus:
             elif isinstance(r, Exception):
                 logger.error("Unhandled listener error: {exc}", exc=repr(r))
 
-    async def _notify_listener(self, listener: Listener, event: BaseEvent) -> None:
+    async def _notify_listener(self, listener: AnyListener, event: BaseEvent) -> None:
         try:
             await listener(event)
         except InvalidDataException as error:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import Field, computed_field
 
@@ -19,17 +20,19 @@ class HistoricBaseModel(Component):
 
     def __init__(self, data: dict, period: HistoricPeriod, **kwargs):
         super().__init__(
-            info=HistoricInfo(
-                unit=data.get("unit", None),
-                period=period,
-                start=data["_start"],
-                stop=data["_stop"]
-            ),
-            **kwargs,
+            **{
+                "info": HistoricInfo(
+                    unit=data.get("unit", None),
+                    period=period,
+                    start=data["_start"],
+                    stop=data["_stop"],
+                ),
+                **kwargs,
+            }
         )
 
     def mqtt_topic(self) -> str:
-        parts = [self.SOURCE]
+        parts = ["energy"]
 
         if self.info.unit:
             parts.append(self.info.unit)
@@ -39,7 +42,7 @@ class HistoricBaseModel(Component):
         return "/".join(parts)
 
     def __str__(self) -> str:
-        return f"{self.SOURCE}: {self.info.period}"
+        return f"energy: {self.info.period}"
 
 
 class HistoricEnergy(HistoricBaseModel):
@@ -59,7 +62,7 @@ class HistoricEnergy(HistoricBaseModel):
         logger.trace(energy_data)
         pv_production = energy_data["pv_production"]
 
-        subclass_values: dict[str, dict[str, float]] = {}
+        subclass_values: dict[str, dict[str, Any]] = {}
 
         for key, value in energy_data.items():
             keys = key.split("_")
@@ -101,9 +104,9 @@ class HistoricEnergy(HistoricBaseModel):
 
     @property
     def has_unit(self) -> bool:
-        return self.unit is not None
+        return self.info.unit is not None
 
-    def homeassistant_device_info(self) -> dict[str, any]:
+    def homeassistant_device_info(self) -> dict[str, Any]:
         parts = ["Energy"]
 
         if self.info.unit:
@@ -300,10 +303,13 @@ class SelfConsumptionRate(Solaredge2MQTTBaseModel):
             total = 0
 
         super().__init__(
-            grid=grid_rate,
-            battery=battery_rate,
-            pv=pv_rate,
-            total=total,
+            **{
+                "grid": grid_rate,
+                "battery": battery_rate,
+                "pv": pv_rate,
+                "total": total,
+                "timestamp": None,
+            }
         )
 
 
@@ -334,8 +340,11 @@ class SelfSufficiencyRate(Solaredge2MQTTBaseModel):
             total = 0
 
         super().__init__(
-            grid=grid_rate,
-            battery=battery_rate,
-            pv=pv_rate,
-            total=total,
+            **{
+                "grid": grid_rate,
+                "battery": battery_rate,
+                "pv": pv_rate,
+                "total": total,
+                "timestamp": None,
+            }
         )

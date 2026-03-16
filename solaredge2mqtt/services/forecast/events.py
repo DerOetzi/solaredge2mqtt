@@ -1,5 +1,6 @@
 from solaredge2mqtt.services.events import ComponentEvent
+from solaredge2mqtt.services.forecast.models import Forecast
 
 
-class ForecastEvent(ComponentEvent):
+class ForecastEvent(ComponentEvent[Forecast]):
     pass
