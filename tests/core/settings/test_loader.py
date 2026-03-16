@@ -198,7 +198,9 @@ class TestConfigurationLoader:
 
     @patch("solaredge2mqtt.core.settings.loader.path.exists")
     @patch("solaredge2mqtt.core.settings.loader.ConfigurationLoader._is_file_empty")
-    def test_load_configuration_empty_file_triggers_migration(self, mock_is_empty, mock_exists):
+    def test_load_configuration_empty_file_triggers_migration(
+        self, mock_is_empty, mock_exists
+    ):
         """Test loading empty configuration file triggers migration."""
         mock_exists.return_value = True
         mock_is_empty.return_value = True
@@ -207,6 +209,7 @@ class TestConfigurationLoader:
             "solaredge2mqtt.core.settings.loader.ConfigurationLoader._migrate_from_environment"
         ) as mock_migrate:
             from solaredge2mqtt.core.settings.models import ServiceSettings
+
             mock_migrate.return_value = ServiceSettings(
                 modbus={"host": "192.168.1.100"},
                 mqtt={"broker": "mqtt.example.com"},
@@ -271,18 +274,17 @@ class TestConfigurationLoader:
         with tempfile.TemporaryDirectory() as tmpdir:
             config_file = Path(tmpdir) / "configuration.yml"
             secrets_file = Path(tmpdir) / "secrets.yml"
-            
+
             # Copy example files
-            ConfigurationLoader._copy_example_files(
-                str(config_file), str(secrets_file)
-            )
-            
+            ConfigurationLoader._copy_example_files(str(config_file), str(secrets_file))
+
             # Check files were created
             assert config_file.exists()
             assert secrets_file.exists()
-            
+
             # Check secrets file has correct permissions (600)
             import stat
+
             secrets_stat = secrets_file.stat()
             # On Unix: should be -rw-------
             # Just check it's not world/group readable
@@ -291,17 +293,15 @@ class TestConfigurationLoader:
 
     @patch("solaredge2mqtt.core.settings.loader.EnvironmentReader.read_all")
     @patch("solaredge2mqtt.core.settings.loader.path.exists")
-    def test_migrate_from_environment_no_env_vars(
-        self, mock_exists, mock_read_all
-    ):
+    def test_migrate_from_environment_no_env_vars(self, mock_exists, mock_read_all):
         """Test migration when no environment variables exist (new install)."""
         mock_exists.return_value = False
         mock_read_all.return_value = {}  # No environment variables
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
             config_file = Path(tmpdir) / "configuration.yml"
             secrets_file = Path(tmpdir) / "secrets.yml"
-            
+
             # Should exit with code 0 after copying examples
             try:
                 ConfigurationLoader._migrate_from_environment(
@@ -310,11 +310,10 @@ class TestConfigurationLoader:
                 raise AssertionError("Expected sys.exit(0)")
             except SystemExit as e:
                 assert e.code == 0
-                
+
             # Check example files were copied
             assert config_file.exists()
             assert secrets_file.exists()
-
 
 
 class TestSecretLoader:
@@ -377,9 +376,7 @@ class TestSecretLoader:
 
             # Create config file with !secret tag
             config_file = Path(tmpdir) / "configuration.yml"
-            config_file.write_text(
-                "mqtt:\n" "  password: !secret mqtt_password\n"
-            )
+            config_file.write_text("mqtt:\n  password: !secret mqtt_password\n")
 
             # Load configuration should raise error
             try:

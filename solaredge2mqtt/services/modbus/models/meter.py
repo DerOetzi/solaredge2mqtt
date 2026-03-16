@@ -3,7 +3,10 @@ from pydantic import Field
 from solaredge2mqtt.services.homeassistant.models import (
     HomeAssistantSensorType as HASensor,
 )
-from solaredge2mqtt.services.modbus.models.base import ModbusComponent, ModbusDeviceInfo
+from solaredge2mqtt.services.modbus.models.base import (
+    ModbusComponent,
+    ModbusDeviceInfo,
+)
 from solaredge2mqtt.services.modbus.models.values import (
     ModbusACCurrent,
     ModbusACPower,

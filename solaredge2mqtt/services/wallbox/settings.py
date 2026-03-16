@@ -14,7 +14,6 @@ class WallboxSettings(BaseModel):
                 self.host is not None,
                 self.password is not None
                 and self.password.get_secret_value() is not None,
-                self.serial is not None
-                and self.serial.get_secret_value() is not None,
+                self.serial is not None and self.serial.get_secret_value() is not None,
             ]
         )

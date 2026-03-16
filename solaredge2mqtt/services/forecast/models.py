@@ -45,7 +45,7 @@ class Forecast(Component):
     @computed_field(**HASensor.ENERGY_WH.field("Energy production remaining today"))
     @property
     def energy_today_remaining(self) -> int:
-        return sum(self._energy_today[self._current_hour():])
+        return sum(self._energy_today[self._current_hour() :])
 
     @computed_field(**HASensor.ENERGY_WH.field("Energy production current hour"))
     def energy_current_hour(self) -> int:

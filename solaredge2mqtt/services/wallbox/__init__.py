@@ -6,7 +6,10 @@ from aiohttp.client_exceptions import ClientResponseError
 from pydantic import BaseModel, Field
 
 from solaredge2mqtt.core.events import EventBus
-from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
+from solaredge2mqtt.core.exceptions import (
+    ConfigurationException,
+    InvalidDataException,
+)
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.services.http_async import HTTPClientAsync
 from solaredge2mqtt.services.wallbox.events import WallboxReadEvent
@@ -40,12 +43,10 @@ class AuthorizationTokens(BaseModel):
             # ⚠️ This only extracts the 'exp' claim without verifying the JWT signature.
             # It's used for internal expiration checks, not for authentication
             # or security decisions.
-            payload = jwt.decode(
-                token, options={"verify_signature": False})  # NOSONAR
+            payload = jwt.decode(token, options={"verify_signature": False})  # NOSONAR
             return payload["exp"]
         except Exception as e:
-            logger.warning(
-                "Failed to decode JWT for exp claim: {error}", error=e)
+            logger.warning("Failed to decode JWT for exp claim: {error}", error=e)
             raise InvalidDataException("Cannot read token expiration") from e
 
 
@@ -73,7 +74,8 @@ class WallboxClient(HTTPClientAsync):
                         serial=self.settings.serial.get_secret_value(),
                     ),
                     headers={
-                        "Authorization": f"Bearer {self.authorization.access_token}"},
+                        "Authorization": f"Bearer {self.authorization.access_token}"
+                    },
                     verify=False,
                     login=self.login,
                 )
@@ -89,8 +91,7 @@ class WallboxClient(HTTPClientAsync):
 
             await self.event_bus.emit(WallboxReadEvent(wallbox))
         except (ClientResponseError, asyncio.TimeoutError) as error:
-            raise InvalidDataException(
-                f"Cannot read Wallbox data: {error}") from error
+            raise InvalidDataException(f"Cannot read Wallbox data: {error}") from error
 
         return wallbox
 
@@ -122,8 +123,7 @@ class WallboxClient(HTTPClientAsync):
                 )
 
             if response is None:
-                raise ConfigurationException(
-                    "wallbox", "Invalid Wallbox login")
+                raise ConfigurationException("wallbox", "Invalid Wallbox login")
 
             self.authorization = AuthorizationTokens(**response)
             logger.info("Logged in to EV charger")
@@ -137,8 +137,7 @@ class WallboxClient(HTTPClientAsync):
         async with asyncio.timeout(5):
             response = await self._post(
                 REFRESH_URL.format(host=self.settings.host),
-                headers={
-                    "Authorization": f"Bearer {self.authorization.refresh_token}"},
+                headers={"Authorization": f"Bearer {self.authorization.refresh_token}"},
                 verify=False,
                 login=self.login,
             )

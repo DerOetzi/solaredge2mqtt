@@ -1,6 +1,5 @@
 """Tests for core events module."""
 
-
 from solaredge2mqtt.core.events.events import BaseEvent
 
 

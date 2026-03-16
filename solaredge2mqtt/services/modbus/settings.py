@@ -18,7 +18,7 @@ class ModbusUnitSettings(BaseModel):
     battery: list[bool] = Field(default_factory=list)
     role: ModbusUnitRole = Field(ModbusUnitRole.LEADER, read_only=True)
 
-    @model_validator(mode='before')
+    @model_validator(mode="before")
     @classmethod
     def fill_defaults(cls, values: dict) -> dict:
         # Set meter defaults: meter0=true, meter1=false, meter2=false
@@ -37,7 +37,7 @@ class ModbusUnitSettings(BaseModel):
         if key not in values or not isinstance(values[key], list):
             values[key] = defaults.copy()
         else:
-            for i, value in enumerate(values[key][:len(defaults)]):
+            for i, value in enumerate(values[key][: len(defaults)]):
                 if isinstance(value, str):
                     values[key][i] = value.lower() == "true"
                 elif isinstance(value, bool):
@@ -46,7 +46,7 @@ class ModbusUnitSettings(BaseModel):
                     values[key][i] = defaults[i]
 
             if len(values[key]) < len(defaults):
-                values[key].extend(defaults[len(values[key]):])
+                values[key].extend(defaults[len(values[key]) :])
 
         return values
 
@@ -79,13 +79,14 @@ class ModbusSettings(ModbusUnitSettings):
 
     check_grid_status: bool = Field(False)
     advanced_power_controls: AdvancedControlsSettings = Field(
-        AdvancedControlsSettings.DISABLED)
+        AdvancedControlsSettings.DISABLED
+    )
 
     follower: list[ModbusUnitSettings] = Field(default_factory=list)
 
     retain: bool = Field(False)
 
-    @model_validator(mode='before')
+    @model_validator(mode="before")
     @classmethod
     def fill_defaults(cls, values: dict) -> dict:
         values = super().fill_defaults(values)

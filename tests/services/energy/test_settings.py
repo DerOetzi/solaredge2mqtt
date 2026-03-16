@@ -2,7 +2,10 @@
 
 import pytest
 
-from solaredge2mqtt.services.energy.settings import EnergySettings, PriceSettings
+from solaredge2mqtt.services.energy.settings import (
+    EnergySettings,
+    PriceSettings,
+)
 
 
 class TestPriceSettings:

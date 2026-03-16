@@ -65,7 +65,7 @@ class TestForecast:
 
             # Simulate a bell curve for power (0 at night, peak at noon)
             if 6 <= (hour % 24) <= 18:
-                power = (1000 - abs(12 - (hour % 24)) * 80)
+                power = 1000 - abs(12 - (hour % 24)) * 80
             else:
                 power = 0
 

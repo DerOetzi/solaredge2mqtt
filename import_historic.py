@@ -28,7 +28,6 @@ async def main():
     columns = data.columns.to_list()
 
     for _, row in data.iterrows():
-
         grid, battery, pv_production, inverter, consumer, powerflow = create_powerflow(
             columns, row
         )
@@ -62,9 +61,7 @@ def read_and_prepare_data():
 
 
 def create_powerflow(columns, row):
-    grid = GridPowerflow(
-        power=round(row["grid_delivery"] - row["grid_consumption"])
-    )
+    grid = GridPowerflow(power=round(row["grid_delivery"] - row["grid_consumption"]))
 
     if "battery_charge" in columns and "battery_discharge" in columns:
         battery = BatteryPowerflow(
@@ -79,8 +76,7 @@ def create_powerflow(columns, row):
 
     dc_power = pv_production - battery.power
 
-    inverter_power = round(
-        row["inverter_production"] - row["inverter_consumption"])
+    inverter_power = round(row["inverter_production"] - row["inverter_consumption"])
 
     inverter = InverterPowerflow(
         power=inverter_power,

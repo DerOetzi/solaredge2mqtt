@@ -35,9 +35,7 @@ class SunSpecRequestRegisterBundle:
         current_bundle = cls()
 
         for register in [
-            reg
-            for reg in sorted_registers
-            if not required_only or reg.required
+            reg for reg in sorted_registers if not required_only or reg.required
         ]:
             if (
                 current_bundle.length > 0
@@ -100,7 +98,7 @@ class SunSpecRequestRegisterBundle:
     ) -> dict[str, SunSpecPayload]:
         for register in self._registers:
             offset = register.address - self.address
-            response_slice = registers[offset: offset + register.length]
+            response_slice = registers[offset : offset + register.length]
             data = register.decode_response(response_slice, data)
 
         return data
@@ -170,9 +168,7 @@ class SunSpecRegister(EnumModel):
     ) -> dict[str, SunSpecPayload]:
         try:
             value = ModbusTcpClient.convert_from_registers(
-                registers,
-                self.value_type.data_type,
-                word_order=self.wordorder()
+                registers, self.value_type.data_type, word_order=self.wordorder()
             )
         except UnicodeDecodeError as e:
             logger.error(

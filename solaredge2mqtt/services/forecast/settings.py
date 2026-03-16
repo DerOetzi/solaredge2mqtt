@@ -1,4 +1,3 @@
-
 from os import chmod, getenv
 from pathlib import Path
 
@@ -17,9 +16,7 @@ def _get_default_cache_dir() -> str:
     DOCKER_CONTAINER environment variable.
     """
     # Check for Docker environment indicators
-    is_docker = (
-        Path("/.dockerenv").exists() or getenv("DOCKER_CONTAINER") == "true"
-    )
+    is_docker = Path("/.dockerenv").exists() or getenv("DOCKER_CONTAINER") == "true"
 
     if is_docker:
         return "/app/cache"
@@ -31,9 +28,7 @@ def _get_default_cache_dir() -> str:
 class ForecastSettings(BaseModel):
     enable: bool = Field(False)
     hyperparametertuning: bool = Field(False)
-    cachingdir: str | None = Field(
-        default_factory=_get_default_cache_dir
-    )
+    cachingdir: str | None = Field(default_factory=_get_default_cache_dir)
     retain: bool = Field(False)
 
     @property
@@ -45,9 +40,7 @@ class ForecastSettings(BaseModel):
         return self.cachingdir is not None
 
     @field_validator("cachingdir")
-    def ensure_secure_cache(
-        cls, v: str | None, info: ValidationInfo
-    ) -> str | None:
+    def ensure_secure_cache(cls, v: str | None, info: ValidationInfo) -> str | None:
         if not info.data.get("enable", False) or v is None:
             return None
 
@@ -59,8 +52,6 @@ class ForecastSettings(BaseModel):
         chmod(path, 0o700)
 
         if path.stat().st_mode & 0o077:
-            raise ValueError(
-                f"Insecure cache directory permissions: {path}"
-            )
+            raise ValueError(f"Insecure cache directory permissions: {path}")
 
         return str(path)

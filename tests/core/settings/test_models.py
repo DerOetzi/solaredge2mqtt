@@ -61,10 +61,7 @@ class TestServiceSettings:
             # Create minimal configuration file
             config_file = Path(tmpdir) / "configuration.yml"
             config_file.write_text(
-                "modbus:\n"
-                "  host: 192.168.1.100\n"
-                "mqtt:\n"
-                "  broker: mqtt.example.com\n"
+                "modbus:\n  host: 192.168.1.100\nmqtt:\n  broker: mqtt.example.com\n"
             )
 
             # Override interval for testing
@@ -101,10 +98,7 @@ class TestServiceSettings:
         with tempfile.TemporaryDirectory() as tmpdir:
             config_file = Path(tmpdir) / "configuration.yml"
             config_file.write_text(
-                "modbus:\n"
-                "  host: 192.168.1.100\n"
-                "mqtt:\n"
-                "  broker: mqtt.example.com\n"
+                "modbus:\n  host: 192.168.1.100\nmqtt:\n  broker: mqtt.example.com\n"
             )
 
             settings = ConfigurationLoader.load_configuration(tmpdir)
@@ -140,10 +134,7 @@ class TestServiceSettings:
         with tempfile.TemporaryDirectory() as tmpdir:
             config_file = Path(tmpdir) / "configuration.yml"
             config_file.write_text(
-                "modbus:\n"
-                "  host: 192.168.1.100\n"
-                "mqtt:\n"
-                "  broker: mqtt.example.com\n"
+                "modbus:\n  host: 192.168.1.100\nmqtt:\n  broker: mqtt.example.com\n"
             )
 
             settings = ConfigurationLoader.load_configuration(tmpdir)
@@ -195,10 +186,7 @@ class TestServiceSettings:
         with tempfile.TemporaryDirectory() as tmpdir:
             config_file = Path(tmpdir) / "configuration.yml"
             config_file.write_text(
-                "modbus:\n"
-                "  host: 192.168.1.100\n"
-                "mqtt:\n"
-                "  broker: mqtt.example.com\n"
+                "modbus:\n  host: 192.168.1.100\nmqtt:\n  broker: mqtt.example.com\n"
             )
 
             settings = ConfigurationLoader.load_configuration(tmpdir)

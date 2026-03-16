@@ -39,9 +39,7 @@ class TestInvalidRegisterDataExceptionUsage:
 
     def test_exception_message_format(self):
         """Test that exception message is properly formatted."""
-        original_err = UnicodeDecodeError(
-            "utf-8", b"\xc2", 0, 1, "invalid start byte"
-        )
+        original_err = UnicodeDecodeError("utf-8", b"\xc2", 0, 1, "invalid start byte")
 
         exc = InvalidRegisterDataException(
             register_id="c_model",
@@ -136,16 +134,12 @@ class TestErrorLoggingPatterns:
         register_id = "c_manufacturer"
 
         # Test meter skip message
-        skip_msg = (
-            f"Skipping {meter_id} due to invalid register data in device info"
-        )
+        skip_msg = f"Skipping {meter_id} due to invalid register data in device info"
         assert "Skipping meter2" in skip_msg
         assert "invalid register data" in skip_msg
 
         # Test register decode failure message
-        decode_msg = (
-            f"Failed to decode register '{register_id}' at address {address}"
-        )
+        decode_msg = f"Failed to decode register '{register_id}' at address {address}"
         assert "Failed to decode register 'c_manufacturer'" in decode_msg
         assert "40123" in decode_msg
 
@@ -213,4 +207,3 @@ class TestRefactoredMethodStructure:
         assert "meter0" not in result  # Not detected
         assert "meter1" not in result  # Failed with exception
         assert "meter2" in result  # Successfully detected
-

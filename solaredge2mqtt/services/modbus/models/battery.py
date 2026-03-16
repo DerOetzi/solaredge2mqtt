@@ -1,4 +1,3 @@
-
 from influxdb_client import Point
 from pydantic import Field
 
@@ -6,7 +5,10 @@ from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.services.homeassistant.models import (
     HomeAssistantSensorType as HASensor,
 )
-from solaredge2mqtt.services.modbus.models.base import ModbusComponent, ModbusDeviceInfo
+from solaredge2mqtt.services.modbus.models.base import (
+    ModbusComponent,
+    ModbusDeviceInfo,
+)
 from solaredge2mqtt.services.modbus.sunspec.values import BATTERY_STATUS_MAP
 
 
@@ -18,10 +20,8 @@ class ModbusBattery(ModbusComponent):
     current: float = Field(**HASensor.CURRENT_A.field("current"))
     voltage: float = Field(**HASensor.VOLTAGE_V.field("voltage"))
     power: float = Field(**HASensor.POWER_W.field("power"))
-    state_of_charge: float = Field(
-        **HASensor.BATTERY.field("state of charge"))
-    state_of_health: float = Field(
-        **HASensor.BATTERY.field("state of health"))
+    state_of_charge: float = Field(**HASensor.BATTERY.field("state of charge"))
+    state_of_health: float = Field(**HASensor.BATTERY.field("state of health"))
 
     def __init__(self, info: ModbusDeviceInfo, data: dict[str, str | int]) -> None:
         status = data["status"]

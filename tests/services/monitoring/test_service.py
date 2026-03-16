@@ -46,8 +46,7 @@ class TestMonitoringSiteInit:
 
     def test_init(self, mock_monitoring_settings, mock_event_bus, mock_influxdb):
         """Test MonitoringSite initialization."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
 
         assert site.settings is mock_monitoring_settings
         assert site.event_bus is mock_event_bus
@@ -61,7 +60,7 @@ class TestMonitoringSiteInit:
 
     def test_subscribes_to_events(self, mock_monitoring_settings, mock_event_bus):
         """Test MonitoringSite subscribes to 15min interval event."""
-        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, None)
+        _site = MonitoringSite(mock_monitoring_settings, mock_event_bus, None)
 
         mock_event_bus.subscribe.assert_called()
 
@@ -74,8 +73,7 @@ class TestMonitoringSiteLogin:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test successful login."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
         site._post = AsyncMock(return_value="success")
 
         await site.login()
@@ -87,8 +85,7 @@ class TestMonitoringSiteLogin:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test login failure raises ConfigurationException."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
 
         mock_request_info = MagicMock(spec=RequestInfo)
         mock_request_info.real_url = "http://test.com"
@@ -108,8 +105,7 @@ class TestMonitoringSiteLogin:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test login timeout raises ConfigurationException."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
         site._post = AsyncMock(side_effect=asyncio.TimeoutError())
 
         with pytest.raises(ConfigurationException):
@@ -154,8 +150,7 @@ class TestMonitoringSiteSaveToInfluxDB:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test save_to_influxdb writes points."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
 
         # Create mock module with power data
         mock_info = MagicMock()
@@ -190,8 +185,7 @@ class TestMonitoringSitePublishMQTT:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test publish_mqtt emits events."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
 
         # Create mock module
         mock_info = MagicMock()
@@ -215,8 +209,7 @@ class TestMonitoringSiteGetData:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test get_data orchestrates data retrieval."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
 
         # Mock the sub-methods
         site.get_modules_energy = AsyncMock(return_value={})
@@ -240,8 +233,7 @@ class TestMonitoringSiteGetModulesEnergy:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test get_modules_energy raises when response is None."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
         site._get_logical = AsyncMock(return_value=None)
 
         with pytest.raises(InvalidDataException):
@@ -256,8 +248,7 @@ class TestMonitoringSiteGetModulesPower:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test get_modules_power raises when response is None."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
         site._get_playback = AsyncMock(return_value=None)
 
         with pytest.raises(InvalidDataException):
@@ -272,8 +263,7 @@ class TestMonitoringSiteGetLogical:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test _get_logical logs in if no CSRF token."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
         site.cookie_exists = MagicMock(return_value=False)
         site.login = AsyncMock()
         site.get_cookie = MagicMock(return_value="test_token")
@@ -289,8 +279,7 @@ class TestMonitoringSiteGetLogical:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test _get_logical raises on error."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
         site.cookie_exists = MagicMock(return_value=True)
         site.get_cookie = MagicMock(return_value="test_token")
 
@@ -316,8 +305,7 @@ class TestMonitoringSiteGetPlayback:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test _get_playback raises on error."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
         site.cookie_exists = MagicMock(return_value=True)
         site.get_cookie = MagicMock(return_value="test_token")
 
@@ -342,8 +330,7 @@ class TestMonitoringSiteParseInverters:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test _parse_inverters parses inverter data."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
 
         inverter_objs = [
             {
@@ -370,8 +357,7 @@ class TestMonitoringSiteParseInverters:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test _parse_inverters logs unknown type."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
 
         inverter_objs = [
             {
@@ -400,8 +386,7 @@ class TestMonitoringSiteParseStrings:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test _parse_strings parses string data."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
 
         inverter = MagicMock()
         inverter.strings = []
@@ -434,8 +419,7 @@ class TestMonitoringSiteParsePanels:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test _parse_panels parses panel data."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
 
         string = MagicMock()
         string.modules = []
@@ -468,8 +452,7 @@ class TestMonitoringSiteGetModulesEnergyFull:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test get_modules_energy with full data parsing."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
 
         logical_response = {
             "logicalTree": {
@@ -528,8 +511,7 @@ class TestMonitoringSiteGetModulesPowerFull:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test get_modules_power with full data parsing."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
 
         playback_response = {
             "reportersData": {

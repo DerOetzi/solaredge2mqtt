@@ -1,4 +1,7 @@
-from solaredge2mqtt.services.modbus.sunspec.base import SunSpecOffset, SunSpecRegister
+from solaredge2mqtt.services.modbus.sunspec.base import (
+    SunSpecOffset,
+    SunSpecRegister,
+)
 from solaredge2mqtt.services.modbus.sunspec.values import SunSpecValueType
 
 

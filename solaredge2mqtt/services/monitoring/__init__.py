@@ -5,7 +5,10 @@ from datetime import datetime, timezone
 from aiohttp import ClientResponseError
 
 from solaredge2mqtt.core.events import EventBus
-from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
+from solaredge2mqtt.core.exceptions import (
+    ConfigurationException,
+    InvalidDataException,
+)
 from solaredge2mqtt.core.influxdb import InfluxDBAsync, Point
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
@@ -93,11 +96,10 @@ class MonitoringSite(HTTPClientAsync):
                     headers={
                         "Content-Type": CONTENT_TYPE_FORM_URLENCODED,
                         "X-CSRF-TOKEN": self.get_cookie("CSRF-TOKEN"),
-                    }
+                    },
                 )
         except (ClientResponseError, asyncio.TimeoutError) as error:
-            raise InvalidDataException(
-                "Unable to read logical layout") from error
+            raise InvalidDataException("Unable to read logical layout") from error
 
         return result
 
@@ -116,8 +118,7 @@ class MonitoringSite(HTTPClientAsync):
                     ),
                 )
 
-                self._parse_strings(
-                    inverter, inverter_obj["children"], reporters_data)
+                self._parse_strings(inverter, inverter_obj["children"], reporters_data)
 
                 inverters.append(inverter)
 
@@ -167,8 +168,7 @@ class MonitoringSite(HTTPClientAsync):
         modules = {}
 
         for date_str, reporters_data in playback["reportersData"].items():
-            date = datetime.strptime(
-                date_str, "%a %b %d %H:%M:%S GMT %Y").astimezone()
+            date = datetime.strptime(date_str, "%a %b %d %H:%M:%S GMT %Y").astimezone()
 
             for entries in reporters_data.values():
                 for entry in entries:
@@ -214,8 +214,7 @@ class MonitoringSite(HTTPClientAsync):
 
             result = json.loads(response)
         except (ClientResponseError, asyncio.TimeoutError) as error:
-            raise InvalidDataException(
-                "Unable to read logical layout") from error
+            raise InvalidDataException("Unable to read logical layout") from error
 
         return result
 
@@ -278,7 +277,7 @@ class MonitoringSite(HTTPClientAsync):
                 MQTTPublishEvent(
                     f"monitoring/module/{module.info.serialnumber}",
                     module,
-                    self.settings.retain
+                    self.settings.retain,
                 )
             )
 

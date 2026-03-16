@@ -1,6 +1,5 @@
 """Tests for wallbox models module."""
 
-
 from solaredge2mqtt.services.wallbox.models import WallboxAPI, WallboxInfo
 
 

@@ -14,7 +14,7 @@ def main():
         help="Path to configuration directory (default: config)",
     )
     args = parser.parse_args()
-    
+
     run(config_dir=args.config_dir)
 
 

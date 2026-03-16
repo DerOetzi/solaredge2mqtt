@@ -130,12 +130,8 @@ class Modbus:
 
                 logger.debug(f"Detected inverter: {inverter_raw}")
 
-                await self._detect_meters(
-                    unit_key, unit_settings, inverter_raw
-                )
-                await self._detect_batteries(
-                    unit_key, unit_settings, inverter_raw
-                )
+                await self._detect_meters(unit_key, unit_settings, inverter_raw)
+                await self._detect_batteries(unit_key, unit_settings, inverter_raw)
 
     async def _detect_meters(
         self,
@@ -145,9 +141,7 @@ class Modbus:
     ):
         """Detect and read meter device information."""
         for meter in SunSpecMeterOffset:
-            if not self._should_detect_meter(
-                unit_settings, meter, inverter_raw
-            ):
+            if not self._should_detect_meter(unit_settings, meter, inverter_raw):
                 continue
 
             try:
@@ -159,9 +153,7 @@ class Modbus:
                     meter.offset,
                 )
             except InvalidRegisterDataException as e:
-                self._log_meter_detection_error(
-                    meter.identifier, inverter_raw, e
-                )
+                self._log_meter_detection_error(meter.identifier, inverter_raw, e)
 
     @staticmethod
     def _should_detect_meter(
@@ -236,9 +228,7 @@ class Modbus:
         unit_settings: ModbusUnitSettings,
         offset: int = 0,
     ) -> SunSpecPayload:
-        raw_data = await self._read_from_modbus(
-            registers, unit_settings.unit, offset
-        )
+        raw_data = await self._read_from_modbus(registers, unit_settings.unit, offset)
 
         if self.settings.has_followers:
             raw_data["unit"] = {
@@ -248,9 +238,7 @@ class Modbus:
             }
 
         info = ModbusDeviceInfo(raw_data)
-        logger.info(
-            f"Found {key} {info.manufacturer} {info.model} {info.serialnumber}"
-        )
+        logger.info(f"Found {key} {info.manufacturer} {info.model} {info.serialnumber}")
         self._device_info[unit_key][key] = info
         return raw_data
 
@@ -285,9 +273,7 @@ class Modbus:
 
                     inverter_data = self._map_inverter(unit_key, inverter_raw)
                     meters_data = self._map_meters(unit_key, meters_raw)
-                    batteries_data = self._map_batteries(
-                        unit_key, batteries_raw
-                    )
+                    batteries_data = self._map_batteries(unit_key, batteries_raw)
 
                     units[unit_key] = ModbusUnit(
                         info=inverter_data.info.unit,
@@ -305,9 +291,7 @@ class Modbus:
 
     async def _get_raw_data(
         self, unit_key: str, unit: int
-    ) -> tuple[
-        SunSpecPayload, dict[str, SunSpecPayload], dict[str, SunSpecPayload]
-    ]:
+    ) -> tuple[SunSpecPayload, dict[str, SunSpecPayload], dict[str, SunSpecPayload]]:
         inverter_raw = await self._read_from_modbus(
             SunSpecInverterRegister.request_bundles(),
             unit,
@@ -345,9 +329,7 @@ class Modbus:
 
         for battery in SunSpecBatteryOffset:
             if battery.identifier in self._device_info[unit_key]:
-                batteries_raw[
-                    battery.identifier
-                ] = await self._read_from_modbus(
+                batteries_raw[battery.identifier] = await self._read_from_modbus(
                     SunSpecBatteryRegister.request_bundles(),
                     unit,
                     offset=battery.offset,
@@ -357,8 +339,7 @@ class Modbus:
 
     async def _read_from_modbus(
         self,
-        registers_or_bundles: SunSpecRegister
-        | list[SunSpecRequestRegisterBundle],
+        registers_or_bundles: SunSpecRegister | list[SunSpecRequestRegisterBundle],
         unit: int,
         offset: int = 0,
     ) -> SunSpecPayload:
@@ -368,9 +349,7 @@ class Modbus:
             address_start = register_or_bundle.address + offset
 
             if address_start in self._block_unreadable:
-                logger.trace(
-                    f"Skip unreadable registers beginning at {address_start}"
-                )
+                logger.trace(f"Skip unreadable registers beginning at {address_start}")
                 continue
 
             logger.trace(
@@ -392,9 +371,7 @@ class Modbus:
                     logger.debug(f"Modbus read error: {result}")
                     self._block_register(address_start)
                 else:
-                    data = register_or_bundle.decode_response(
-                        result.registers, data
-                    )
+                    data = register_or_bundle.decode_response(result.registers, data)
 
                 if not self._initialized:
                     logger.trace(
@@ -456,13 +433,10 @@ class Modbus:
                 raw=json.dumps(meter_raw, indent=4),
             )
 
-            meter_data = ModbusMeter(
-                self._device_info[unit_key][meter_key], meter_raw
-            )
+            meter_data = ModbusMeter(self._device_info[unit_key][meter_key], meter_raw)
             logger.debug(meter_data)
             logger.info(
-                LOGGING_DEVICE_INFO
-                + ": {power} W, {consumption} kWh, {delivery} kWh",
+                LOGGING_DEVICE_INFO + ": {power} W, {consumption} kWh, {delivery} kWh",
                 unit_key=meter_data.info.unit_key(":"),
                 device=meter_key,
                 info=meter_data.info,
@@ -491,8 +465,7 @@ class Modbus:
             )
             logger.debug(battery_data)
             logger.info(
-                LOGGING_DEVICE_INFO
-                + ": {status}, {power} W, {state_of_charge} %",
+                LOGGING_DEVICE_INFO + ": {status}, {power} W, {state_of_charge} %",
                 unit_key=battery_data.info.unit_key(":"),
                 device=battery_key,
                 info=battery_data.info,
@@ -511,9 +484,7 @@ class Modbus:
     async def _write_to_modbus(
         self, register: SunSpecRegister, value: SunSpecInputData
     ) -> None:
-        logger.info(
-            f"Writing {value} to register {register.address} ({register.name})"
-        )
+        logger.info(f"Writing {value} to register {register.address} ({register.name})")
 
         value_decoded = register.encode_request(value)
         logger.trace(f"Encoded value: {value_decoded}")

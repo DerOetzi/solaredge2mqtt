@@ -15,7 +15,7 @@ class InvalidDataException(Exception):
 class InvalidRegisterDataException(Exception):
     """
     Exception raised when register data cannot be decoded properly.
-    
+
     This typically occurs when string registers contain invalid UTF-8 data,
     indicating a device communication issue or uninitialized register.
     """

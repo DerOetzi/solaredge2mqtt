@@ -40,9 +40,7 @@ class TestConfigurationMigrator:
         assert key == "meter0"
         assert pos == 4  # Index of 'r', last non-digit character
 
-        key, pos = ConfigurationMigrator._identify_key_and_position(
-            ["follower"]
-        )
+        key, pos = ConfigurationMigrator._identify_key_and_position(["follower"])
         assert key == "follower"
         assert pos == 7
 
@@ -60,14 +58,10 @@ class TestConfigurationMigrator:
         migrator = ConfigurationMigrator(ServiceSettings)
         container = {}
 
-        migrator._insert_nested_key(
-            container, ["modbus", "host"], "192.168.1.100"
-        )
+        migrator._insert_nested_key(container, ["modbus", "host"], "192.168.1.100")
         migrator._insert_nested_key(container, ["modbus", "port"], "1502")
 
-        assert container == {
-            "modbus": {"host": "192.168.1.100", "port": "1502"}
-        }
+        assert container == {"modbus": {"host": "192.168.1.100", "port": "1502"}}
 
     def test_insert_nested_key_with_array(self):
         """Test inserting nested key-value pairs with array indices."""
@@ -110,9 +104,7 @@ class TestConfigurationMigrator:
         assert isinstance(config_data["mqtt"]["password"], SecretReference)
         assert config_data["mqtt"]["password"].secret_key == "mqtt_password"
         assert isinstance(config_data["weather"]["api_key"], SecretReference)
-        assert (
-            config_data["weather"]["api_key"].secret_key == "weather_api_key"
-        )
+        assert config_data["weather"]["api_key"].secret_key == "weather_api_key"
         assert isinstance(config_data["influxdb"]["token"], SecretReference)
         assert config_data["influxdb"]["token"].secret_key == "influxdb_token"
 

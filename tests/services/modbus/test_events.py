@@ -1,8 +1,13 @@
 """Tests for modbus events module."""
 
 from solaredge2mqtt.core.events.events import BaseEvent
-from solaredge2mqtt.services.modbus.events import ModbusUnitsReadEvent, ModbusWriteEvent
-from solaredge2mqtt.services.modbus.sunspec.inverter import SunSpecPowerControlRegister
+from solaredge2mqtt.services.modbus.events import (
+    ModbusUnitsReadEvent,
+    ModbusWriteEvent,
+)
+from solaredge2mqtt.services.modbus.sunspec.inverter import (
+    SunSpecPowerControlRegister,
+)
 
 
 class TestModbusUnitsReadEvent:

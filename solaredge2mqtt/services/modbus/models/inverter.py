@@ -11,8 +11,13 @@ from solaredge2mqtt.services.homeassistant.models import (
 from solaredge2mqtt.services.homeassistant.models import (
     HomeAssistantSensorType as HASensor,
 )
-from solaredge2mqtt.services.modbus.models.base import ModbusComponent, ModbusDeviceInfo
-from solaredge2mqtt.services.modbus.models.inputs import ModbusPowerControlInput
+from solaredge2mqtt.services.modbus.models.base import (
+    ModbusComponent,
+    ModbusDeviceInfo,
+)
+from solaredge2mqtt.services.modbus.models.inputs import (
+    ModbusPowerControlInput,
+)
 from solaredge2mqtt.services.modbus.models.values import ModbusAC, ModbusDC
 from solaredge2mqtt.services.modbus.sunspec.values import INVERTER_STATUS_MAP
 from solaredge2mqtt.services.models import ComponentValueGroup
@@ -31,7 +36,8 @@ class ModbusInverter(ModbusComponent):
         None, **HABinarySensor.GRID_STATUS.field("Grid status")
     )
     advanced_power_controls: ModbusPowerControl | None = Field(
-        None, title="Advanced Power Controls")
+        None, title="Advanced Power Controls"
+    )
 
     def __init__(self, info: ModbusDeviceInfo, data: dict[str, str | int]):
         ac = ModbusAC(data)
@@ -75,12 +81,13 @@ class ModbusInverter(ModbusComponent):
 
 class ModbusPowerControl(ComponentValueGroup):
     advanced_power_control: bool = Field(
-        **HABinarySensor.ENABLED.field("Control enabled"))
+        **HABinarySensor.ENABLED.field("Control enabled")
+    )
     active_power_limit: int = Field(
         **HANumber.ACTIVE_POWER_LIMIT.field(
-            ModbusPowerControlInput.ACTIVE_POWER_LIMIT,
-            "Active PowerLimit"
-        ))
+            ModbusPowerControlInput.ACTIVE_POWER_LIMIT, "Active PowerLimit"
+        )
+    )
 
     def __init__(self, data: dict[str, str | int | bool]):
         super().__init__(

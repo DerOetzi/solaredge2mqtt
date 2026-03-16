@@ -118,9 +118,7 @@ class TestInvalidRegisterDataException:
 
     def test_invalid_register_data_exception_can_be_raised(self):
         """Test InvalidRegisterDataException can be raised and caught."""
-        unicode_err = UnicodeDecodeError(
-            "utf-8", b"\xff", 0, 1, "invalid byte"
-        )
+        unicode_err = UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid byte")
 
         with pytest.raises(InvalidRegisterDataException) as exc_info:
             raise InvalidRegisterDataException(
@@ -137,9 +135,7 @@ class TestInvalidRegisterDataException:
 
     def test_invalid_register_data_exception_preserves_cause(self):
         """Test InvalidRegisterDataException preserves exception chain."""
-        original_err = UnicodeDecodeError(
-            "utf-8", b"\xc2", 0, 1, "test"
-        )
+        original_err = UnicodeDecodeError("utf-8", b"\xc2", 0, 1, "test")
 
         try:
             try:

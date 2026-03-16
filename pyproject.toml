@@ -83,7 +83,7 @@ local_scheme = "node-and-date"
 fallback_version = "0.0.0.unknown"
 
 [tool.ruff]
-line-length = 79
+line-length = 88
 target-version = "py313"
 
 [tool.ruff.lint]
@@ -112,6 +112,10 @@ omit = [
 ]
 
 [tool.coverage.report]
+# Fail the build if total coverage drops below this threshold.
+# Current baseline is ~92%; 90% gives a small buffer while
+# still providing a meaningful quality gate for all PRs.
+fail_under = 90
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",

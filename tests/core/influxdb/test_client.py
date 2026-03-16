@@ -1,11 +1,10 @@
 """Tests for core InfluxDBAsync module with mocking."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.influxdb import InfluxDBAsync
 from solaredge2mqtt.core.influxdb.events import InfluxDBAggregatedEvent
 from solaredge2mqtt.core.influxdb.settings import InfluxDBSettings
@@ -39,9 +38,10 @@ def price_settings():
 @pytest.fixture
 def mock_influxdb_client():
     """Create mock InfluxDB clients."""
-    with patch("solaredge2mqtt.core.influxdb.InfluxDBClient") as mock_sync, patch(
-        "solaredge2mqtt.core.influxdb.InfluxDBClientAsync"
-    ) as mock_async:
+    with (
+        patch("solaredge2mqtt.core.influxdb.InfluxDBClient") as mock_sync,
+        patch("solaredge2mqtt.core.influxdb.InfluxDBClientAsync") as mock_async,
+    ):
         mock_sync_instance = MagicMock()
         mock_sync.return_value = mock_sync_instance
 
@@ -87,9 +87,7 @@ class TestInfluxDBAsyncInit:
 class TestInfluxDBAsyncInitialize:
     """Tests for InfluxDBAsync initialize methods."""
 
-    def test_init_method(
-        self, influxdb_settings, price_settings, mock_influxdb_client
-    ):
+    def test_init_method(self, influxdb_settings, price_settings, mock_influxdb_client):
         """Test init method creates async client and initializes buckets."""
         mock_sync, mock_async = mock_influxdb_client
 

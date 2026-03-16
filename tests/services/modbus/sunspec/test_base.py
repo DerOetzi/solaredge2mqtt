@@ -39,10 +39,7 @@ class TestSunSpecRegister:
             TEST_REG = "test_reg", 40000, SunSpecValueType.UINT16, True
 
         # UINT16 has length 1
-        assert (
-            TestRegister.TEST_REG.end_address
-            == TestRegister.TEST_REG.address + 1
-        )
+        assert TestRegister.TEST_REG.end_address == TestRegister.TEST_REG.address + 1
 
     def test_register_value_type(self):
         """Test register value_type property."""
@@ -134,9 +131,7 @@ class TestSunSpecRegister:
             "utf-8", b"\xc2", 5, 6, "invalid continuation byte"
         ),
     )
-    def test_register_decode_response_unicode_error(
-        self, mock_convert, mock_logger
-    ):
+    def test_register_decode_response_unicode_error(self, mock_convert, mock_logger):
         """Test register decode_response handles UnicodeDecodeError."""
 
         class TestRegister(SunSpecRegister):
@@ -156,9 +151,7 @@ class TestSunSpecRegister:
 
         # Should raise InvalidRegisterDataException after logging
         with pytest.raises(InvalidRegisterDataException) as exc_info:
-            TestRegister.TEST_REG.decode_response(
-                invalid_registers, data
-            )
+            TestRegister.TEST_REG.decode_response(invalid_registers, data)
 
         # Verify exception attributes
         exception = exc_info.value
@@ -185,9 +178,7 @@ class TestSunSpecRegister:
     @patch("solaredge2mqtt.services.modbus.sunspec.base.logger")
     @patch(
         "pymodbus.client.ModbusTcpClient.convert_from_registers",
-        side_effect=UnicodeDecodeError(
-            "utf-8", b"\xc2", 0, 1, "invalid start byte"
-        ),
+        side_effect=UnicodeDecodeError("utf-8", b"\xc2", 0, 1, "invalid start byte"),
     )
     def test_register_decode_response_unicode_error_empty_data(
         self, mock_convert, mock_logger
@@ -207,9 +198,7 @@ class TestSunSpecRegister:
 
         # Should raise InvalidRegisterDataException after logging
         with pytest.raises(InvalidRegisterDataException) as exc_info:
-            TestRegister.MANUFACTURER.decode_response(
-                [0xC200, 0x0000], data
-            )
+            TestRegister.MANUFACTURER.decode_response([0xC200, 0x0000], data)
 
         # Verify exception attributes
         exception = exc_info.value
@@ -219,7 +208,6 @@ class TestSunSpecRegister:
         # Should have logged appropriate messages
         assert mock_logger.error.call_count == 1
         assert mock_logger.debug.call_count == 1
-
 
     def test_register_encode_request_int(self):
         """Test register encode_request for integer."""

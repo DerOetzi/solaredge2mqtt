@@ -1,6 +1,5 @@
 """Tests for forecast settings module."""
 
-
 from solaredge2mqtt.services.forecast.settings import ForecastSettings
 
 # Note: ForecastSettings.ensure_secure_cache validator has a pydantic v1/v2

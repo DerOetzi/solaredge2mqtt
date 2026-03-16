@@ -1,6 +1,9 @@
 """Tests for forecast __init__ module."""
 
-from solaredge2mqtt.services.forecast import FORECAST_AVAILABLE, _deps_available
+from solaredge2mqtt.services.forecast import (
+    FORECAST_AVAILABLE,
+    _deps_available,
+)
 
 
 class TestForecastModule:

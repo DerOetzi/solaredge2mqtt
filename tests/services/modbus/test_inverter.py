@@ -1,6 +1,5 @@
 """Tests for modbus inverter model module."""
 
-
 from solaredge2mqtt.services.modbus.models.base import (
     ModbusDeviceInfo,
     ModbusUnitInfo,

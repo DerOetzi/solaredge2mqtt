@@ -78,6 +78,11 @@ jobs:
       - name: Install package with dev dependencies
         run: pip install -e ".[dev,forecast]"
 
+      # Lint is secrets-free and runs for all PRs, including external forks.
+      # It enforces code style and catches common errors before tests run.
+      - name: Lint with ruff
+        run: ruff check .
+
       - name: Run tests with coverage
         run: python -m pytest --cov=solaredge2mqtt --cov-report=xml:coverage.xml --tb=short
 
