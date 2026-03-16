@@ -81,8 +81,25 @@ jobs:
       - name: Run tests with coverage
         run: python -m pytest --cov=solaredge2mqtt --cov-report=xml:coverage.xml --tb=short
 
+      # Security: SONAR_TOKEN is not available for pull requests from external
+      # forks (GitHub withholds secrets from untrusted code). Running Sonar
+      # against such PRs would always fail. Instead, Sonar is skipped with a
+      # clear notice and only runs on pushes and internal PRs (same repo),
+      # where the secret is safely accessible. This avoids both false failures
+      # and the risk of secret exfiltration via pull_request_target.
+      - name: SonarCloud Scan skipped (external fork PR)
+        if: >-
+          ${{ matrix.python-version == '3.13' &&
+              github.event_name == 'pull_request' &&
+              github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          echo "::notice::SonarCloud Scan skipped: pull request originates from an external fork. SONAR_TOKEN is not available for fork PRs (GitHub security policy). Sonar analysis will run after the PR is merged to main or on internal branches."
+
       - name: SonarCloud Scan
-        if: ${{ matrix.python-version == '3.13' }}
+        if: >-
+          ${{ matrix.python-version == '3.13' &&
+              (github.event_name != 'pull_request' ||
+               github.event.pull_request.head.repo.full_name == github.repository) }}
         uses: SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
