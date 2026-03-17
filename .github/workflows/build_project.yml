@@ -105,7 +105,7 @@ jobs:
 
       - name: Publish assets to github
         if: ${{github.event_name == 'release' && matrix.python-version == '3.13'}}
-        uses: svenstaro/upload-release-action@b98a3b12e86552593f3e4e577ca8a62aa2f3f22b
+        uses: svenstaro/upload-release-action@29e53e917877a24fad85510ded594ab3c9ca12de
         with:
           repo_token: ${{ github.token }}
           file: dist/*
