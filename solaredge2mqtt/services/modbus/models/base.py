@@ -43,7 +43,7 @@ class ModbusDeviceInfo(Solaredge2MQTTBaseModel):
     unit: ModbusUnitInfo | None = None
 
     @classmethod
-    def from_sunspec_payload(
+    def from_sunspec(
         cls,
         payload: SunSpecPayload,
         unit: ModbusUnitInfo | None = None

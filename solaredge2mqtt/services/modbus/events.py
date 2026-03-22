@@ -3,11 +3,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from solaredge2mqtt.core.events.events import BaseEvent
+from solaredge2mqtt.services.modbus.sunspec.values import SunSpecRawData
 
 if TYPE_CHECKING:
     from solaredge2mqtt.services.modbus.models.unit import ModbusUnit
     from solaredge2mqtt.services.modbus.sunspec.base import SunSpecRegister
-    from solaredge2mqtt.services.modbus.sunspec.values import SunSpecInputData
+    from solaredge2mqtt.services.modbus.sunspec.values import SunSpecRawData
 
 
 class ModbusUnitsReadEvent(BaseEvent):
@@ -24,7 +25,7 @@ class ModbusWriteEvent(BaseEvent):
 
     def __init__(self,
                  register: SunSpecRegister,
-                 payload: SunSpecInputData):
+                 payload: SunSpecRawData):
         self._register = register
         self._payload = payload
 
@@ -33,5 +34,5 @@ class ModbusWriteEvent(BaseEvent):
         return self._register
 
     @property
-    def payload(self) -> SunSpecInputData:
+    def payload(self) -> SunSpecRawData:
         return self._payload

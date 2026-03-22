@@ -1,4 +1,7 @@
-from solaredge2mqtt.services.modbus.sunspec.base import SunSpecRegister
+from solaredge2mqtt.services.modbus.sunspec.base import (
+    SunSpecRegister,
+    SunSpecWordOrder,
+)
 from solaredge2mqtt.services.modbus.sunspec.battery import (
     SunSpecBatteryInfoRegister,
     SunSpecBatteryOffset,
@@ -188,8 +191,8 @@ class SunSpecPowerControlRegister(SunSpecRegister):
     )
 
     def decode_response(
-        self, registers: list[int], data: dict[str, SunSpecPayload]
-    ) -> dict[str, SunSpecPayload]:
+        self, registers: list[int], data: SunSpecPayload
+    ) -> SunSpecPayload:
         data = super().decode_response(registers, data)
 
         if self == SunSpecPowerControlRegister.ADVANCED_POWER_CONTROL_ENABLE:
@@ -198,7 +201,7 @@ class SunSpecPowerControlRegister(SunSpecRegister):
         return data
 
     @staticmethod
-    def wordorder() -> str:
+    def wordorder() -> SunSpecWordOrder:
         return "little"
 
 
@@ -223,15 +226,15 @@ class SunSpecSiteLimitRegister(SunSpecRegister):
     )
 
     def decode_response(
-        self, registers: list[int], data: dict[str, SunSpecPayload]
-    ) -> dict[str, SunSpecPayload]:
+        self, registers: list[int], data: SunSpecPayload
+    ) -> SunSpecPayload:
         data = super().decode_response(registers, data)
 
-        if self == SunSpecPowerControlRegister.EXPORT_CONTROL_SITE_LIMIT:
-            data[self.identifier] = 0 if data[self.identifier] < 0 else int(
+        if self == SunSpecSiteLimitRegister.EXPORT_CONTROL_SITE_LIMIT:
+            data[self.identifier] = 0 if float(data[self.identifier]) < 0.0 else int(
                 data[self.identifier])
-        elif self == SunSpecPowerControlRegister.EXPORT_CONTROL_MODE:
-            bitmask = data[self.identifier]
+        elif self == SunSpecSiteLimitRegister.EXPORT_CONTROL_MODE:
+            bitmask = int(data[self.identifier])
             data[f"{self.identifier}_raw"] = bitmask
 
             data[self.identifier] = ((bitmask & 0x0001) +
@@ -244,5 +247,5 @@ class SunSpecSiteLimitRegister(SunSpecRegister):
         return data
 
     @staticmethod
-    def wordorder() -> str:
+    def wordorder() -> SunSpecWordOrder:
         return "little"

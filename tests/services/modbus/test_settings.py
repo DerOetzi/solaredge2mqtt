@@ -134,7 +134,12 @@ class TestModbusSettings:
 
     def test_modbus_settings_units_with_followers(self):
         """Test units property with followers."""
-        settings = ModbusSettings(follower=[{"unit": 2}, {"unit": 3}])
+        settings = ModbusSettings(
+            follower=[
+                {"unit": 2},
+                {"unit": 3}
+            ]  # pyright: ignore[reportArgumentType]
+        )
         units = settings.units
 
         assert "leader" in units
@@ -144,7 +149,8 @@ class TestModbusSettings:
 
     def test_modbus_settings_has_followers_true(self):
         """Test has_followers returns True with followers."""
-        settings = ModbusSettings(follower=[{"unit": 2}])
+        settings = ModbusSettings(
+            follower=[{"unit": 2}])  # pyright: ignore[reportArgumentType]
 
         assert settings.has_followers is True
 
@@ -156,18 +162,21 @@ class TestModbusSettings:
 
     def test_modbus_settings_follower_role_is_follower(self):
         """Test that followers have FOLLOWER role."""
-        settings = ModbusSettings(follower=[{"unit": 2}])
+        settings = ModbusSettings(
+            follower=[{"unit": 2}])  # pyright: ignore[reportArgumentType]
 
         assert settings.follower[0].role == ModbusUnitRole.FOLLOWER
 
     def test_modbus_settings_follower_meter_defaults_false(self):
         """Test that follower meter defaults are False."""
-        settings = ModbusSettings(follower=[{"unit": 2}])
+        settings = ModbusSettings(
+            follower=[{"unit": 2}])  # pyright: ignore[reportArgumentType]
 
         assert all(m is False for m in settings.follower[0].meter)
 
     def test_modbus_settings_follower_battery_defaults_false(self):
         """Test that follower battery defaults are False."""
-        settings = ModbusSettings(follower=[{"unit": 2}])
+        settings = ModbusSettings(
+            follower=[{"unit": 2}])  # pyright: ignore[reportArgumentType]
 
         assert all(b is False for b in settings.follower[0].battery)

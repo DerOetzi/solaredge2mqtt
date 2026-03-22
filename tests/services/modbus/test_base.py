@@ -57,7 +57,7 @@ class TestModbusDeviceInfo:
             "c_serialnumber": "INV12345",
         }
 
-        info = ModbusDeviceInfo.from_sunspec_payload(data)
+        info = ModbusDeviceInfo.from_sunspec(data)
 
         assert info.manufacturer == "SolarEdge"
         assert info.model == "SE10K"
@@ -77,7 +77,7 @@ class TestModbusDeviceInfo:
             "c_sunspec_did": 103,
         }
 
-        info = ModbusDeviceInfo.from_sunspec_payload(data)
+        info = ModbusDeviceInfo.from_sunspec(data)
 
         assert info.sunspec_type == "Three Phase Inverter"
 
@@ -91,7 +91,7 @@ class TestModbusDeviceInfo:
             "c_option": "Export",
         }
 
-        info = ModbusDeviceInfo.from_sunspec_payload(data)
+        info = ModbusDeviceInfo.from_sunspec(data)
 
         assert info.option == "Export"
 
@@ -109,7 +109,7 @@ class TestModbusDeviceInfo:
             "c_serialnumber": "INV12345",
         }
 
-        info = ModbusDeviceInfo.from_sunspec_payload(data, unit_info)
+        info = ModbusDeviceInfo.from_sunspec(data, unit_info)
 
         assert info.unit is not None
         assert info.unit.key == "leader"
@@ -128,7 +128,7 @@ class TestModbusDeviceInfo:
             "c_serialnumber": "INV12345",
         }
 
-        info = ModbusDeviceInfo.from_sunspec_payload(data, unit_info)
+        info = ModbusDeviceInfo.from_sunspec(data, unit_info)
 
         assert info.unit is not None
 
@@ -141,7 +141,7 @@ class TestModbusDeviceInfo:
             "c_serialnumber": "INV12345",
         }
 
-        info = ModbusDeviceInfo.from_sunspec_payload(data)
+        info = ModbusDeviceInfo.from_sunspec(data)
 
         assert info.unit is None
 
@@ -159,7 +159,7 @@ class TestModbusDeviceInfo:
             "c_serialnumber": "INV12345",
         }
 
-        info = ModbusDeviceInfo.from_sunspec_payload(data, unit_info)
+        info = ModbusDeviceInfo.from_sunspec(data, unit_info)
 
         assert info.unit_key() == "leader"
         assert info.unit_key("_test") == "leader_test"
@@ -173,7 +173,7 @@ class TestModbusDeviceInfo:
             "c_serialnumber": "INV12345",
         }
 
-        info = ModbusDeviceInfo.from_sunspec_payload(data)
+        info = ModbusDeviceInfo.from_sunspec(data)
 
         assert info.unit_key() == ""
         assert info.unit_key("_test") == ""
@@ -187,7 +187,7 @@ class TestModbusDeviceInfo:
             "c_serialnumber": "INV12345",
         }
 
-        info = ModbusDeviceInfo.from_sunspec_payload(data)
+        info = ModbusDeviceInfo.from_sunspec(data)
         ha_info = info.homeassistant_device_info("Inverter")
 
         assert ha_info["name"] == "SolarEdge Inverter"
@@ -210,7 +210,7 @@ class TestModbusDeviceInfo:
             "c_serialnumber": "INV12345",
         }
 
-        info = ModbusDeviceInfo.from_sunspec_payload(data, unit_info)
+        info = ModbusDeviceInfo.from_sunspec(data, unit_info)
         ha_info = info.homeassistant_device_info("Inverter")
 
         assert ha_info["unit_key"] == "leader"
@@ -243,7 +243,7 @@ class TestModbusDeviceInfo:
                 "c_serialnumber": "TEST123",
                 "c_sunspec_did": did,
             }
-            info = ModbusDeviceInfo.from_sunspec_payload(data)
+            info = ModbusDeviceInfo.from_sunspec(data)
             assert info.sunspec_type == expected_type
 
 
@@ -273,7 +273,7 @@ class TestModbusComponent:
         from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
 
         # Create a real ModbusComponent subclass instance
-        device_info = ModbusDeviceInfo.from_sunspec_payload({
+        device_info = ModbusDeviceInfo.from_sunspec({
             "c_manufacturer": "SolarEdge",
             "c_model": "Meter",
             "c_version": "1.0.0",
@@ -321,7 +321,7 @@ class TestModbusComponent:
         """Test influxdb_tags returns correct tags."""
         from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
 
-        device_info = ModbusDeviceInfo.from_sunspec_payload({
+        device_info = ModbusDeviceInfo.from_sunspec({
             "c_manufacturer": "SolarEdge",
             "c_model": "Meter",
             "c_version": "1.0.0",
@@ -365,7 +365,7 @@ class TestModbusComponent:
         """Test mqtt_topic without followers."""
         from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
 
-        device_info = ModbusDeviceInfo.from_sunspec_payload({
+        device_info = ModbusDeviceInfo.from_sunspec({
             "c_manufacturer": "SolarEdge",
             "c_model": "Meter",
             "c_version": "1.0.0",
@@ -409,7 +409,7 @@ class TestModbusComponent:
             role=ModbusUnitRole.LEADER,
         )
 
-        device_info = ModbusDeviceInfo.from_sunspec_payload({
+        device_info = ModbusDeviceInfo.from_sunspec({
             "c_manufacturer": "SolarEdge",
             "c_model": "Meter",
             "c_version": "1.0.0",
@@ -448,7 +448,7 @@ class TestModbusComponent:
         from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
 
         # Without unit
-        device_info = ModbusDeviceInfo.from_sunspec_payload({
+        device_info = ModbusDeviceInfo.from_sunspec({
             "c_manufacturer": "SolarEdge",
             "c_model": "Meter",
             "c_version": "1.0.0",

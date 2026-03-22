@@ -20,7 +20,7 @@ def make_device_info(with_unit: bool = False) -> ModbusDeviceInfo:
         "c_sunspec_did": 802,
     }
 
-    return ModbusDeviceInfo.from_sunspec_payload(
+    return ModbusDeviceInfo.from_sunspec(
         data,
         unit=(
             ModbusUnitInfo(unit=1, key="leader", role=ModbusUnitRole.LEADER)

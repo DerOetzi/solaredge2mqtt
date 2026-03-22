@@ -29,7 +29,7 @@ class InvalidRegisterDataException(Exception):
         register_id: str,
         address: int,
         raw_values: list[int],
-        original_error: Exception,
+        original_error: Exception | None,
     ) -> None:
         self.register_id = register_id
         self.address = address

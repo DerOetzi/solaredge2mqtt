@@ -66,7 +66,7 @@ class TestModbusInit:
 
         assert modbus.settings is mock_service_settings.modbus
         assert modbus.event_bus is mock_event_bus
-        assert modbus.client is None
+        assert modbus._client is None
         assert modbus._initialized is False
 
     def test_modbus_subscribes_to_events(
@@ -95,7 +95,7 @@ class TestModbusAsyncInit:
         ):
             await modbus.async_init()
 
-        assert modbus.client is not None
+        assert modbus._client is not None
         modbus.detect_devices.assert_called_once()
         modbus.check_readable_registers.assert_called_once()
         assert modbus._initialized is True
@@ -110,7 +110,7 @@ class TestModbusReadFromModbus:
     ):
         """Test successful modbus read."""
         modbus = Modbus(mock_service_settings, mock_event_bus)
-        modbus.client = mock_modbus_client
+        modbus._client = mock_modbus_client
 
         # Mock register bundle
         mock_bundle = MagicMock()
@@ -135,7 +135,7 @@ class TestModbusReadFromModbus:
     ):
         """Test modbus read error blocks register."""
         modbus = Modbus(mock_service_settings, mock_event_bus)
-        modbus.client = mock_modbus_client
+        modbus._client = mock_modbus_client
         modbus._initialized = False
 
         # Mock register bundle
@@ -158,7 +158,7 @@ class TestModbusReadFromModbus:
     ):
         """Test modbus exception blocks register."""
         modbus = Modbus(mock_service_settings, mock_event_bus)
-        modbus.client = mock_modbus_client
+        modbus._client = mock_modbus_client
         modbus._initialized = False
 
         # Mock register bundle
@@ -180,7 +180,7 @@ class TestModbusReadFromModbus:
     ):
         """Test modbus read skips blocked registers."""
         modbus = Modbus(mock_service_settings, mock_event_bus)
-        modbus.client = mock_modbus_client
+        modbus._client = mock_modbus_client
         modbus._block_unreadable = {40000}
 
         # Mock register bundle for blocked address
@@ -203,7 +203,7 @@ class TestModbusGetData:
     ):
         """Test get_data returns units."""
         modbus = Modbus(mock_service_settings, mock_event_bus)
-        modbus.client = mock_modbus_client
+        modbus._client = mock_modbus_client
         modbus._initialized = True
 
         # Setup device info
@@ -250,7 +250,7 @@ class TestModbusGetData:
     ):
         """Test get_data raises on KeyError."""
         modbus = Modbus(mock_service_settings, mock_event_bus)
-        modbus.client = mock_modbus_client
+        modbus._client = mock_modbus_client
         modbus._initialized = True
         modbus._device_info = {}
 
@@ -281,7 +281,7 @@ class TestModbusMappers:
             mock_inverter.dc.power = 1200
             mock_inverter.energytotal = 50000
             mock_inverter.grid_status = "ON"
-            mock_inverter_class.return_value = mock_inverter
+            mock_inverter_class.from_sunspec.return_value = mock_inverter
 
             result = modbus._map_inverter("leader", {})
 
@@ -302,7 +302,7 @@ class TestModbusMappers:
             mock_meter.power.actual = 500
             mock_meter.energy.totalimport = 10000
             mock_meter.energy.totalexport = 5000
-            mock_meter_class.return_value = mock_meter
+            mock_meter_class.from_sunspec.return_value = mock_meter
 
             result = modbus._map_meters("leader", {"meter0": {}})
 
@@ -323,11 +323,12 @@ class TestModbusMappers:
             mock_battery.status = "ON"
             mock_battery.power = 500
             mock_battery.state_of_charge = 80
-            mock_battery_class.return_value = mock_battery
+            mock_battery_class.from_sunspec.return_value = mock_battery
 
             result = modbus._map_batteries("leader", {"battery0": {}})
 
             assert "battery0" in result
+            assert result["battery0"] is mock_battery
 
 
 class TestModbusWriteToModbus:
@@ -339,7 +340,7 @@ class TestModbusWriteToModbus:
     ):
         """Test successful modbus write."""
         modbus = Modbus(mock_service_settings, mock_event_bus)
-        modbus.client = mock_modbus_client
+        modbus._client = mock_modbus_client
 
         mock_register = MagicMock()
         mock_register.address = 40000
@@ -356,7 +357,7 @@ class TestModbusWriteToModbus:
     ):
         """Test modbus write handles exception."""
         modbus = Modbus(mock_service_settings, mock_event_bus)
-        modbus.client = mock_modbus_client
+        modbus._client = mock_modbus_client
 
         mock_register = MagicMock()
         mock_register.address = 40000

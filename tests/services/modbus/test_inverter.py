@@ -24,7 +24,7 @@ def make_device_info(with_unit: bool = False) -> ModbusDeviceInfo:
         "c_serialnumber": "INV12345",
         "c_sunspec_did": 103,
     }
-    return ModbusDeviceInfo.from_sunspec_payload(
+    return ModbusDeviceInfo.from_sunspec(
         data,
         ModbusUnitInfo(unit=1, key="leader", role=ModbusUnitRole.LEADER)
         if with_unit else None

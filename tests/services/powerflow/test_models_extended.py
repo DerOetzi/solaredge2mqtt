@@ -816,7 +816,7 @@ class TestInverterPowerflowFromModbus:
         """Test from_modbus creates InverterPowerflow correctly."""
 
         # Create mock device info
-        device_info = ModbusDeviceInfo.from_sunspec_payload({
+        device_info = ModbusDeviceInfo.from_sunspec({
             "c_manufacturer": "SolarEdge",
             "c_model": "SE10K",
             "c_version": "1.0.0",
@@ -878,7 +878,7 @@ class TestGridPowerflowFromModbus:
         from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
 
         # Create mock device info with Import/Export option
-        device_info = ModbusDeviceInfo.from_sunspec_payload({
+        device_info = ModbusDeviceInfo.from_sunspec({
             "c_manufacturer": "SolarEdge",
             "c_model": "Meter",
             "c_version": "1.0.0",

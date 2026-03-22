@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.logging import logger
@@ -55,7 +55,7 @@ class ModbusAdvancedControl:
         else:
             logger.info("Advanced power control is disabled in settings")
 
-    def enable_advanced_power_control(self):
+    async def enable_advanced_power_control(self):  # noqa S7503 Needs to be done
         logger.debug("Enabling advanced power control")
         # await self.event_bus.emit(ModbusWriteEvent(
         #    SunSpecPowerControlRegister.ADVANCED_POWER_CONTROL_ENABLE, True
@@ -78,7 +78,7 @@ class ModbusAdvancedControl:
 
         logger.info("Advanced power control disabled.")
 
-    def subscribe_topics(self) -> None:
+    async def subscribe_topics(self) -> None:  # noqa S7503 Needs to be done
         for field in ModbusInverter.parse_schema(self.property_parser):
             topic = f"{self.topic_prefix}/{field['topic']}"
             logger.info(f"Subscribing to topic: {topic}")
@@ -86,14 +86,15 @@ class ModbusAdvancedControl:
 
     @staticmethod
     def property_parser(
-        prop: dict[str, any],
+        prop: dict[str, Any],
         name: str,
         path: list[str]
     ) -> dict[str, str] | None:
         field = None
 
-        if prop.get("input_field", False):
-            input_field = prop.get("input_field")
+        input_field = prop.get("input_field", False)
+
+        if input_field:
             input_field = ModbusPowerControlInput.from_string(input_field)
             field = {
                 "name": name,
@@ -103,5 +104,5 @@ class ModbusAdvancedControl:
 
         return field
 
-    def handle_mqtt_received_event(self, event: MQTTReceivedEvent) -> None:
+    async def handle_mqtt_received_event(self, event: MQTTReceivedEvent) -> None:  # noqa S7503 Needs to be done
         logger.info(event.input)

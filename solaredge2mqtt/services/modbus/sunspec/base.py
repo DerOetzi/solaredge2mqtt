@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+from typing import Literal, TypeAlias
+
 from pymodbus.client import ModbusTcpClient
 
 from solaredge2mqtt.core.exceptions import InvalidRegisterDataException
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.models import EnumModel
 from solaredge2mqtt.services.modbus.sunspec.values import (
-    SunSpecInputData,
     SunSpecPayload,
+    SunSpecRawData,
     SunSpecValueType,
 )
 
@@ -78,7 +80,7 @@ class SunSpecRequestRegisterBundle:
         self._registers.append(register)
 
     @property
-    def registers(self) -> set[SunSpecRegister]:
+    def registers(self) -> list[SunSpecRegister]:
         return self._registers
 
     @property
@@ -96,14 +98,17 @@ class SunSpecRequestRegisterBundle:
         return length
 
     def decode_response(
-        self, registers: list[int], data: dict[str, SunSpecPayload]
-    ) -> dict[str, SunSpecPayload]:
+        self, registers: list[int], data: SunSpecPayload
+    ) -> SunSpecPayload:
         for register in self._registers:
             offset = register.address - self.address
             response_slice = registers[offset: offset + register.length]
             data = register.decode_response(response_slice, data)
 
         return data
+
+
+SunSpecWordOrder: TypeAlias = Literal["big", "little"]
 
 
 class SunSpecRegister(EnumModel):
@@ -152,7 +157,7 @@ class SunSpecRegister(EnumModel):
         return self._required
 
     @staticmethod
-    def wordorder() -> str:
+    def wordorder() -> SunSpecWordOrder:
         return "big"
 
     @classmethod
@@ -161,19 +166,28 @@ class SunSpecRegister(EnumModel):
     ) -> list[SunSpecRequestRegisterBundle]:
         if not hasattr(cls, "_cached_bundles"):
             cls._cached_bundles = SunSpecRequestRegisterBundle.from_registers(
-                cls, required_only
+                list(cls), required_only
             )
         return cls._cached_bundles
 
     def decode_response(
-        self, registers: list[int], data: dict[str, SunSpecPayload]
-    ) -> dict[str, SunSpecPayload]:
+        self, registers: list[int], data: SunSpecPayload
+    ) -> SunSpecPayload:
         try:
             value = ModbusTcpClient.convert_from_registers(
                 registers,
                 self.value_type.data_type,
                 word_order=self.wordorder()
             )
+
+            if isinstance(value, list):
+                raise InvalidRegisterDataException(
+                    register_id=self.identifier,
+                    address=self.address,
+                    raw_values=registers,
+                    original_error=None
+                )
+
         except UnicodeDecodeError as e:
             logger.error(
                 f"Failed to decode register '{self.identifier}' at "
@@ -192,7 +206,7 @@ class SunSpecRegister(EnumModel):
             ) from e
 
         if self.value_type == SunSpecValueType.STRING:
-            value = value.strip("\x00").rstrip()
+            value = str(value).strip("\x00").rstrip()
         elif value == self.value_type.not_implemented_value:
             value = False
 
@@ -200,15 +214,15 @@ class SunSpecRegister(EnumModel):
 
         return data
 
-    def encode_request(self, value: SunSpecInputData) -> list[int]:
+    def encode_request(self, value: SunSpecRawData) -> list[int]:
         if isinstance(value, bool):
             value = 1 if value else 0
 
-        value = ModbusTcpClient.convert_to_registers(
+        encoded_value = ModbusTcpClient.convert_to_registers(
             value, self.value_type.data_type, word_order=self.wordorder()
         )
 
-        return value
+        return encoded_value
 
 
 class SunSpecOffset(EnumModel):

@@ -13,12 +13,16 @@ class AdvancedControlsSettings(EnumModel):
 
 
 class ModbusUnitSettings(BaseModel):
-    unit: int = Field(1)
+    unit: int = Field(default=1)
     meter: list[bool] = Field(default_factory=list)
     battery: list[bool] = Field(default_factory=list)
-    role: ModbusUnitRole = Field(ModbusUnitRole.LEADER, read_only=True)
+    role: ModbusUnitRole = Field(default=ModbusUnitRole.LEADER)
 
     @model_validator(mode='before')
+    @classmethod
+    def model_fill_defaults(cls, values: dict) -> dict:
+        return cls.fill_defaults(values)
+
     @classmethod
     def fill_defaults(cls, values: dict) -> dict:
         # Set meter defaults: meter0=true, meter1=false, meter2=false
@@ -72,30 +76,34 @@ class ModbusUnitSettings(BaseModel):
 
 
 class ModbusSettings(ModbusUnitSettings):
-    host: str = Field(None)
-    port: int = Field(1502)
+    host: str | None = Field(default=None)
+    port: int = Field(default=1502)
 
-    timeout: int = Field(1)
+    timeout: int = Field(default=1)
 
-    check_grid_status: bool = Field(False)
+    check_grid_status: bool = Field(default=False)
     advanced_power_controls: AdvancedControlsSettings = Field(
-        AdvancedControlsSettings.DISABLED)
+        default=AdvancedControlsSettings.DISABLED)
 
     follower: list[ModbusUnitSettings] = Field(default_factory=list)
 
-    retain: bool = Field(False)
+    retain: bool = Field(default=False)
 
     @model_validator(mode='before')
     @classmethod
+    def model_fill_defaults(cls, values: dict) -> dict:
+        return cls.fill_defaults(values)
+
+    @classmethod
     def fill_defaults(cls, values: dict) -> dict:
-        values = super().fill_defaults(values)
+        values = ModbusUnitSettings.fill_defaults(values)
 
         for i, slave_values in enumerate(values.get("follower", [])):
             slave_values["role"] = ModbusUnitRole.FOLLOWER
-            slave_values = super()._fill_defaults_array(
+            slave_values = ModbusUnitSettings._fill_defaults_array(
                 "meter", slave_values, 3, "false"
             )
-            slave_values = super()._fill_defaults_array(
+            slave_values = ModbusUnitSettings._fill_defaults_array(
                 "battery", slave_values, 2, "false"
             )
             values["follower"][i] = slave_values
@@ -108,7 +116,7 @@ class ModbusSettings(ModbusUnitSettings):
 
     @property
     def units(self) -> dict[str, ModbusUnitSettings]:
-        units = {"leader": self}
+        units: dict[str, ModbusUnitSettings] = {"leader": self}
         for i, follower in enumerate(self.follower):
             units[f"follower{i}"] = follower
 
