@@ -21,7 +21,7 @@ classifiers = [
 dependencies = [
     "aiocsv==1.4.0",
     "aiohttp==3.13.3",
-    "aiomqtt==2.5.0",
+    "aiomqtt==2.5.1",
     "astral==3.2",
     "ephem==4.2.1",
     "influxdb-client==1.50.0",
