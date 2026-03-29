@@ -3,14 +3,13 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field, PrivateAttr, computed_field
 
 from solaredge2mqtt.core.models import (
     BaseField,
-    BaseInputField,
-    BaseInputFieldEnumModel,
+    BaseInputScalarField,
     EnumModel,
 )
 
@@ -30,17 +29,14 @@ class HomeAssistantStatus(EnumModel):
         return self._status
 
 
-class HomeAssistantStatusInput(BaseInputField):
+class HomeAssistantStatusInput(BaseInputScalarField):
     status: HomeAssistantStatus
-
-    def __init__(self, status: str):
-        super().__init__(status=status)
 
 
 class HomeAssistantBaseModel(BaseModel):
     client_id: str = Field(..., exclude=True)
 
-    def hash_unique_id(self, ids: list[str | int]) -> str:
+    def hash_unique_id(self, ids: list[str] | list[str | int]) -> str:
         ids.append(self.client_id)
         unique_id = "_".join([str(id) for id in ids])
 
@@ -55,26 +51,23 @@ class HomeAssistantBaseModel(BaseModel):
 class HomeAssistantDevice(HomeAssistantBaseModel):
     name: str
     state_topic: str = Field(exclude=True)
-    manufacturer: str | None = Field(None)
-    model: str | None = Field(None)
-    hw_version: str | None = Field(None)
-    serial_number: str | None = Field(None)
-    sw_version: str | None = Field(None)
-    via_device: str | None = Field(None)
-    unit_key: str | None = Field(None, exclude=True)
+    manufacturer: str | None = Field(default=None)
+    model: str | None = Field(default=None)
+    hw_version: str | None = Field(default=None)
+    serial_number: str | None = Field(default=None)
+    sw_version: str | None = Field(default=None)
+    via_device: str | None = Field(default=None)
+    unit_key: str | None = Field(default=None, exclude=True)
 
     @computed_field
     @property
     def identifiers(self) -> str:
-        identifiers = [self.name, self.manufacturer,
-                       self.model, self.serial_number]
+        identifiers = [self.name, self.manufacturer, self.model, self.serial_number]
 
         if self.unit_key:
             identifiers.append(self.unit_key)
 
-        return self.hash_unique_id(
-            identifiers
-        )
+        return self.hash_unique_id(identifiers)
 
 
 class HomeAssistantType(EnumModel):
@@ -83,10 +76,7 @@ class HomeAssistantType(EnumModel):
     SENSOR = "sensor", False, []
 
     def __init__(
-        self,
-        identifier: str,
-        command_topic: bool,
-        additional_fields: list[str]
+        self, identifier: str, command_topic: bool, additional_fields: list[str]
     ):
         self._identifier: str = identifier
         self._command_topic: bool = command_topic
@@ -140,21 +130,18 @@ class HomeAssistantEntityBaseType(BaseField):
     def field(
         self,
         title: str | None = None,
-        icon: str | None = None,
-        json_schema_extra: dict[str, any] | None = None,
-        input_field: BaseInputFieldEnumModel | None = None
-    ) -> dict[str, any]:
-        if json_schema_extra is None:
-            json_schema_extra = {}
+        input_field: BaseInputFieldEnumModel | None = None,
+        **json_schema_extra: Any,
+    ) -> dict[str, Any]:
 
         json_schema_extra = {
             "ha_type": self,
             "ha_typed": self.typed.identifier,
-            "icon": icon,
-            **json_schema_extra
+            "icon": None,
+            **json_schema_extra,
         }
 
-        return super().field(title, json_schema_extra, input_field)
+        return super().field(title, input_field, **json_schema_extra)
 
 
 class HomeAssistantBinarySensorType(HomeAssistantEntityBaseType):
@@ -178,7 +165,7 @@ class HomeAssistantBinarySensorType(HomeAssistantEntityBaseType):
 
 
 class HomeAssistantNumberType(HomeAssistantEntityBaseType):
-    ACTIVE_POWER_LIMIT = "active_power_limit", None, '%', 0, 100, 1, "slider"
+    ACTIVE_POWER_LIMIT = "active_power_limit", None, "%", 0, 100, 1, "slider"
 
     def __init__(
         self,
@@ -190,8 +177,9 @@ class HomeAssistantNumberType(HomeAssistantEntityBaseType):
         step: int | float | None = None,
         mode: str | None = None,
     ):
-        super().__init__(key, HomeAssistantType.NUMBER,
-                         device_class, None, unit_of_measurement)
+        super().__init__(
+            key, HomeAssistantType.NUMBER, device_class, None, unit_of_measurement
+        )
 
         self._min: int | float | None = min
         self._max: int | float | None = max
@@ -200,22 +188,24 @@ class HomeAssistantNumberType(HomeAssistantEntityBaseType):
 
     def field(
         self,
-        input_field: BaseInputFieldEnumModel,
         title: str | None = None,
-        icon: str | None = None,
-        min: float | None = None,
-        max: float | None = None,
-        step: float | None = None,
-        mode: str | None = None
-    ) -> dict[str, any]:
+        input_field: BaseInputFieldEnumModel | None = None,
+        **json_schema_extra: Any,
+    ) -> dict[str, Any]:
+
         json_schema_extra = {
-            "min": min or self._min,
-            "max": max or self._max,
-            "step": step or self._step,
-            "mode": mode or self._mode,
+            "min": self._min,
+            "max": self._max,
+            "step": self._step,
+            "mode": self._mode,
+            **json_schema_extra,
         }
 
-        return super().field(title, icon, json_schema_extra, input_field)
+        return super().field(
+            title,
+            input_field,
+            **json_schema_extra,
+        )
 
 
 class HomeAssistantSensorType(HomeAssistantEntityBaseType):
@@ -243,22 +233,28 @@ class HomeAssistantSensorType(HomeAssistantEntityBaseType):
         state_class: str | None = None,
         unit_of_measurement: str | None = None,
     ):
-        super().__init__(key, HomeAssistantType.SENSOR,
-                         device_class, state_class, unit_of_measurement)
+        super().__init__(
+            key,
+            HomeAssistantType.SENSOR,
+            device_class,
+            state_class,
+            unit_of_measurement,
+        )
 
 
 class HomeAssistantEntity(HomeAssistantBaseModel):
     name: str
     device: HomeAssistantDevice
-    _icon: str | None = None
-    _additional_fields: dict[str, any] = {}
+
     path: list[str] | None = Field(None, exclude=True)
-    ha_type: HomeAssistantEntityBaseType = Field(
-        exclude=True)
+    ha_type: HomeAssistantEntityBaseType = Field(exclude=True)
     unit: str | None = Field(None, exclude=True)
 
+    _icon: str | None = PrivateAttr(default=None)
+    _additional_fields: dict[str, Any] = PrivateAttr(default_factory=dict)
+
     def __init__(self, device: HomeAssistantDevice, icon: str | None = None, **data):
-        super().__init__(client_id=device.client_id, device=device, **data)
+        super().__init__(client_id=device.client_id, **{"device": device, **data})
 
         for field in self.ha_type.typed.additional_fields:
             if field in data and data[field] is not None:
@@ -269,19 +265,25 @@ class HomeAssistantEntity(HomeAssistantBaseModel):
     @computed_field
     @property
     def unique_id(self) -> str:
-        return self.hash_unique_id(
-            [self.device.identifiers, self.name,
-                self.state_topic, self.value_template]
-        )
+        ids = [self.device.identifiers, self.name, self.state_topic]
+
+        if value_template := self.value_template:
+            ids.append(value_template)
+
+        return self.hash_unique_id(ids)
 
     @computed_field
     @property
     def command_topic(self) -> str | None:
-        return (
-            f"{self.device.state_topic}/{'/'.join(self.path)}"
-            if self.ha_type.typed.command_topic
-            else None
-        )
+        if not self.ha_type.typed.command_topic:
+            return None
+
+        path = [self.device.state_topic]
+
+        if self.path:
+            path.extend(self.path)
+
+        return "/".join(path)
 
     @computed_field
     @property

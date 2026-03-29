@@ -1,5 +1,7 @@
 """Tests for modbus sunspec values module."""
 
+import pytest
+
 from solaredge2mqtt.services.modbus.sunspec.values import (
     BATTERY_STATUS_MAP,
     C_SUNSPEC_DID_MAP,
@@ -131,3 +133,15 @@ class TestSunSpecValueType:
 
         # data_type should be set from __modbus_data_type
         assert value_type.data_type is not None
+
+    def test_modbus_data_type_unsupported_raises(self):
+        """Unsupported datatype code raises ValueError."""
+        modbus_data_type = getattr(
+            SunSpecValueType,
+            "_SunSpecValueType__modbus_data_type",
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            modbus_data_type("unsupported")
+
+        assert "Unsupported data type" in str(exc_info.value)

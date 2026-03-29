@@ -28,6 +28,25 @@ This is the standard way to contribute to the project.
    git checkout -b feature-xyz
    ```
 
+### Recommended Pre-Commit Hooks
+
+Local pre-commit hooks are recommended for contributors because they catch and fix common issues before you open a pull request. The same checks are enforced again in CI during PR validation.
+
+This repository includes a versioned Git `pre-commit` hook that runs these checks before a commit is created:
+
+- `ruff check --fix` on staged Python files
+- `npx pyright` for the repository
+
+If one of these checks fails, Git aborts the commit.
+
+To enable the hook locally, run:
+
+```bash
+./scripts/setup-git-hooks.sh
+```
+
+The script configures Git to use `.githooks/` and installs the local Node dependency required for `npx pyright`.
+
 ---
 
 ### 🔧 Worktree Workflow (For Maintainers)

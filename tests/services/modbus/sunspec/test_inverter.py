@@ -209,6 +209,17 @@ class TestSunSpecPowerControlRegister:
 
         assert result["advanced_power_control_enable"] is False
 
+    def test_decode_response_non_advanced_register_passes_through(self):
+        """Test decode_response on a non-ADVANCED_POWER_CONTROL_ENABLE register
+        does not modify the decoded value."""
+        reg = SunSpecPowerControlRegister.RRCR_STATE
+        data = {}
+
+        # UINT16 value 42, little endian (single register)
+        result = reg.decode_response([42], data)
+
+        assert result["rrcr_state"] == 42
+
 
 class TestSunSpecSiteLimitRegister:
     """Tests for SunSpecSiteLimitRegister class."""
@@ -234,3 +245,62 @@ class TestSunSpecSiteLimitRegister:
     def test_wordorder_little_endian(self):
         """Test wordorder returns little for site limit registers."""
         assert SunSpecSiteLimitRegister.wordorder() == "little"
+
+    def test_decode_response_site_limit_negative_clamped_to_zero(self):
+        """Test EXPORT_CONTROL_SITE_LIMIT with negative float is clamped to 0."""
+        reg = SunSpecSiteLimitRegister.EXPORT_CONTROL_SITE_LIMIT
+        data = {}
+
+        # FLOAT32 -5.0 in little word order: big endian words [0xC0A0, 0x0000]
+        # → little word order registers [0x0000, 0xC0A0]
+        result = reg.decode_response([0x0000, 0xC0A0], data)
+
+        assert result["export_control_site_limit"] == 0
+
+    def test_decode_response_site_limit_positive_converted_to_int(self):
+        """Test EXPORT_CONTROL_SITE_LIMIT with positive float is converted to int."""
+        reg = SunSpecSiteLimitRegister.EXPORT_CONTROL_SITE_LIMIT
+        data = {}
+
+        # FLOAT32 5.0 in little word order: big endian words [0x40A0, 0x0000]
+        # → little word order registers [0x0000, 0x40A0]
+        result = reg.decode_response([0x0000, 0x40A0], data)
+
+        assert result["export_control_site_limit"] == 5
+
+    def test_decode_response_export_control_mode_bitmask(self):
+        """Test EXPORT_CONTROL_MODE decodes bitmask fields correctly."""
+        reg = SunSpecSiteLimitRegister.EXPORT_CONTROL_MODE
+        data = {}
+
+        # bitmask 0x0C07:
+        #   bits 0-2 set → mode = 1+1+1 = 3 (Production Limitation)
+        #   bit 10 set   → export_control_external_production = True
+        #   bit 11 set   → export_control_negative_site_limit = True
+        result = reg.decode_response([0x0C07], data)
+
+        assert result["export_control_mode"] == 3
+        assert result["export_control_mode_raw"] == 0x0C07
+        assert result["export_control_external_production"] is True
+        assert result["export_control_negative_site_limit"] is True
+
+    def test_decode_response_export_control_mode_no_flags(self):
+        """Test EXPORT_CONTROL_MODE with only mode bit, no flag bits."""
+        reg = SunSpecSiteLimitRegister.EXPORT_CONTROL_MODE
+        data = {}
+
+        # bitmask 0x0001 → mode = 1, flags both False
+        result = reg.decode_response([0x0001], data)
+
+        assert result["export_control_mode"] == 1
+        assert result["export_control_external_production"] is False
+        assert result["export_control_negative_site_limit"] is False
+
+    def test_decode_response_export_control_limit_mode_passes_through(self):
+        """Test EXPORT_CONTROL_LIMIT_MODE passes through without modification."""
+        reg = SunSpecSiteLimitRegister.EXPORT_CONTROL_LIMIT_MODE
+        data = {}
+
+        result = reg.decode_response([2], data)
+
+        assert result["export_control_limit_mode"] == 2

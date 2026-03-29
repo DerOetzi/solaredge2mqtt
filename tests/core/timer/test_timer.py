@@ -9,6 +9,7 @@ from solaredge2mqtt.core.timer.events import (
     Interval1MinTriggerEvent,
     Interval5MinTriggerEvent,
     Interval10MinTriggerEvent,
+    Interval15MinTriggerEvent,
     IntervalBaseTriggerEvent,
 )
 
@@ -120,6 +121,24 @@ class TestTimer:
             emit_calls = mock_event_bus.emit.call_args_list
             assert any(
                 isinstance(call.args[0], Interval10MinTriggerEvent)
+                for call in emit_calls
+            )
+
+    @pytest.mark.asyncio
+    async def test_timer_loop_emits_15min_event(self, mock_event_bus):
+        """Test that timer loop emits 15 min event at correct interval."""
+        base_interval = 5
+        timer = Timer(mock_event_bus, base_interval)
+
+        with patch("solaredge2mqtt.core.timer.datetime") as mock_datetime:
+            # For base_interval=5, timestamp 919 reaches final 900-divisible check
+            mock_datetime.now.return_value.timestamp.return_value = 919
+
+            await timer.loop()
+
+            emit_calls = mock_event_bus.emit.call_args_list
+            assert any(
+                isinstance(call.args[0], Interval15MinTriggerEvent)
                 for call in emit_calls
             )
 

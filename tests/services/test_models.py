@@ -1,144 +1,148 @@
 """Tests for services models module."""
 
-from datetime import datetime
-
 import pytest
 
-from solaredge2mqtt.services.models import Component, ComponentValueGroup
+from solaredge2mqtt.services.models import Component, HTTPResponse, TComponent
 
 
-class TestComponentValueGroup:
-    """Tests for ComponentValueGroup class."""
+class ConcreteComponent(Component):
+    """Concrete Component implementation for testing."""
 
-    def test_scale_value_positive_scale(self):
-        """Test scale_value with positive scale."""
-        data = {"power": 100, "power_scale": 2}
-        result = ComponentValueGroup.scale_value(data, "power")
+    COMPONENT = "test_component"
+    SOURCE = "test_source"
 
-        assert result == pytest.approx(10000.0)
-
-    def test_scale_value_negative_scale(self):
-        """Test scale_value with negative scale."""
-        data = {"power": 12345, "power_scale": -2}
-        result = ComponentValueGroup.scale_value(data, "power")
-
-        assert result == pytest.approx(123.45)
-
-    def test_scale_value_zero_scale(self):
-        """Test scale_value with zero scale."""
-        data = {"power": 500, "power_scale": 0}
-        result = ComponentValueGroup.scale_value(data, "power")
-
-        assert result == pytest.approx(500.0)
-
-    def test_scale_value_custom_scale_key(self):
-        """Test scale_value with custom scale key."""
-        data = {"voltage": 2300, "custom_scale": -1}
-        result = ComponentValueGroup.scale_value(data, "voltage", "custom_scale")
-
-        assert result == pytest.approx(230.0)
-
-    def test_scale_value_custom_digits(self):
-        """Test scale_value with custom digit precision."""
-        data = {"power": 333, "power_scale": -2}
-        result = ComponentValueGroup.scale_value(data, "power", digits=4)
-
-        assert result == pytest.approx(3.33)
-
-    def test_scale_value_rounding(self):
-        """Test scale_value rounds correctly."""
-        data = {"power": 12345, "power_scale": -4}
-        result = ComponentValueGroup.scale_value(data, "power", digits=2)
-
-        assert result == pytest.approx(1.23)
+    def homeassistant_device_info(self) -> dict[str, str]:
+        """Return Home Assistant device info."""
+        return {
+            "name": "Test Component",
+            "manufacturer": "Test",
+        }
 
 
-class TestComponentBase:
-    """Tests for Component class."""
+class ConcreteComponentNoSource(Component):
+    """Concrete Component implementation without source for testing."""
 
-    def test_component_default_values(self):
-        """Test Component class defaults."""
-        assert Component.COMPONENT == "unknown"
-        assert Component.SOURCE is None
+    COMPONENT = "no_source_component"
+    SOURCE = None
 
-    def test_component_influxdb_tags(self):
-        """Test Component influxdb_tags property."""
+    def homeassistant_device_info(self) -> dict[str, str]:
+        """Return Home Assistant device info."""
+        return {"name": "No Source Component"}
 
-        class SampleComponent(Component):
-            """Sample component for testing."""
 
-            COMPONENT = "test_component"
-            SOURCE = "test_source"
+class TestComponent:
+    """Tests for Component base class."""
 
-        component = SampleComponent()
+    def test_influxdb_tags_with_source(self):
+        """Test influxdb_tags property with source."""
+        component = ConcreteComponent()
+
         tags = component.influxdb_tags
 
         assert tags["component"] == "test_component"
         assert tags["source"] == "test_source"
 
-    def test_component_mqtt_topic_with_source(self):
-        """Test Component mqtt_topic with source."""
+    def test_influxdb_tags_without_source(self):
+        """Test influxdb_tags property without source."""
+        component = ConcreteComponentNoSource()
 
-        class InverterComponent(Component):
-            """Inverter component for testing."""
+        tags = component.influxdb_tags
 
-            COMPONENT = "inverter"
-            SOURCE = "modbus"
+        assert tags["component"] == "no_source_component"
+        assert tags["source"] == ""
 
-        component = InverterComponent()
+    def test_mqtt_topic_with_source(self):
+        """Test mqtt_topic method with source."""
+        component = ConcreteComponent()
+
         topic = component.mqtt_topic()
 
-        assert topic == "modbus/inverter"
+        assert topic == "test_source/test_component"
 
-    def test_component_mqtt_topic_without_source(self):
-        """Test Component mqtt_topic without source."""
+    def test_mqtt_topic_without_source(self):
+        """Test mqtt_topic method without source."""
+        component = ConcreteComponentNoSource()
 
-        class PowerflowComponent(Component):
-            """Powerflow component for testing."""
-
-            COMPONENT = "powerflow"
-            SOURCE = None
-
-        component = PowerflowComponent()
         topic = component.mqtt_topic()
 
-        assert topic == "powerflow"
+        assert topic == "no_source_component"
 
-    def test_component_str_with_source(self):
-        """Test Component string representation with source."""
+    def test_str_with_source(self):
+        """Test __str__ method with source."""
+        component = ConcreteComponent()
 
-        class MeterComponent(Component):
-            """Meter component for testing."""
+        name = str(component)
 
-            COMPONENT = "meter"
-            SOURCE = "modbus"
+        assert name == "test_source: test_component"
 
-        component = MeterComponent()
+    def test_str_without_source(self):
+        """Test __str__ method without source."""
+        component = ConcreteComponentNoSource()
 
-        assert str(component) == "modbus: meter"
+        name = str(component)
 
-    def test_component_str_without_source(self):
-        """Test Component string representation without source."""
+        assert name == "no_source_component"
 
-        class PowerflowComponent(Component):
-            """Powerflow component for testing."""
+    def test_homeassistant_device_info(self):
+        """Test homeassistant_device_info method."""
+        component = ConcreteComponent()
 
-            COMPONENT = "powerflow"
-            SOURCE = None
+        info = component.homeassistant_device_info()
 
-        component = PowerflowComponent()
+        assert isinstance(info, dict)
+        assert info["name"] == "Test Component"
+        assert info["manufacturer"] == "Test"
 
-        assert str(component) == "powerflow"
+    def test_component_is_solaredge2mqtt_base_model(self):
+        """Test Component inherits from Solaredge2MQTTBaseModel."""
+        from solaredge2mqtt.core.models import Solaredge2MQTTBaseModel
 
-    def test_component_has_timestamp(self):
-        """Test Component has timestamp from base model."""
+        assert issubclass(Component, Solaredge2MQTTBaseModel)
 
-        class TimestampComponent(Component):
-            """Component for testing timestamps."""
+    def test_abstract_homeassistant_device_info(self):
+        """Test that homeassistant_device_info is abstract."""
+        # Component class should not be instantiable directly
+        # because of abstract method
+        with pytest.raises(TypeError):
+            Component()  # type: ignore[abstract]
 
-            COMPONENT = "test"
+    def test_base_abstract_method_body_is_callable(self):
+        """Call abstract method implementation directly for branch coverage."""
+        component = ConcreteComponent()
 
-        component = TimestampComponent()
+        assert Component.homeassistant_device_info(component) is None
 
-        assert component.timestamp is not None
-        assert isinstance(component.timestamp, datetime)
+
+class TestHTTPResponse:
+    """Tests for HTTPResponse type alias."""
+
+    def test_http_response_dict(self):
+        """Test HTTPResponse with dict."""
+        response: HTTPResponse = {"key": "value"}
+
+        assert isinstance(response, dict)
+        assert response["key"] == "value"
+
+    def test_http_response_string(self):
+        """Test HTTPResponse with string."""
+        response: HTTPResponse = "response_string"
+
+        assert isinstance(response, str)
+        assert response == "response_string"
+
+
+class TestTComponent:
+    """Tests for TComponent TypeVar."""
+
+    def test_tcomponent_bound_to_component(self):
+        """Test TComponent is bound to Component."""
+
+        # Create a function using TComponent
+        def process_component(comp: TComponent) -> TComponent:
+            return comp
+
+        concrete = ConcreteComponent()
+        result = process_component(concrete)
+
+        assert result == concrete
+        assert isinstance(result, Component)

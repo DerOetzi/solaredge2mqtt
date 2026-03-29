@@ -1,5 +1,7 @@
 """Tests for modbus events module."""
 
+import pytest
+
 from solaredge2mqtt.core.events.events import BaseEvent
 from solaredge2mqtt.services.modbus.events import ModbusUnitsReadEvent, ModbusWriteEvent
 from solaredge2mqtt.services.modbus.sunspec.inverter import SunSpecPowerControlRegister
@@ -11,14 +13,6 @@ class TestModbusUnitsReadEvent:
     def test_event_is_base_event(self):
         """Test ModbusUnitsReadEvent inherits from BaseEvent."""
         assert issubclass(ModbusUnitsReadEvent, BaseEvent)
-
-    def test_event_units_property(self):
-        """Test units property."""
-        mock_units = {"leader": "mock_unit"}
-
-        event = ModbusUnitsReadEvent(mock_units)
-
-        assert event.units == mock_units
 
     def test_event_await_default_false(self):
         """Test AWAIT is False by default."""
@@ -58,7 +52,7 @@ class TestModbusWriteEvent:
 
         event = ModbusWriteEvent(register, 0.95)
 
-        assert event.payload == 0.95
+        assert event.payload == pytest.approx(0.95)
 
     def test_event_payload_property_bool(self):
         """Test payload property with bool."""

@@ -1,10 +1,17 @@
 """Tests for powerflow models - additional tests for better coverage."""
 
+from types import SimpleNamespace
+from typing import cast
+from unittest.mock import PropertyMock, patch
 
 from solaredge2mqtt.services.modbus.models.base import (
+    ModbusDeviceInfo,
     ModbusUnitInfo,
     ModbusUnitRole,
 )
+from solaredge2mqtt.services.modbus.models.inverter import ModbusInverter
+from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
+from solaredge2mqtt.services.modbus.sunspec.values import SunSpecPayload
 from solaredge2mqtt.services.powerflow.models import (
     BatteryPowerflow,
     ConsumerPowerflow,
@@ -22,14 +29,16 @@ class TestPowerflow:
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
         grid = GridPowerflow(power=-200)
         battery = BatteryPowerflow(power=0)
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
 
-        powerflow = Powerflow(
-            pv_production=1200,
-            inverter=inverter,
-            grid=grid,
-            battery=battery,
-            consumer=consumer,
+        powerflow = Powerflow.model_validate(
+            {
+                "pv_production": 1200,
+                "inverter": inverter,
+                "grid": grid,
+                "battery": battery,
+                "consumer": consumer,
+            }
         )
 
         assert powerflow.pv_production == 1200
@@ -49,7 +58,7 @@ class TestPowerflow:
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
         grid = GridPowerflow(power=-200)
         battery = BatteryPowerflow(power=0)
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
 
         powerflow = Powerflow(
             unit=unit_info,
@@ -60,7 +69,7 @@ class TestPowerflow:
             consumer=consumer,
         )
 
-        assert powerflow.has_unit is True
+        assert powerflow.unit is not None
         assert powerflow.unit.key == "leader"
 
     def test_powerflow_has_unit_false(self):
@@ -68,31 +77,35 @@ class TestPowerflow:
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
         grid = GridPowerflow(power=-200)
         battery = BatteryPowerflow(power=0)
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
 
-        powerflow = Powerflow(
-            pv_production=1200,
-            inverter=inverter,
-            grid=grid,
-            battery=battery,
-            consumer=consumer,
+        powerflow = Powerflow.model_validate(
+            {
+                "pv_production": 1200,
+                "inverter": inverter,
+                "grid": grid,
+                "battery": battery,
+                "consumer": consumer,
+            }
         )
 
-        assert powerflow.has_unit is False
+        assert powerflow.unit is None
 
     def test_powerflow_mqtt_topic_without_unit(self):
         """Test mqtt_topic without unit."""
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
         grid = GridPowerflow(power=-200)
         battery = BatteryPowerflow(power=0)
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
 
-        powerflow = Powerflow(
-            pv_production=1200,
-            inverter=inverter,
-            grid=grid,
-            battery=battery,
-            consumer=consumer,
+        powerflow = Powerflow.model_validate(
+            {
+                "pv_production": 1200,
+                "inverter": inverter,
+                "grid": grid,
+                "battery": battery,
+                "consumer": consumer,
+            }
         )
 
         assert powerflow.mqtt_topic() == "powerflow"
@@ -108,15 +121,17 @@ class TestPowerflow:
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
         grid = GridPowerflow(power=-200)
         battery = BatteryPowerflow(power=0)
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
 
-        powerflow = Powerflow(
-            unit=unit_info,
-            pv_production=1200,
-            inverter=inverter,
-            grid=grid,
-            battery=battery,
-            consumer=consumer,
+        powerflow = Powerflow.model_validate(
+            {
+                "unit": unit_info,
+                "pv_production": 1200,
+                "inverter": inverter,
+                "grid": grid,
+                "battery": battery,
+                "consumer": consumer,
+            }
         )
 
         assert powerflow.mqtt_topic() == "powerflow/leader"
@@ -126,14 +141,16 @@ class TestPowerflow:
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
         grid = GridPowerflow(power=-200)
         battery = BatteryPowerflow(power=0)
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
 
-        powerflow = Powerflow(
-            pv_production=1200,
-            inverter=inverter,
-            grid=grid,
-            battery=battery,
-            consumer=consumer,
+        powerflow = Powerflow.model_validate(
+            {
+                "pv_production": 1200,
+                "inverter": inverter,
+                "grid": grid,
+                "battery": battery,
+                "consumer": consumer,
+            }
         )
 
         ha_info = powerflow.homeassistant_device_info()
@@ -151,15 +168,17 @@ class TestPowerflow:
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
         grid = GridPowerflow(power=-200)
         battery = BatteryPowerflow(power=0)
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
 
-        powerflow = Powerflow(
-            unit=unit_info,
-            pv_production=1200,
-            inverter=inverter,
-            grid=grid,
-            battery=battery,
-            consumer=consumer,
+        powerflow = Powerflow.model_validate(
+            {
+                "unit": unit_info,
+                "pv_production": 1200,
+                "inverter": inverter,
+                "grid": grid,
+                "battery": battery,
+                "consumer": consumer,
+            }
         )
 
         ha_info = powerflow.homeassistant_device_info()
@@ -172,14 +191,16 @@ class TestPowerflow:
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
         grid = GridPowerflow(power=0)
         battery = BatteryPowerflow(power=0)
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
 
-        powerflow = Powerflow(
-            pv_production=1000,
-            inverter=inverter,
-            grid=grid,
-            battery=battery,
-            consumer=consumer,
+        powerflow = Powerflow.model_validate(
+            {
+                "pv_production": 1000,
+                "inverter": inverter,
+                "grid": grid,
+                "battery": battery,
+                "consumer": consumer,
+            }
         )
 
         assert powerflow.is_valid(external_production=False) is True
@@ -189,31 +210,109 @@ class TestPowerflow:
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
         grid = GridPowerflow(power=-200)
         battery = BatteryPowerflow(power=0)
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
 
-        powerflow = Powerflow(
-            pv_production=-100,
-            inverter=inverter,
-            grid=grid,
-            battery=battery,
-            consumer=consumer,
+        powerflow = Powerflow.model_validate(
+            {
+                "pv_production": -100,
+                "inverter": inverter,
+                "grid": grid,
+                "battery": battery,
+                "consumer": consumer,
+            }
         )
 
         assert powerflow.is_valid(external_production=False) is False
+
+    def test_powerflow_is_valid_mismatch_branch_sets_true(self):
+        """Test mismatch branch in is_valid marks powerflow as valid."""
+        inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
+        grid = GridPowerflow(power=100)
+        battery = BatteryPowerflow(power=0)
+        consumer = ConsumerPowerflow(
+            house=100,
+            evcharger=0,
+            inverter=0,
+            used_production=50,
+            battery_factor=0.0,
+        )
+
+        powerflow = Powerflow.model_validate(
+            {
+                "pv_production": 1000,
+                "inverter": inverter,
+                "grid": grid,
+                "battery": battery,
+                "consumer": consumer,
+            }
+        )
+
+        assert powerflow.is_valid(external_production=False) is True
+
+    def test_prepare_point_energy_with_prices_adds_money_fields(self):
+        """Test prepare_point_energy writes all money-related fields."""
+        from solaredge2mqtt.services.energy.settings import PriceSettings
+
+        inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
+        grid = GridPowerflow(power=300)
+        battery = BatteryPowerflow(power=0)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
+
+        powerflow = Powerflow.model_validate(
+            {
+                "pv_production": 1200,
+                "inverter": inverter,
+                "grid": grid,
+                "battery": battery,
+                "consumer": consumer,
+            }
+        )
+
+        prices = PriceSettings(consumption=0.4, delivery=0.1)
+        point = powerflow.prepare_point_energy(prices=prices)
+        field_keys = set(point._fields.keys())
+
+        assert "money_saved" in field_keys
+        assert "money_price_in" in field_keys
+        assert "money_delivered" in field_keys
+        assert "money_price_out" in field_keys
+        assert "money_consumed" in field_keys
+
+    def test_grid_from_modbus_skips_non_import_export_meter(self):
+        """Test from_modbus skips meters without both Import and Export options."""
+        skipped_meter = SimpleNamespace(
+            info=SimpleNamespace(option=None),
+            power=SimpleNamespace(actual=999),
+        )
+        valid_meter = SimpleNamespace(
+            info=SimpleNamespace(option="Import/Export"),
+            power=SimpleNamespace(actual=123),
+        )
+
+        grid = GridPowerflow.from_modbus(
+            {
+                "skip": cast(ModbusMeter, skipped_meter),
+                "valid": cast(ModbusMeter, valid_meter),
+            }
+        )
+
+        assert grid.power == 123
 
     def test_powerflow_prepare_point(self):
         """Test prepare_point method."""
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
         grid = GridPowerflow(power=-200)
         battery = BatteryPowerflow(power=0)
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
 
-        powerflow = Powerflow(
-            pv_production=1200,
-            inverter=inverter,
-            grid=grid,
-            battery=battery,
-            consumer=consumer,
+        powerflow = Powerflow.model_validate(
+            {
+                "pv_production": 1200,
+                "inverter": inverter,
+                "grid": grid,
+                "battery": battery,
+                "consumer": consumer,
+            }
         )
 
         point = powerflow.prepare_point()
@@ -231,15 +330,17 @@ class TestPowerflow:
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
         grid = GridPowerflow(power=-200)
         battery = BatteryPowerflow(power=0)
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
 
-        powerflow = Powerflow(
-            unit=unit_info,
-            pv_production=1200,
-            inverter=inverter,
-            grid=grid,
-            battery=battery,
-            consumer=consumer,
+        powerflow = Powerflow.model_validate(
+            {
+                "unit": unit_info,
+                "pv_production": 1200,
+                "inverter": inverter,
+                "grid": grid,
+                "battery": battery,
+                "consumer": consumer,
+            }
         )
 
         point = powerflow.prepare_point()
@@ -253,33 +354,38 @@ class TestPowerflow:
         inverter1 = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
         grid1 = GridPowerflow(power=-200)
         battery1 = BatteryPowerflow(power=0)
-        consumer1 = ConsumerPowerflow(inverter1, grid1, evcharger=0)
+        consumer1 = ConsumerPowerflow.from_powerflows(inverter1, grid1, evcharger=0)
 
-        pf1 = Powerflow(
-            pv_production=1200,
-            inverter=inverter1,
-            grid=grid1,
-            battery=battery1,
-            consumer=consumer1,
+        pf1 = Powerflow.model_validate(
+            {
+                "pv_production": 1200,
+                "inverter": inverter1,
+                "grid": grid1,
+                "battery": battery1,
+                "consumer": consumer1,
+            }
         )
 
         inverter2 = InverterPowerflow(power=500, dc_power=600, battery_discharge=0)
         grid2 = GridPowerflow(power=-100)
         battery2 = BatteryPowerflow(power=0)
-        consumer2 = ConsumerPowerflow(inverter2, grid2, evcharger=0)
+        consumer2 = ConsumerPowerflow.from_powerflows(inverter2, grid2, evcharger=0)
 
-        pf2 = Powerflow(
-            pv_production=600,
-            inverter=inverter2,
-            grid=grid2,
-            battery=battery2,
-            consumer=consumer2,
+        pf2 = Powerflow.model_validate(
+            {
+                "pv_production": 600,
+                "inverter": inverter2,
+                "grid": grid2,
+                "battery": battery2,
+                "consumer": consumer2,
+            }
         )
 
         cumulated = Powerflow.cumulated_powerflow({"leader": pf1, "follower": pf2})
 
         assert cumulated.pv_production == 1800  # 1200 + 600
         assert cumulated.inverter.power == 1500  # 1000 + 500
+        assert cumulated.unit is not None
         assert cumulated.unit.role == ModbusUnitRole.CUMULATED
 
     def test_powerflow_is_not_valid_with_last_first_call(self):
@@ -290,14 +396,16 @@ class TestPowerflow:
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
         grid = GridPowerflow(power=-200)
         battery = BatteryPowerflow(power=0)
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
 
-        powerflow = Powerflow(
-            pv_production=200,
-            inverter=inverter,
-            grid=grid,
-            battery=battery,
-            consumer=consumer,
+        powerflow = Powerflow.model_validate(
+            {
+                "pv_production": 200,
+                "inverter": inverter,
+                "grid": grid,
+                "battery": battery,
+                "consumer": consumer,
+            }
         )
 
         # First call should return False (no last_powerflow)
@@ -311,14 +419,18 @@ class TestPowerflow:
         inverter_last = InverterPowerflow(power=0, dc_power=0, battery_discharge=0)
         grid_last = GridPowerflow(power=0)
         battery_last = BatteryPowerflow(power=0)
-        consumer_last = ConsumerPowerflow(inverter_last, grid_last, evcharger=0)
+        consumer_last = ConsumerPowerflow.from_powerflows(
+            inverter_last, grid_last, evcharger=0
+        )
 
-        last_powerflow = Powerflow(
-            pv_production=0,
-            inverter=inverter_last,
-            grid=grid_last,
-            battery=battery_last,
-            consumer=consumer_last,
+        last_powerflow = Powerflow.model_validate(
+            {
+                "pv_production": 0,
+                "inverter": inverter_last,
+                "grid": grid_last,
+                "battery": battery_last,
+                "consumer": consumer_last,
+            }
         )
         Powerflow.last_powerflow = last_powerflow
 
@@ -326,14 +438,16 @@ class TestPowerflow:
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
         grid = GridPowerflow(power=-200)
         battery = BatteryPowerflow(power=0)
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
 
-        powerflow = Powerflow(
-            pv_production=200,  # Sudden increase from 0 to 200 (>100)
-            inverter=inverter,
-            grid=grid,
-            battery=battery,
-            consumer=consumer,
+        powerflow = Powerflow.model_validate(
+            {
+                "pv_production": 200,  # Sudden increase from 0 to 200 (>100)
+                "inverter": inverter,
+                "grid": grid,
+                "battery": battery,
+                "consumer": consumer,
+            }
         )
 
         result = Powerflow.is_not_valid_with_last(powerflow)
@@ -355,6 +469,288 @@ class TestInverterPowerflowValidation:
         # battery_production = round(100 * 2.0) = 200 -> capped at 100
         assert inverter.battery_production <= inverter.production
 
+    def test_inverter_is_valid_negative_consumption_branch(self):
+        """Test is_valid branch when consumption is negative."""
+        inverter = InverterPowerflow(power=10, dc_power=10, battery_discharge=0)
+        with patch.object(
+            InverterPowerflow,
+            "consumption",
+            new_callable=PropertyMock,
+            return_value=-1,
+        ):
+            assert inverter.is_valid is False
+
+    def test_inverter_is_valid_negative_production_branch(self):
+        """Test is_valid branch when production is negative."""
+        inverter = InverterPowerflow(power=10, dc_power=10, battery_discharge=0)
+        with patch.object(
+            InverterPowerflow,
+            "production",
+            new_callable=PropertyMock,
+            return_value=-1,
+        ):
+            assert inverter.is_valid is False
+
+    def test_inverter_is_valid_negative_pv_production_branch(self):
+        """Test is_valid branch when pv_production is negative."""
+        inverter = InverterPowerflow(power=10, dc_power=10, battery_discharge=0)
+        with (
+            patch.object(
+                InverterPowerflow,
+                "consumption",
+                new_callable=PropertyMock,
+                return_value=0,
+            ),
+            patch.object(
+                InverterPowerflow,
+                "production",
+                new_callable=PropertyMock,
+                return_value=1,
+            ),
+            patch.object(
+                InverterPowerflow,
+                "pv_production",
+                new_callable=PropertyMock,
+                return_value=-1,
+            ),
+        ):
+            assert inverter.is_valid is False
+
+    def test_inverter_is_valid_negative_battery_production_branch(self):
+        """Test is_valid branch when battery_production is negative."""
+        inverter = InverterPowerflow(power=10, dc_power=10, battery_discharge=0)
+        with (
+            patch.object(
+                InverterPowerflow,
+                "consumption",
+                new_callable=PropertyMock,
+                return_value=0,
+            ),
+            patch.object(
+                InverterPowerflow,
+                "production",
+                new_callable=PropertyMock,
+                return_value=1,
+            ),
+            patch.object(
+                InverterPowerflow,
+                "pv_production",
+                new_callable=PropertyMock,
+                return_value=0,
+            ),
+            patch.object(
+                InverterPowerflow,
+                "battery_production",
+                new_callable=PropertyMock,
+                return_value=-1,
+            ),
+        ):
+            assert inverter.is_valid is False
+
+
+class TestGridAndBatteryValidationBranches:
+    """Extra branch tests for Grid and Battery validation methods."""
+
+    def test_grid_is_valid_negative_consumption_branch(self):
+        grid = GridPowerflow(power=0)
+        with patch.object(
+            GridPowerflow,
+            "consumption",
+            new_callable=PropertyMock,
+            return_value=-1,
+        ):
+            assert grid.is_valid is False
+
+    def test_grid_is_valid_negative_delivery_branch(self):
+        grid = GridPowerflow(power=0)
+        with (
+            patch.object(
+                GridPowerflow,
+                "consumption",
+                new_callable=PropertyMock,
+                return_value=0,
+            ),
+            patch.object(
+                GridPowerflow,
+                "delivery",
+                new_callable=PropertyMock,
+                return_value=-1,
+            ),
+        ):
+            assert grid.is_valid is False
+
+    def test_battery_is_valid_negative_charge_branch(self):
+        battery = BatteryPowerflow(power=0)
+        with patch.object(
+            BatteryPowerflow,
+            "charge",
+            new_callable=PropertyMock,
+            return_value=-1,
+        ):
+            assert battery.is_valid is False
+
+    def test_battery_is_valid_negative_discharge_branch(self):
+        battery = BatteryPowerflow(power=0)
+        with (
+            patch.object(
+                BatteryPowerflow,
+                "charge",
+                new_callable=PropertyMock,
+                return_value=0,
+            ),
+            patch.object(
+                BatteryPowerflow,
+                "discharge",
+                new_callable=PropertyMock,
+                return_value=-1,
+            ),
+        ):
+            assert battery.is_valid is False
+
+
+class TestConsumerValidationBranches:
+    """Additional branch coverage tests for ConsumerPowerflow.is_valid."""
+
+    def test_consumer_is_valid_house_negative_branch(self):
+        consumer = ConsumerPowerflow(
+            house=-1,
+            evcharger=0,
+            inverter=0,
+            used_production=0,
+            battery_factor=0.0,
+        )
+        assert consumer.is_valid is False
+
+    def test_consumer_is_valid_evcharger_negative_branch(self):
+        consumer = ConsumerPowerflow(
+            house=0,
+            evcharger=-1,
+            inverter=0,
+            used_production=0,
+            battery_factor=0.0,
+        )
+        assert consumer.is_valid is False
+
+    def test_consumer_is_valid_inverter_negative_branch(self):
+        consumer = ConsumerPowerflow(
+            house=0,
+            evcharger=0,
+            inverter=-1,
+            used_production=0,
+            battery_factor=0.0,
+        )
+        assert consumer.is_valid is False
+
+    def test_consumer_is_valid_used_production_negative_branch(self):
+        consumer = ConsumerPowerflow(
+            house=0,
+            evcharger=0,
+            inverter=0,
+            used_production=-1,
+            battery_factor=0.0,
+        )
+        assert consumer.is_valid is False
+
+    def test_consumer_is_valid_used_pv_negative_branch(self):
+        consumer = ConsumerPowerflow(
+            house=1,
+            evcharger=0,
+            inverter=0,
+            used_production=0,
+            battery_factor=0.0,
+        )
+        with patch.object(
+            ConsumerPowerflow,
+            "used_pv_production",
+            new_callable=PropertyMock,
+            return_value=-1,
+        ):
+            assert consumer.is_valid is False
+
+    def test_consumer_is_valid_used_battery_negative_branch(self):
+        consumer = ConsumerPowerflow(
+            house=1,
+            evcharger=0,
+            inverter=0,
+            used_production=0,
+            battery_factor=0.0,
+        )
+        with (
+            patch.object(
+                ConsumerPowerflow,
+                "used_pv_production",
+                new_callable=PropertyMock,
+                return_value=0,
+            ),
+            patch.object(
+                ConsumerPowerflow,
+                "used_battery_production",
+                new_callable=PropertyMock,
+                return_value=-1,
+            ),
+        ):
+            assert consumer.is_valid is False
+
+    def test_consumer_is_valid_total_negative_branch(self):
+        consumer = ConsumerPowerflow(
+            house=1,
+            evcharger=0,
+            inverter=0,
+            used_production=0,
+            battery_factor=0.0,
+        )
+        with (
+            patch.object(
+                ConsumerPowerflow,
+                "used_pv_production",
+                new_callable=PropertyMock,
+                return_value=0,
+            ),
+            patch.object(
+                ConsumerPowerflow,
+                "used_battery_production",
+                new_callable=PropertyMock,
+                return_value=0,
+            ),
+            patch.object(
+                ConsumerPowerflow,
+                "total",
+                new_callable=PropertyMock,
+                return_value=-1,
+            ),
+        ):
+            assert consumer.is_valid is False
+
+    def test_consumer_is_valid_total_less_than_used_production_branch(self):
+        consumer = ConsumerPowerflow(
+            house=10,
+            evcharger=0,
+            inverter=0,
+            used_production=5,
+            battery_factor=0.0,
+        )
+        with (
+            patch.object(
+                ConsumerPowerflow,
+                "used_pv_production",
+                new_callable=PropertyMock,
+                return_value=1,
+            ),
+            patch.object(
+                ConsumerPowerflow,
+                "used_battery_production",
+                new_callable=PropertyMock,
+                return_value=0,
+            ),
+            patch.object(
+                ConsumerPowerflow,
+                "total",
+                new_callable=PropertyMock,
+                return_value=4,
+            ),
+        ):
+            assert consumer.is_valid is False
+
 
 class TestConsumerPowerflowValidation:
     """Additional validation tests for ConsumerPowerflow."""
@@ -364,7 +760,7 @@ class TestConsumerPowerflowValidation:
         inverter = InverterPowerflow(power=100, dc_power=50, battery_discharge=100)
         grid = GridPowerflow(power=0)
 
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
 
         # used_battery_production should not exceed used_production
         assert consumer.used_battery_production <= consumer.used_production
@@ -374,9 +770,8 @@ class TestConsumerPowerflowValidation:
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
         grid = GridPowerflow(power=300)  # Delivering 300 to grid
 
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
 
-        # used_production = production - grid.delivery = 1000 - 300 = 700
         assert consumer.used_production == 700
 
     def test_consumer_used_production_when_production_less_than_delivery(self):
@@ -384,18 +779,18 @@ class TestConsumerPowerflowValidation:
         inverter = InverterPowerflow(power=200, dc_power=250, battery_discharge=0)
         grid = GridPowerflow(power=300)  # Delivering more than production
 
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
 
         # production (200) < grid.delivery (300), so used_production = 0
         assert consumer.used_production == 0
 
     def test_consumer_battery_charging_from_grid_no_double_count(self):
         """Test that battery charging from grid is not double-counted.
-        
+
         When battery is charging from grid, the inverter consumes power.
         Most of that power goes to the battery, but we should still account
         for the difference (conversion losses).
-        
+
         Scenario (perfect efficiency):
         - Battery charging: 500W (DC side)
         - Inverter consuming: 500W (AC side)
@@ -404,38 +799,36 @@ class TestConsumerPowerflowValidation:
         - Inverter losses: 0W (perfect efficiency)
         """
         # Battery charging from grid: inverter is consuming 500W
-        inverter = InverterPowerflow(
-            power=-500, dc_power=0, battery_discharge=0
-        )
+        inverter = InverterPowerflow(power=-500, dc_power=0, battery_discharge=0)
         # Grid is importing 600W (negative = consuming from grid)
         grid = GridPowerflow(power=-600)
         # Battery is charging at 500W (same as inverter consumption)
         battery = BatteryPowerflow(power=500)
 
-        consumer = ConsumerPowerflow(
+        consumer = ConsumerPowerflow.from_powerflows(
             inverter, grid, evcharger=0, battery=battery
         )
 
         # Expected: house = |grid - inverter| = |-600 - (-500)| = 100
         assert consumer.house == 100
-        
+
         # With perfect efficiency, inverter consumption after accounting
         # for battery charging should be 0
         assert consumer.inverter == 0, (
             f"Inverter consumption should be 0 with perfect efficiency "
             f"(got {consumer.inverter}W)."
         )
-        
+
         # Total consumer = house + inverter + evcharger = 100 + 0 + 0
         assert consumer.total == 100
 
     def test_consumer_battery_charging_with_losses(self):
         """Test battery charging with conversion losses.
-        
+
         When battery charges from grid, there are typically conversion
         losses (AC to DC). The inverter consumption is higher than the
         battery charge.
-        
+
         Scenario (with losses):
         - Inverter consuming: 550W (AC side)
         - Battery charging: 520W (DC side)
@@ -444,226 +837,197 @@ class TestConsumerPowerflowValidation:
         - House consumption: 100W
         """
         # Inverter consuming 550W from AC side
-        inverter = InverterPowerflow(
-            power=-550, dc_power=0, battery_discharge=0
-        )
+        inverter = InverterPowerflow(power=-550, dc_power=0, battery_discharge=0)
         # Grid importing 650W
         grid = GridPowerflow(power=-650)
         # Battery charging at 520W (30W losses)
         battery = BatteryPowerflow(power=520)
 
-        consumer = ConsumerPowerflow(
+        consumer = ConsumerPowerflow.from_powerflows(
             inverter, grid, evcharger=0, battery=battery
         )
 
         # house = |grid - inverter| = |-650 - (-550)| = 100
         assert consumer.house == 100
-        
+
         # Inverter consumption should be the losses: 550 - 520 = 30W
         assert consumer.inverter == 30, (
             f"Inverter consumption should account for losses "
             f"(550W - 520W = 30W), got {consumer.inverter}W"
         )
-        
+
         # Total consumer = house + inverter + evcharger
         # = 100 + 30 + 0 = 130W
         assert consumer.total == 130
 
     def test_consumer_battery_charging_mixed_pv_and_grid(self):
         """Test battery charging from both PV production and grid.
-        
+
         Scenario: Partly cloudy day - mixed PV and grid charging
         - PV Production: 2000W
-        - Battery charging: 3000W  
+        - Battery charging: 3000W
         - Grid importing: 2030W (supplements PV)
         - Inverter consuming: 1530W (from grid, AC side)
         """
-        inverter = InverterPowerflow(
-            power=-1530, dc_power=2000, battery_discharge=0
-        )
+        inverter = InverterPowerflow(power=-1530, dc_power=2000, battery_discharge=0)
         grid = GridPowerflow(power=-2030)
         battery = BatteryPowerflow(power=3000)
 
-        consumer = ConsumerPowerflow(
+        consumer = ConsumerPowerflow.from_powerflows(
             inverter, grid, evcharger=0, battery=battery
         )
 
-        # house = |grid - inverter| = |-2030 - (-1530)| = 500
         assert consumer.house == 500
-        
-        # consumer.inverter = max(0, 1530 - 3000) = 0
         assert consumer.inverter == 0
-        
-        # Total = house + inverter = 500 + 0 = 500W
+
         assert consumer.total == 500
 
     def test_consumer_battery_charging_pv_only(self):
         """Test battery charging entirely from PV production.
-        
+
         Scenario: PV-only charging with grid export
         - PV Production: 6000W
-        - Battery charging: 3500W  
+        - Battery charging: 3500W
         - Grid export: 500W (excess PV)
         - No grid import: 0W
-        
+
         Note: consumer.house (5500W) represents the calculated power flow
         balance, which includes battery charging (3500W) in the formula.
         """
-        inverter = InverterPowerflow(
-            power=6000, dc_power=6000, battery_discharge=0
-        )
+        inverter = InverterPowerflow(power=6000, dc_power=6000, battery_discharge=0)
         grid = GridPowerflow(power=500)
         battery = BatteryPowerflow(power=3500)
 
-        consumer = ConsumerPowerflow(
+        consumer = ConsumerPowerflow.from_powerflows(
             inverter, grid, evcharger=0, battery=battery
         )
 
         # With positive inverter power, inverter.consumption = 0
         assert consumer.inverter == 0
-        
+
         # house = |grid - inverter| = |500 - 6000| = 5500
         assert consumer.house == 5500
-        
+
         # Total = house + inverter = 5500 + 0 = 5500W
         assert consumer.total == 5500
-        
+
         # Verify no grid import
         assert grid.consumption == 0
         assert grid.delivery == 500
 
     def test_consumer_battery_charging_pv_exceeds_max_rate(self):
         """Test PV production exceeding battery max charge rate.
-        
+
         Scenario: High PV production, battery at max charge limit
         - PV Production: 10000W
         - Battery charging: 5000W (hardware max limit)
         - Grid export: 3500W (excess that can't be stored)
-        
+
         Note: consumer.house (6500W) represents the calculated power flow
         balance, which includes battery charging (5000W) in the formula.
         """
-        inverter = InverterPowerflow(
-            power=10000, dc_power=10000, battery_discharge=0
-        )
+        inverter = InverterPowerflow(power=10000, dc_power=10000, battery_discharge=0)
         grid = GridPowerflow(power=3500)
         battery = BatteryPowerflow(power=5000)
 
-        consumer = ConsumerPowerflow(
+        consumer = ConsumerPowerflow.from_powerflows(
             inverter, grid, evcharger=0, battery=battery
         )
 
         # With positive inverter power, inverter.consumption = 0
         assert consumer.inverter == 0
-        
+
         # house = |grid - inverter| = |3500 - 10000| = 6500
         assert consumer.house == 6500
-        
+
         # Total = 6500 + 0 = 6500W
         assert consumer.total == 6500
-        
+
         # Verify grid export and battery at max
         assert grid.delivery == 3500
         assert grid.consumption == 0
         assert battery.charge == 5000
 
-    def test_consumer_battery_charging_minimal_grid_contribution(
-        self
-    ):
+    def test_consumer_battery_charging_minimal_grid_contribution(self):
         """Test battery charging with minimal grid contribution.
-        
+
         Scenario: Mostly PV with tiny grid supplement
         - PV Production: 4900W
         - Battery charging: 3000W
         - Grid import: 100W (small supplement)
-        
+
         Note: consumer.house (0W) results from the power flow calculation
         where grid and inverter values cancel out in the formula.
         """
-        inverter = InverterPowerflow(
-            power=-100, dc_power=4900, battery_discharge=0
-        )
+        inverter = InverterPowerflow(power=-100, dc_power=4900, battery_discharge=0)
         grid = GridPowerflow(power=-100)
         battery = BatteryPowerflow(power=3000)
 
-        consumer = ConsumerPowerflow(
+        consumer = ConsumerPowerflow.from_powerflows(
             inverter, grid, evcharger=0, battery=battery
         )
 
         # house = |grid - inverter| = |-100 - (-100)| = 0
         assert consumer.house == 0
-        
-        # consumer.inverter = max(0, 100 - 3000) = 0
+
         assert consumer.inverter == 0
-        
-        # Total = 0 + 0 = 0
+
         assert consumer.total == 0
 
     def test_consumer_battery_charging_exact_balance(self):
         """Test battery charging with exact PV/consumption balance.
-        
+
         Scenario: PV exactly matches battery needs
         - PV Production: 5500W
         - Battery charging: 3500W
         - Grid import/export: 0W (perfect balance)
-        
+
         Note: consumer.house (5500W) represents the calculated power flow
         balance, which includes battery charging (3500W) in the formula.
         """
-        inverter = InverterPowerflow(
-            power=5500, dc_power=5500, battery_discharge=0
-        )
+        inverter = InverterPowerflow(power=5500, dc_power=5500, battery_discharge=0)
         grid = GridPowerflow(power=0)
         battery = BatteryPowerflow(power=3500)
 
-        consumer = ConsumerPowerflow(
+        consumer = ConsumerPowerflow.from_powerflows(
             inverter, grid, evcharger=0, battery=battery
         )
 
-        # consumer.inverter = max(0, 0 - 3500) = 0
         assert consumer.inverter == 0
-        
-        # house = |0 - 5500| = 5500
+
         assert consumer.house == 5500
-        
-        # Total = 5500 + 0 = 5500
+
         assert consumer.total == 5500
-        
-        # Verify no grid interaction
+
         assert grid.consumption == 0
         assert grid.delivery == 0
 
     def test_consumer_battery_charging_with_evcharger(self):
         """Test battery and EV charger both active.
-        
+
         Scenario: Battery charging while EV charger running
         - PV Production: 8000W
         - Battery charging: 4000W
         - EV Charger: 3000W
         - Grid import: 4500W (supplements PV)
         """
-        inverter = InverterPowerflow(
-            power=-500, dc_power=8000, battery_discharge=0
-        )
+        inverter = InverterPowerflow(power=-500, dc_power=8000, battery_discharge=0)
         grid = GridPowerflow(power=-4500)
         battery = BatteryPowerflow(power=4000)
 
-        consumer = ConsumerPowerflow(
+        consumer = ConsumerPowerflow.from_powerflows(
             inverter, grid, evcharger=3000, battery=battery
         )
 
-        # house = abs(-4500 - (-500)) - 3000 = 4000 - 3000 = 1000
         assert consumer.house == 1000
-        
-        # consumer.inverter = max(0, 500 - 4000) = 0
+
         assert consumer.inverter == 0
-        
-        # Total = house + evcharger + inverter = 1000 + 3000 + 0 = 4000
+
         assert consumer.total == 4000
 
     def test_consumer_battery_high_efficiency_charging(self):
         """Test battery charging with very high efficiency (minimal losses).
-        
+
         Scenario: Modern inverter with high efficiency
         - Grid import: 5100W
         - Inverter consuming: 5010W (AC side)
@@ -671,23 +1035,18 @@ class TestConsumerPowerflowValidation:
         - Losses: 10W (99.8% efficiency)
         - House: 100W
         """
-        inverter = InverterPowerflow(
-            power=-5010, dc_power=0, battery_discharge=0
-        )
+        inverter = InverterPowerflow(power=-5010, dc_power=0, battery_discharge=0)
         grid = GridPowerflow(power=-5110)
         battery = BatteryPowerflow(power=5000)
 
-        consumer = ConsumerPowerflow(
+        consumer = ConsumerPowerflow.from_powerflows(
             inverter, grid, evcharger=0, battery=battery
         )
 
-        # house = abs(-5110 - (-5010)) = 100
         assert consumer.house == 100
-        
-        # consumer.inverter = max(0, 5010 - 5000) = 10W (losses)
+
         assert consumer.inverter == 10
-        
-        # Total = 100 + 10 = 110
+
         assert consumer.total == 110
 
 
@@ -723,14 +1082,16 @@ class TestPowerflowPreparePointEnergy:
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
         grid = GridPowerflow(power=-200)
         battery = BatteryPowerflow(power=0)
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
 
-        powerflow = Powerflow(
-            pv_production=1200,
-            inverter=inverter,
-            grid=grid,
-            battery=battery,
-            consumer=consumer,
+        powerflow = Powerflow.model_validate(
+            {
+                "pv_production": 1200,
+                "inverter": inverter,
+                "grid": grid,
+                "battery": battery,
+                "consumer": consumer,
+            }
         )
 
         point = powerflow.prepare_point_energy()
@@ -742,16 +1103,18 @@ class TestPowerflowPreparePointEnergy:
         from solaredge2mqtt.services.energy.settings import PriceSettings
 
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
-        grid = GridPowerflow(power=300)  # Delivery = 300
+        grid = GridPowerflow(power=300)
         battery = BatteryPowerflow(power=0)
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
 
-        powerflow = Powerflow(
-            pv_production=1200,
-            inverter=inverter,
-            grid=grid,
-            battery=battery,
-            consumer=consumer,
+        powerflow = Powerflow.model_validate(
+            {
+                "pv_production": 1200,
+                "inverter": inverter,
+                "grid": grid,
+                "battery": battery,
+                "consumer": consumer,
+            }
         )
 
         prices = PriceSettings(consumption=0.30, delivery=0.08)
@@ -767,14 +1130,16 @@ class TestPowerflowPreparePointEnergy:
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
         grid = GridPowerflow(power=-200)
         battery = BatteryPowerflow(power=0)
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
 
-        powerflow = Powerflow(
-            pv_production=1200,
-            inverter=inverter,
-            grid=grid,
-            battery=battery,
-            consumer=consumer,
+        powerflow = Powerflow.model_validate(
+            {
+                "pv_production": 1200,
+                "inverter": inverter,
+                "grid": grid,
+                "battery": battery,
+                "consumer": consumer,
+            }
         )
 
         point = powerflow.prepare_point_energy(measurement="custom_energy")
@@ -787,21 +1152,19 @@ class TestInverterPowerflowFromModbus:
 
     def test_from_modbus_basic(self):
         """Test from_modbus creates InverterPowerflow correctly."""
-        from solaredge2mqtt.services.modbus.models.inverter import (
-            ModbusDeviceInfo,
-            ModbusInverter,
-        )
 
         # Create mock device info
-        device_info = ModbusDeviceInfo({
-            "c_manufacturer": "SolarEdge",
-            "c_model": "SE10K",
-            "c_version": "1.0.0",
-            "c_serialnumber": "INV12345",
-        })
+        device_info = ModbusDeviceInfo.from_sunspec(
+            {
+                "c_manufacturer": "SolarEdge",
+                "c_model": "SE10K",
+                "c_version": "1.0.0",
+                "c_serialnumber": "INV12345",
+            }
+        )
 
         # Create mock inverter data with proper structure
-        inverter_data = ModbusInverter(
+        inverter_data = ModbusInverter.from_sunspec(
             device_info,
             {
                 "status": 4,  # ON and producing
@@ -834,7 +1197,7 @@ class TestInverterPowerflowFromModbus:
                 "power_dc_scale": 0,
                 "temperature": 35,
                 "temperature_scale": 0,
-            }
+            },
         )
 
         battery = BatteryPowerflow(power=0)
@@ -855,16 +1218,18 @@ class TestGridPowerflowFromModbus:
         from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
 
         # Create mock device info with Import/Export option
-        device_info = ModbusDeviceInfo({
-            "c_manufacturer": "SolarEdge",
-            "c_model": "Meter",
-            "c_version": "1.0.0",
-            "c_serialnumber": "MTR12345",
-            "c_option": "Export+Import",
-        })
+        device_info = ModbusDeviceInfo.from_sunspec(
+            {
+                "c_manufacturer": "SolarEdge",
+                "c_model": "Meter",
+                "c_version": "1.0.0",
+                "c_serialnumber": "MTR12345",
+                "c_option": "Export+Import",
+            }
+        )
 
         # Create mock meter data with correct field names
-        meter_data = {
+        meter_data: SunSpecPayload = {
             "current": 10,
             "l1_current": 10,
             "current_scale": 0,
@@ -886,7 +1251,7 @@ class TestGridPowerflowFromModbus:
             "energy_active_scale": 0,
         }
 
-        meter = ModbusMeter(device_info, meter_data)
+        meter = ModbusMeter.from_sunspec(device_info, meter_data)
         meters = {"meter0": meter}
 
         result = GridPowerflow.from_modbus(meters)
@@ -932,14 +1297,16 @@ class TestPowerflowFromModbus:
         )
         from solaredge2mqtt.services.modbus.models.unit import ModbusUnit
 
-        device_info = ModbusDeviceInfo({
-            "c_manufacturer": "SolarEdge",
-            "c_model": "SE10K",
-            "c_version": "1.0.0",
-            "c_serialnumber": "INV12345",
-        })
+        device_info = ModbusDeviceInfo.from_sunspec(
+            {
+                "c_manufacturer": "SolarEdge",
+                "c_model": "SE10K",
+                "c_version": "1.0.0",
+                "c_serialnumber": "INV12345",
+            }
+        )
 
-        inverter_data = ModbusInverter(
+        inverter_data = ModbusInverter.from_sunspec(
             device_info,
             {
                 "status": 4,
@@ -972,17 +1339,19 @@ class TestPowerflowFromModbus:
                 "power_dc_scale": 0,
                 "temperature": 25,
                 "temperature_scale": 0,
+            },
+        )
+
+        battery_device_info = ModbusDeviceInfo.from_sunspec(
+            {
+                "c_manufacturer": "SolarEdge",
+                "c_model": "Battery",
+                "c_version": "1.0.0",
+                "c_serialnumber": "BAT12345",
             }
         )
 
-        battery_device_info = ModbusDeviceInfo({
-            "c_manufacturer": "SolarEdge",
-            "c_model": "Battery",
-            "c_version": "1.0.0",
-            "c_serialnumber": "BAT12345",
-        })
-
-        battery_data = ModbusBattery(
+        battery_data = ModbusBattery.from_sunspec(
             battery_device_info,
             {
                 "status": 3,
@@ -991,7 +1360,7 @@ class TestPowerflowFromModbus:
                 "instantaneous_power": 4998,
                 "soe": 50.0,
                 "soh": 100.0,
-            }
+            },
         )
 
         unit_info = ModbusUnitInfo(
@@ -1000,11 +1369,13 @@ class TestPowerflowFromModbus:
             role=ModbusUnitRole.LEADER,
         )
 
-        unit = ModbusUnit(
-            info=unit_info,
-            inverter=inverter_data,
-            meters={},
-            batteries={"battery1": battery_data},
+        unit = ModbusUnit.model_validate(
+            {
+                "info": unit_info,
+                "inverter": inverter_data,
+                "meters": {},
+                "batteries": {"battery1": battery_data},
+            }
         )
 
         result = Powerflow.from_modbus(unit)
@@ -1030,14 +1401,16 @@ class TestPowerflowFromModbus:
         )
         from solaredge2mqtt.services.modbus.models.unit import ModbusUnit
 
-        device_info = ModbusDeviceInfo({
-            "c_manufacturer": "SolarEdge",
-            "c_model": "SE10K",
-            "c_version": "1.0.0",
-            "c_serialnumber": "INV12345",
-        })
+        device_info = ModbusDeviceInfo.from_sunspec(
+            {
+                "c_manufacturer": "SolarEdge",
+                "c_model": "SE10K",
+                "c_version": "1.0.0",
+                "c_serialnumber": "INV12345",
+            }
+        )
 
-        inverter_data = ModbusInverter(
+        inverter_data = ModbusInverter.from_sunspec(
             device_info,
             {
                 "status": 4,
@@ -1070,17 +1443,19 @@ class TestPowerflowFromModbus:
                 "power_dc_scale": 0,
                 "temperature": 25,
                 "temperature_scale": 0,
+            },
+        )
+
+        battery_device_info = ModbusDeviceInfo.from_sunspec(
+            {
+                "c_manufacturer": "SolarEdge",
+                "c_model": "Battery",
+                "c_version": "1.0.0",
+                "c_serialnumber": "BAT12345",
             }
         )
 
-        battery_device_info = ModbusDeviceInfo({
-            "c_manufacturer": "SolarEdge",
-            "c_model": "Battery",
-            "c_version": "1.0.0",
-            "c_serialnumber": "BAT12345",
-        })
-
-        battery_data = ModbusBattery(
+        battery_data = ModbusBattery.from_sunspec(
             battery_device_info,
             {
                 "status": 3,
@@ -1089,7 +1464,7 @@ class TestPowerflowFromModbus:
                 "instantaneous_power": 2000,
                 "soe": 50.0,
                 "soh": 100.0,
-            }
+            },
         )
 
         unit_info = ModbusUnitInfo(
@@ -1098,11 +1473,13 @@ class TestPowerflowFromModbus:
             role=ModbusUnitRole.LEADER,
         )
 
-        unit = ModbusUnit(
-            info=unit_info,
-            inverter=inverter_data,
-            meters={},
-            batteries={"battery1": battery_data},
+        unit = ModbusUnit.model_validate(
+            {
+                "info": unit_info,
+                "inverter": inverter_data,
+                "meters": {},
+                "batteries": {"battery1": battery_data},
+            }
         )
 
         result = Powerflow.from_modbus(unit)
@@ -1128,14 +1505,16 @@ class TestPowerflowFromModbus:
         )
         from solaredge2mqtt.services.modbus.models.unit import ModbusUnit
 
-        device_info = ModbusDeviceInfo({
-            "c_manufacturer": "SolarEdge",
-            "c_model": "SE10K",
-            "c_version": "1.0.0",
-            "c_serialnumber": "INV12345",
-        })
+        device_info = ModbusDeviceInfo.from_sunspec(
+            {
+                "c_manufacturer": "SolarEdge",
+                "c_model": "SE10K",
+                "c_version": "1.0.0",
+                "c_serialnumber": "INV12345",
+            }
+        )
 
-        inverter_data = ModbusInverter(
+        inverter_data = ModbusInverter.from_sunspec(
             device_info,
             {
                 "status": 4,
@@ -1168,17 +1547,19 @@ class TestPowerflowFromModbus:
                 "power_dc_scale": 0,
                 "temperature": 25,
                 "temperature_scale": 0,
+            },
+        )
+
+        battery_device_info = ModbusDeviceInfo.from_sunspec(
+            {
+                "c_manufacturer": "SolarEdge",
+                "c_model": "Battery",
+                "c_version": "1.0.0",
+                "c_serialnumber": "BAT12345",
             }
         )
 
-        battery_device_info = ModbusDeviceInfo({
-            "c_manufacturer": "SolarEdge",
-            "c_model": "Battery",
-            "c_version": "1.0.0",
-            "c_serialnumber": "BAT12345",
-        })
-
-        battery_data = ModbusBattery(
+        battery_data = ModbusBattery.from_sunspec(
             battery_device_info,
             {
                 "status": 2,
@@ -1187,7 +1568,7 @@ class TestPowerflowFromModbus:
                 "instantaneous_power": -1000,
                 "soe": 50.0,
                 "soh": 100.0,
-            }
+            },
         )
 
         unit_info = ModbusUnitInfo(
@@ -1196,11 +1577,13 @@ class TestPowerflowFromModbus:
             role=ModbusUnitRole.LEADER,
         )
 
-        unit = ModbusUnit(
-            info=unit_info,
-            inverter=inverter_data,
-            meters={},
-            batteries={"battery1": battery_data},
+        unit = ModbusUnit.model_validate(
+            {
+                "info": unit_info,
+                "inverter": inverter_data,
+                "meters": {},
+                "batteries": {"battery1": battery_data},
+            }
         )
 
         result = Powerflow.from_modbus(unit)
@@ -1224,14 +1607,16 @@ class TestPowerflowFromModbus:
         )
         from solaredge2mqtt.services.modbus.models.unit import ModbusUnit
 
-        device_info = ModbusDeviceInfo({
-            "c_manufacturer": "SolarEdge",
-            "c_model": "SE10K",
-            "c_version": "1.0.0",
-            "c_serialnumber": "INV12345",
-        })
+        device_info = ModbusDeviceInfo.from_sunspec(
+            {
+                "c_manufacturer": "SolarEdge",
+                "c_model": "SE10K",
+                "c_version": "1.0.0",
+                "c_serialnumber": "INV12345",
+            }
+        )
 
-        inverter_data = ModbusInverter(
+        inverter_data = ModbusInverter.from_sunspec(
             device_info,
             {
                 "status": 4,
@@ -1264,7 +1649,7 @@ class TestPowerflowFromModbus:
                 "power_dc_scale": 0,
                 "temperature": 25,
                 "temperature_scale": 0,
-            }
+            },
         )
 
         unit_info = ModbusUnitInfo(
@@ -1273,11 +1658,13 @@ class TestPowerflowFromModbus:
             role=ModbusUnitRole.LEADER,
         )
 
-        unit = ModbusUnit(
-            info=unit_info,
-            inverter=inverter_data,
-            meters={},
-            batteries={},
+        unit = ModbusUnit.model_validate(
+            {
+                "info": unit_info,
+                "inverter": inverter_data,
+                "meters": {},
+                "batteries": {},
+            }
         )
 
         result = Powerflow.from_modbus(unit)
@@ -1304,14 +1691,16 @@ class TestPowerflowFromModbus:
         )
         from solaredge2mqtt.services.modbus.models.unit import ModbusUnit
 
-        device_info = ModbusDeviceInfo({
-            "c_manufacturer": "SolarEdge",
-            "c_model": "SE10K",
-            "c_version": "1.0.0",
-            "c_serialnumber": "INV12345",
-        })
+        device_info = ModbusDeviceInfo.from_sunspec(
+            {
+                "c_manufacturer": "SolarEdge",
+                "c_model": "SE10K",
+                "c_version": "1.0.0",
+                "c_serialnumber": "INV12345",
+            }
+        )
 
-        inverter_data = ModbusInverter(
+        inverter_data = ModbusInverter.from_sunspec(
             device_info,
             {
                 "status": 4,
@@ -1344,17 +1733,19 @@ class TestPowerflowFromModbus:
                 "power_dc_scale": 0,
                 "temperature": 25,
                 "temperature_scale": 0,
+            },
+        )
+
+        battery_device_info = ModbusDeviceInfo.from_sunspec(
+            {
+                "c_manufacturer": "SolarEdge",
+                "c_model": "Battery",
+                "c_version": "1.0.0",
+                "c_serialnumber": "BAT12345",
             }
         )
 
-        battery_device_info = ModbusDeviceInfo({
-            "c_manufacturer": "SolarEdge",
-            "c_model": "Battery",
-            "c_version": "1.0.0",
-            "c_serialnumber": "BAT12345",
-        })
-
-        battery_data = ModbusBattery(
+        battery_data = ModbusBattery.from_sunspec(
             battery_device_info,
             {
                 "status": 3,
@@ -1363,7 +1754,7 @@ class TestPowerflowFromModbus:
                 "instantaneous_power": 3000,
                 "soe": 50.0,
                 "soh": 100.0,
-            }
+            },
         )
 
         unit_info = ModbusUnitInfo(
@@ -1372,11 +1763,13 @@ class TestPowerflowFromModbus:
             role=ModbusUnitRole.LEADER,
         )
 
-        unit = ModbusUnit(
-            info=unit_info,
-            inverter=inverter_data,
-            meters={},
-            batteries={"battery1": battery_data},
+        unit = ModbusUnit.model_validate(
+            {
+                "info": unit_info,
+                "inverter": inverter_data,
+                "meters": {},
+                "batteries": {"battery1": battery_data},
+            }
         )
 
         result = Powerflow.from_modbus(unit)

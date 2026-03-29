@@ -5,11 +5,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from solaredge2mqtt.core.exceptions import InvalidDataException
-from solaredge2mqtt.core.influxdb.events import InfluxDBAggregatedEvent
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.services.energy import EnergyService
 from solaredge2mqtt.services.energy.events import EnergyReadEvent
-from solaredge2mqtt.services.energy.models import HistoricPeriod, HistoricQuery
 from solaredge2mqtt.services.energy.settings import EnergySettings
 
 
@@ -44,7 +42,7 @@ class TestEnergyServiceInit:
         self, mock_energy_settings, mock_event_bus, mock_influxdb
     ):
         """Test EnergyService subscribes to influxdb aggregated event."""
-        service = EnergyService(mock_energy_settings, mock_event_bus, mock_influxdb)
+        EnergyService(mock_energy_settings, mock_event_bus, mock_influxdb)
 
         mock_event_bus.subscribe.assert_called()
 

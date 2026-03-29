@@ -1,5 +1,11 @@
-from pydantic import Field, field_serializer
+from __future__ import annotations
 
+from typing import Any
+
+from pydantic import Field, field_serializer
+from pydantic.json_schema import SkipJsonSchema
+
+from solaredge2mqtt.core.exceptions import InvalidDataException
 from solaredge2mqtt.core.models import Solaredge2MQTTBaseModel
 from solaredge2mqtt.services.homeassistant.models import (
     HomeAssistantBinarySensorType as HABinarySensor,
@@ -7,7 +13,7 @@ from solaredge2mqtt.services.homeassistant.models import (
 from solaredge2mqtt.services.homeassistant.models import (
     HomeAssistantSensorType as HASensor,
 )
-from solaredge2mqtt.services.models import Component
+from solaredge2mqtt.services.models import Component, HTTPResponse
 
 
 class WallboxInfo(Solaredge2MQTTBaseModel):
@@ -16,17 +22,21 @@ class WallboxInfo(Solaredge2MQTTBaseModel):
     version: str
     serialnumber: str
 
-    def __init__(self, data: dict[str, str | int]) -> dict[str, str]:
-        values = {
-            "manufacturer": "SolarEdge",
-            "model": data["model"],
-            "version": data["firmwareVersion"],
-            "serialnumber": data["serialNumber"],
-        }
+    @classmethod
+    def from_http_response(cls, response: dict[str, Any]) -> WallboxInfo:
+        try:
+            values = {
+                "manufacturer": "SolarEdge",
+                "model": response["model"],
+                "version": response["firmwareVersion"],
+                "serialnumber": response["serialNumber"],
+            }
 
-        super().__init__(**values)
+            return cls(**values)
+        except KeyError as e:
+            raise InvalidDataException(f"Missing key in Wallbox data: {e}")
 
-    def homeassistant_device_info(self) -> dict[str, any]:
+    def homeassistant_device_info(self) -> dict[str, Any]:
         return {
             "name": f"{self.manufacturer} Wallbox",
             "manufacturer": self.manufacturer,
@@ -40,37 +50,38 @@ class WallboxAPI(Component):
     COMPONENT = "wallbox"
     SOURCE = "api"
 
-    info: WallboxInfo
-    power: float = Field(**HASensor.POWER_W.field("Power"))
+    info: SkipJsonSchema[WallboxInfo]
+
+    power: int = Field(**HASensor.POWER_W.field("Power"))
     state: str = Field(title="State")
-    vehicle_plugged: bool = Field(
-        **HABinarySensor.PLUG.field("Vehicle plugged"))
+    vehicle_plugged: bool = Field(**HABinarySensor.PLUG.field("Vehicle plugged"))
     max_current: float = Field(**HASensor.CURRENT_A.field("Max current"))
 
-    def __init__(self, data: dict[str, str | int]):
-        info = WallboxInfo(data)
-        power = round(data["meter"]["totalActivePower"] / 1000)
-        state = data["state"]
-        vehicle_connected = bool(data["vehiclePlugged"])
-        max_current = float(data["maxCurrent"])
-
-        super().__init__(
-            info=info,
-            power=power,
-            state=state,
-            vehicle_plugged=vehicle_connected,
-            max_current=max_current,
-        )
-
-    def homeassistant_device_info(self) -> dict[str, any]:
-        return self.info.homeassistant_device_info()
-
     @classmethod
-    # pylint: disable=arguments-differ
-    def model_json_schema(cls, mode: str = "serialization") -> dict[str, any]:
-        schema = super().model_json_schema(mode=mode)
-        schema["properties"].pop("info", None)
-        return schema
+    def from_http_response(cls, response: HTTPResponse) -> WallboxAPI:
+        if not isinstance(response, dict):
+            raise InvalidDataException("Invalid Wallbox data")
+
+        info = WallboxInfo.from_http_response(response)
+
+        try:
+            power = round(float(response["meter"]["totalActivePower"]) / 1000)
+            state = str(response["state"])
+            vehicle_connected = bool(response["vehiclePlugged"])
+            max_current = float(response["maxCurrent"])
+
+            return cls(
+                info=info,
+                power=power,
+                state=state,
+                vehicle_plugged=vehicle_connected,
+                max_current=max_current,
+            )
+        except KeyError as e:
+            raise InvalidDataException(f"Missing key in Wallbox data: {e}")
+
+    def homeassistant_device_info(self) -> dict[str, Any]:
+        return self.info.homeassistant_device_info()
 
     @field_serializer("vehicle_plugged")
     def serialize_vehicle_plugged(self, value: bool) -> str:

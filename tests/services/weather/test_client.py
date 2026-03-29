@@ -1,12 +1,12 @@
 """Tests for WeatherClient with mocking."""
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from aiohttp import ClientResponseError, RequestInfo
 
-from solaredge2mqtt.core.exceptions import InvalidDataException
+from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.services.weather import WeatherClient
 from solaredge2mqtt.services.weather.events import WeatherUpdateEvent
@@ -79,7 +79,7 @@ class TestWeatherClientInit:
         self, mock_service_settings, mock_event_bus
     ):
         """Test WeatherClient subscribes to 10min interval event."""
-        client = WeatherClient(mock_service_settings, mock_event_bus)
+        WeatherClient(mock_service_settings, mock_event_bus)
 
         mock_event_bus.subscribe.assert_called()
 
@@ -97,8 +97,8 @@ class TestWeatherClientGetWeather:
 
         result = await client.get_weather()
 
-        assert result.lat == 52.52
-        assert result.lon == 13.405
+        assert result.lat == pytest.approx(52.52)
+        assert result.lon == pytest.approx(13.405)
         assert result.current is not None
 
     @pytest.mark.asyncio
@@ -115,14 +115,12 @@ class TestWeatherClientGetWeather:
         assert "Unable to read weather data" in exc_info.value.message
 
     @pytest.mark.asyncio
-    async def test_get_weather_401_error(
-        self, mock_service_settings, mock_event_bus
-    ):
+    async def test_get_weather_401_error(self, mock_service_settings, mock_event_bus):
         """Test get_weather handles 401 error."""
         client = WeatherClient(mock_service_settings, mock_event_bus)
 
         mock_request_info = MagicMock(spec=RequestInfo)
-        mock_request_info.real_url = "http://test.com"
+        mock_request_info.real_url = "https://test.com"
 
         error = ClientResponseError(
             request_info=mock_request_info,
@@ -144,7 +142,7 @@ class TestWeatherClientGetWeather:
         client = WeatherClient(mock_service_settings, mock_event_bus)
 
         mock_request_info = MagicMock(spec=RequestInfo)
-        mock_request_info.real_url = "http://test.com"
+        mock_request_info.real_url = "https://test.com"
 
         error = ClientResponseError(
             request_info=mock_request_info,
@@ -159,9 +157,7 @@ class TestWeatherClientGetWeather:
         assert "Unable to read weather data" in exc_info.value.message
 
     @pytest.mark.asyncio
-    async def test_get_weather_timeout(
-        self, mock_service_settings, mock_event_bus
-    ):
+    async def test_get_weather_timeout(self, mock_service_settings, mock_event_bus):
         """Test get_weather handles timeout."""
         client = WeatherClient(mock_service_settings, mock_event_bus)
         client._get = AsyncMock(side_effect=asyncio.TimeoutError())
@@ -170,6 +166,20 @@ class TestWeatherClientGetWeather:
             await client.get_weather()
 
         assert "timeout" in exc_info.value.message
+
+    @pytest.mark.asyncio
+    async def test_get_weather_missing_configuration(self, mock_event_bus):
+        """Test get_weather raises when client has missing config."""
+        mock_settings = MagicMock()
+        mock_settings.location = None
+        mock_settings.weather = MagicMock()
+
+        client = WeatherClient(mock_settings, mock_event_bus)
+
+        with pytest.raises(ConfigurationException) as exc_info:
+            await client.get_weather()
+
+        assert exc_info.value.component == "weather"
 
 
 class TestWeatherClientLoop:

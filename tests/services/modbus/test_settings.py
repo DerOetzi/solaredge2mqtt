@@ -1,6 +1,5 @@
 """Tests for modbus settings module."""
 
-
 from solaredge2mqtt.services.modbus.models.base import ModbusUnitRole
 from solaredge2mqtt.services.modbus.settings import (
     AdvancedControlsSettings,
@@ -80,15 +79,40 @@ class TestModbusUnitSettings:
         assert settings.meter[1] is False
         assert settings.meter[2] is False
 
+    def test_modbus_unit_settings_invalid_meter_item_uses_defaults(self):
+        """Non-bool/string meter values should fall back to pattern defaults."""
+        values = {"meter": [123, True, "false"]}
+
+        filled = ModbusUnitSettings._fill_defaults_array_with_pattern(
+            "meter",
+            values,
+            [True, False, False],
+        )
+
+        assert filled["meter"] == [True, True, False]
+
+    def test_modbus_unit_settings_invalid_battery_item_and_extend(self):
+        """Non-bool/string battery values should default and extend list."""
+        values = {"battery": [None]}
+
+        filled = ModbusUnitSettings._fill_defaults_array(
+            "battery",
+            values,
+            2,
+            "true",
+        )
+
+        assert filled["battery"] == [True, "true"]
+
 
 class TestModbusSettings:
     """Tests for ModbusSettings class."""
 
     def test_modbus_settings_defaults(self):
         """Test ModbusSettings default values."""
-        settings = ModbusSettings()
+        settings = ModbusSettings(host="test")
 
-        assert settings.host is None
+        assert settings.host == "test"
         assert settings.port == 1502
         assert settings.timeout == 1
         assert settings.check_grid_status is False
@@ -99,14 +123,14 @@ class TestModbusSettings:
     def test_modbus_settings_custom_values(self):
         """Test ModbusSettings with custom values."""
         settings = ModbusSettings(
-            host="192.168.1.100",
+            host="192.168.1.100",  # noqa: S1313
             port=502,
             timeout=5,
             check_grid_status=True,
             retain=True,
         )
 
-        assert settings.host == "192.168.1.100"
+        assert settings.host == "192.168.1.100"  # noqa: S1313
         assert settings.port == 502
         assert settings.timeout == 5
         assert settings.check_grid_status is True
@@ -115,10 +139,10 @@ class TestModbusSettings:
     def test_modbus_settings_advanced_power_controls_enabled(self):
         """Test advanced_power_controls_enabled property."""
         settings_enabled = ModbusSettings(
-            advanced_power_controls=AdvancedControlsSettings.ENABLED
+            host="test", advanced_power_controls=AdvancedControlsSettings.ENABLED
         )
         settings_disabled = ModbusSettings(
-            advanced_power_controls=AdvancedControlsSettings.DISABLED
+            host="test", advanced_power_controls=AdvancedControlsSettings.DISABLED
         )
 
         assert settings_enabled.advanced_power_controls_enabled is True
@@ -126,7 +150,7 @@ class TestModbusSettings:
 
     def test_modbus_settings_units_without_followers(self):
         """Test units property without followers."""
-        settings = ModbusSettings()
+        settings = ModbusSettings(host="test")
         units = settings.units
 
         assert "leader" in units
@@ -134,7 +158,10 @@ class TestModbusSettings:
 
     def test_modbus_settings_units_with_followers(self):
         """Test units property with followers."""
-        settings = ModbusSettings(follower=[{"unit": 2}, {"unit": 3}])
+        settings = ModbusSettings(
+            host="test",
+            follower=[{"unit": 2}, {"unit": 3}],  # pyright: ignore[reportArgumentType]
+        )
         units = settings.units
 
         assert "leader" in units
@@ -144,30 +171,46 @@ class TestModbusSettings:
 
     def test_modbus_settings_has_followers_true(self):
         """Test has_followers returns True with followers."""
-        settings = ModbusSettings(follower=[{"unit": 2}])
+        settings = ModbusSettings(host="test", follower=[{"unit": 2}])  # pyright: ignore[reportArgumentType]
 
         assert settings.has_followers is True
 
     def test_modbus_settings_has_followers_false(self):
         """Test has_followers returns False without followers."""
-        settings = ModbusSettings()
+        settings = ModbusSettings(host="test")
 
         assert settings.has_followers is False
 
     def test_modbus_settings_follower_role_is_follower(self):
         """Test that followers have FOLLOWER role."""
-        settings = ModbusSettings(follower=[{"unit": 2}])
+        settings = ModbusSettings(host="test", follower=[{"unit": 2}])  # pyright: ignore[reportArgumentType]
 
         assert settings.follower[0].role == ModbusUnitRole.FOLLOWER
 
     def test_modbus_settings_follower_meter_defaults_false(self):
         """Test that follower meter defaults are False."""
-        settings = ModbusSettings(follower=[{"unit": 2}])
+        settings = ModbusSettings(host="test", follower=[{"unit": 2}])  # pyright: ignore[reportArgumentType]
 
         assert all(m is False for m in settings.follower[0].meter)
 
     def test_modbus_settings_follower_battery_defaults_false(self):
         """Test that follower battery defaults are False."""
-        settings = ModbusSettings(follower=[{"unit": 2}])
+        settings = ModbusSettings(host="test", follower=[{"unit": 2}])  # pyright: ignore[reportArgumentType]
 
         assert all(b is False for b in settings.follower[0].battery)
+
+    def test_modbus_settings_follower_non_bool_values_normalized(self):
+        """Follower non-boolean values should normalize to false defaults."""
+        settings = ModbusSettings(
+            host="test",
+            follower=[
+                {
+                    "unit": 2,
+                    "meter": [None],
+                    "battery": [object()],
+                }
+            ],  # pyright: ignore[reportArgumentType]
+        )
+
+        assert settings.follower[0].meter == [False, False, False]
+        assert settings.follower[0].battery == [False, False]

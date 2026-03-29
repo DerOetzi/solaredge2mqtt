@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.logging import logger
@@ -27,7 +27,8 @@ class ModbusAdvancedControl:
         inverter_topic = (
             ModbusInverter.generate_topic_prefix(str(ModbusUnitRole.LEADER))
             if self.settings.has_followers
-            else ModbusInverter.generate_topic_prefix())
+            else ModbusInverter.generate_topic_prefix()
+        )
 
         self.topic_prefix = f"{service_settings.mqtt.topic_prefix}/{inverter_topic}"
         self.event_bus = event_bus
@@ -36,9 +37,7 @@ class ModbusAdvancedControl:
 
     def _subscribe_events(self) -> None:
         if self.settings.advanced_power_controls_enabled:
-            self.event_bus.subscribe(
-                MQTTReceivedEvent, self.handle_mqtt_received_event
-            )
+            self.event_bus.subscribe(MQTTReceivedEvent, self.handle_mqtt_received_event)
 
     async def async_init(self) -> None:
         await self.handle_advanced_power_control_settings()
@@ -50,12 +49,11 @@ class ModbusAdvancedControl:
         elif self.settings.advanced_power_controls == AdvancedControlsSettings.DISABLE:
             await self.disable_advanced_control_settings()
 
-            logger.warning(
-                "Change setting to disabled and restart the service.")
+            logger.warning("Change setting to disabled and restart the service.")
         else:
             logger.info("Advanced power control is disabled in settings")
 
-    def enable_advanced_power_control(self):
+    async def enable_advanced_power_control(self):  # noqa: S7503 Needs to be done
         logger.debug("Enabling advanced power control")
         # await self.event_bus.emit(ModbusWriteEvent(
         #    SunSpecPowerControlRegister.ADVANCED_POWER_CONTROL_ENABLE, True
@@ -64,21 +62,25 @@ class ModbusAdvancedControl:
 
     async def disable_advanced_control_settings(self):
         logger.debug("Disabling advanced power control")
-        await self.event_bus.emit(ModbusWriteEvent(
-            SunSpecPowerControlRegister.REACTIVE_POWER_CONFIG, 0
-        ))
+        await self.event_bus.emit(
+            ModbusWriteEvent(SunSpecPowerControlRegister.REACTIVE_POWER_CONFIG, 0)
+        )
 
-        await self.event_bus.emit(ModbusWriteEvent(
-            SunSpecPowerControlRegister.ADVANCED_POWER_CONTROL_ENABLE, False
-        ))
+        await self.event_bus.emit(
+            ModbusWriteEvent(
+                SunSpecPowerControlRegister.ADVANCED_POWER_CONTROL_ENABLE, False
+            )
+        )
 
-        await self.event_bus.emit(ModbusWriteEvent(
-            SunSpecPowerControlRegister.COMMIT_POWER_CONTROL_SETTINGS, 1
-        ))
+        await self.event_bus.emit(
+            ModbusWriteEvent(
+                SunSpecPowerControlRegister.COMMIT_POWER_CONTROL_SETTINGS, 1
+            )
+        )
 
         logger.info("Advanced power control disabled.")
 
-    def subscribe_topics(self) -> None:
+    async def subscribe_topics(self) -> None:  # noqa: S7503 Needs to be done
         for field in ModbusInverter.parse_schema(self.property_parser):
             topic = f"{self.topic_prefix}/{field['topic']}"
             logger.info(f"Subscribing to topic: {topic}")
@@ -86,14 +88,13 @@ class ModbusAdvancedControl:
 
     @staticmethod
     def property_parser(
-        prop: dict[str, any],
-        name: str,
-        path: list[str]
+        prop: dict[str, Any], name: str, path: list[str]
     ) -> dict[str, str] | None:
         field = None
 
-        if prop.get("input_field", False):
-            input_field = prop.get("input_field")
+        input_field = prop.get("input_field", False)
+
+        if input_field:
             input_field = ModbusPowerControlInput.from_string(input_field)
             field = {
                 "name": name,
@@ -103,5 +104,5 @@ class ModbusAdvancedControl:
 
         return field
 
-    def handle_mqtt_received_event(self, event: MQTTReceivedEvent) -> None:
+    async def handle_mqtt_received_event(self, event: MQTTReceivedEvent) -> None:  # noqa: S7503 Needs to be done
         logger.info(event.input)

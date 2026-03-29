@@ -9,10 +9,10 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent))
 
 from solaredge2mqtt.core.settings.migrator import ConfigurationMigrator
-from solaredge2mqtt.core.settings.models import ServiceSettings
+
 
 def main():
-    
+
     parser = argparse.ArgumentParser(
         description=(
             "Migrate SolarEdge2MQTT configuration from "
@@ -57,6 +57,7 @@ def main():
 
     if args.backup:
         from datetime import datetime
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         if config_file.exists():
             backup_path = config_file.with_suffix(f".yml.backup.{timestamp}")
@@ -70,7 +71,7 @@ def main():
     print("Starting migration...")
     print(f"Reading configuration from environment variables and {args.input}")
 
-    migrator = ConfigurationMigrator(ServiceSettings)
+    migrator = ConfigurationMigrator()
     config_data, secrets_data = migrator.extract_from_environment()
 
     if args.dry_run:
@@ -88,10 +89,10 @@ def main():
         print(f"  - Configuration written to: {config_file}")
         print(f"  - Secrets written to: {secrets_file}")
         print(
-            "\nIMPORTANT: Please review the files and "
-            "ensure all settings are correct."
+            "\nIMPORTANT: Please review the files and ensure all settings are correct."
         )
         print(f"WARNING: {secrets_file} contains sensitive data. Keep it secure!")
+
 
 if __name__ == "__main__":
     main()

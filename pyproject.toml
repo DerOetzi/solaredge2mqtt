@@ -53,6 +53,7 @@ dev = [
     "pytest==9.0.2",
     "pytest-asyncio==1.3.0",
     "pytest-cov==7.1.0",
+    "pytest-xdist==3.8.0",
 ]
 forecast = [
     "numpy==2.4.4",
@@ -83,7 +84,7 @@ local_scheme = "node-and-date"
 fallback_version = "0.0.0.unknown"
 
 [tool.ruff]
-line-length = 79
+line-length = 88
 target-version = "py313"
 
 [tool.ruff.lint]
@@ -94,14 +95,17 @@ unfixable = []
 
 [tool.ruff.format]
 quote-style = "double"
-indent-style = "space"
 skip-magic-trailing-comma = false
+indent-style = "space"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-addopts = "-v --tb=short"
+addopts = "-v --tb=short -n auto --dist=worksteal"
+markers = [
+    "slow"
+]
 
 [tool.coverage.run]
 source = ["solaredge2mqtt"]
@@ -112,6 +116,7 @@ omit = [
 ]
 
 [tool.coverage.report]
+fail_under = 90
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",

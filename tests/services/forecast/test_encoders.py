@@ -1,11 +1,14 @@
 """Tests for forecast encoders module."""
 
 from datetime import datetime, timezone
+from typing import cast
+from unittest.mock import MagicMock, patch
 
 import pytest
 from numpy import isclose
 from pandas import DataFrame, Series
 
+from solaredge2mqtt.core.settings.models import LocationSettings
 from solaredge2mqtt.services.forecast.encoders import (
     BaseEncoder,
     CategoricalEncoder,
@@ -15,12 +18,11 @@ from solaredge2mqtt.services.forecast.encoders import (
 )
 
 
-class MockLocationSettings:
+class MockLocationSettings(LocationSettings):
     """Mock LocationSettings for testing."""
 
     def __init__(self, latitude=52.52, longitude=13.405):
-        self.latitude = latitude
-        self.longitude = longitude
+        super().__init__(latitude=latitude, longitude=longitude)
 
 
 class TestBaseEncoder:
@@ -43,13 +45,6 @@ class TestBaseEncoder:
         assert result is encoder
         assert encoder.features == ["col1", "col2"]
 
-    def test_base_encoder_fit_no_columns_raises(self):
-        """Test BaseEncoder fit raises when x_vector has no columns."""
-        encoder = BaseEncoder()
-
-        with pytest.raises(AttributeError, match="x_vector has no columns"):
-            encoder.fit(Series([1, 2, 3]))
-
     def test_base_encoder_transform_not_fitted_raises(self):
         """Test _transform raises when encoder not fitted."""
         encoder = BaseEncoder()
@@ -57,15 +52,6 @@ class TestBaseEncoder:
 
         with pytest.raises(AttributeError, match="is not been fitted yet"):
             encoder._transform(df)
-
-    def test_base_encoder_transform_no_columns_raises(self):
-        """Test _transform raises when x_vector has no columns."""
-        encoder = BaseEncoder()
-        df = DataFrame({"col1": [1, 2, 3]})
-        encoder.fit(df)
-
-        with pytest.raises(AttributeError, match="x_vector has no columns"):
-            encoder._transform(Series([1, 2, 3]))
 
     def test_base_encoder_transform_missing_features_raises(self):
         """Test _transform raises when vector is missing features."""
@@ -106,6 +92,13 @@ class TestBaseEncoder:
         assert encoder._feature_names_out == ["col1", "col2"]
         assert result is df
 
+    def test_base_encoder_as_series_raises_for_dataframe_column(self):
+        """_as_series should fail if a duplicated key resolves to DataFrame."""
+        df = DataFrame([[1, 2], [3, 4]], columns=["dup", "dup"])
+
+        with pytest.raises(TypeError, match="unexpectedly resolved to DataFrame"):
+            BaseEncoder._as_series(df, "dup")
+
 
 class TestCategoricalEncoder:
     """Tests for CategoricalEncoder class."""
@@ -124,10 +117,12 @@ class TestCategoricalEncoder:
     def test_categorical_encoder_multiple_columns(self):
         """Test CategoricalEncoder with multiple columns."""
         encoder = CategoricalEncoder()
-        df = DataFrame({
-            "cat1": ["a", "b", "a"],
-            "cat2": ["x", "y", "z"],
-        })
+        df = DataFrame(
+            {
+                "cat1": ["a", "b", "a"],
+                "cat2": ["x", "y", "z"],
+            }
+        )
         encoder.fit(df)
 
         result = encoder.transform(df)
@@ -141,13 +136,13 @@ class TestCyclicalEncoder:
 
     def test_cyclical_encoder_init(self):
         """Test CyclicalEncoder initialization."""
-        encoder = CyclicalEncoder(hour=24, month=12)
+        encoder = CyclicalEncoder(**{"hour": 24, "month": 12})
 
         assert encoder.cycle_lengths == {"hour": 24, "month": 12}
 
     def test_cyclical_encoder_transform(self):
         """Test CyclicalEncoder transform method."""
-        encoder = CyclicalEncoder(hour=24)
+        encoder = CyclicalEncoder(**{"hour": 24})
         df = DataFrame({"hour": [0, 6, 12, 18]})
         encoder.fit(df)
 
@@ -157,9 +152,17 @@ class TestCyclicalEncoder:
         assert "hour_sin" in result.columns
         assert "hour" not in result.columns
 
+    def test_cyclical_encoder_transform_not_fitted_raises(self):
+        """Transform should fail when encoder has not been fitted."""
+        encoder = CyclicalEncoder(**{"hour": 24})
+        df = DataFrame({"hour": [0, 6]})
+
+        with pytest.raises(AttributeError, match="is not been fitted yet"):
+            encoder.transform(df)
+
     def test_cyclical_encoder_values_at_boundaries(self):
         """Test CyclicalEncoder produces correct values at cycle boundaries."""
-        encoder = CyclicalEncoder(hour=24)
+        encoder = CyclicalEncoder(**{"hour": 24})
         df = DataFrame({"hour": [0, 12, 24]})
         encoder.fit(df)
 
@@ -175,7 +178,7 @@ class TestCyclicalEncoder:
 
     def test_cyclical_encoder_unknown_feature_raises(self):
         """Test CyclicalEncoder raises for unknown feature."""
-        encoder = CyclicalEncoder(known_feature=24)
+        encoder = CyclicalEncoder(**{"known_feature": 24})
         df = DataFrame({"unknown_feature": [1, 2, 3]})
         encoder.fit(df)
 
@@ -184,7 +187,7 @@ class TestCyclicalEncoder:
 
     def test_cyclical_encoder_get_params(self):
         """Test CyclicalEncoder get_params method."""
-        encoder = CyclicalEncoder(hour=24, month=12)
+        encoder = CyclicalEncoder(**{"hour": 24, "month": 12})
 
         params = encoder.get_params()
 
@@ -195,7 +198,10 @@ class TestCyclicalEncoder:
         df = DataFrame({"value": [0, 6, 12, 18]})
 
         result = CyclicalEncoder.transform_cycle_columns(
-            df, "test", df["value"], 24
+            df,
+            "test",
+            cast(Series, df["value"]),
+            24,
         )
 
         assert "test_cos" in result.columns
@@ -216,12 +222,14 @@ class TestTimeEncoder:
     def test_time_encoder_transform(self):
         """Test TimeEncoder transform method."""
         encoder = TimeEncoder()
-        df = DataFrame({
-            "timestamp": [
-                datetime(2024, 6, 15, 12, 0, tzinfo=timezone.utc),
-                datetime(2024, 12, 15, 6, 0, tzinfo=timezone.utc),
-            ]
-        })
+        df = DataFrame(
+            {
+                "timestamp": [
+                    datetime(2024, 6, 15, 12, 0, tzinfo=timezone.utc),
+                    datetime(2024, 12, 15, 6, 0, tzinfo=timezone.utc),
+                ]
+            }
+        )
         encoder.fit(df)
 
         result = encoder.transform(df)
@@ -238,6 +246,16 @@ class TestTimeEncoder:
 
         # Original column should be dropped
         assert "timestamp" not in result.columns
+
+    def test_time_encoder_transform_not_fitted_raises(self):
+        """Transform should fail when TimeEncoder has not been fitted."""
+        encoder = TimeEncoder()
+        df = DataFrame(
+            {"timestamp": [datetime(2024, 6, 1, 12, 0, tzinfo=timezone.utc)]}
+        )
+
+        with pytest.raises(AttributeError, match="is not been fitted yet"):
+            encoder.transform(df)
 
     def test_time_encoder_map_season_spring(self):
         """Test _map_season returns spring for spring date."""
@@ -279,6 +297,15 @@ class TestTimeEncoder:
 
         assert season == "winter"
 
+    def test_time_encoder_map_season_late_december_is_winter(self):
+        """Dates after winter solstice should still map to winter."""
+        encoder = TimeEncoder()
+        date = datetime(2024, 12, 30, 12, 0, tzinfo=timezone.utc)
+
+        season = encoder._map_season(date)
+
+        assert season == "winter"
+
     def test_time_encoder_caches_season_starts(self):
         """Test TimeEncoder caches season_starts per year."""
         encoder = TimeEncoder()
@@ -308,12 +335,14 @@ class TestSunEncoder:
         location = MockLocationSettings(latitude=52.52, longitude=13.405)
         encoder = SunEncoder(location)
 
-        df = DataFrame({
-            "time": [
-                datetime(2024, 6, 15, 12, 0, tzinfo=timezone.utc),
-                datetime(2024, 6, 15, 14, 0, tzinfo=timezone.utc),
-            ]
-        })
+        df = DataFrame(
+            {
+                "time": [
+                    datetime(2024, 6, 15, 12, 0, tzinfo=timezone.utc),
+                    datetime(2024, 6, 15, 14, 0, tzinfo=timezone.utc),
+                ]
+            }
+        )
         encoder.fit(df)
 
         result = encoder.transform(df)
@@ -347,12 +376,48 @@ class TestSunEncoder:
         location = MockLocationSettings(latitude=52.52, longitude=13.405)
         encoder = SunEncoder(location)
 
-        df = DataFrame({
-            "time": [datetime(2024, 6, 15, 12, 0, tzinfo=timezone.utc)]
-        })
+        df = DataFrame({"time": [datetime(2024, 6, 15, 12, 0, tzinfo=timezone.utc)]})
         encoder.fit(df)
 
         result = encoder.transform(df)
 
         # At noon in summer, elevation should be positive
         assert result["time_elevation"].iloc[0] > 0
+
+    def test_sun_encoder_transform_with_missing_features_raises(self):
+        """SunEncoder should raise if features become unavailable."""
+        location = MockLocationSettings(latitude=52.52, longitude=13.405)
+        encoder = SunEncoder(location)
+        df = DataFrame({"time": [datetime(2024, 6, 15, 12, 0, tzinfo=timezone.utc)]})
+
+        with patch.object(SunEncoder, "_transform", return_value=df.copy()):
+            with pytest.raises(AttributeError, match="is not been fitted yet"):
+                encoder.transform(df)
+
+    def test_sun_encoder_transform_raises_for_dataframe_azimuth(self):
+        """SunEncoder should fail if azimuth calculation returns DataFrame."""
+        location = MockLocationSettings(latitude=52.52, longitude=13.405)
+        encoder = SunEncoder(location)
+        df = DataFrame(
+            {
+                "time": [
+                    datetime(2024, 6, 15, 12, 0, tzinfo=timezone.utc),
+                    datetime(2024, 6, 15, 13, 0, tzinfo=timezone.utc),
+                ]
+            }
+        )
+        encoder.fit(df)
+
+        fake_time_series = MagicMock()
+        fake_time_series.apply.side_effect = [
+            Series([10.0, 11.0]),
+            DataFrame({"bad": [1, 2]}),
+        ]
+
+        with patch.object(
+            SunEncoder,
+            "_as_series",
+            side_effect=[cast(Series, df["time"]), fake_time_series],
+        ):
+            with pytest.raises(TypeError, match="Computed azimuth"):
+                encoder.transform(df)

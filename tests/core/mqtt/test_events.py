@@ -91,11 +91,50 @@ class TestMQTTReceivedEvent:
             value: float
 
         input_data = TestInput(value=3.14)
-        event = MQTTReceivedEvent("test/topic", input_data)
+        event = MQTTReceivedEvent[TestInput]("test/topic", input_data)
 
         assert event.topic == "test/topic"
         assert event.input == input_data
         assert event.input.value == pytest.approx(3.14)
+
+    def test_mqtt_received_event_input_model(self):
+        """Test input_model returns generic input type."""
+
+        class TestInput(BaseInputField):
+            value: int
+
+        class TestReceivedEvent(MQTTReceivedEvent[TestInput]): ...  # pragma: no cover
+
+        assert TestReceivedEvent.input_model() == TestInput
+
+    def test_mqtt_received_event_input_model_raises_type_error(self, monkeypatch):
+        """Test input_model raises TypeError when generic type is missing."""
+
+        class InvalidReceivedEvent(MQTTReceivedEvent): ...  # pragma: no cover
+
+        monkeypatch.setattr(InvalidReceivedEvent, "__orig_bases__", ())
+
+        with pytest.raises(
+            TypeError,
+            match=r"must specify a generic input model",
+        ):
+            InvalidReceivedEvent.input_model()
+
+    def test_mqtt_received_event_input_model_skips_non_generic_base(self, monkeypatch):
+        """Test input_model skips bases without generic args."""
+
+        class TestInput(BaseInputField):
+            value: int
+
+        class TestReceivedEvent(MQTTReceivedEvent[TestInput]): ...  # pragma: no cover
+
+        monkeypatch.setattr(
+            TestReceivedEvent,
+            "__orig_bases__",
+            (BaseEvent, MQTTReceivedEvent[TestInput]),
+        )
+
+        assert TestReceivedEvent.input_model() is TestInput
 
 
 class TestMQTTSubscribeEvent:
@@ -115,7 +154,46 @@ class TestMQTTSubscribeEvent:
         class TestInput(BaseInputField):
             value: float
 
-        event = MQTTSubscribeEvent("test/topic", TestInput)
+        class TestReceivedEvent(MQTTReceivedEvent[TestInput]): ...  # pragma: no cover
+
+        class TestSubscribeEvent(
+            MQTTSubscribeEvent[TestReceivedEvent]
+        ): ...  # pragma: no cover
+
+        event = TestSubscribeEvent("test/topic")
 
         assert event.topic == "test/topic"
-        assert event.model == TestInput
+        assert event.event() == TestReceivedEvent
+
+    def test_mqtt_subscribe_event_event_raises_type_error(self, monkeypatch):
+        """Test event() raises TypeError when generic type is missing."""
+
+        class InvalidSubscribeEvent(MQTTSubscribeEvent): ...  # pragma: no cover
+
+        monkeypatch.setattr(InvalidSubscribeEvent, "__orig_bases__", ())
+
+        with pytest.raises(
+            TypeError,
+            match=r"must specify a generic received event",
+        ):
+            InvalidSubscribeEvent.event()
+
+    def test_mqtt_subscribe_event_event_skips_non_generic_base(self, monkeypatch):
+        """Test event() skips bases without generic args."""
+
+        class TestInput(BaseInputField):
+            value: float
+
+        class TestReceivedEvent(MQTTReceivedEvent[TestInput]): ...  # pragma: no cover
+
+        class TestSubscribeEvent(
+            MQTTSubscribeEvent[TestReceivedEvent]
+        ): ...  # pragma: no cover
+
+        monkeypatch.setattr(
+            TestSubscribeEvent,
+            "__orig_bases__",
+            (BaseEvent, MQTTSubscribeEvent[TestReceivedEvent]),
+        )
+
+        assert TestSubscribeEvent.event() is TestReceivedEvent

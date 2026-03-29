@@ -1,54 +1,89 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Awaitable, Callable
+from typing import Any, Awaitable, Protocol, overload
 
 from aiomqtt import MqttError
 
-from solaredge2mqtt.core.events.events import BaseEvent
+from solaredge2mqtt.core.events.events import BaseEvent, TEvent, TEventContra
 from solaredge2mqtt.core.exceptions import InvalidDataException
 from solaredge2mqtt.core.logging import logger
 
-Listener = Callable[[BaseEvent], Awaitable[None]]
+
+class Listener(Protocol[TEventContra]):
+    def __call__(self, event: TEventContra) -> Awaitable[None]: ...  # pragma: no cover
+
+
+AnyListener = Listener[Any]
 
 
 class EventBus:
     def __init__(self) -> None:
-        self._listeners: dict[str, list[Listener]] = {}
+        self._listeners: dict[str, list[AnyListener]] = {}
         self._subscribed_events: dict[str, type[BaseEvent]] = {}
         self._tasks: set[asyncio.Task] = set()
         self._critical_error: BaseException | None = None
 
+    @overload
+    def subscribe(
+        self, event: list[type[TEvent]], listener: Listener[TEvent]
+    ) -> None: ...  # pragma: no cover
+
+    @overload
+    def subscribe(
+        self, event: type[TEvent], listener: Listener[TEvent]
+    ) -> None: ...  # pragma: no cover
+
     def subscribe(
         self,
-        event: type[BaseEvent] | list[type[BaseEvent]],
-        listener: Listener,
+        event: type[TEvent] | list[type[TEvent]],
+        listener: Listener[TEvent],
     ) -> None:
         if isinstance(event, list):
             for _event in event:
                 self.subscribe(_event, listener)
             return
+
         event_key = event.event_key()
         logger.info(f"Event subscribed: {event_key}")
         self._listeners.setdefault(event_key, []).append(listener)
         self._subscribed_events[event_key] = event
 
     @property
-    def subscribed_events(self) -> list[type[BaseEvent]]:
-        return list(self._subscribed_events.values())
+    def subscribed_events(self) -> set[type[BaseEvent]]:
+        return set(self._subscribed_events.values())
 
-    def unsubscribe(self, event: type[BaseEvent], listener: Listener) -> None:
+    @overload
+    def unsubscribe(
+        self,
+        event: TEvent,
+        listener: Listener[TEvent],
+    ) -> None: ...  # pragma: no cover
+
+    @overload
+    def unsubscribe(
+        self,
+        event: type[TEvent],
+        listener: Listener[TEvent],
+    ) -> None: ...  # pragma: no cover
+
+    def unsubscribe(
+        self,
+        event: TEvent | type[TEvent],
+        listener: Listener[TEvent],
+    ) -> None:
         event_key = event.event_key()
         if event_key in self._listeners:
             try:
                 self._listeners[event_key].remove(listener)
             except ValueError:
                 pass
-            if not self._listeners[event_key]:
+
+            if len(self._listeners[event_key]) == 0:
                 self._listeners.pop(event_key, None)
                 self._subscribed_events.pop(event_key, None)
 
-    def unsubscribe_all(self, event: type[BaseEvent]) -> None:
+    def unsubscribe_all(self, event: type[TEvent]) -> None:
         event_key = event.event_key()
         if event_key in self._listeners:
             self._listeners.pop(event_key, None)
@@ -62,23 +97,37 @@ class EventBus:
 
         event_key = event.event_key()
         logger.trace(f"Event emitted: {event_key}")
-        listeners = self._listeners.get(event_key)
+        listeners = self._resolve_listeners(type(event))
         if not listeners:
             return
         if event.AWAIT:
             await self._notify_listeners(event, listeners)
         else:
-            task = asyncio.create_task(
-                self._notify_listeners(event, listeners))
+            task = asyncio.create_task(self._notify_listeners(event, listeners))
             self._tasks.add(task)
             task.add_done_callback(self._handle_task_done)
 
+    def _resolve_listeners(self, event_type: type[BaseEvent]) -> list[AnyListener]:
+        listeners: list[AnyListener] = []
+        seen_listeners: list[AnyListener] = []
+
+        for cls in event_type.__mro__:
+            if not issubclass(cls, BaseEvent):
+                continue
+            event_key = cls.event_key()
+            for listener in self._listeners.get(event_key, []):
+                if any(listener == seen_listener for seen_listener in seen_listeners):
+                    continue
+                seen_listeners.append(listener)
+                listeners.append(listener)
+
+        return listeners
+
     async def _notify_listeners(
-        self, event: BaseEvent, listeners: list[Listener]
+        self, event: BaseEvent, listeners: list[AnyListener]
     ) -> None:
         results = await asyncio.gather(
-            *(self._notify_listener(listener, event)
-              for listener in listeners),
+            *(self._notify_listener(listener, event) for listener in listeners),
             return_exceptions=True,
         )
         for r in results:
@@ -87,12 +136,11 @@ class EventBus:
             elif isinstance(r, Exception):
                 logger.error("Unhandled listener error: {exc}", exc=repr(r))
 
-    async def _notify_listener(self, listener: Listener, event: BaseEvent) -> None:
+    async def _notify_listener(self, listener: AnyListener, event: BaseEvent) -> None:
         try:
             await listener(event)
         except InvalidDataException as error:
-            logger.warning("{message}, skipping this loop",
-                           message=error.message)
+            logger.warning("{message}, skipping this loop", message=error.message)
 
     def _handle_task_done(self, task: asyncio.Task) -> None:
         self._tasks.discard(task)

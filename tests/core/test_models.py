@@ -8,6 +8,7 @@ from solaredge2mqtt.core.models import (
     BaseField,
     BaseInputField,
     BaseInputFieldEnumModel,
+    BaseInputScalarField,
     EnumModel,
     Solaredge2MQTTBaseModel,
 )
@@ -97,7 +98,10 @@ class TestBaseInputField:
             field1: str
 
         with pytest.raises(Exception):
-            TestInput(field1="value", extra_field="should_fail")
+            TestInput(
+                field1="value",
+                extra_field="should_fail",  # pyright: ignore[reportCallIssue]
+            )
 
     def test_base_input_field_valid(self):
         """Test that BaseInputField accepts valid fields."""
@@ -109,6 +113,40 @@ class TestBaseInputField:
         model = TestInput(field1="value", field2=42)
         assert model.field1 == "value"
         assert model.field2 == 42
+
+
+class TestBaseInputScalarField:
+    """Tests for BaseInputScalarField class."""
+
+    def test_scalar_value_is_wrapped(self):
+        """Scalar values are wrapped into single-field dicts."""
+
+        class ScalarInput(BaseInputScalarField):
+            value: int
+
+        parsed = ScalarInput.model_validate(7)
+
+        assert parsed.value == 7
+
+    def test_mapping_value_is_kept(self):
+        """Mappings are accepted as-is by scalar validator."""
+
+        class ScalarInput(BaseInputScalarField):
+            value: int
+
+        parsed = ScalarInput.model_validate({"value": 8})
+
+        assert parsed.value == 8
+
+    def test_multiple_fields_scalar_raises_type_error(self):
+        """Scalar input with multi-field model should fail."""
+
+        class MultiInput(BaseInputScalarField):
+            a: int
+            b: int
+
+        with pytest.raises(TypeError):
+            MultiInput.model_validate(1)
 
 
 class TestBaseInputFieldEnumModel:
@@ -175,7 +213,7 @@ class TestBaseField:
 
         result = TestField.POWER.field(
             "Power Value",
-            json_schema_extra={"unit": "W"},
+            unit="W",
         )
 
         assert result["title"] == "Power Value"
@@ -280,3 +318,119 @@ class TestSolaredge2MQTTBaseModel:
         # This tests that the method runs without error
         result = TestModel.parse_schema()
         assert isinstance(result, list)
+
+    def test_parse_schema_with_allof_and_anyof_paths(self):
+        """parse_schema handles nested object trees via recursion helper."""
+
+        class TestModel(Solaredge2MQTTBaseModel):
+            value: int
+
+        parser_calls: list[tuple[str, list[str]]] = []
+
+        def parser(prop, name, path):
+            parser_calls.append((name, path))
+            return {"name": name, "path": path, "prop": prop.get("type")}
+
+        properties = {
+            "group": {
+                "title": "Group",
+                "properties": {
+                    "leaf": {"title": "Leaf", "type": "number", "input_field": "test"}
+                },
+            },
+            "all_of_group": {
+                "title": "AllOf Group",
+                "allOf": [
+                    {
+                        "properties": {
+                            "leaf2": {
+                                "title": "Leaf2",
+                                "type": "integer",
+                                "input_field": "test2",
+                            }
+                        }
+                    }
+                ],
+            },
+            "any_of_group": {
+                "title": "AnyOf Group",
+                "anyOf": [
+                    {
+                        "properties": {
+                            "leaf3": {
+                                "title": "Leaf3",
+                                "type": "boolean",
+                                "input_field": "test3",
+                            }
+                        }
+                    }
+                ],
+            },
+        }
+
+        items = TestModel._walk_schema(properties, parser)  # noqa: SLF001
+
+        assert len(items) == 3
+        assert any(call[0].endswith("Leaf") for call in parser_calls)
+        assert any(call[1] == ["group", "leaf"] for call in parser_calls)
+
+    def test_property_parser_without_input_field_returns_none(self):
+        """property_parser ignores schema fields without input_field metadata."""
+        result = Solaredge2MQTTBaseModel.property_parser(
+            {"type": "number"},
+            "Value",
+            ["value"],
+        )
+
+        assert result is None
+
+    def test_property_parser_with_input_field(self):
+        """property_parser returns payload when input_field metadata exists."""
+        result = Solaredge2MQTTBaseModel.property_parser(
+            {"type": "number", "input_field": "power"},
+            "Power",
+            ["inverter", "power"],
+        )
+
+        assert result == {
+            "name": "Power",
+            "path": ["inverter", "power"],
+            "input_field": "power",
+        }
+
+    def test_flatten_dict_initializes_ignore_keys_when_none(self):
+        """_flatten_dict initializes ignore_keys when argument is None."""
+
+        class TestModel(Solaredge2MQTTBaseModel):
+            value: int
+
+        model = TestModel(value=1)
+        flattened = model._flatten_dict({"value": 1}, ignore_keys=None)  # noqa: SLF001
+
+        assert flattened["value"] == pytest.approx(1.0)
+
+    def test_parse_schema_handles_non_mapping_replace_refs(self, monkeypatch):
+        """parse_schema returns empty list when replace_refs result is non-mapping."""
+
+        class TestModel(Solaredge2MQTTBaseModel):
+            value: int
+
+        monkeypatch.setattr(
+            "solaredge2mqtt.core.models.jsonref.replace_refs",
+            lambda *args, **kwargs: ["not", "a", "mapping"],
+        )
+
+        assert TestModel.parse_schema() == []
+
+    def test_parse_schema_handles_non_mapping_properties(self, monkeypatch):
+        """parse_schema ignores non-mapping properties payloads."""
+
+        class TestModel(Solaredge2MQTTBaseModel):
+            value: int
+
+        monkeypatch.setattr(
+            "solaredge2mqtt.core.models.jsonref.replace_refs",
+            lambda *args, **kwargs: {"properties": ["invalid"]},
+        )
+
+        assert TestModel.parse_schema() == []

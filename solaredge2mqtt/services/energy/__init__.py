@@ -29,10 +29,9 @@ class EnergyService:
         self._subscribe_events()
 
     def _subscribe_events(self) -> None:
-        self.event_bus.subscribe(
-            InfluxDBAggregatedEvent, self.read_historic_energy)
+        self.event_bus.subscribe(InfluxDBAggregatedEvent, self.read_historic_energy)
 
-    async def read_historic_energy(self, _) -> None:
+    async def read_historic_energy(self, event: InfluxDBAggregatedEvent | None) -> None:
         for period in HistoricPeriod:
             records = await self.influxdb.query_timeunit(period, "energy")
             if records is None:
@@ -46,7 +45,7 @@ class EnergyService:
                 continue
 
             for record in records:
-                energy = HistoricEnergy(record, period)
+                energy = HistoricEnergy.from_energy_data(record, period)
 
                 logger.info(
                     "Read from influxdb {period} energy: {energy.pv_production} kWh",

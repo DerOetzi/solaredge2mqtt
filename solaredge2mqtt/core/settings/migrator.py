@@ -5,6 +5,7 @@ import yaml
 from pydantic import BaseModel, SecretStr, ValidationError
 
 from solaredge2mqtt.core.logging import logger
+from solaredge2mqtt.core.settings.models import ServiceSettings
 
 DOCKER_SECRETS_DIR = "/run/secrets"
 
@@ -84,8 +85,7 @@ def secret_representer(dumper, data):
     )
 
 
-class ConfigDumper(yaml.SafeDumper):
-    pass
+class ConfigDumper(yaml.SafeDumper): ...  # pragma: no cover
 
 
 _original_choose_scalar_style = ConfigDumper.choose_scalar_style
@@ -102,9 +102,8 @@ ConfigDumper.add_representer(SecretReference, secret_representer)
 
 
 class ConfigurationMigrator:
-    def __init__(self, model_class: type[BaseModel]):
-        self.model_class = model_class
-        self.secret_fields = self._identify_secret_fields(model_class)
+    def __init__(self):
+        self.secret_fields = self._identify_secret_fields(ServiceSettings)
 
     def _identify_secret_fields(
         self, model: type[BaseModel], prefix: str = ""
@@ -166,16 +165,12 @@ class ConfigurationMigrator:
         """Check if annotation is SecretStr type."""
         if annotation is SecretStr:
             return True
-        return isinstance(annotation, type) and issubclass(
-            annotation, SecretStr
-        )
+        return isinstance(annotation, type) and issubclass(annotation, SecretStr)
 
     @staticmethod
     def _is_base_model_type(annotation: Any) -> bool:
         """Check if annotation is BaseModel type."""
-        return isinstance(annotation, type) and issubclass(
-            annotation, BaseModel
-        )
+        return isinstance(annotation, type) and issubclass(annotation, BaseModel)
 
     def _add_secret_field(
         self,
@@ -202,25 +197,22 @@ class ConfigurationMigrator:
                 secret_fields[key] = []
             secret_fields[key].extend(fields)
 
-    def migrate(self) -> BaseModel:
+    def migrate(self) -> ServiceSettings:
         env_data = EnvironmentReader.read_all()
 
         parsed_data = self._parse_environment_to_dict(env_data)
 
         try:
-            validated_model = self.model_class(**parsed_data)
+            validated_model = ServiceSettings(**parsed_data)
             logger.info(
-                "Environment variables validated successfully with "
-                "Pydantic model"
+                "Environment variables validated successfully with Pydantic model"
             )
             return validated_model
         except ValidationError as e:
             logger.error(f"Validation failed: {e}")
             raise
 
-    def _parse_environment_to_dict(
-        self, env_data: dict[str, str]
-    ) -> dict[str, Any]:
+    def _parse_environment_to_dict(self, env_data: dict[str, str]) -> dict[str, Any]:
         config_data = {}
 
         for key, value in env_data.items():
@@ -233,13 +225,13 @@ class ConfigurationMigrator:
         return config_data
 
     def _insert_nested_key(
-        self, container: dict, keys: list[str], value: Any
+        self, container: dict[str, Any], keys: list[str], value: Any
     ) -> None:
         key, i = self._identify_key_and_position(keys)
         key, idx, next_container = self._get_or_initialize_nested_container(
             container, key, i
         )
-        
+
         # Insert value or recurse deeper
         if len(keys) == 1:
             self._set_final_value(container, key, idx, value)
@@ -249,6 +241,7 @@ class ConfigurationMigrator:
     @staticmethod
     def _identify_key_and_position(keys: list[str]) -> tuple[str, int]:
         key = keys[0]
+        i = 0
         for i in range(len(key) - 1, -1, -1):
             if not key[i].isdigit():
                 break
@@ -256,8 +249,8 @@ class ConfigurationMigrator:
 
     @staticmethod
     def _get_or_initialize_nested_container(
-        container: dict, key: str, i: int
-    ) -> tuple[str, int | str, dict | list]:
+        container: dict[str, Any], key: str, i: int
+    ) -> tuple[str, int | str, dict[str, Any]]:
         prefix, idx = key[: i + 1], key[i + 1 :]
         if idx.isdigit():
             return ConfigurationMigrator._init_list_container(
@@ -267,8 +260,8 @@ class ConfigurationMigrator:
 
     @staticmethod
     def _init_list_container(
-        container: dict, key: str, idx: int
-    ) -> tuple[str, int, dict]:
+        container: dict[str, Any], key: str, idx: int
+    ) -> tuple[str, int, dict[str, Any]]:
         """Initialize or get a list-based nested container."""
         if key not in container or not isinstance(container[key], list):
             container[key] = []
@@ -278,8 +271,8 @@ class ConfigurationMigrator:
 
     @staticmethod
     def _init_dict_container(
-        container: dict, key: str
-    ) -> tuple[str, str, dict]:
+        container: dict[str, Any], key: str
+    ) -> tuple[str, str, dict[str, Any]]:
         """Initialize or get a dict-based nested container."""
         if key not in container or not isinstance(container[key], dict):
             container[key] = {}
@@ -307,36 +300,59 @@ class ConfigurationMigrator:
         # Remove any remaining None values from nested structures
         config_data = self._remove_null_values(config_data)
 
-        self._write_yaml_files(
-            config_data, secrets_data, config_file, secrets_file
-        )
+        self._write_yaml_files(config_data, secrets_data, config_file, secrets_file)
 
-    def _ensure_proper_types(self, data: dict, model: BaseModel) -> dict:
+    def _ensure_proper_types(
+        self,
+        data: dict[str, Any],
+        model: BaseModel | type[BaseModel],
+    ) -> dict[str, Any]:
         result = {}
         for key, value in data.items():
             result[key] = self._process_field_value(key, value, model)
         return result
 
     def _process_field_value(
-        self, key: str, value: Any, model: BaseModel
+        self,
+        key: str,
+        value: Any,
+        model: BaseModel | type[BaseModel],
     ) -> Any:
         """Process a single field value to ensure proper type."""
-        if key not in model.model_fields:
+        model_class = model if isinstance(model, type) else model.__class__
+
+        if key not in model_class.model_fields:
             return value
 
-        field_info = model.model_fields[key]
+        field_info = model_class.model_fields[key]
         annotation = field_info.annotation
 
-        if isinstance(value, dict) and hasattr(annotation, "model_fields"):
-            return self._ensure_proper_types(value, annotation)
+        nested_model = self._extract_nested_model_type(annotation)
+        if isinstance(value, dict) and nested_model is not None:
+            return self._ensure_proper_types(value, nested_model)
 
         if self._is_simple_type(value):
             return value
 
         if hasattr(value, "value"):
-            return value.value
+            return getattr(value, "value")
 
         return value
+
+    def _extract_nested_model_type(self, annotation: Any) -> type[BaseModel] | None:
+        """Extract a BaseModel type from an annotation, if present."""
+        if self._is_base_model_type(annotation):
+            return annotation
+
+        origin = get_origin(annotation)
+        if origin is None:
+            return None
+
+        for arg in get_args(annotation):
+            if self._is_base_model_type(arg):
+                return arg
+
+        return None
 
     @staticmethod
     def _is_simple_type(value: Any) -> bool:
@@ -401,9 +417,7 @@ class ConfigurationMigrator:
 
         for field in fields:
             if field in section_data:
-                self._extract_single_secret(
-                    section_data, secrets_data, section, field
-                )
+                self._extract_single_secret(section_data, secrets_data, section, field)
 
     @staticmethod
     def _extract_single_secret(
@@ -430,19 +444,15 @@ class ConfigurationMigrator:
         parsed_data = self._parse_environment_to_dict(env_data)
 
         try:
-            validated_model = self.model_class(**parsed_data)
+            validated_model = ServiceSettings(**parsed_data)
             validated_data = validated_model.model_dump(exclude_none=True)
             config_data, secrets_data = self._extract_secrets(validated_data)
-            config_data = self._ensure_proper_types(
-                config_data, validated_model
-            )
+            config_data = self._ensure_proper_types(config_data, validated_model)
             # Remove any remaining None values from nested structures
             config_data = self._remove_null_values(config_data)
             return config_data, secrets_data
         except ValidationError as e:
-            logger.error(
-                f"Validation failed during extract_from_environment: {e}"
-            )
+            logger.error(f"Validation failed during extract_from_environment: {e}")
             raise
 
     def write_yaml_files(
@@ -452,9 +462,7 @@ class ConfigurationMigrator:
         config_file: str,
         secrets_file: str,
     ) -> None:
-        self._write_yaml_files(
-            config_data, secrets_data, config_file, secrets_file
-        )
+        self._write_yaml_files(config_data, secrets_data, config_file, secrets_file)
 
     def _write_yaml_files(
         self,
@@ -469,9 +477,7 @@ class ConfigurationMigrator:
                 makedirs(config_dir, exist_ok=True)
                 logger.info(f"Created config directory: {config_dir}")
             except PermissionError as e:
-                logger.error(
-                    f"Permission denied creating directory {config_dir}: {e}"
-                )
+                logger.error(f"Permission denied creating directory {config_dir}: {e}")
                 raise
 
         try:
@@ -487,14 +493,11 @@ class ConfigurationMigrator:
             logger.info(f"Configuration written to {config_file}")
         except PermissionError as e:
             logger.error(
-                f"Permission denied writing configuration file "
-                f"{config_file}: {e}"
+                f"Permission denied writing configuration file {config_file}: {e}"
             )
             raise
         except Exception as e:
-            logger.error(
-                f"Error writing configuration file {config_file}: {e}"
-            )
+            logger.error(f"Error writing configuration file {config_file}: {e}")
             raise
 
         if secrets_data:
@@ -516,8 +519,7 @@ class ConfigurationMigrator:
                 )
             except PermissionError as e:
                 logger.error(
-                    f"Permission denied writing secrets file "
-                    f"{secrets_file}: {e}"
+                    f"Permission denied writing secrets file {secrets_file}: {e}"
                 )
                 raise
             except Exception as e:

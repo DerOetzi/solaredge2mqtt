@@ -1,6 +1,10 @@
+from __future__ import annotations
+
 from datetime import datetime
+from typing import Any
 
 from pydantic import computed_field
+from pydantic.json_schema import SkipJsonSchema
 
 from solaredge2mqtt.core.models import EnumModel
 from solaredge2mqtt.services.homeassistant.models import (
@@ -34,8 +38,8 @@ class ForecasterType(EnumModel):
 class Forecast(Component):
     COMPONENT = "forecast"
 
-    power_period: dict[datetime, int]
-    energy_period: dict[datetime, int]
+    power_period: SkipJsonSchema[dict[datetime, int]]
+    energy_period: SkipJsonSchema[dict[datetime, int]]
 
     @computed_field(**HASensor.ENERGY_WH.field("Energy production today"))
     @property
@@ -45,7 +49,7 @@ class Forecast(Component):
     @computed_field(**HASensor.ENERGY_WH.field("Energy production remaining today"))
     @property
     def energy_today_remaining(self) -> int:
-        return sum(self._energy_today[self._current_hour():])
+        return sum(self._energy_today[self._current_hour() :])
 
     @computed_field(**HASensor.ENERGY_WH.field("Energy production current hour"))
     def energy_current_hour(self) -> int:
@@ -77,13 +81,5 @@ class Forecast(Component):
     def _current_hour() -> int:
         return datetime.now().hour
 
-    @classmethod
-    # pylint: disable=arguments-differ
-    def model_json_schema(cls, mode: str = "serialization") -> dict[str, any]:
-        schema = super().model_json_schema(mode=mode)
-        schema["properties"].pop("power_period", None)
-        schema["properties"].pop("energy_period", None)
-        return schema
-
-    def homeassistant_device_info(self) -> dict[str, any]:
+    def homeassistant_device_info(self) -> dict[str, Any]:
         return self._default_homeassistant_device_info("Forecast")

@@ -1,5 +1,6 @@
 """Tests for modbus inverter model module."""
 
+import pytest
 
 from solaredge2mqtt.services.modbus.models.base import (
     ModbusDeviceInfo,
@@ -10,20 +11,24 @@ from solaredge2mqtt.services.modbus.models.inverter import (
     ModbusInverter,
     ModbusPowerControl,
 )
+from solaredge2mqtt.services.modbus.sunspec.values import SunSpecPayload
 
 
 def make_device_info(with_unit: bool = False) -> ModbusDeviceInfo:
     """Create a ModbusDeviceInfo for testing."""
-    data = {
+    data: SunSpecPayload = {
         "c_manufacturer": "SolarEdge",
         "c_model": "SE10K",
         "c_version": "1.0.0",
         "c_serialnumber": "INV12345",
         "c_sunspec_did": 103,
     }
-    if with_unit:
-        data["unit"] = ModbusUnitInfo(unit=1, key="leader", role=ModbusUnitRole.LEADER)
-    return ModbusDeviceInfo(data)
+    return ModbusDeviceInfo.from_sunspec(
+        data,
+        ModbusUnitInfo(unit=1, key="leader", role=ModbusUnitRole.LEADER)
+        if with_unit
+        else None,
+    )
 
 
 def make_inverter_data(
@@ -83,7 +88,7 @@ class TestModbusInverter:
         info = make_device_info()
         data = make_inverter_data(status=4)
 
-        inverter = ModbusInverter(info, data)
+        inverter = ModbusInverter.from_sunspec(info, data)
 
         assert inverter.status == 4
         assert inverter.status_text == "Inverter is ON and producing power"
@@ -93,7 +98,7 @@ class TestModbusInverter:
         info = make_device_info()
         data = make_inverter_data(status=999)
 
-        inverter = ModbusInverter(info, data)
+        inverter = ModbusInverter.from_sunspec(info, data)
 
         assert inverter.status == 999
         assert inverter.status_text == "Unknown"
@@ -103,45 +108,45 @@ class TestModbusInverter:
         info = make_device_info()
         data = make_inverter_data()
 
-        inverter = ModbusInverter(info, data)
+        inverter = ModbusInverter.from_sunspec(info, data)
 
-        assert inverter.ac.power.actual == 2300.0
-        assert inverter.ac.frequency == 50.0
+        assert inverter.ac.power.actual == pytest.approx(2300.0)
+        assert inverter.ac.frequency == pytest.approx(50.0)
 
     def test_inverter_dc_values(self):
         """Test inverter DC values."""
         info = make_device_info()
         data = make_inverter_data()
 
-        inverter = ModbusInverter(info, data)
+        inverter = ModbusInverter.from_sunspec(info, data)
 
-        assert inverter.dc.power == 4000.0
-        assert inverter.dc.voltage == 400.0
+        assert inverter.dc.power == pytest.approx(4000.0)
+        assert inverter.dc.voltage == pytest.approx(400.0)
 
     def test_inverter_energy_total(self):
         """Test inverter energy total."""
         info = make_device_info()
         data = make_inverter_data()
 
-        inverter = ModbusInverter(info, data)
+        inverter = ModbusInverter.from_sunspec(info, data)
 
-        assert inverter.energytotal == 100000.0
+        assert inverter.energytotal == pytest.approx(100000.0)
 
     def test_inverter_temperature(self):
         """Test inverter temperature."""
         info = make_device_info()
         data = make_inverter_data()
 
-        inverter = ModbusInverter(info, data)
+        inverter = ModbusInverter.from_sunspec(info, data)
 
-        assert inverter.temperature == 45.0
+        assert inverter.temperature == pytest.approx(45.0)
 
     def test_inverter_without_grid_status(self):
         """Test inverter without grid status."""
         info = make_device_info()
         data = make_inverter_data(with_grid_status=False)
 
-        inverter = ModbusInverter(info, data)
+        inverter = ModbusInverter.from_sunspec(info, data)
 
         assert inverter.grid_status is None
 
@@ -150,7 +155,7 @@ class TestModbusInverter:
         info = make_device_info()
         data = make_inverter_data(with_grid_status=True, grid_status=0)
 
-        inverter = ModbusInverter(info, data)
+        inverter = ModbusInverter.from_sunspec(info, data)
 
         # grid_status 0 represents grid ON state (inverted boolean)
         assert inverter.grid_status is True
@@ -160,7 +165,7 @@ class TestModbusInverter:
         info = make_device_info()
         data = make_inverter_data(with_grid_status=True, grid_status=1)
 
-        inverter = ModbusInverter(info, data)
+        inverter = ModbusInverter.from_sunspec(info, data)
 
         # grid_status 1 represents grid OFF state (inverted boolean)
         assert inverter.grid_status is False
@@ -170,7 +175,7 @@ class TestModbusInverter:
         info = make_device_info()
         data = make_inverter_data(with_advanced_power=False)
 
-        inverter = ModbusInverter(info, data)
+        inverter = ModbusInverter.from_sunspec(info, data)
 
         assert inverter.advanced_power_controls is None
 
@@ -179,7 +184,7 @@ class TestModbusInverter:
         info = make_device_info()
         data = make_inverter_data(with_advanced_power=True)
 
-        inverter = ModbusInverter(info, data)
+        inverter = ModbusInverter.from_sunspec(info, data)
 
         assert inverter.advanced_power_controls is not None
         assert inverter.advanced_power_controls.advanced_power_control is True
@@ -190,7 +195,7 @@ class TestModbusInverter:
         info = make_device_info()
         data = make_inverter_data()
 
-        inverter = ModbusInverter(info, data)
+        inverter = ModbusInverter.from_sunspec(info, data)
         ha_info = inverter.homeassistant_device_info()
 
         assert ha_info["name"] == "SolarEdge Inverter"
@@ -213,7 +218,7 @@ class TestModbusInverter:
 
         for status, expected_text in status_map.items():
             data = make_inverter_data(status=status)
-            inverter = ModbusInverter(info, data)
+            inverter = ModbusInverter.from_sunspec(info, data)
             assert inverter.status_text == expected_text
 
 
@@ -227,7 +232,7 @@ class TestModbusPowerControl:
             "active_power_limit": 80,
         }
 
-        power_control = ModbusPowerControl(data)
+        power_control = ModbusPowerControl.from_sunspec(data)
 
         assert power_control.advanced_power_control is True
         assert power_control.active_power_limit == 80
@@ -239,7 +244,7 @@ class TestModbusPowerControl:
             "active_power_limit": 100,
         }
 
-        power_control = ModbusPowerControl(data)
+        power_control = ModbusPowerControl.from_sunspec(data)
 
         assert power_control.advanced_power_control is False
         assert power_control.active_power_limit == 100

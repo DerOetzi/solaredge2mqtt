@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any, Self
 
 from pydantic import Field, computed_field
 
@@ -12,54 +13,31 @@ from solaredge2mqtt.services.homeassistant.models import (
 from solaredge2mqtt.services.models import Component
 
 
-class HistoricBaseModel(Component):
+class HistoricEnergy(Component):
     SOURCE = "energy"
 
     info: HistoricInfo
 
-    def __init__(self, data: dict, period: HistoricPeriod, **kwargs):
-        super().__init__(
-            info=HistoricInfo(
-                unit=data.get("unit", None),
-                period=period,
-                start=data["_start"],
-                stop=data["_stop"]
-            ),
-            **kwargs,
-        )
-
-    def mqtt_topic(self) -> str:
-        parts = [self.SOURCE]
-
-        if self.info.unit:
-            parts.append(self.info.unit)
-
-        parts.append(self.info.period.topic)
-
-        return "/".join(parts)
-
-    def __str__(self) -> str:
-        return f"{self.SOURCE}: {self.info.period}"
-
-
-class HistoricEnergy(HistoricBaseModel):
-    pv_production: float = Field(
-        **HASensor.ENERGY_KWH.field("PV production"))
+    pv_production: float = Field(**HASensor.ENERGY_KWH.field("PV production"))
     inverter: InverterEnergy = Field(title="Inverter")
     grid: GridEnergy = Field(title="Grid")
     battery: BatteryEnergy = Field(title="Battery")
     consumer: ConsumerEnergy = Field(title="Consumer")
     money: HistoricMoney | None = Field(None, title="Money")
 
-    def __init__(
-        self,
-        energy_data: dict,
-        period: HistoricPeriod,
-    ):
-        logger.trace(energy_data)
+    @classmethod
+    def from_energy_data(cls, energy_data: dict, period: HistoricPeriod) -> Self:
+
+        info = HistoricInfo(
+            unit=energy_data.get("unit", None),
+            period=period,
+            start=energy_data["_start"],
+            stop=energy_data["_stop"],
+        )
+
         pv_production = energy_data["pv_production"]
 
-        subclass_values: dict[str, dict[str, float]] = {}
+        subclass_values: dict[str, dict[str, Any]] = {}
 
         for key, value in energy_data.items():
             keys = key.split("_")
@@ -74,36 +52,39 @@ class HistoricEnergy(HistoricBaseModel):
 
         logger.debug(subclass_values["consumer"])
 
-        super().__init__(
-            period=period,
-            data=energy_data,
-            pv_production=round(pv_production, 3),
-            inverter=InverterEnergy(**subclass_values["inverter"]),
-            grid=GridEnergy(**subclass_values["grid"]),
-            battery=BatteryEnergy(**subclass_values["battery"]),
-            consumer=ConsumerEnergy(**subclass_values["consumer"]),
-            money=(
-                HistoricMoney(**subclass_values["money"])
-                if "money" in subclass_values
-                else None
-            ),
+        return cls.model_validate(
+            {
+                "info": info,
+                "period": period,
+                "data": energy_data,
+                "pv_production": round(pv_production, 3),
+                "inverter": InverterEnergy(**subclass_values["inverter"]),
+                "grid": GridEnergy(**subclass_values["grid"]),
+                "battery": BatteryEnergy(**subclass_values["battery"]),
+                "consumer": ConsumerEnergy(**subclass_values["consumer"]),
+                "money": (
+                    HistoricMoney(**subclass_values["money"])
+                    if "money" in subclass_values
+                    else None
+                ),
+            }
         )
 
     @computed_field(title="Self consumption rate")
     @property
     def self_consumption_rates(self) -> SelfConsumptionRate:
-        return SelfConsumptionRate(self)
+        return SelfConsumptionRate.from_historic_energy(self)
 
     @computed_field(title="Self sufficiency rate")
     @property
     def self_sufficiency_rates(self) -> SelfSufficiencyRate:
-        return SelfSufficiencyRate(self)
+        return SelfSufficiencyRate.from_historic_energy(self)
 
     @property
     def has_unit(self) -> bool:
-        return self.unit is not None
+        return self.info.unit is not None
 
-    def homeassistant_device_info(self) -> dict[str, any]:
+    def homeassistant_device_info(self) -> dict[str, Any]:
         parts = ["Energy"]
 
         if self.info.unit:
@@ -114,6 +95,19 @@ class HistoricEnergy(HistoricBaseModel):
         return self._default_homeassistant_device_info(
             " - ".join(parts),
         )
+
+    def mqtt_topic(self) -> str:
+        parts = ["energy"]
+
+        if self.info.unit:
+            parts.append(self.info.unit)
+
+        parts.append(self.info.period.topic)
+
+        return "/".join(parts)
+
+    def __str__(self) -> str:
+        return f"energy: {self.info.period}"
 
 
 class HistoricMoney(Solaredge2MQTTBaseModel):
@@ -140,7 +134,7 @@ class HistoricMoney(Solaredge2MQTTBaseModel):
 
 
 class HistoricInfo(Solaredge2MQTTBaseModel):
-    unit: str | None = Field(None)
+    unit: str | None = Field(default=None)
     period: HistoricPeriod
     start: datetime
     stop: datetime
@@ -239,11 +233,8 @@ class InverterEnergy(Solaredge2MQTTBaseModel):
     production: float = Field(**HASensor.ENERGY_KWH.field("Production"))
     consumption: float = Field(**HASensor.ENERGY_KWH.field("Consumption"))
     dc_power: float = Field(**HASensor.POWER_W.field("DC production"))
-    pv_production: float = Field(
-        **HASensor.ENERGY_KWH.field("PV production"))
-    battery_production: float = Field(
-        **HASensor.ENERGY_KWH.field("Battery production")
-    )
+    pv_production: float = Field(**HASensor.ENERGY_KWH.field("PV production"))
+    battery_production: float = Field(**HASensor.ENERGY_KWH.field("Battery production"))
 
 
 class GridEnergy(Solaredge2MQTTBaseModel):
@@ -263,11 +254,8 @@ class ConsumerEnergy(Solaredge2MQTTBaseModel):
 
     total: float = Field(**HASensor.ENERGY_KWH.field("Total"))
 
-    used_production: float = Field(
-        **HASensor.ENERGY_KWH.field("Used production"))
-    used_pv_production: float = Field(
-        **HASensor.ENERGY_KWH.field("Used PV production")
-    )
+    used_production: float = Field(**HASensor.ENERGY_KWH.field("Used production"))
+    used_pv_production: float = Field(**HASensor.ENERGY_KWH.field("Used PV production"))
     used_battery_production: float = Field(
         **HASensor.ENERGY_KWH.field("Used battery production")
     )
@@ -279,7 +267,8 @@ class SelfConsumptionRate(Solaredge2MQTTBaseModel):
     pv: int = Field(**HASensor.PERCENTAGE.field("PV"))
     total: int = Field(**HASensor.PERCENTAGE.field("Total"))
 
-    def __init__(self, energy: HistoricEnergy):
+    @classmethod
+    def from_historic_energy(cls, energy: HistoricEnergy) -> Self:
         if energy.inverter.production > 0:
             grid_rate = int(
                 round(energy.grid.delivery / energy.inverter.production * 100)
@@ -299,11 +288,13 @@ class SelfConsumptionRate(Solaredge2MQTTBaseModel):
             pv_rate = 0
             total = 0
 
-        super().__init__(
-            grid=grid_rate,
-            battery=battery_rate,
-            pv=pv_rate,
-            total=total,
+        return cls.model_validate(
+            {
+                "grid": grid_rate,
+                "battery": battery_rate,
+                "pv": pv_rate,
+                "total": total,
+            }
         )
 
 
@@ -313,7 +304,8 @@ class SelfSufficiencyRate(Solaredge2MQTTBaseModel):
     pv: int = Field(**HASensor.PERCENTAGE.field("PV"))
     total: int = Field(**HASensor.PERCENTAGE.field("Total"))
 
-    def __init__(self, energy: HistoricEnergy):
+    @classmethod
+    def from_historic_energy(cls, energy: HistoricEnergy) -> Self:
         if energy.consumer.total > 0:
             grid_rate = int(
                 round(energy.grid.consumption / energy.consumer.total * 100)
@@ -333,9 +325,11 @@ class SelfSufficiencyRate(Solaredge2MQTTBaseModel):
             pv_rate = 0
             total = 0
 
-        super().__init__(
-            grid=grid_rate,
-            battery=battery_rate,
-            pv=pv_rate,
-            total=total,
+        return cls.model_validate(
+            {
+                "grid": grid_rate,
+                "battery": battery_rate,
+                "pv": pv_rate,
+                "total": total,
+            }
         )

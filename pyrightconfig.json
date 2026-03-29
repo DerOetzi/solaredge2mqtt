@@ -1,0 +1,16 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "include": [
+    "freeze_version.py",
+    "generate_requirements.py",
+    "migrate_config.py",
+    "solaredge2mqtt",
+    "tests"
+  ],
+  "exclude": [
+    ".venv",
+    "htmlcov",
+    "solaredge2mqtt.egg-info"
+  ]
+}

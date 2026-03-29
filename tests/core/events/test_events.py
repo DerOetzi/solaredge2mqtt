@@ -1,6 +1,5 @@
 """Tests for core events module."""
 
-
 from solaredge2mqtt.core.events.events import BaseEvent
 
 
@@ -18,8 +17,7 @@ class TestBaseEvent:
     def test_custom_event_event_key(self):
         """Test that custom events return correct event_key."""
 
-        class CustomTestEvent(BaseEvent):
-            pass
+        class CustomTestEvent(BaseEvent): ...  # pragma: no cover
 
         assert CustomTestEvent.event_key() == "customtestevent"
 
@@ -34,8 +32,7 @@ class TestBaseEvent:
     def test_event_key_case_insensitive(self):
         """Test that event_key is always lowercase."""
 
-        class MyCustomTestEventWithLongName(BaseEvent):
-            pass
+        class MyCustomTestEventWithLongName(BaseEvent): ...  # pragma: no cover
 
         expected = "mycustomtesteventwithlong name".replace(" ", "")
         assert MyCustomTestEventWithLongName.event_key() == expected

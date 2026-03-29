@@ -1,6 +1,8 @@
 """Tests for wallbox models module."""
 
+import pytest
 
+from solaredge2mqtt.core.exceptions import InvalidDataException
 from solaredge2mqtt.services.wallbox.models import WallboxAPI, WallboxInfo
 
 
@@ -26,7 +28,7 @@ class TestWallboxInfo:
         """Test WallboxInfo creation."""
         data = make_wallbox_data()
 
-        info = WallboxInfo(data)
+        info = WallboxInfo.from_http_response(data)
 
         assert info.manufacturer == "SolarEdge"
         assert info.model == "EV Charger"
@@ -37,7 +39,7 @@ class TestWallboxInfo:
         """Test WallboxInfo homeassistant_device_info method."""
         data = make_wallbox_data()
 
-        info = WallboxInfo(data)
+        info = WallboxInfo.from_http_response(data)
         ha_info = info.homeassistant_device_info()
 
         assert ha_info["name"] == "SolarEdge Wallbox"
@@ -45,6 +47,22 @@ class TestWallboxInfo:
         assert ha_info["model"] == "EV Charger"
         assert ha_info["hw_version"] == "2.5.0"
         assert ha_info["serial_number"] == "WB123456"
+
+    @pytest.mark.parametrize(
+        "missing_key", ["model", "firmwareVersion", "serialNumber"]
+    )
+    def test_wallbox_info_raises_invalid_data_on_missing_key(self, missing_key):
+        """Test WallboxInfo raises InvalidDataException
+        when required keys are missing."""
+        invalid_response = make_wallbox_data()
+        invalid_response.pop(missing_key)
+
+        with pytest.raises(InvalidDataException) as exc_info:
+            WallboxInfo.from_http_response(invalid_response)
+
+        assert exc_info.value.message == (
+            f"Missing key in Wallbox data: '{missing_key}'"
+        )
 
 
 class TestWallboxAPI:
@@ -54,20 +72,20 @@ class TestWallboxAPI:
         """Test WallboxAPI creation."""
         data = make_wallbox_data()
 
-        wallbox = WallboxAPI(data)
+        wallbox = WallboxAPI.from_http_response(data)
 
         assert wallbox.info.model == "EV Charger"
-        assert wallbox.power == 7200.0  # Converted from milliwatts
+        assert wallbox.power == pytest.approx(7200.0)  # Converted from milliwatts
         assert wallbox.state == "charging"
         assert wallbox.vehicle_plugged is True
-        assert wallbox.max_current == 32.0
+        assert wallbox.max_current == pytest.approx(32.0)
 
     def test_wallbox_api_vehicle_not_plugged(self):
         """Test WallboxAPI with vehicle not plugged."""
         data = make_wallbox_data()
         data["vehiclePlugged"] = False
 
-        wallbox = WallboxAPI(data)
+        wallbox = WallboxAPI.from_http_response(data)
 
         assert wallbox.vehicle_plugged is False
 
@@ -76,15 +94,15 @@ class TestWallboxAPI:
         data = make_wallbox_data()
         data["meter"]["totalActivePower"] = 0
 
-        wallbox = WallboxAPI(data)
+        wallbox = WallboxAPI.from_http_response(data)
 
-        assert wallbox.power == 0.0
+        assert wallbox.power == pytest.approx(0.0)
 
     def test_wallbox_api_homeassistant_device_info(self):
         """Test WallboxAPI homeassistant_device_info method."""
         data = make_wallbox_data()
 
-        wallbox = WallboxAPI(data)
+        wallbox = WallboxAPI.from_http_response(data)
         ha_info = wallbox.homeassistant_device_info()
 
         assert ha_info["name"] == "SolarEdge Wallbox"
@@ -101,7 +119,7 @@ class TestWallboxAPI:
         data = make_wallbox_data()
         data["vehiclePlugged"] = True
 
-        wallbox = WallboxAPI(data)
+        wallbox = WallboxAPI.from_http_response(data)
         serialized = wallbox.model_dump()
 
         assert serialized["vehicle_plugged"] == "true"
@@ -111,7 +129,7 @@ class TestWallboxAPI:
         data = make_wallbox_data()
         data["vehiclePlugged"] = False
 
-        wallbox = WallboxAPI(data)
+        wallbox = WallboxAPI.from_http_response(data)
         serialized = wallbox.model_dump()
 
         assert serialized["vehicle_plugged"] == "false"
@@ -129,6 +147,44 @@ class TestWallboxAPI:
             data = make_wallbox_data()
             data["state"] = state
 
-            wallbox = WallboxAPI(data)
+            wallbox = WallboxAPI.from_http_response(data)
 
             assert wallbox.state == state
+
+    @pytest.mark.parametrize("invalid_response", [None, [], "invalid", 123])
+    def test_wallbox_api_raises_invalid_data_on_non_dict(self, invalid_response):
+        """Test WallboxAPI raises InvalidDataException for non-dict responses."""
+        with pytest.raises(InvalidDataException) as exc_info:
+            WallboxAPI.from_http_response(invalid_response)
+
+        assert exc_info.value.message == "Invalid Wallbox data"
+
+    @pytest.mark.parametrize(
+        "missing_key", ["state", "vehiclePlugged", "maxCurrent", "meter"]
+    )
+    def test_wallbox_api_raises_invalid_data_on_missing_top_level_key(
+        self, missing_key
+    ):
+        """Test WallboxAPI raises InvalidDataException when payload keys are missing."""
+        invalid_response = make_wallbox_data()
+        invalid_response.pop(missing_key)
+
+        with pytest.raises(InvalidDataException) as exc_info:
+            WallboxAPI.from_http_response(invalid_response)
+
+        assert exc_info.value.message == (
+            f"Missing key in Wallbox data: '{missing_key}'"
+        )
+
+    def test_wallbox_api_raises_invalid_data_on_missing_nested_meter_key(self):
+        """Test WallboxAPI raises InvalidDataException
+        when meter power key is missing."""
+        invalid_response = make_wallbox_data()
+        invalid_response["meter"] = {}
+
+        with pytest.raises(InvalidDataException) as exc_info:
+            WallboxAPI.from_http_response(invalid_response)
+
+        assert exc_info.value.message == (
+            "Missing key in Wallbox data: 'totalActivePower'"
+        )

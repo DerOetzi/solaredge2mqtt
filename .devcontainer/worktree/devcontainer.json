@@ -47,5 +47,5 @@
 		}
 	},
 	"postStartCommand": "bash .devcontainer/worktree/fix-worktree.sh",
-	"postCreateCommand": ".devcontainer/worktree/fix-worktree.sh && python -m venv .venv && . .venv/bin/activate && pip install --upgrade pip && pip install -e .[dev,forecast]"
+	"postCreateCommand": "bash .devcontainer/post-create.sh --fix-worktree"
 }

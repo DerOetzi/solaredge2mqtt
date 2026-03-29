@@ -3,11 +3,12 @@ from __future__ import annotations
 import time
 from asyncio import Event, to_thread
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from joblib import Memory
 from numpy import percentile
-from pandas import DataFrame
+from numpy.typing import NDArray
+from pandas import DataFrame, to_datetime
 from sklearn import clone
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
@@ -15,7 +16,7 @@ from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.inspection import permutation_importance
 from sklearn.model_selection import GridSearchCV, TimeSeriesSplit, train_test_split
 from sklearn.pipeline import Pipeline
-from tzlocal import get_localzone_name
+from tzlocal import get_localzone
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import InvalidDataException
@@ -39,7 +40,7 @@ if TYPE_CHECKING:
     from solaredge2mqtt.core.settings.models import LocationSettings
 
 
-LOCAL_TZ = get_localzone_name()
+LOCAL_TZ = get_localzone()
 
 
 class ForecastService:
@@ -58,13 +59,11 @@ class ForecastService:
         self.influxdb = influxdb
 
         self.forecasters: dict[ForecasterType, Forecaster] = {
-            typed: Forecaster(typed, location, settings)
-            for typed in ForecasterType
+            typed: Forecaster(typed, location, settings) for typed in ForecasterType
         }
 
         self.last_weather_forecast: list[OpenWeatherMapForecastData] | None = None
-        self.last_hour_forecast: dict[int,
-                                      OpenWeatherMapForecastData] | None = None
+        self.last_hour_forecast: dict[int, OpenWeatherMapForecastData] | None = None
 
     def _subscribe_events(self) -> None:
         self.event_bus.subscribe(WeatherUpdateEvent, self.weather_update)
@@ -96,8 +95,7 @@ class ForecastService:
         self, last_hour_weather_forecast: OpenWeatherMapForecastData
     ) -> None:
         now = datetime.now().astimezone()
-        last_hour = now.replace(
-            minute=0, second=0, microsecond=0) - timedelta(hours=1)
+        last_hour = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)
 
         training_data = last_hour_weather_forecast.model_dump_estimation_data()
         training_data["time"] = last_hour
@@ -147,7 +145,7 @@ class ForecastService:
         for forecaster in self.forecasters.values():
             forecaster.train(data)
 
-    async def forecast_loop(self, _):
+    async def forecast_loop(self, event: Interval10MinTriggerEvent) -> None:
         if (
             not self.forecasters[ForecasterType.ENERGY].is_trained
             or not self.forecasters[ForecasterType.POWER].is_trained
@@ -176,7 +174,7 @@ class ForecastService:
         ]
 
         data = DataFrame(estimation_data_list)
-        data["time"] = data["time"].astype(f"datetime64[ns, {LOCAL_TZ}]")
+        data["time"] = to_datetime(data["time"], utc=True).dt.tz_convert(LOCAL_TZ)
 
         for typed, forecaster in self.forecasters.items():
             predicted_data = await forecaster.predict(data)
@@ -191,7 +189,11 @@ class ForecastService:
         for _, period in periods.iterrows():
             point = Point("forecast")
             point.field(typed.target_column, period[typed.target_column])
-            utc_time = period["time"].astimezone(timezone.utc)
+            period_time = period["time"]
+            if not isinstance(period_time, datetime):
+                raise InvalidDataException("Forecast period time must be datetime")
+
+            utc_time = period_time.astimezone(timezone.utc)
             point.time(utc_time)
             points.append(point)
 
@@ -201,17 +203,31 @@ class ForecastService:
     async def publish_forecast(self) -> None:
         forecast_data = await self.influxdb.query_dataframe("forecast")
         if not forecast_data.empty:
-            forecast_data["time"] = forecast_data["_time"].dt.tz_convert(
-                LOCAL_TZ)
-            power_hours = {
-                row["time"]: row["power"] for idx, row in forecast_data.iterrows()
-            }
-            energy_hours = {
-                row["time"]: round(row["energy"] * 1000)
-                for idx, row in forecast_data.iterrows()
-            }
-            forecast = Forecast(power_period=power_hours,
-                                energy_period=energy_hours)
+            forecast_data["time"] = forecast_data["_time"].dt.tz_convert(LOCAL_TZ)
+            power_hours: dict[datetime, int] = {}
+            energy_hours: dict[datetime, int] = {}
+            for _, row in forecast_data.iterrows():
+                row_time = row["time"]
+                row_power = row["power"]
+                row_energy = row["energy"]
+
+                if not isinstance(row_time, datetime):
+                    raise InvalidDataException(
+                        "Forecast row time must be datetime",
+                    )
+                if not isinstance(row_power, (int, float)):
+                    raise InvalidDataException(
+                        "Forecast power value must be numeric",
+                    )
+                if not isinstance(row_energy, (int, float)):
+                    raise InvalidDataException(
+                        "Forecast energy value must be numeric",
+                    )
+
+                power_hours[row_time] = int(round(row_power))
+                energy_hours[row_time] = int(round(row_energy * 1000))
+
+            forecast = Forecast(power_period=power_hours, energy_period=energy_hours)
             logger.debug(forecast)
 
             await self.event_bus.emit(
@@ -252,7 +268,7 @@ class Forecaster:
         self,
         typed: ForecasterType,
         location: LocationSettings,
-        settings: ForecastSettings
+        settings: ForecastSettings,
     ) -> None:
         self.typed: ForecasterType = typed
         self.location = location
@@ -260,10 +276,10 @@ class Forecaster:
         self.model_pipeline: Pipeline | None = None
         self.training_completed: Event = Event()
 
-        self.memory = (
+        self.memory: Memory | None = (
             Memory(settings.cachingdir, verbose=0)
             if settings.is_caching_enabled
-            else False
+            else None
         )
 
     def train(self, data: DataFrame) -> None:
@@ -284,8 +300,7 @@ class Forecaster:
         pipeline = self._prepare_model_pipeline(data.columns.to_list())
 
         if self.enable_hyperparameter_tuning:
-            self.model_pipeline = self._hyperparametertuning(
-                data, y_vector, pipeline)
+            self.model_pipeline = self._hyperparametertuning(data, y_vector, pipeline)
         else:
             self.model_pipeline = pipeline
 
@@ -294,7 +309,7 @@ class Forecaster:
         execution_time = time.time() - start_time
         self.training_completed.set()
 
-        transformed_features = self.model_pipeline[
+        transformed_features = self.model_pipeline.named_steps[
             "preprocessor"
         ].get_feature_names_out()
         logger.debug(
@@ -303,9 +318,9 @@ class Forecaster:
             features=", ".join(transformed_features),
         )
 
-        selected_features = self.model_pipeline[
+        selected_features = self.model_pipeline.named_steps[
             "feature_selector"
-        ].important_features_.tolist()
+        ].important_features_
         logger.info(
             "Selected features ({count}): {features} ",
             count=len(selected_features),
@@ -314,7 +329,7 @@ class Forecaster:
 
         logger.info(f"Training execution time: {execution_time:.2f} seconds")
 
-    def _hyperparametertuning(self, data, y_vector, pipeline):
+    def _hyperparametertuning(self, data, y_vector, pipeline) -> Pipeline:
         param_grid = {
             "model__max_iter": [100, 200, 300],
             "model__max_depth": [None, 5, 10],
@@ -332,10 +347,9 @@ class Forecaster:
         logger.info(
             "Training with best parameters: {params}", params=grid_search.best_params_
         )
-        logger.info(
-            "Training with best score: {score}", score=grid_search.best_score_)
+        logger.info("Training with best score: {score}", score=grid_search.best_score_)
 
-        return clone(grid_search.best_estimator_)
+        return cast(Pipeline, clone(grid_search.best_estimator_))
 
     def _prepare_model_pipeline(self, x_vector_columns: list[str]) -> Pipeline:
         base_estimator = HistGradientBoostingRegressor(
@@ -349,13 +363,9 @@ class Forecaster:
                 ("preprocessor", self._prepare_preprocessor(x_vector_columns)),
                 (
                     "feature_selector",
-                    PFISelector(
-                        estimator=clone(base_estimator)
-                    ),
+                    PFISelector(estimator=clone(base_estimator)),
                 ),
-                (
-                    "model", clone(base_estimator)
-                ),
+                ("model", clone(base_estimator)),
             ],
             memory=self.memory,
         )
@@ -373,8 +383,7 @@ class Forecaster:
                 (
                     "num",
                     "passthrough",
-                    self._extract_used_columns(
-                        self.NUMERIC_FEATURES, x_vector_columns),
+                    self._extract_used_columns(self.NUMERIC_FEATURES, x_vector_columns),
                 ),
                 (
                     "time",
@@ -414,6 +423,8 @@ class Forecaster:
         await self.training_completed.wait()
 
         predictions = self.model_pipeline.predict(data_for_prediction)
+        if isinstance(predictions, tuple):
+            predictions = predictions[0]
         data_for_prediction[self.typed.target_column] = predictions
         data_for_prediction[self.typed.target_column] = data_for_prediction[
             self.typed.target_column
@@ -426,6 +437,8 @@ class PFISelector(BaseEstimator, TransformerMixin):
     def __init__(self, estimator, n_repeats=10):
         self.estimator = estimator
         self.n_repeats = n_repeats
+        self.important_features_: list[str] | None = None
+        self.important_indices_: list[bool] | None = None
 
     def fit(self, x_vector: DataFrame, y_vector=None) -> PFISelector:
         x_train, x_test, y_train, y_test = train_test_split(
@@ -441,20 +454,31 @@ class PFISelector(BaseEstimator, TransformerMixin):
             n_jobs=-1,
         )
 
-        self.feature_importances_ = results.importances_mean
+        self.feature_importances_ = cast(
+            NDArray,
+            results["importances_mean"],
+        )
 
         threshold_value = percentile(self.feature_importances_, 75)
 
-        self.important_indices_ = self.feature_importances_ > threshold_value
-        self.important_features_ = x_vector.columns[self.important_indices_]
+        important_indices = cast(
+            list[bool],
+            (self.feature_importances_ > threshold_value).tolist(),
+        )
+        self.important_indices_ = important_indices
+        self.important_features_ = [
+            col
+            for col, keep in zip(x_vector.columns.to_list(), important_indices)
+            if keep
+        ]
         return self
 
     def transform(self, x_vector: DataFrame) -> DataFrame:
-        if not hasattr(self, "important_features_"):
+        if self.important_features_ is None:
             raise RuntimeError("PFISelector has not been fitted yet.")
-        return x_vector[self.important_features_]
+        return cast(DataFrame, x_vector.loc[:, self.important_features_])
 
     def get_support(self, *_) -> list[bool]:
-        if not hasattr(self, "important_indices_"):
+        if self.important_indices_ is None:
             raise RuntimeError("PFISelector has not been fitted yet.")
-        return self.important_indices_.to_list()
+        return self.important_indices_

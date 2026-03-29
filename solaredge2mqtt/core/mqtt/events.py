@@ -1,7 +1,9 @@
+from typing import Generic, TypeVar, get_args
+
 from pydantic import BaseModel
 
 from solaredge2mqtt.core.events.events import BaseEvent
-from solaredge2mqtt.core.models import BaseInputField
+from solaredge2mqtt.core.models import TBaseInputField
 
 
 class MQTTPublishEvent(BaseEvent):
@@ -48,31 +50,51 @@ class MQTTPublishEvent(BaseEvent):
         return self._exclude_none
 
 
-class MQTTReceivedEvent(BaseEvent):
-    def __init__(self, topic: str, input: BaseInputField):
+class MQTTReceivedEvent(Generic[TBaseInputField], BaseEvent):
+    def __init__(self, topic: str, input: TBaseInputField):
         self._topic: str = topic
-        self._input: BaseInputField = input
+        self._input: TBaseInputField = input
 
     @property
     def topic(self) -> str:
         return self._topic
 
     @property
-    def input(self) -> BaseInputField:
+    def input(self) -> TBaseInputField:
         return self._input
 
+    @classmethod
+    def input_model(cls) -> type[TBaseInputField]:
+        for base in getattr(cls, "__orig_bases__", []):
+            args = get_args(base)
+            if args:
+                return args[0]
+        raise TypeError(
+            f"{cls.__name__} must specify a generic input model "
+            "for MQTTReceivedEvent[TBaseInputField]"
+        )
 
-class MQTTSubscribeEvent(BaseEvent):
+
+TMQTTReceivedEvent = TypeVar("TMQTTReceivedEvent", bound=MQTTReceivedEvent)
+
+
+class MQTTSubscribeEvent(Generic[TMQTTReceivedEvent], BaseEvent):
     AWAIT = True
 
-    def __init__(self, topic: str, model: type[BaseInputField]):
+    def __init__(self, topic: str):
         self._topic: str = topic
-        self._model: type[BaseInputField] = model
 
     @property
     def topic(self) -> str:
         return self._topic
 
-    @property
-    def model(self) -> type[BaseInputField]:
-        return self._model
+    @classmethod
+    def event(cls) -> type[TMQTTReceivedEvent]:
+        for base in getattr(cls, "__orig_bases__", []):
+            args = get_args(base)
+            if args:
+                return args[0]
+        raise TypeError(
+            f"{cls.__name__} must specify a generic received event "
+            "for MQTTSubscribeEvent[TMQTTReceivedEvent]"
+        )

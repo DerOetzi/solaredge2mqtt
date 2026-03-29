@@ -4,6 +4,7 @@ from typing import Callable
 import aiohttp
 
 from solaredge2mqtt.core.logging import logger
+from solaredge2mqtt.services.models import HTTPResponse
 
 
 class HTTPClientAsync:
@@ -16,34 +17,30 @@ class HTTPClientAsync:
             cookie_jar = aiohttp.CookieJar(unsafe=True)
             self.session = aiohttp.ClientSession(cookie_jar=cookie_jar)
 
-    async def _handle_response(
-        self, response: aiohttp.ClientResponse, expect_json: bool = True
-    ) -> dict | str | None:
-        try:
-            response.raise_for_status()
-            return await response.json() if expect_json else await response.text()
-        except aiohttp.ClientResponseError as error:
-            logger.warning(f"HTTP error from {self.service}: {error}")
-            raise error
-
     async def _get(
         self,
         url: str,
         params: dict[str, str | int | float] | None = None,
         headers: dict[str, str] | None = None,
         verify: bool = True,
+        expect_json: bool = True,
         login: Callable | None = None,
-    ) -> dict | None:
+    ) -> HTTPResponse:
         try:
             self.init()
+
+            if self.session is None:
+                raise RuntimeError("HTTP session not initialized")
 
             async with self.session.get(
                 url, params=params, headers=headers, ssl=verify
             ) as response:
                 if response.status in (401, 403) and login:
                     await login()
-                    return await self._get(url, params, headers, verify, None)
-                return await self._handle_response(response)
+                    return await self._get(
+                        url, params, headers, verify, expect_json, None
+                    )
+                return await self._handle_response(response, expect_json)
         except (aiohttp.ClientConnectionError, asyncio.TimeoutError) as error:
             logger.warning(f"Connection issue with {self.service}: {error}")
             return None
@@ -57,9 +54,12 @@ class HTTPClientAsync:
         verify: bool = True,
         expect_json: bool = True,
         login: Callable | None = None,
-    ) -> dict | str | None:
+    ) -> HTTPResponse:
         try:
             self.init()
+
+            if self.session is None:
+                raise RuntimeError("HTTP session not initialized")
 
             async with self.session.post(
                 url, json=json, data=data, headers=headers, ssl=verify
@@ -74,6 +74,16 @@ class HTTPClientAsync:
         except (aiohttp.ClientConnectionError, asyncio.TimeoutError) as error:
             logger.warning(f"Connection issue with {self.service}: {error}")
             return None
+
+    async def _handle_response(
+        self, response: aiohttp.ClientResponse, expect_json: bool = True
+    ) -> HTTPResponse:
+        try:
+            response.raise_for_status()
+            return await response.json() if expect_json else await response.text()
+        except aiohttp.ClientResponseError as error:
+            logger.warning(f"HTTP error from {self.service}: {error}")
+            raise error
 
     async def close(self) -> None:
         if self.session:

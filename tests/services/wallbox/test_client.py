@@ -1,5 +1,6 @@
 """Tests for WallboxClient with mocking."""
 
+import asyncio
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -17,7 +18,7 @@ from solaredge2mqtt.services.wallbox.settings import WallboxSettings
 def wallbox_settings():
     """Create WallboxSettings for testing."""
     settings = MagicMock(spec=WallboxSettings)
-    settings.host = "192.168.1.100"
+    settings.host = "192.168.1.100"  # noqa: S1313
     settings.serial = MagicMock()
     settings.serial.get_secret_value.return_value = "CHARGER123"
     settings.password = MagicMock()
@@ -29,8 +30,10 @@ def wallbox_settings():
 @pytest.fixture
 def mock_http_client():
     """Mock HTTP client methods."""
-    with patch.object(WallboxClient, "_get", new_callable=AsyncMock) as mock_get, \
-            patch.object(WallboxClient, "_post", new_callable=AsyncMock) as mock_post:
+    with (
+        patch.object(WallboxClient, "_get", new_callable=AsyncMock) as mock_get,
+        patch.object(WallboxClient, "_post", new_callable=AsyncMock) as mock_post,
+    ):
         yield mock_get, mock_post
 
 
@@ -54,12 +57,12 @@ class TestWallboxClientLogin:
         self, wallbox_settings, mock_event_bus, mock_http_client
     ):
         """Test successful login."""
-        mock_get, mock_post = mock_http_client
+        _, mock_post = mock_http_client
 
         # Mock successful login response
         mock_post.return_value = {
-            "accessToken": "test_access_token_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjk5OTk5OTk5OTl9.signature",
-            "refreshToken": "test_refresh_token_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjk5OTk5OTk5OTl9.signature",
+            "accessToken": "test_access_token_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjk5OTk5OTk5OTl9.signature",  # noqa: E501
+            "refreshToken": "test_refresh_token_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjk5OTk5OTk5OTl9.signature",  # noqa: E501
         }
 
         client = WallboxClient(wallbox_settings, mock_event_bus)
@@ -76,8 +79,23 @@ class TestWallboxClientLogin:
         self, wallbox_settings, mock_event_bus, mock_http_client
     ):
         """Test login failure with None response."""
-        mock_get, mock_post = mock_http_client
+        _, mock_post = mock_http_client
         mock_post.return_value = None
+
+        client = WallboxClient(wallbox_settings, mock_event_bus)
+
+        with pytest.raises(ConfigurationException) as exc_info:
+            await client.login()
+
+        assert exc_info.value.component == "wallbox"
+
+    @pytest.mark.asyncio
+    async def test_login_failure_timeout_raises_configuration_exception(
+        self, wallbox_settings, mock_event_bus, mock_http_client
+    ):
+        """Test login timeout is wrapped in ConfigurationException."""
+        _, mock_post = mock_http_client
+        mock_post.side_effect = asyncio.TimeoutError()
 
         client = WallboxClient(wallbox_settings, mock_event_bus)
 
@@ -91,9 +109,7 @@ class TestWallboxClientGetAccess:
     """Tests for WallboxClient _get_access."""
 
     @pytest.mark.asyncio
-    async def test_get_access_no_authorization(
-        self, wallbox_settings, mock_event_bus
-    ):
+    async def test_get_access_no_authorization(self, wallbox_settings, mock_event_bus):
         """Test _get_access calls login when no authorization."""
         client = WallboxClient(wallbox_settings, mock_event_bus)
         client.login = AsyncMock()
@@ -104,9 +120,23 @@ class TestWallboxClientGetAccess:
         client.login.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_get_access_token_expired(
+    async def test_get_access_authorization_with_none_access_token(
         self, wallbox_settings, mock_event_bus
     ):
+        """Test _get_access calls login when access token is missing."""
+        client = WallboxClient(wallbox_settings, mock_event_bus)
+        client.login = AsyncMock()
+
+        mock_auth = MagicMock()
+        mock_auth.access_token = None
+        client.authorization = mock_auth
+
+        await client._get_access()
+
+        client.login.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_access_token_expired(self, wallbox_settings, mock_event_bus):
         """Test _get_access calls login when access token expired."""
         client = WallboxClient(wallbox_settings, mock_event_bus)
         client.login = AsyncMock()
@@ -122,9 +152,7 @@ class TestWallboxClientGetAccess:
         client.login.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_get_access_refresh_token(
-        self, wallbox_settings, mock_event_bus
-    ):
+    async def test_get_access_refresh_token(self, wallbox_settings, mock_event_bus):
         """Test _get_access refreshes token when access expired but refresh valid."""
         client = WallboxClient(wallbox_settings, mock_event_bus)
         client._refresh_token = AsyncMock()
@@ -142,9 +170,7 @@ class TestWallboxClientGetAccess:
         client.login.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_get_access_token_valid(
-        self, wallbox_settings, mock_event_bus
-    ):
+    async def test_get_access_token_valid(self, wallbox_settings, mock_event_bus):
         """Test _get_access does nothing when token is valid."""
         client = WallboxClient(wallbox_settings, mock_event_bus)
         client.login = AsyncMock()
@@ -170,7 +196,7 @@ class TestWallboxClientRefreshToken:
         self, wallbox_settings, mock_event_bus, mock_http_client
     ):
         """Test successful token refresh."""
-        mock_get, mock_post = mock_http_client
+        _, mock_post = mock_http_client
         mock_post.return_value = {"accessToken": "new_access_token"}
 
         client = WallboxClient(wallbox_settings, mock_event_bus)
@@ -181,6 +207,50 @@ class TestWallboxClientRefreshToken:
 
         assert client.authorization.access_token == "new_access_token"
 
+    @pytest.mark.asyncio
+    async def test_refresh_token_missing_authorization_raises(
+        self, wallbox_settings, mock_event_bus
+    ):
+        """Test _refresh_token raises when there is no prior authorization."""
+        client = WallboxClient(wallbox_settings, mock_event_bus)
+        client.authorization = None
+
+        with pytest.raises(InvalidDataException) as exc_info:
+            await client._refresh_token()
+
+        assert "Missing previous Wallbox authorization" in exc_info.value.message
+
+    @pytest.mark.asyncio
+    async def test_refresh_token_missing_refresh_token_raises(
+        self, wallbox_settings, mock_event_bus
+    ):
+        """Test _refresh_token raises when refresh token is missing."""
+        client = WallboxClient(wallbox_settings, mock_event_bus)
+        client.authorization = MagicMock()
+        client.authorization.refresh_token = None
+
+        with pytest.raises(InvalidDataException) as exc_info:
+            await client._refresh_token()
+
+        assert "Missing previous Wallbox authorization" in exc_info.value.message
+
+    @pytest.mark.asyncio
+    async def test_refresh_token_none_response_raises_invalid_data(
+        self, wallbox_settings, mock_event_bus, mock_http_client
+    ):
+        """Test _refresh_token raises when refresh endpoint returns None."""
+        _, mock_post = mock_http_client
+        mock_post.return_value = None
+
+        client = WallboxClient(wallbox_settings, mock_event_bus)
+        client.authorization = MagicMock()
+        client.authorization.refresh_token = "old_refresh_token"
+
+        with pytest.raises(InvalidDataException) as exc_info:
+            await client._refresh_token()
+
+        assert "No valid token refresh response" in exc_info.value.message
+
 
 class TestWallboxClientGetData:
     """Tests for WallboxClient get_data."""
@@ -190,7 +260,7 @@ class TestWallboxClientGetData:
         self, wallbox_settings, mock_event_bus, mock_http_client
     ):
         """Test successful get_data."""
-        mock_get, mock_post = mock_http_client
+        mock_get, _ = mock_http_client
 
         # Mock wallbox API response
         mock_get.return_value = {
@@ -204,13 +274,11 @@ class TestWallboxClientGetData:
         client.authorization = MagicMock()
         client.authorization.access_token = "test_token"
 
-        with patch(
-            "solaredge2mqtt.services.wallbox.WallboxAPI"
-        ) as mock_wallbox_api:
+        with patch("solaredge2mqtt.services.wallbox.WallboxAPI") as mock_wallbox_api:
             mock_wallbox_instance = MagicMock()
             mock_wallbox_instance.power = 7400
             mock_wallbox_instance.state = "CHARGING"
-            mock_wallbox_api.return_value = mock_wallbox_instance
+            mock_wallbox_api.from_http_response.return_value = mock_wallbox_instance
 
             result = await client.get_data()
 
@@ -222,7 +290,7 @@ class TestWallboxClientGetData:
         self, wallbox_settings, mock_event_bus, mock_http_client
     ):
         """Test get_data raises when response is None."""
-        mock_get, mock_post = mock_http_client
+        mock_get, _ = mock_http_client
         mock_get.return_value = None
 
         client = WallboxClient(wallbox_settings, mock_event_bus)
@@ -232,3 +300,50 @@ class TestWallboxClientGetData:
 
         with pytest.raises(InvalidDataException):
             await client.get_data()
+
+    @pytest.mark.asyncio
+    async def test_get_data_missing_authorization_raises(
+        self, wallbox_settings, mock_event_bus
+    ):
+        """Test get_data raises when _get_access leaves authorization unset."""
+        client = WallboxClient(wallbox_settings, mock_event_bus)
+        client._get_access = AsyncMock()
+        client.authorization = None
+
+        with pytest.raises(InvalidDataException) as exc_info:
+            await client.get_data()
+
+        assert "Missing Wallbox authorization" in exc_info.value.message
+
+    @pytest.mark.asyncio
+    async def test_get_data_missing_access_token_raises(
+        self, wallbox_settings, mock_event_bus
+    ):
+        """Test get_data raises when authorization has no access token."""
+        client = WallboxClient(wallbox_settings, mock_event_bus)
+        client._get_access = AsyncMock()
+        client.authorization = MagicMock()
+        client.authorization.access_token = None
+
+        with pytest.raises(InvalidDataException) as exc_info:
+            await client.get_data()
+
+        assert "Missing Wallbox authorization" in exc_info.value.message
+
+    @pytest.mark.asyncio
+    async def test_get_data_timeout_wrapped_as_invalid_data(
+        self, wallbox_settings, mock_event_bus, mock_http_client
+    ):
+        """Test get_data wraps asyncio.TimeoutError from HTTP layer."""
+        mock_get, _ = mock_http_client
+        mock_get.side_effect = asyncio.TimeoutError()
+
+        client = WallboxClient(wallbox_settings, mock_event_bus)
+        client._get_access = AsyncMock()
+        client.authorization = MagicMock()
+        client.authorization.access_token = "test_token"
+
+        with pytest.raises(InvalidDataException) as exc_info:
+            await client.get_data()
+
+        assert "Cannot read Wallbox data" in exc_info.value.message

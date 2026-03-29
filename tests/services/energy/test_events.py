@@ -2,8 +2,6 @@
 
 from datetime import datetime, timezone
 
-import pytest
-
 from solaredge2mqtt.services.energy.events import EnergyReadEvent
 from solaredge2mqtt.services.energy.models import HistoricEnergy, HistoricPeriod
 from solaredge2mqtt.services.events import ComponentEvent
@@ -44,9 +42,18 @@ class TestEnergyReadEvent:
     def test_event_component_property(self):
         """Test component property returns energy component."""
         data = make_historic_energy_data()
-        energy = HistoricEnergy(data, HistoricPeriod.TODAY)
+        energy = HistoricEnergy.from_energy_data(data, HistoricPeriod.TODAY)
 
         event = EnergyReadEvent(energy)
 
         assert event.component is energy
         assert event.component.info.period == HistoricPeriod.TODAY
+
+    def test_event_str(self):
+        """Test EnergyReadEvent string representation."""
+        data = make_historic_energy_data()
+        energy = HistoricEnergy.from_energy_data(data, HistoricPeriod.TODAY)
+
+        event = EnergyReadEvent(energy)
+
+        assert str(event) == f"energy: {HistoricPeriod.TODAY}"

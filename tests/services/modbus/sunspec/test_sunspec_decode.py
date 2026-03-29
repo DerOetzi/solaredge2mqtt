@@ -5,7 +5,7 @@ These tests verify the logic without importing modbus module directly.
 
 import pytest
 
-from solaredge2mqtt.core.exceptions import InvalidRegisterDataException
+from solaredge2mqtt.services.modbus.exceptions import InvalidRegisterDataException
 
 
 class TestInvalidRegisterDataExceptionUsage:
@@ -39,9 +39,7 @@ class TestInvalidRegisterDataExceptionUsage:
 
     def test_exception_message_format(self):
         """Test that exception message is properly formatted."""
-        original_err = UnicodeDecodeError(
-            "utf-8", b"\xc2", 0, 1, "invalid start byte"
-        )
+        original_err = UnicodeDecodeError("utf-8", b"\xc2", 0, 1, "invalid start byte")
 
         exc = InvalidRegisterDataException(
             register_id="c_model",
@@ -136,16 +134,12 @@ class TestErrorLoggingPatterns:
         register_id = "c_manufacturer"
 
         # Test meter skip message
-        skip_msg = (
-            f"Skipping {meter_id} due to invalid register data in device info"
-        )
+        skip_msg = f"Skipping {meter_id} due to invalid register data in device info"
         assert "Skipping meter2" in skip_msg
         assert "invalid register data" in skip_msg
 
         # Test register decode failure message
-        decode_msg = (
-            f"Failed to decode register '{register_id}' at address {address}"
-        )
+        decode_msg = f"Failed to decode register '{register_id}' at address {address}"
         assert "Failed to decode register 'c_manufacturer'" in decode_msg
         assert "40123" in decode_msg
 
@@ -170,47 +164,3 @@ class TestErrorLoggingPatterns:
         assert "40139" in debug_msg
         assert "STRING" in debug_msg
         assert str(raw_values) in debug_msg
-
-
-class TestRefactoredMethodStructure:
-    """Tests for the refactored method structure."""
-
-    def test_detect_meters_separates_concerns(self):
-        """Test that meter detection logic is properly separated."""
-        # This test verifies the conceptual separation
-
-        def detect_meters_high_level():
-            """High-level meter detection flow."""
-            meters = ["meter0", "meter1", "meter2"]
-            detected = []
-
-            for meter in meters:
-                if should_detect(meter):
-                    try:
-                        read_device_info(meter)
-                        detected.append(meter)
-                    except Exception:
-                        log_error(meter)
-                        continue
-
-            return detected
-
-        def should_detect(meter):
-            """Conditional logic extracted."""
-            return meter in ["meter1", "meter2"]
-
-        def read_device_info(meter):
-            """Device info reading extracted."""
-            if meter == "meter1":
-                raise Exception("Invalid data")
-
-        def log_error(meter):
-            """Error logging extracted."""
-            pass  # Logging logic
-
-        # Test the flow
-        result = detect_meters_high_level()
-        assert "meter0" not in result  # Not detected
-        assert "meter1" not in result  # Failed with exception
-        assert "meter2" in result  # Successfully detected
-

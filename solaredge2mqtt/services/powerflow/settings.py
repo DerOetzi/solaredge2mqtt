@@ -4,5 +4,5 @@ from pydantic import BaseModel, Field
 
 
 class PowerflowSettings(BaseModel):
-    external_production: bool = Field(False)
-    retain: bool = Field(False)
+    external_production: bool = Field(default=False)
+    retain: bool = Field(default=False)

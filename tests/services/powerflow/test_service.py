@@ -4,16 +4,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from solaredge2mqtt.core.events import EventBus
-from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
+from solaredge2mqtt.core.exceptions import (
+    ConfigurationException,
+    InvalidDataException,
+)
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.services.powerflow import PowerflowService
-from solaredge2mqtt.services.powerflow.events import PowerflowGeneratedEvent
 from solaredge2mqtt.services.powerflow.models import (
-    BatteryPowerflow,
-    ConsumerPowerflow,
-    GridPowerflow,
-    InverterPowerflow,
     Powerflow,
 )
 
@@ -36,13 +33,21 @@ def mock_service_settings():
 
     settings.wallbox = MagicMock()
     settings.wallbox.retain = False
-    settings.is_wallbox_configured = False
+    settings.wallbox.is_configured = False
 
     settings.location = MagicMock()
     settings.location.latitude = 52.52
     settings.location.longitude = 13.405
 
     return settings
+
+
+@pytest.fixture
+def mock_event_bus():
+    """Create mock event bus."""
+    event_bus = MagicMock()
+    event_bus.emit = AsyncMock()
+    return event_bus
 
 
 @pytest.fixture
@@ -110,10 +115,8 @@ class TestPowerflowServiceInit:
 
     def test_powerflow_service_init(self, mock_service_settings, mock_event_bus):
         """Test PowerflowService initialization."""
-        with patch("solaredge2mqtt.services.powerflow.Modbus") as mock_modbus:
-            service = PowerflowService(
-                mock_service_settings, mock_event_bus, None
-            )
+        with patch("solaredge2mqtt.services.powerflow.Modbus"):
+            service = PowerflowService(mock_service_settings, mock_event_bus, None)
 
             assert service.settings is mock_service_settings
             assert service.event_bus is mock_event_bus
@@ -124,14 +127,13 @@ class TestPowerflowServiceInit:
         self, mock_service_settings, mock_event_bus
     ):
         """Test PowerflowService initialization with wallbox."""
-        mock_service_settings.is_wallbox_configured = True
+        mock_service_settings.wallbox.is_configured = True
 
-        with patch("solaredge2mqtt.services.powerflow.Modbus") as mock_modbus, patch(
-            "solaredge2mqtt.services.powerflow.WallboxClient"
-        ) as mock_wallbox:
-            service = PowerflowService(
-                mock_service_settings, mock_event_bus, None
-            )
+        with (
+            patch("solaredge2mqtt.services.powerflow.Modbus"),
+            patch("solaredge2mqtt.services.powerflow.WallboxClient"),
+        ):
+            service = PowerflowService(mock_service_settings, mock_event_bus, None)
 
             assert service.wallbox is not None
 
@@ -157,9 +159,7 @@ class TestPowerflowServiceAsyncInit:
             mock_modbus = AsyncMock()
             mock_modbus_class.return_value = mock_modbus
 
-            service = PowerflowService(
-                mock_service_settings, mock_event_bus, None
-            )
+            service = PowerflowService(mock_service_settings, mock_event_bus, None)
             await service.async_init()
 
             mock_modbus.async_init.assert_called_once()
@@ -173,10 +173,11 @@ class TestPowerflowServiceCalculate:
         self, mock_service_settings, mock_event_bus, mock_modbus_unit
     ):
         """Test calculate_powerflow success flow."""
-        with patch("solaredge2mqtt.services.powerflow.Modbus") as mock_modbus_class, \
-             patch.object(Powerflow, "from_modbus") as mock_from_modbus, \
-             patch.object(Powerflow, "is_not_valid_with_last", return_value=False):
-
+        with (
+            patch("solaredge2mqtt.services.powerflow.Modbus") as mock_modbus_class,
+            patch.object(Powerflow, "from_modbus") as mock_from_modbus,
+            patch.object(Powerflow, "is_not_valid_with_last", return_value=False),
+        ):
             mock_modbus = AsyncMock()
             mock_modbus.get_data.return_value = {"leader": mock_modbus_unit}
             mock_modbus_class.return_value = mock_modbus
@@ -193,11 +194,9 @@ class TestPowerflowServiceCalculate:
             mock_powerflow.prepare_point.return_value = MagicMock()
             mock_from_modbus.return_value = mock_powerflow
 
-            service = PowerflowService(
-                mock_service_settings, mock_event_bus, None
-            )
+            service = PowerflowService(mock_service_settings, mock_event_bus, None)
 
-            await service.calculate_powerflow(None)
+            await service.calculate_powerflow()
 
             mock_modbus.get_data.assert_called_once()
 
@@ -211,9 +210,7 @@ class TestPowerflowServiceCalculate:
             mock_modbus.get_data.return_value = {"follower": MagicMock()}
             mock_modbus_class.return_value = mock_modbus
 
-            service = PowerflowService(
-                mock_service_settings, mock_event_bus, None
-            )
+            service = PowerflowService(mock_service_settings, mock_event_bus, None)
 
             with pytest.raises(InvalidDataException) as exc_info:
                 await service.calculate_powerflow(None)
@@ -233,14 +230,255 @@ class TestPowerflowServiceCalculate:
             mock_modbus.get_data.return_value = {"leader": mock_modbus_unit}
             mock_modbus_class.return_value = mock_modbus
 
-            service = PowerflowService(
-                mock_service_settings, mock_event_bus, None
-            )
+            service = PowerflowService(mock_service_settings, mock_event_bus, None)
 
             with pytest.raises(InvalidDataException) as exc_info:
-                await service.calculate_powerflow(None)
+                await service.calculate_powerflow()
 
             assert "Invalid battery data" in exc_info.value.message
+
+    @pytest.mark.asyncio
+    async def test_calculate_powerflow_invalid_powerflow_raises(
+        self, mock_service_settings, mock_event_bus, mock_modbus_unit
+    ):
+        """Invalid powerflow output raises InvalidDataException."""
+        with (
+            patch("solaredge2mqtt.services.powerflow.Modbus") as mock_modbus_class,
+            patch.object(Powerflow, "from_modbus") as mock_from_modbus,
+            patch.object(Powerflow, "is_not_valid_with_last", return_value=False),
+        ):
+            mock_modbus = AsyncMock()
+            mock_modbus.get_data.return_value = {"leader": mock_modbus_unit}
+            mock_modbus_class.return_value = mock_modbus
+
+            mock_powerflow = MagicMock()
+            mock_powerflow.is_valid.return_value = False
+            mock_powerflow.model_dump_json.return_value = "{}"
+            mock_from_modbus.return_value = mock_powerflow
+
+            service = PowerflowService(mock_service_settings, mock_event_bus, None)
+
+            with pytest.raises(InvalidDataException) as exc_info:
+                await service.calculate_powerflow()
+
+            assert "Invalid powerflow data" in exc_info.value.message
+
+    @pytest.mark.asyncio
+    async def test_calculate_powerflow_delta_not_valid_raises(
+        self, mock_service_settings, mock_event_bus, mock_modbus_unit
+    ):
+        """Invalid delta to last powerflow raises InvalidDataException."""
+        with (
+            patch("solaredge2mqtt.services.powerflow.Modbus") as mock_modbus_class,
+            patch.object(Powerflow, "from_modbus") as mock_from_modbus,
+            patch.object(Powerflow, "is_not_valid_with_last", return_value=True),
+        ):
+            mock_modbus = AsyncMock()
+            mock_modbus.get_data.return_value = {"leader": mock_modbus_unit}
+            mock_modbus_class.return_value = mock_modbus
+
+            mock_powerflow = MagicMock()
+            mock_powerflow.is_valid.return_value = True
+            mock_powerflow.model_dump_json.return_value = "{}"
+            mock_from_modbus.return_value = mock_powerflow
+
+            service = PowerflowService(mock_service_settings, mock_event_bus, None)
+
+            with pytest.raises(InvalidDataException) as exc_info:
+                await service.calculate_powerflow()
+
+            assert "Value change not valid" in exc_info.value.message
+
+    @pytest.mark.asyncio
+    async def test_calculate_powerflow_followers_adds_cumulated(
+        self, mock_service_settings, mock_event_bus, mock_modbus_unit
+    ):
+        """Followers path builds and publishes cumulated powerflow."""
+        mock_service_settings.modbus.has_followers = True
+
+        follower_unit = MagicMock()
+        leader_powerflow = MagicMock()
+        follower_powerflow = MagicMock()
+        cumulated_powerflow = MagicMock()
+        cumulated_powerflow.is_valid.return_value = True
+        cumulated_powerflow.pv_production = 1500
+        cumulated_powerflow.inverter = MagicMock(power=1300)
+        cumulated_powerflow.consumer = MagicMock(house=700, evcharger=0)
+        cumulated_powerflow.grid = MagicMock(power=400)
+        cumulated_powerflow.battery = MagicMock(power=0)
+
+        with (
+            patch("solaredge2mqtt.services.powerflow.Modbus") as mock_modbus_class,
+            patch.object(
+                Powerflow, "cumulated_powerflow", return_value=cumulated_powerflow
+            ) as mock_cumulated,
+            patch.object(Powerflow, "is_not_valid_with_last", return_value=False),
+        ):
+            mock_modbus = AsyncMock()
+            mock_modbus.get_data.return_value = {
+                "leader": mock_modbus_unit,
+                "follower": follower_unit,
+            }
+            mock_modbus_class.return_value = mock_modbus
+
+            service = PowerflowService(mock_service_settings, mock_event_bus, None)
+            service._check_batteries = MagicMock(return_value={})
+            service._read_wallbox_data = AsyncMock(return_value=(0, None))
+            service._powerflows_from_data = MagicMock(
+                return_value={
+                    "leader": leader_powerflow,
+                    "follower": follower_powerflow,
+                }
+            )
+            service.write_to_influxdb = AsyncMock()
+            service.publish_modbus = AsyncMock()
+            service.publish_wallbox = AsyncMock()
+            service.publish_powerflow = AsyncMock()
+
+            await service.calculate_powerflow()
+
+            mock_cumulated.assert_called_once()
+            cumulated_arg = mock_cumulated.call_args.args[0]
+            assert cumulated_arg["leader"] is leader_powerflow
+            assert cumulated_arg["follower"] is follower_powerflow
+            service.publish_powerflow.assert_called_once()
+            published = service.publish_powerflow.call_args.args[0]
+            assert published["cumulated"] is cumulated_powerflow
+
+
+class TestPowerflowServiceHelpers:
+    """Tests for helper methods extracted from calculate_powerflow."""
+
+    def test_check_batteries_returns_flat_map(
+        self, mock_service_settings, mock_event_bus, mock_modbus_unit
+    ):
+        """The helper flattens batteries across all units."""
+        follower_unit = MagicMock()
+        follower_battery = MagicMock()
+        follower_battery.is_valid = True
+        follower_unit.batteries = {"battery1": follower_battery}
+
+        with patch("solaredge2mqtt.services.powerflow.Modbus"):
+            service = PowerflowService(mock_service_settings, mock_event_bus, None)
+
+            batteries = service._check_batteries(
+                {"leader": mock_modbus_unit, "follower": follower_unit}
+            )
+
+            assert batteries == {
+                "leader:battery0": mock_modbus_unit.batteries["battery0"],
+                "follower:battery1": follower_battery,
+            }
+
+    def test_check_batteries_raises_for_invalid_data(
+        self, mock_service_settings, mock_event_bus, mock_modbus_unit
+    ):
+        """The helper raises InvalidDataException for invalid battery payloads."""
+        mock_modbus_unit.batteries["battery0"].is_valid = False
+
+        with patch("solaredge2mqtt.services.powerflow.Modbus"):
+            service = PowerflowService(mock_service_settings, mock_event_bus, None)
+
+            with pytest.raises(InvalidDataException) as exc_info:
+                service._check_batteries({"leader": mock_modbus_unit})
+
+            assert "Invalid battery data" in exc_info.value.message
+
+    @pytest.mark.asyncio
+    async def test_read_wallbox_data_without_wallbox_returns_default(
+        self, mock_service_settings, mock_event_bus
+    ):
+        """The helper returns defaults when no wallbox is configured."""
+        with patch("solaredge2mqtt.services.powerflow.Modbus"):
+            service = PowerflowService(mock_service_settings, mock_event_bus, None)
+
+            evcharger, wallbox_data = await service._read_wallbox_data()
+
+            assert evcharger == 0
+            assert wallbox_data is None
+
+    @pytest.mark.asyncio
+    async def test_read_wallbox_data_success(
+        self, mock_service_settings, mock_event_bus
+    ):
+        """The helper returns wallbox payload and power on success."""
+        with patch("solaredge2mqtt.services.powerflow.Modbus"):
+            service = PowerflowService(mock_service_settings, mock_event_bus, None)
+            wallbox_payload = MagicMock()
+            wallbox_payload.power = 7400
+            wallbox = AsyncMock()
+            wallbox.get_data.return_value = wallbox_payload
+            service.wallbox = wallbox
+
+            evcharger, wallbox_data = await service._read_wallbox_data()
+
+            assert evcharger == 7400
+            assert wallbox_data is wallbox_payload
+
+    @pytest.mark.asyncio
+    async def test_read_wallbox_data_handles_configuration_exception(
+        self, mock_service_settings, mock_event_bus
+    ):
+        """The helper keeps defaults when wallbox config is invalid."""
+        with patch("solaredge2mqtt.services.powerflow.Modbus"):
+            service = PowerflowService(mock_service_settings, mock_event_bus, None)
+            wallbox = AsyncMock()
+            wallbox.get_data.side_effect = ConfigurationException(
+                "wallbox", "not configured"
+            )
+            service.wallbox = wallbox
+
+            evcharger, wallbox_data = await service._read_wallbox_data()
+
+            assert evcharger == 0
+            assert wallbox_data is None
+
+    @pytest.mark.asyncio
+    async def test_read_wallbox_data_handles_invalid_data_exception(
+        self, mock_service_settings, mock_event_bus
+    ):
+        """The helper keeps defaults when wallbox payload is invalid."""
+        with patch("solaredge2mqtt.services.powerflow.Modbus"):
+            service = PowerflowService(mock_service_settings, mock_event_bus, None)
+            wallbox = AsyncMock()
+            wallbox.get_data.side_effect = InvalidDataException("invalid")
+            service.wallbox = wallbox
+
+            evcharger, wallbox_data = await service._read_wallbox_data()
+
+            assert evcharger == 0
+            assert wallbox_data is None
+
+    def test_powerflows_from_data_calls_leader_with_evcharger(
+        self, mock_service_settings, mock_event_bus, mock_modbus_unit
+    ):
+        """The helper calls from_modbus with evcharger only for leader unit."""
+        follower_unit = MagicMock()
+        follower_unit.batteries = {}
+
+        with (
+            patch("solaredge2mqtt.services.powerflow.Modbus"),
+            patch.object(Powerflow, "from_modbus") as mock_from_modbus,
+        ):
+            leader_powerflow = MagicMock()
+            leader_powerflow.model_dump_json.return_value = "{}"
+            follower_powerflow = MagicMock()
+            follower_powerflow.model_dump_json.return_value = "{}"
+            mock_from_modbus.side_effect = [leader_powerflow, follower_powerflow]
+
+            service = PowerflowService(mock_service_settings, mock_event_bus, None)
+
+            powerflows = service._powerflows_from_data(
+                {"leader": mock_modbus_unit, "follower": follower_unit}, 7400
+            )
+
+            assert powerflows == {
+                "leader": leader_powerflow,
+                "follower": follower_powerflow,
+            }
+            mock_from_modbus.assert_any_call(mock_modbus_unit, 7400)
+            mock_from_modbus.assert_any_call(follower_unit)
+            assert mock_from_modbus.call_count == 2
 
 
 class TestPowerflowServiceWriteInfluxDB:
@@ -265,21 +503,16 @@ class TestPowerflowServiceWriteInfluxDB:
             mock_battery.prepare_point.return_value = MagicMock()
 
             await service.write_to_influxdb(
-                {"leader": mock_powerflow},
-                {"battery0": mock_battery}
+                {"leader": mock_powerflow}, {"battery0": mock_battery}
             )
 
             mock_influxdb.write_points.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_write_to_influxdb_none(
-        self, mock_service_settings, mock_event_bus
-    ):
+    async def test_write_to_influxdb_none(self, mock_service_settings, mock_event_bus):
         """Test write_to_influxdb does nothing when influxdb is None."""
         with patch("solaredge2mqtt.services.powerflow.Modbus"):
-            service = PowerflowService(
-                mock_service_settings, mock_event_bus, None
-            )
+            service = PowerflowService(mock_service_settings, mock_event_bus, None)
 
             # Should not raise
             await service.write_to_influxdb({}, {})
@@ -294,9 +527,7 @@ class TestPowerflowServicePublish:
     ):
         """Test publish_modbus emits events."""
         with patch("solaredge2mqtt.services.powerflow.Modbus"):
-            service = PowerflowService(
-                mock_service_settings, mock_event_bus, None
-            )
+            service = PowerflowService(mock_service_settings, mock_event_bus, None)
 
             await service.publish_modbus({"leader": mock_modbus_unit})
 
@@ -309,9 +540,7 @@ class TestPowerflowServicePublish:
     ):
         """Test publish_wallbox with wallbox data."""
         with patch("solaredge2mqtt.services.powerflow.Modbus"):
-            service = PowerflowService(
-                mock_service_settings, mock_event_bus, None
-            )
+            service = PowerflowService(mock_service_settings, mock_event_bus, None)
 
             mock_wallbox_data = MagicMock()
             mock_wallbox_data.mqtt_topic.return_value = "wallbox"
@@ -323,14 +552,10 @@ class TestPowerflowServicePublish:
             assert isinstance(call_args[0][0], MQTTPublishEvent)
 
     @pytest.mark.asyncio
-    async def test_publish_wallbox_none(
-        self, mock_service_settings, mock_event_bus
-    ):
+    async def test_publish_wallbox_none(self, mock_service_settings, mock_event_bus):
         """Test publish_wallbox with None data."""
         with patch("solaredge2mqtt.services.powerflow.Modbus"):
-            service = PowerflowService(
-                mock_service_settings, mock_event_bus, None
-            )
+            service = PowerflowService(mock_service_settings, mock_event_bus, None)
 
             await service.publish_wallbox(None)
 
@@ -344,9 +569,7 @@ class TestPowerflowServicePublish:
         mock_service_settings.modbus.has_followers = False
 
         with patch("solaredge2mqtt.services.powerflow.Modbus"):
-            service = PowerflowService(
-                mock_service_settings, mock_event_bus, None
-            )
+            service = PowerflowService(mock_service_settings, mock_event_bus, None)
 
             mock_powerflow = MagicMock()
             mock_powerflow.mqtt_topic.return_value = "powerflow"
@@ -364,19 +587,16 @@ class TestPowerflowServicePublish:
         mock_service_settings.modbus.has_followers = True
 
         with patch("solaredge2mqtt.services.powerflow.Modbus"):
-            service = PowerflowService(
-                mock_service_settings, mock_event_bus, None
-            )
+            service = PowerflowService(mock_service_settings, mock_event_bus, None)
 
             mock_powerflow1 = MagicMock()
             mock_powerflow1.mqtt_topic.return_value = "powerflow/leader"
             mock_powerflow2 = MagicMock()
             mock_powerflow2.mqtt_topic.return_value = "powerflow/cumulated"
 
-            await service.publish_powerflow({
-                "leader": mock_powerflow1,
-                "cumulated": mock_powerflow2
-            })
+            await service.publish_powerflow(
+                {"leader": mock_powerflow1, "cumulated": mock_powerflow2}
+            )
 
             # Should emit MQTT events for each powerflow plus PowerflowGeneratedEvent
             assert mock_event_bus.emit.call_count == 3
@@ -386,37 +606,35 @@ class TestPowerflowServiceClose:
     """Tests for PowerflowService close."""
 
     @pytest.mark.asyncio
-    async def test_close_with_wallbox(
-        self, mock_service_settings, mock_event_bus
-    ):
+    async def test_close_with_wallbox(self, mock_service_settings, mock_event_bus):
         """Test close closes wallbox."""
-        mock_service_settings.is_wallbox_configured = True
+        mock_service_settings.wallbox.is_configured = True
 
-        with patch("solaredge2mqtt.services.powerflow.Modbus"), patch(
-            "solaredge2mqtt.services.powerflow.WallboxClient"
-        ) as mock_wallbox_class:
+        with (
+            patch("solaredge2mqtt.services.powerflow.Modbus"),
+            patch(
+                "solaredge2mqtt.services.powerflow.WallboxClient"
+            ) as mock_wallbox_class,
+            patch(
+                "solaredge2mqtt.services.powerflow.WallboxClient"
+            ) as mock_wallbox_class,
+        ):
             mock_wallbox = AsyncMock()
             mock_wallbox_class.return_value = mock_wallbox
 
-            service = PowerflowService(
-                mock_service_settings, mock_event_bus, None
-            )
+            service = PowerflowService(mock_service_settings, mock_event_bus, None)
 
             await service.close()
 
             mock_wallbox.close.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_close_without_wallbox(
-        self, mock_service_settings, mock_event_bus
-    ):
+    async def test_close_without_wallbox(self, mock_service_settings, mock_event_bus):
         """Test close without wallbox."""
         mock_service_settings.is_wallbox_configured = False
 
         with patch("solaredge2mqtt.services.powerflow.Modbus"):
-            service = PowerflowService(
-                mock_service_settings, mock_event_bus, None
-            )
+            service = PowerflowService(mock_service_settings, mock_event_bus, None)
 
             # Should not raise
             await service.close()

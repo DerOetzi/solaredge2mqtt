@@ -2,6 +2,8 @@
 
 from datetime import datetime, timezone
 
+import pytest
+
 from solaredge2mqtt.services.weather.models import (
     OpenWeatherMapBaseData,
     OpenWeatherMapCondition,
@@ -49,18 +51,18 @@ class TestOpenWeatherMapRain:
     def test_rain_default_value(self):
         """Test rain with default value."""
         rain = OpenWeatherMapRain()
-        assert rain.one_hour == 0.0
+        assert rain.one_hour == pytest.approx(0.0)
 
     def test_rain_with_value(self):
         """Test rain with value."""
-        rain = OpenWeatherMapRain(**{"1h": 2.5})
-        assert rain.one_hour == 2.5
+        rain = OpenWeatherMapRain.model_validate({"1h": 2.5})
+        assert rain.one_hour == pytest.approx(2.5)
 
     def test_rain_serialization(self):
         """Test rain serialization returns float."""
-        rain = OpenWeatherMapRain(**{"1h": 3.5})
+        rain = OpenWeatherMapRain.model_validate({"1h": 3.5})
         serialized = rain.model_dump()
-        assert serialized == 3.5
+        assert serialized == pytest.approx(3.5)
 
 
 class TestOpenWeatherMapSnow:
@@ -73,12 +75,12 @@ class TestOpenWeatherMapSnow:
     def test_snow_default_value(self):
         """Test snow with default value."""
         snow = OpenWeatherMapSnow()
-        assert snow.one_hour == 0.0
+        assert snow.one_hour == pytest.approx(0.0)
 
     def test_snow_with_value(self):
         """Test snow with value."""
-        snow = OpenWeatherMapSnow(**{"1h": 1.5})
-        assert snow.one_hour == 1.5
+        snow = OpenWeatherMapSnow.model_validate({"1h": 1.5})
+        assert snow.one_hour == pytest.approx(1.5)
 
 
 class TestOpenWeatherMapCondition:
@@ -102,8 +104,8 @@ class TestOpenWeatherMapBaseData:
         data = make_base_data()
         base = OpenWeatherMapBaseData(**data)
 
-        assert base.temp == 25.5
-        assert base.feels_like == 26.0
+        assert base.temp == pytest.approx(25.5)
+        assert base.feels_like == pytest.approx(26.0)
         assert base.pressure == 1013
         assert base.humidity == 65
 
@@ -190,7 +192,7 @@ class TestOpenWeatherMapBaseData:
         data["rain"] = {"1h": 2.5}
         base = OpenWeatherMapBaseData(**data)
 
-        assert base.rain.one_hour == 2.5
+        assert base.rain.one_hour == pytest.approx(2.5)
 
     def test_base_data_with_snow(self):
         """Test base data with snow."""
@@ -198,7 +200,7 @@ class TestOpenWeatherMapBaseData:
         data["snow"] = {"1h": 1.0}
         base = OpenWeatherMapBaseData(**data)
 
-        assert base.snow.one_hour == 1.0
+        assert base.snow.one_hour == pytest.approx(1.0)
 
 
 class TestOpenWeatherMapCurrentData:
@@ -212,7 +214,7 @@ class TestOpenWeatherMapCurrentData:
 
         current = OpenWeatherMapCurrentData(**data)
 
-        assert current.temp == 25.5
+        assert current.temp == pytest.approx(25.5)
         assert current.sunrise.hour == 5
         assert current.sunset.hour == 21
 
@@ -227,8 +229,8 @@ class TestOpenWeatherMapForecastData:
 
         forecast = OpenWeatherMapForecastData(**data)
 
-        assert forecast.temp == 25.5
-        assert forecast.pop == 0.25
+        assert forecast.temp == pytest.approx(25.5)
+        assert forecast.pop == pytest.approx(0.25)
 
 
 class TestOpenWeatherMapOneCallBase:
@@ -245,8 +247,8 @@ class TestOpenWeatherMapOneCallBase:
 
         base = OpenWeatherMapOneCallBase(**data)
 
-        assert base.lat == 52.52
-        assert base.lon == 13.405
+        assert base.lat == pytest.approx(52.52)
+        assert base.lon == pytest.approx(13.405)
         assert base.timezone == "Europe/Berlin"
         assert base.timezone_offset == 7200
 
@@ -274,7 +276,7 @@ class TestOpenWeatherMapOneCall:
 
         one_call = OpenWeatherMapOneCall(**data)
 
-        assert one_call.lat == 52.52
-        assert one_call.current.temp == 25.5
+        assert one_call.lat == pytest.approx(52.52)
+        assert one_call.current.temp == pytest.approx(25.5)
         assert len(one_call.hourly) == 1
-        assert one_call.hourly[0].pop == 0.1
+        assert one_call.hourly[0].pop == pytest.approx(0.1)

@@ -3,7 +3,6 @@
 import base64
 import json
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -20,12 +19,18 @@ class TestAuthorizationTokens:
         # Create a simple JWT token (header.payload.signature)
         # Payload: {"exp": current_time + 3600} (expires in 1 hour)
         exp_time = int(time.time()) + 3600
-        header = base64.urlsafe_b64encode(
-            json.dumps({"alg": "HS256", "typ": "JWT"}).encode()
-        ).decode().rstrip("=")
-        payload = base64.urlsafe_b64encode(
-            json.dumps({"exp": exp_time}).encode()
-        ).decode().rstrip("=")
+        header = (
+            base64.urlsafe_b64encode(
+                json.dumps({"alg": "HS256", "typ": "JWT"}).encode()
+            )
+            .decode()
+            .rstrip("=")
+        )
+        payload = (
+            base64.urlsafe_b64encode(json.dumps({"exp": exp_time}).encode())
+            .decode()
+            .rstrip("=")
+        )
         signature = base64.urlsafe_b64encode(b"fake_signature").decode().rstrip("=")
 
         return f"{header}.{payload}.{signature}", exp_time
@@ -85,3 +90,21 @@ class TestAuthorizationTokens:
 
         assert tokens.access_token is None
         assert tokens.refresh_token is None
+
+    def test_access_token_expires_raises_when_missing(self):
+        """access_token_expires raises InvalidDataException if missing."""
+        tokens = AuthorizationTokens(accessToken=None, refreshToken="abc")
+
+        with pytest.raises(InvalidDataException) as exc_info:
+            _ = tokens.access_token_expires
+
+        assert exc_info.value.message == "Access token is missing"
+
+    def test_refresh_token_expires_raises_when_missing(self):
+        """refresh_token_expires raises InvalidDataException if missing."""
+        tokens = AuthorizationTokens(accessToken="abc", refreshToken=None)
+
+        with pytest.raises(InvalidDataException) as exc_info:
+            _ = tokens.refresh_token_expires
+
+        assert exc_info.value.message == "Refresh token is missing"

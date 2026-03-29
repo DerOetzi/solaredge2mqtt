@@ -8,6 +8,28 @@ import pytest
 from solaredge2mqtt.core.events import EventBus
 
 
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item]
+) -> None:
+    """Schedule slow tests first to reduce xdist stealwork tail latency.
+
+    With ``pytest-xdist --dist=steal``, a small number of long-running tests are
+    started immediately, while idle workers keep stealing short tests from busy
+    workers. This avoids a late start of slow tests at the end of the run, which
+    would otherwise extend total wall-clock time.
+    """
+    slow = []
+    fast = []
+
+    for item in items:
+        if "slow" in item.keywords:
+            slow.append(item)
+        else:
+            fast.append(item)
+
+    items[:] = slow + fast
+
+
 @pytest.fixture
 def event_bus():
     """Create an EventBus instance for testing."""
@@ -60,7 +82,7 @@ def sample_influxdb_settings():
 def sample_modbus_settings():
     """Provide sample Modbus settings for testing."""
     return {
-        "host": "192.168.1.100",
+        "host": "192.168.1.100",  # noqa: S1313
         "port": 1502,
         "unit": 1,
         "timeout": 5,

@@ -1,6 +1,6 @@
 """Tests for weather events module."""
 
-from datetime import datetime, timezone
+import pytest
 
 from solaredge2mqtt.core.events.events import BaseEvent
 from solaredge2mqtt.services.weather.events import WeatherUpdateEvent
@@ -45,5 +45,5 @@ class TestWeatherUpdateEvent:
         event = WeatherUpdateEvent(weather)
 
         assert event.weather is weather
-        assert event.weather.lat == 52.52
-        assert event.weather.lon == 13.405
+        assert event.weather.lat == pytest.approx(52.52)
+        assert event.weather.lon == pytest.approx(13.405)

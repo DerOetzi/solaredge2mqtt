@@ -160,7 +160,7 @@ class TestConsumerPowerflow:
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
         grid = GridPowerflow(power=-200)
 
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=100)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=100)
 
         assert consumer.total == consumer.house + consumer.evcharger + consumer.inverter
 
@@ -170,7 +170,7 @@ class TestConsumerPowerflow:
         grid = GridPowerflow(power=-200)
         evcharger = 100
 
-        consumer = ConsumerPowerflow(inverter, grid, evcharger)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger)
 
         # house = |grid.power - inverter.power| - evcharger
         # house = |-200 - 1000| - 100 = 1200 - 100 = 1100
@@ -182,7 +182,7 @@ class TestConsumerPowerflow:
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
         grid = GridPowerflow(power=300)
 
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
 
         assert consumer.used_production == 700
 
@@ -191,7 +191,7 @@ class TestConsumerPowerflow:
         inverter = InverterPowerflow(power=-100, dc_power=0, battery_discharge=0)
         grid = GridPowerflow(power=-500)
 
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
 
         assert consumer.used_production == 0
 
@@ -200,7 +200,7 @@ class TestConsumerPowerflow:
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
         grid = GridPowerflow(power=-200)
 
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=100)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=100)
 
         assert consumer.is_valid is True
 
@@ -269,27 +269,24 @@ class TestConsumerPowerflowValidation:
         """Test used_battery_production with battery factor."""
         # Create inverter with battery discharge
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=200)
-        grid = GridPowerflow(power=100)  # Delivery = 100
+        grid = GridPowerflow(power=100)
 
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
 
-        # used_production = production - delivery = 1000 - 100 = 900
         assert consumer.used_production == 900
 
-        # used_battery_production = round(used_production * battery_factor)
-        # battery_factor = 200/1200 = 0.1667
-        # used_battery_production = round(900 * 0.1667) = round(150) = 150
         assert consumer.used_battery_production > 0
 
-        # used_pv_production = used_production - used_battery_production
-        assert consumer.used_pv_production == consumer.used_production - consumer.used_battery_production
+        assert consumer.used_pv_production == (
+            consumer.used_production - consumer.used_battery_production
+        )
 
     def test_used_battery_production_no_battery(self):
         """Test used_battery_production is 0 when no battery."""
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
         grid = GridPowerflow(power=100)
 
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
 
         assert consumer.used_battery_production == 0
         assert consumer.used_pv_production == consumer.used_production
@@ -299,7 +296,7 @@ class TestConsumerPowerflowValidation:
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
         grid = GridPowerflow(power=-200)
 
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=500)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=500)
 
         assert consumer.evcharger == 500
         assert consumer.total == consumer.house + consumer.evcharger + consumer.inverter
@@ -309,6 +306,6 @@ class TestConsumerPowerflowValidation:
         inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
         grid = GridPowerflow(power=100)
 
-        consumer = ConsumerPowerflow(inverter, grid, evcharger=0)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
 
         assert consumer.is_valid is True
