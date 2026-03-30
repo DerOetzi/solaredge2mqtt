@@ -20,7 +20,7 @@ classifiers = [
 ]
 dependencies = [
     "aiocsv==1.4.0",
-    "aiohttp==3.13.3",
+    "aiohttp==3.13.4",
     "aiomqtt==2.5.1",
     "astral==3.2",
     "ephem==4.2.1",
