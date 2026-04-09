@@ -1,5 +1,6 @@
 """Tests for homeassistant models module."""
 
+import pytest
 from pydantic import ValidationError
 
 from solaredge2mqtt.services.homeassistant.models import (
@@ -50,11 +51,9 @@ class TestHomeAssistantStatusInput:
 
     def test_status_input_invalid(self):
         """Test StatusInput with invalid status."""
-        try:
+
+        with pytest.raises(ValidationError):
             HomeAssistantStatusInput.model_validate("invalid_status")
-            assert False, "Expected validation error for invalid status"
-        except ValidationError as e:
-            assert "1 validation error" in str(e)
 
 
 class TestHomeAssistantBaseModel:

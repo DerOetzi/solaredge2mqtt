@@ -20,7 +20,7 @@ class MQTTSettings(BaseModel):
     topic_prefix: str = Field(default="solaredge")
     use_tls: bool = Field(default=False)
     ca_certs: str | None = Field(default=None)
-    tls_verify: bool | None = Field(default=True)
+    tls_verify: bool = Field(default=True)
 
     @property
     def kargs(self) -> dict[str, Any]:

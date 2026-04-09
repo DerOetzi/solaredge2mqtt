@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 
 import pytest
+from pydantic import ValidationError
 
 from solaredge2mqtt.core.models import (
     BaseField,
@@ -97,7 +98,7 @@ class TestBaseInputField:
         class TestInput(BaseInputField):
             field1: str
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             TestInput(
                 field1="value",
                 extra_field="should_fail",  # pyright: ignore[reportCallIssue]

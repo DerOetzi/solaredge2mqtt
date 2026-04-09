@@ -11,7 +11,8 @@ from solaredge2mqtt.core.logging import logger
 
 
 class Listener(Protocol[TEventContra]):
-    def __call__(self, event: TEventContra) -> Awaitable[None]: ...  # pragma: no cover
+    def __call__(
+        self, event: TEventContra) -> Awaitable[None]: ...  # pragma: no cover
 
 
 AnyListener = Listener[Any]
@@ -103,22 +104,25 @@ class EventBus:
         if event.AWAIT:
             await self._notify_listeners(event, listeners)
         else:
-            task = asyncio.create_task(self._notify_listeners(event, listeners))
+            task = asyncio.create_task(
+                self._notify_listeners(event, listeners))
             self._tasks.add(task)
             task.add_done_callback(self._handle_task_done)
 
     def _resolve_listeners(self, event_type: type[BaseEvent]) -> list[AnyListener]:
         listeners: list[AnyListener] = []
-        seen_listeners: list[AnyListener] = []
+        seen_listeners: set[int] = set()
 
         for cls in event_type.__mro__:
             if not issubclass(cls, BaseEvent):
                 continue
             event_key = cls.event_key()
             for listener in self._listeners.get(event_key, []):
-                if any(listener == seen_listener for seen_listener in seen_listeners):
+                listener_id = id(listener)
+                if listener_id in seen_listeners:
                     continue
-                seen_listeners.append(listener)
+
+                seen_listeners.add(listener_id)
                 listeners.append(listener)
 
         return listeners
@@ -127,9 +131,11 @@ class EventBus:
         self, event: BaseEvent, listeners: list[AnyListener]
     ) -> None:
         results = await asyncio.gather(
-            *(self._notify_listener(listener, event) for listener in listeners),
+            *(self._notify_listener(listener, event)
+              for listener in listeners),
             return_exceptions=True,
         )
+
         for r in results:
             if isinstance(r, (asyncio.CancelledError, MqttError)):
                 raise r
@@ -140,7 +146,8 @@ class EventBus:
         try:
             await listener(event)
         except InvalidDataException as error:
-            logger.warning("{message}, skipping this loop", message=error.message)
+            logger.warning("{message}, skipping this loop",
+                           message=error.message)
 
     def _handle_task_done(self, task: asyncio.Task) -> None:
         self._tasks.discard(task)

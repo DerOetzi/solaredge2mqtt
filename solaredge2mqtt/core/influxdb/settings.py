@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field, PrivateAttr, SecretStr
 
 from solaredge2mqtt.core.exceptions import ConfigurationException
 from solaredge2mqtt.core.logging import logger
@@ -24,19 +24,23 @@ class InfluxDBSettings(BaseModel):
     retention: int = Field(default=SECONDS_PER_2_YEARS)
     retention_raw: int = Field(default=25)
 
+    _url: str | None = PrivateAttr(default=None)
+
     @property
     def url(self) -> str:
-        if self.host is None:
-            raise ConfigurationException("influxdb", "No InfluxDB host set.")
+        if self._url is None:
+            if self.host is None:
+                raise ConfigurationException(
+                    "influxdb", "No InfluxDB host set.")
 
-        url = f"{self.host}:{self.port}"
+            self._url = f"{self.host}:{self.port}"
 
-        if url.startswith("http://"):  # noqa: S5332 - User explicitly configured this
-            logger.info("InfluxDB uses unsecured HTTP connection.")
-        elif not str(self.host).startswith("https://"):
-            url = f"https://{url}"
+            if self._url.startswith("http://"):  # noqa: S5332 - User explicitly configured this
+                logger.info("InfluxDB uses unsecured HTTP connection.")
+            elif not str(self.host).startswith("https://"):
+                self._url = f"https://{self._url}"
 
-        return url
+        return self._url
 
     @property
     def client_params(self) -> InfluxDBClientParams:
