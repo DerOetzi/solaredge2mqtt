@@ -1,3 +1,4 @@
+from functools import cache
 from typing import Generic, TypeVar, get_args
 
 from pydantic import BaseModel
@@ -64,6 +65,7 @@ class MQTTReceivedEvent(Generic[TBaseInputField], BaseEvent):
         return self._input
 
     @classmethod
+    @cache
     def input_model(cls) -> type[TBaseInputField]:
         for base in getattr(cls, "__orig_bases__", []):
             args = get_args(base)
@@ -89,6 +91,7 @@ class MQTTSubscribeEvent(Generic[TMQTTReceivedEvent], BaseEvent):
         return self._topic
 
     @classmethod
+    @cache
     def event(cls) -> type[TMQTTReceivedEvent]:
         for base in getattr(cls, "__orig_bases__", []):
             args = get_args(base)
