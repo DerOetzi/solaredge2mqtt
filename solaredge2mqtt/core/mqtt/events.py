@@ -1,4 +1,4 @@
-from typing import Generic, TypeVar, get_args
+from typing import Generic, TypeVar, get_args, get_origin
 
 from pydantic import BaseModel
 
@@ -57,10 +57,12 @@ class MQTTReceivedEvent(Generic[TBaseInputField], BaseEvent):
         super().__init_subclass__(**kwargs)
 
         for base in getattr(cls, "__orig_bases__", []):
-            args = get_args(base)
-            if args:
-                cls._model_type = args[0]
-                return
+            origin = get_origin(base)
+            if origin is MQTTReceivedEvent:
+                args = get_args(base)
+                if args:
+                    cls._model_type = args[0]
+                    return
 
         raise TypeError(
             f"{cls.__name__} must specify a generic input model "
@@ -95,10 +97,12 @@ class MQTTSubscribeEvent(Generic[TMQTTReceivedEvent], BaseEvent):
         super().__init_subclass__(**kwargs)
 
         for base in getattr(cls, "__orig_bases__", []):
-            args = get_args(base)
-            if args:
-                cls._event_type = args[0]
-                return
+            origin = get_origin(base)
+            if origin is MQTTSubscribeEvent:
+                args = get_args(base)
+                if args:
+                    cls._event_type = args[0]
+                    return
 
         raise TypeError(
             f"{cls.__name__} must specify a generic received event "
