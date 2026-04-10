@@ -103,38 +103,71 @@ class TestMQTTReceivedEvent:
         class TestInput(BaseInputField):
             value: int
 
-        class TestReceivedEvent(MQTTReceivedEvent[TestInput]): ...  # pragma: no cover
+        class TestReceivedEvent(MQTTReceivedEvent[TestInput]):
+            ...  # pragma: no cover
 
         assert TestReceivedEvent.input_model() == TestInput
+        assert TestReceivedEvent._model_type is TestInput
 
-    def test_mqtt_received_event_input_model_raises_type_error(self, monkeypatch):
-        """Test input_model raises TypeError when generic type is missing."""
-
-        class InvalidReceivedEvent(MQTTReceivedEvent): ...  # pragma: no cover
-
-        monkeypatch.setattr(InvalidReceivedEvent, "__orig_bases__", ())
+    def test_mqtt_received_event_init_subclass_raises_without_generic(self):
+        """Test __init_subclass__ raises TypeError when generic type is missing."""
 
         with pytest.raises(
             TypeError,
             match=r"must specify a generic input model",
         ):
-            InvalidReceivedEvent.input_model()
 
-    def test_mqtt_received_event_input_model_skips_non_generic_base(self, monkeypatch):
-        """Test input_model skips bases without generic args."""
+            class InvalidReceivedEvent(MQTTReceivedEvent):  # noqa: S5603
+                ...  # pragma: no cover
+
+    def test_mqtt_received_event_init_subclass_skips_non_matching_origin(
+        self, monkeypatch
+    ):
+        """Test __init_subclass__ continues when origin is not MQTTReceivedEvent."""
 
         class TestInput(BaseInputField):
             value: int
 
-        class TestReceivedEvent(MQTTReceivedEvent[TestInput]): ...  # pragma: no cover
+        import solaredge2mqtt.core.mqtt.events as mqtt_events
+
+        monkeypatch.setattr(mqtt_events, "get_origin", lambda _base: BaseEvent)
+
+        with pytest.raises(
+            TypeError,
+            match=r"must specify a generic input model",
+        ):
+
+            class InvalidReceivedEvent(  # noqa: S5603
+                MQTTReceivedEvent[TestInput]
+            ):
+                ...
+
+    def test_mqtt_received_event_init_subclass_raises_when_generic_args_empty(
+        self, monkeypatch
+    ):
+        """Test __init_subclass__ raises when matching origin has empty args."""
+
+        class TestInput(BaseInputField):
+            value: int
+
+        import solaredge2mqtt.core.mqtt.events as mqtt_events
 
         monkeypatch.setattr(
-            TestReceivedEvent,
-            "__orig_bases__",
-            (BaseEvent, MQTTReceivedEvent[TestInput]),
+            mqtt_events,
+            "get_origin",
+            lambda _base: MQTTReceivedEvent,
         )
+        monkeypatch.setattr(mqtt_events, "get_args", lambda _base: ())
 
-        assert TestReceivedEvent.input_model() is TestInput
+        with pytest.raises(
+            TypeError,
+            match=r"must specify a generic input model",
+        ):
+
+            class InvalidReceivedEvent(  # noqa: S5603
+                MQTTReceivedEvent[TestInput]
+            ):
+                ...
 
 
 class TestMQTTSubscribeEvent:
@@ -154,46 +187,82 @@ class TestMQTTSubscribeEvent:
         class TestInput(BaseInputField):
             value: float
 
-        class TestReceivedEvent(MQTTReceivedEvent[TestInput]): ...  # pragma: no cover
+        class TestReceivedEvent(MQTTReceivedEvent[TestInput]):
+            ...  # pragma: no cover
 
         class TestSubscribeEvent(
             MQTTSubscribeEvent[TestReceivedEvent]
-        ): ...  # pragma: no cover
+        ):
+            ...  # pragma: no cover
 
         event = TestSubscribeEvent("test/topic")
 
         assert event.topic == "test/topic"
         assert event.event() == TestReceivedEvent
+        assert TestSubscribeEvent._event_type is TestReceivedEvent
 
-    def test_mqtt_subscribe_event_event_raises_type_error(self, monkeypatch):
-        """Test event() raises TypeError when generic type is missing."""
-
-        class InvalidSubscribeEvent(MQTTSubscribeEvent): ...  # pragma: no cover
-
-        monkeypatch.setattr(InvalidSubscribeEvent, "__orig_bases__", ())
+    def test_mqtt_subscribe_event_init_subclass_raises_without_generic(self):
+        """Test __init_subclass__ raises TypeError when generic type is missing."""
 
         with pytest.raises(
             TypeError,
             match=r"must specify a generic received event",
         ):
-            InvalidSubscribeEvent.event()
 
-    def test_mqtt_subscribe_event_event_skips_non_generic_base(self, monkeypatch):
-        """Test event() skips bases without generic args."""
+            class InvalidSubscribeEvent(MQTTSubscribeEvent):  # noqa: S5603
+                ...  # noqa: S5603
+
+    def test_mqtt_subscribe_event_init_subclass_skips_non_matching_origin(
+        self, monkeypatch
+    ):
+        """Test __init_subclass__ continues when origin is not MQTTSubscribeEvent."""
 
         class TestInput(BaseInputField):
             value: float
 
-        class TestReceivedEvent(MQTTReceivedEvent[TestInput]): ...  # pragma: no cover
+        class TestReceivedEvent(MQTTReceivedEvent[TestInput]):
+            ...  # pragma: no cover
 
-        class TestSubscribeEvent(
-            MQTTSubscribeEvent[TestReceivedEvent]
-        ): ...  # pragma: no cover
+        import solaredge2mqtt.core.mqtt.events as mqtt_events
+
+        monkeypatch.setattr(mqtt_events, "get_origin", lambda _base: BaseEvent)
+
+        with pytest.raises(
+            TypeError,
+            match=r"must specify a generic received event",
+        ):
+
+            class InvalidSubscribeEvent(  # noqa: S5603
+                MQTTSubscribeEvent[TestReceivedEvent]
+            ):
+                ...
+
+    def test_mqtt_subscribe_event_init_subclass_raises_when_generic_args_empty(
+        self, monkeypatch
+    ):
+        """Test __init_subclass__ raises when matching origin has empty args."""
+
+        class TestInput(BaseInputField):
+            value: float
+
+        class TestReceivedEvent(MQTTReceivedEvent[TestInput]):
+            ...  # pragma: no cover
+
+        import solaredge2mqtt.core.mqtt.events as mqtt_events
 
         monkeypatch.setattr(
-            TestSubscribeEvent,
-            "__orig_bases__",
-            (BaseEvent, MQTTSubscribeEvent[TestReceivedEvent]),
+            mqtt_events,
+            "get_origin",
+            lambda _base: MQTTSubscribeEvent,
         )
+        monkeypatch.setattr(mqtt_events, "get_args", lambda _base: ())
 
-        assert TestSubscribeEvent.event() is TestReceivedEvent
+        with pytest.raises(
+            TypeError,
+            match=r"must specify a generic received event",
+        ):
+
+            class InvalidSubscribeEvent(  # noqa: S5603
+                MQTTSubscribeEvent[TestReceivedEvent]
+            ):
+                ...

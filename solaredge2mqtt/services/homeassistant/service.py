@@ -188,9 +188,6 @@ class HomeAssistantDiscovery:
             )
 
     async def homeassistant_status(self, event: HomeAssistantStatusEvent) -> None:
-        if event.topic != self._status_topic:
-            return
-
         if event.input.status == HomeAssistantStatus.ONLINE:
             logger.info(
                 "Home Assistant status changed to online resend discovery")
