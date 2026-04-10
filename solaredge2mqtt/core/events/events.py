@@ -1,8 +1,8 @@
-from typing import TypeVar
+from typing import ClassVar, TypeVar
 
 
 class BaseEvent:
-    AWAIT = False
+    AWAIT: ClassVar[bool] = False
 
     @classmethod
     def event_key(cls) -> str:

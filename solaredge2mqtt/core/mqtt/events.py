@@ -1,4 +1,3 @@
-from functools import cache
 from typing import Generic, TypeVar, get_args
 
 from pydantic import BaseModel
@@ -52,6 +51,22 @@ class MQTTPublishEvent(BaseEvent):
 
 
 class MQTTReceivedEvent(Generic[TBaseInputField], BaseEvent):
+    _model_type: type[TBaseInputField]
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+
+        for base in getattr(cls, "__orig_bases__", []):
+            args = get_args(base)
+            if args:
+                cls._model_type = args[0]
+                return
+
+        raise TypeError(
+            f"{cls.__name__} must specify a generic input model "
+            "for MQTTReceivedEvent[TBaseInputField]"
+        )
+
     def __init__(self, topic: str, input: TBaseInputField):
         self._topic: str = topic
         self._input: TBaseInputField = input
@@ -65,16 +80,8 @@ class MQTTReceivedEvent(Generic[TBaseInputField], BaseEvent):
         return self._input
 
     @classmethod
-    @cache
     def input_model(cls) -> type[TBaseInputField]:
-        for base in getattr(cls, "__orig_bases__", []):
-            args = get_args(base)
-            if args:
-                return args[0]
-        raise TypeError(
-            f"{cls.__name__} must specify a generic input model "
-            "for MQTTReceivedEvent[TBaseInputField]"
-        )
+        return cls._model_type
 
 
 TMQTTReceivedEvent = TypeVar("TMQTTReceivedEvent", bound=MQTTReceivedEvent)
@@ -82,6 +89,21 @@ TMQTTReceivedEvent = TypeVar("TMQTTReceivedEvent", bound=MQTTReceivedEvent)
 
 class MQTTSubscribeEvent(Generic[TMQTTReceivedEvent], BaseEvent):
     AWAIT = True
+    _event_type: type[TMQTTReceivedEvent]
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+
+        for base in getattr(cls, "__orig_bases__", []):
+            args = get_args(base)
+            if args:
+                cls._event_type = args[0]
+                return
+
+        raise TypeError(
+            f"{cls.__name__} must specify a generic received event "
+            "for MQTTSubscribeEvent[TMQTTReceivedEvent]"
+        )
 
     def __init__(self, topic: str):
         self._topic: str = topic
@@ -91,13 +113,5 @@ class MQTTSubscribeEvent(Generic[TMQTTReceivedEvent], BaseEvent):
         return self._topic
 
     @classmethod
-    @cache
     def event(cls) -> type[TMQTTReceivedEvent]:
-        for base in getattr(cls, "__orig_bases__", []):
-            args = get_args(base)
-            if args:
-                return args[0]
-        raise TypeError(
-            f"{cls.__name__} must specify a generic received event "
-            "for MQTTSubscribeEvent[TMQTTReceivedEvent]"
-        )
+        return cls._event_type
