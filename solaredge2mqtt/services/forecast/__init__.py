@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+from typing import TYPE_CHECKING
 
 _FORECAST_DEPS = ("numpy", "pandas", "scipy", "sklearn")
 
@@ -12,10 +13,12 @@ def _deps_available() -> bool:
 FORECAST_AVAILABLE: bool = _deps_available()
 
 
-if FORECAST_AVAILABLE:
+if TYPE_CHECKING:
     from .service import ForecastService
-    __all__ = ["ForecastService"]
+elif FORECAST_AVAILABLE:
+    from .service import ForecastService
 else:
+
     class ForecastService:
         def __init__(self, *args, **kwargs):
             raise ImportError(
@@ -24,3 +27,6 @@ else:
                     "Run pip install solaredge2mqtt[forecast]"
                 )
             )
+
+
+__all__ = ["ForecastService"]

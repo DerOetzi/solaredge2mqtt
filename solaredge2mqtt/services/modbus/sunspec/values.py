@@ -1,14 +1,12 @@
-from typing import Type
+from typing import Type, TypeAlias
 
 from pymodbus.client import ModbusTcpClient
 
 from solaredge2mqtt.core.models import EnumModel
 
-SunSpecRawData = str | int | float
+SunSpecRawData: TypeAlias = str | int | float | bool
 
-SunSpecInputData = int | float | str | bool
-
-SunSpecPayload = dict[str, SunSpecRawData]
+SunSpecPayload: TypeAlias = dict[str, SunSpecRawData]
 
 
 C_SUNSPEC_DID_MAP = {
@@ -56,7 +54,7 @@ EXPORT_CONTROL_MODE_MAP = {
     0: "Disabled",
     1: "Direct Export Limitation",
     2: "Indirect Export Limitation",
-    3: "Production Limitation"
+    3: "Production Limitation",
 }
 
 REACTIVE_POWER_CONFIG_MAP = {
@@ -64,7 +62,7 @@ REACTIVE_POWER_CONFIG_MAP = {
     1: "Fixed Q",
     2: "CosPhi(P)",
     3: "Q(U) + Q(P)",
-    4: "RRCR Mode"
+    4: "RRCR Mode",
 }
 
 
@@ -95,6 +93,8 @@ class SunSpecValueType(EnumModel):
         for datatype in ModbusTcpClient.DATATYPE:
             if datatype.value[0] == data_type:
                 return datatype
+
+        raise ValueError(f"Unsupported data type: {data_type}")
 
     @property
     def identifier(self) -> str:

@@ -4,13 +4,16 @@ from unittest.mock import patch
 
 import pytest
 
-from solaredge2mqtt.core.exceptions import InvalidRegisterDataException
+from solaredge2mqtt.services.modbus.exceptions import InvalidRegisterDataException
 from solaredge2mqtt.services.modbus.sunspec.base import (
     SunSpecOffset,
     SunSpecRegister,
     SunSpecRequestRegisterBundle,
 )
-from solaredge2mqtt.services.modbus.sunspec.values import SunSpecValueType
+from solaredge2mqtt.services.modbus.sunspec.values import (
+    SunSpecPayload,
+    SunSpecValueType,
+)
 
 
 class TestSunSpecRegister:
@@ -39,10 +42,7 @@ class TestSunSpecRegister:
             TEST_REG = "test_reg", 40000, SunSpecValueType.UINT16, True
 
         # UINT16 has length 1
-        assert (
-            TestRegister.TEST_REG.end_address
-            == TestRegister.TEST_REG.address + 1
-        )
+        assert TestRegister.TEST_REG.end_address == TestRegister.TEST_REG.address + 1
 
     def test_register_value_type(self):
         """Test register value_type property."""
@@ -134,15 +134,13 @@ class TestSunSpecRegister:
             "utf-8", b"\xc2", 5, 6, "invalid continuation byte"
         ),
     )
-    def test_register_decode_response_unicode_error(
-        self, mock_convert, mock_logger
-    ):
+    def test_register_decode_response_unicode_error(self, mock_convert, mock_logger):
         """Test register decode_response handles UnicodeDecodeError."""
 
         class TestRegister(SunSpecRegister):
             TEST_REG = "test_reg", 40123, SunSpecValueType.STRING, True, 16
 
-        data = {"existing_key": "existing_value"}
+        data: SunSpecPayload = {"existing_key": "existing_value"}
         invalid_registers = [
             0x5465,
             0x7374,
@@ -156,9 +154,7 @@ class TestSunSpecRegister:
 
         # Should raise InvalidRegisterDataException after logging
         with pytest.raises(InvalidRegisterDataException) as exc_info:
-            TestRegister.TEST_REG.decode_response(
-                invalid_registers, data
-            )
+            TestRegister.TEST_REG.decode_response(invalid_registers, data)
 
         # Verify exception attributes
         exception = exc_info.value
@@ -185,9 +181,7 @@ class TestSunSpecRegister:
     @patch("solaredge2mqtt.services.modbus.sunspec.base.logger")
     @patch(
         "pymodbus.client.ModbusTcpClient.convert_from_registers",
-        side_effect=UnicodeDecodeError(
-            "utf-8", b"\xc2", 0, 1, "invalid start byte"
-        ),
+        side_effect=UnicodeDecodeError("utf-8", b"\xc2", 0, 1, "invalid start byte"),
     )
     def test_register_decode_response_unicode_error_empty_data(
         self, mock_convert, mock_logger
@@ -203,13 +197,11 @@ class TestSunSpecRegister:
                 16,
             )
 
-        data = {}
+        data: SunSpecPayload = {}
 
         # Should raise InvalidRegisterDataException after logging
         with pytest.raises(InvalidRegisterDataException) as exc_info:
-            TestRegister.MANUFACTURER.decode_response(
-                [0xC200, 0x0000], data
-            )
+            TestRegister.MANUFACTURER.decode_response([0xC200, 0x0000], data)
 
         # Verify exception attributes
         exception = exc_info.value
@@ -219,7 +211,6 @@ class TestSunSpecRegister:
         # Should have logged appropriate messages
         assert mock_logger.error.call_count == 1
         assert mock_logger.debug.call_count == 1
-
 
     def test_register_encode_request_int(self):
         """Test register encode_request for integer."""
@@ -263,6 +254,90 @@ class TestSunSpecRegister:
 
         # Should return same cached object
         assert bundles1 is bundles2
+
+    @patch(
+        "pymodbus.client.ModbusTcpClient.convert_from_registers",
+        return_value=[1, 2],
+    )
+    def test_register_decode_response_list_value_raises(self, _mock_convert):
+        """Test decode_response rejects list payloads from pymodbus."""
+
+        class TestRegister(SunSpecRegister):
+            TEST_REG = "test_reg", 40020, SunSpecValueType.UINT16, True
+
+        with pytest.raises(InvalidRegisterDataException) as exc_info:
+            TestRegister.TEST_REG.decode_response([1], {})
+
+        assert exc_info.value.register_id == "test_reg"
+        assert exc_info.value.address == 40020
+        assert exc_info.value.raw_values == [1]
+        assert isinstance(exc_info.value.original_error, TypeError)
+
+    @patch(
+        "pymodbus.client.ModbusTcpClient.convert_from_registers",
+        return_value="Test\x00\x00  ",
+    )
+    def test_register_decode_response_string_strip_and_rstrip(self, _mock_convert):
+        """Test decode_response strips null bytes and trailing spaces."""
+
+        class TestRegister(SunSpecRegister):
+            TEST_REG = "test_reg", 40021, SunSpecValueType.STRING, True, 8
+
+        result = TestRegister.TEST_REG.decode_response([0, 0, 0, 0], {})
+
+        assert result["test_reg"] == "Test\x00\x00"
+
+    def test_register_without_available_length_raises_attribute_error(self):
+        """Test register without explicit or type length has no _length field."""
+
+        class InvalidLengthRegister(SunSpecRegister):
+            BROKEN = "broken", 49000, SunSpecValueType.STRING, False
+
+        with pytest.raises(AttributeError):
+            _ = InvalidLengthRegister.BROKEN.length
+
+    def test_request_bundles_required_only_false(self):
+        """Test request_bundles with required_only=False includes optional regs."""
+
+        class TestRegister(SunSpecRegister):
+            REQ_REG = "req_reg", 40030, SunSpecValueType.UINT16, True
+            OPT_REG = "opt_reg", 40031, SunSpecValueType.UINT16, False
+
+        if hasattr(TestRegister, "_cached_bundles_by_required_only"):
+            delattr(TestRegister, "_cached_bundles_by_required_only")
+
+        bundles = TestRegister.request_bundles(required_only=False)
+
+        all_registers = []
+        for bundle in bundles:
+            all_registers.extend(bundle.registers)
+
+        assert TestRegister.REQ_REG in all_registers
+        assert TestRegister.OPT_REG in all_registers
+
+    def test_request_bundles_cache_isolated_by_required_only(self):
+        """Test request_bundles keeps separate cache entries per argument."""
+
+        class TestRegister(SunSpecRegister):
+            REQ_REG = "req_reg", 40040, SunSpecValueType.UINT16, True
+            OPT_REG = "opt_reg", 40041, SunSpecValueType.UINT16, False
+
+        required_only_bundles = TestRegister.request_bundles(required_only=True)
+        all_bundles = TestRegister.request_bundles(required_only=False)
+
+        assert required_only_bundles is not all_bundles
+
+        required_registers = [
+            register
+            for bundle in required_only_bundles
+            for register in bundle.registers
+        ]
+        all_registers = [
+            register for bundle in all_bundles for register in bundle.registers
+        ]
+
+        assert TestRegister.OPT_REG not in required_registers
+        assert TestRegister.OPT_REG in all_registers
 
 
 class TestSunSpecRequestRegisterBundle:
@@ -335,7 +410,7 @@ class TestSunSpecRequestRegisterBundle:
             REG2 = "reg2", 40001, SunSpecValueType.UINT16, True
             REG3 = "reg3", 40002, SunSpecValueType.UINT16, True
 
-        bundles = SunSpecRequestRegisterBundle.from_registers(TestRegister)
+        bundles = SunSpecRequestRegisterBundle.from_registers(list(TestRegister))
 
         assert len(bundles) == 1
 
@@ -347,7 +422,7 @@ class TestSunSpecRequestRegisterBundle:
             REG1 = "reg1", 40000, SunSpecValueType.UINT16, True
             REG2 = "reg2", 40150, SunSpecValueType.UINT16, True  # > 120 away
 
-        bundles = SunSpecRequestRegisterBundle.from_registers(TestRegister)
+        bundles = SunSpecRequestRegisterBundle.from_registers(list(TestRegister))
 
         assert len(bundles) == 2
 
@@ -359,7 +434,7 @@ class TestSunSpecRequestRegisterBundle:
             OPT_REG = "opt_reg", 40001, SunSpecValueType.UINT16, False
 
         bundles = SunSpecRequestRegisterBundle.from_registers(
-            TestRegister, required_only=True
+            list(TestRegister), required_only=True
         )
 
         # Should only include required registers in bundles
@@ -370,6 +445,86 @@ class TestSunSpecRequestRegisterBundle:
             all_registers.extend(bundle.registers)
 
         assert TestRegister.REQ_REG in all_registers
+
+    def test_from_registers_required_only_false_skips_optional_merge(self):
+        """Test required_only=False does not call optional merge helper."""
+
+        class TestRegister(SunSpecRegister):
+            REQ_REG = "req_reg", 40100, SunSpecValueType.UINT16, True
+            OPT_REG = "opt_reg", 40101, SunSpecValueType.UINT16, False
+
+        bundles = SunSpecRequestRegisterBundle.from_registers(
+            list(TestRegister), required_only=False
+        )
+
+        assert len(bundles) == 1
+        assert len(bundles[0].registers) == 2
+
+    def test_bundle_registers_required_only_no_required(self):
+        """Test internal bundling returns empty bundles with no required regs."""
+
+        class TestRegister(SunSpecRegister):
+            OPT_REG1 = "opt_reg1", 40200, SunSpecValueType.UINT16, False
+            OPT_REG2 = "opt_reg2", 40201, SunSpecValueType.UINT16, False
+
+        bundles = SunSpecRequestRegisterBundle._bundle_registers(
+            required_only=True,
+            sorted_registers=list(TestRegister),
+        )
+
+        assert bundles == []
+
+    def test_add_not_required_does_not_include_out_of_range_registers(self):
+        """Test optional registers outside bundle range are not added."""
+
+        class TestRegister(SunSpecRegister):
+            REQ_REG = "req_reg", 40300, SunSpecValueType.UINT16, True
+            OPT_REG_OUTSIDE = "opt_reg_outside", 40450, SunSpecValueType.UINT16, False
+
+        bundles = SunSpecRequestRegisterBundle._bundle_registers(
+            required_only=True,
+            sorted_registers=[TestRegister.REQ_REG],
+        )
+        result = SunSpecRequestRegisterBundle._add_not_required(
+            [TestRegister.REQ_REG, TestRegister.OPT_REG_OUTSIDE], bundles
+        )
+
+        assert len(result) == 1
+        assert TestRegister.REQ_REG in result[0].registers
+        assert TestRegister.OPT_REG_OUTSIDE not in result[0].registers
+
+    def test_add_not_required_includes_registers_inside_bundle_range(self):
+        """Test optional registers within bundle range are added."""
+
+        class TestRegister(SunSpecRegister):
+            REQ_REG_WIDE = "req_reg_wide", 40500, SunSpecValueType.UINT32, True
+            OPT_REG_INSIDE = "opt_reg_inside", 40501, SunSpecValueType.UINT16, False
+
+        bundles = SunSpecRequestRegisterBundle._bundle_registers(
+            required_only=True,
+            sorted_registers=[TestRegister.REQ_REG_WIDE],
+        )
+        result = SunSpecRequestRegisterBundle._add_not_required(
+            [TestRegister.REQ_REG_WIDE, TestRegister.OPT_REG_INSIDE], bundles
+        )
+
+        assert TestRegister.OPT_REG_INSIDE in result[0].registers
+
+    def test_bundle_decode_response_with_sparse_offsets(self):
+        """Test decode_response slices register values by per-register offset."""
+
+        class TestRegister(SunSpecRegister):
+            REG1 = "reg1", 41000, SunSpecValueType.UINT16, True
+            REG2 = "reg2", 41002, SunSpecValueType.UINT16, True
+
+        bundle = SunSpecRequestRegisterBundle()
+        bundle.add_register(TestRegister.REG1)
+        bundle.add_register(TestRegister.REG2)
+
+        result = bundle.decode_response([10, 999, 20], {})
+
+        assert result["reg1"] == 10
+        assert result["reg2"] == 20
 
     def test_bundle_decode_response(self):
         """Test bundle decode_response."""

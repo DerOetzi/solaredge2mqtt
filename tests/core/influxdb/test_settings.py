@@ -1,7 +1,11 @@
 """Tests for core InfluxDB settings module."""
 
+from unittest.mock import patch
+
+import pytest
 from pydantic import SecretStr
 
+from solaredge2mqtt.core.exceptions import ConfigurationException
 from solaredge2mqtt.core.influxdb.settings import (
     SECONDS_PER_2_YEARS,
     SECONDS_PER_DAY,
@@ -51,7 +55,7 @@ class TestInfluxDBSettings:
         settings = InfluxDBSettings(
             host="influxdb.example.com",
             port=8087,
-            token="my_token",
+            token=SecretStr("my_token"),
             org="my_org",
             bucket="custom_bucket",
             retention=SECONDS_PER_YEAR,
@@ -60,6 +64,7 @@ class TestInfluxDBSettings:
 
         assert settings.host == "influxdb.example.com"
         assert settings.port == 8087
+        assert settings.token is not None
         assert settings.token.get_secret_value() == "my_token"
         assert settings.org == "my_org"
         assert settings.bucket == "custom_bucket"
@@ -78,6 +83,15 @@ class TestInfluxDBSettings:
 
         assert settings.url == "http://localhost:8086"
 
+    def test_influxdb_settings_url_with_http_logs_info(self):
+        """Test url property logs when using insecure http://."""
+        settings = InfluxDBSettings(host="http://localhost", port=8086)
+
+        with patch("solaredge2mqtt.core.influxdb.settings.logger.info") as mock_info:
+            assert settings.url == "http://localhost:8086"
+
+        mock_info.assert_called_once_with("InfluxDB uses unsecured HTTP connection.")
+
     def test_influxdb_settings_url_with_https(self):
         """Test url property preserves https://."""
         settings = InfluxDBSettings(host="https://localhost", port=8086)
@@ -89,22 +103,22 @@ class TestInfluxDBSettings:
         settings = InfluxDBSettings(
             host="http://localhost",
             port=8086,
-            token="my_token",
+            token=SecretStr("my_token"),
             org="my_org",
         )
 
         params = settings.client_params
 
-        assert params["url"] == "http://localhost:8086"
-        assert params["token"] == "my_token"
-        assert params["org"] == "my_org"
+        assert params.url == "http://localhost:8086"
+        assert params.token == "my_token"
+        assert params.org == "my_org"
 
     def test_influxdb_settings_is_configured_true(self):
         """Test is_configured returns True when all required fields set."""
         settings = InfluxDBSettings(
             host="localhost",
             port=8086,
-            token="my_token",
+            token=SecretStr("my_token"),
             org="my_org",
         )
 
@@ -113,7 +127,7 @@ class TestInfluxDBSettings:
     def test_influxdb_settings_is_configured_false_no_host(self):
         """Test is_configured returns False without host."""
         settings = InfluxDBSettings(
-            token="my_token",
+            token=SecretStr("my_token"),
             org="my_org",
         )
 
@@ -132,14 +146,41 @@ class TestInfluxDBSettings:
         """Test is_configured returns False without org."""
         settings = InfluxDBSettings(
             host="localhost",
-            token="my_token",
+            token=SecretStr("my_token"),
         )
 
         assert settings.is_configured is False
 
     def test_influxdb_settings_token_is_secret(self):
         """Test that token is a SecretStr."""
-        settings = InfluxDBSettings(token="my_secret_token")
+        settings = InfluxDBSettings(token=SecretStr("my_secret_token"))
 
         assert isinstance(settings.token, SecretStr)
         assert str(settings.token) != "my_secret_token"  # Should be masked
+
+    def test_client_params_raises_without_token(self):
+        """client_params should raise when token is missing."""
+        settings = InfluxDBSettings(host="localhost", org="test_org")
+
+        with pytest.raises(ConfigurationException):
+            _ = settings.client_params
+
+    def test_client_params_raises_without_org(self):
+        """client_params should raise when org is missing."""
+        settings = InfluxDBSettings(
+            host="localhost",
+            token=SecretStr("test_token"),
+        )
+
+        with pytest.raises(ConfigurationException):
+            _ = settings.client_params
+
+    def test_client_params_raises_without_host(self):
+        """client_params should raise when host is missing."""
+        settings = InfluxDBSettings(
+            token=SecretStr("test_token"),
+            org="test_org",
+        )
+
+        with pytest.raises(ConfigurationException):
+            _ = settings.client_params

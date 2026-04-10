@@ -2,7 +2,7 @@ import asyncio
 import platform
 import signal
 from time import time
-from typing import Callable
+from typing import Any, Callable
 
 from aiomqtt import MqttError
 from tzlocal import get_localzone_name
@@ -16,16 +16,13 @@ from solaredge2mqtt.core.mqtt import MQTTClient
 from solaredge2mqtt.core.settings import service_settings
 from solaredge2mqtt.core.timer import Timer
 from solaredge2mqtt.services.energy import EnergyService
-from solaredge2mqtt.services.forecast import FORECAST_AVAILABLE
+from solaredge2mqtt.services.forecast import FORECAST_AVAILABLE, ForecastService
 from solaredge2mqtt.services.homeassistant.service import (
     HomeAssistantDiscovery,
 )
 from solaredge2mqtt.services.monitoring import MonitoringSite
 from solaredge2mqtt.services.powerflow import PowerflowService
 from solaredge2mqtt.services.weather import WeatherClient
-
-if FORECAST_AVAILABLE:
-    from solaredge2mqtt.services.forecast import ForecastService
 
 LOCAL_TZ = get_localzone_name()
 
@@ -62,31 +59,28 @@ class Service:
         self._run_task: asyncio.Task | None = None
 
         self.influxdb: InfluxDBAsync | None = (
-            InfluxDBAsync(self.settings.influxdb,
-                          self.settings.prices, self.event_bus)
-            if self.settings.is_influxdb_configured
+            InfluxDBAsync(self.settings.influxdb, self.settings.prices, self.event_bus)
+            if self.settings.influxdb.is_configured
             else None
         )
 
         self.energy: EnergyService | None = (
             EnergyService(self.settings.energy, self.event_bus, self.influxdb)
-            if self.settings.is_influxdb_configured
+            if self.influxdb
             else None
         )
 
-        self.powerflow = PowerflowService(
-            self.settings, self.event_bus, self.influxdb)
+        self.powerflow = PowerflowService(self.settings, self.event_bus, self.influxdb)
 
         self.monitoring: MonitoringSite | None = (
-            MonitoringSite(self.settings.monitoring,
-                           self.event_bus, self.influxdb)
-            if self.settings.is_monitoring_configured
+            MonitoringSite(self.settings.monitoring, self.event_bus, self.influxdb)
+            if self.settings.monitoring.is_configured
             else None
         )
 
         self.weather: WeatherClient | None = (
             WeatherClient(self.settings, self.event_bus)
-            if self.settings.is_weather_configured
+            if self.settings.is_weather_enabled
             else None
         )
 
@@ -99,16 +93,15 @@ class Service:
                     self.event_bus,
                     self.influxdb,
                 )
-                if self.settings.is_forecast_configured
+                if self.influxdb and self.settings.is_forecast_enabled
                 else None
             )
-        elif self.settings.is_forecast_configured:
-            logger.warning(
-                "Forecast service not available, please refer to README")
+        elif self.settings.is_forecast_enabled:
+            logger.warning("Forecast service not available, please refer to README")
 
         self.homeassistant: HomeAssistantDiscovery | None = (
             HomeAssistantDiscovery(self.settings, self.event_bus)
-            if self.settings.is_homeassistant_configured
+            if self.settings.homeassistant.enable
             else None
         )
 
@@ -121,9 +114,7 @@ class Service:
         finally:
             await self.shutdown()
 
-    def _register_signal_handlers(
-        self, loop: asyncio.AbstractEventLoop
-    ) -> None:
+    def _register_signal_handlers(self, loop: asyncio.AbstractEventLoop) -> None:
         for signum in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(signum, self.cancel)
 
@@ -151,7 +142,7 @@ class Service:
         logger.debug(self.settings)
         logger.info("Timezone: {timezone}", timezone=LOCAL_TZ)
 
-        if self.settings.is_influxdb_configured:
+        if self.influxdb:
             self.influxdb.init()
 
         while not self.cancel_request.is_set():
@@ -161,7 +152,7 @@ class Service:
                 async with self.mqtt:
                     await self.mqtt.publish_status_online()
 
-                    if self.settings.is_homeassistant_configured:
+                    if self.homeassistant:
                         await self.homeassistant.async_init()
 
                     await self.powerflow.async_init()
@@ -203,9 +194,7 @@ class Service:
             try:
                 await self.mqtt.publish_status_offline()
             except MqttError:
-                logger.debug(
-                    "Unable to publish offline status during cleanup"
-                )
+                logger.debug("Unable to publish offline status during cleanup")
             finally:
                 self.mqtt = None
 
@@ -216,6 +205,9 @@ class Service:
         await self.close()
 
     def _start_mqtt_listener(self):
+        if self.mqtt is None:
+            raise RuntimeError("MQTT client is not initialized")
+
         task = asyncio.create_task(self.mqtt.listen())
         self.loops.add(task)
         task.add_done_callback(self.loops.discard)
@@ -229,7 +221,7 @@ class Service:
         interval_in_seconds: int,
         handles: Callable | list[Callable],
         delay_start: int = 0,
-        args: list[any] = None,
+        args: list[Any] | None = None,
     ):
         loop = asyncio.create_task(
             self.run_loop(interval_in_seconds, handles, delay_start, args)
@@ -242,7 +234,7 @@ class Service:
         interval_in_seconds: int,
         handles: Callable | list[Callable],
         delay_start: int = 0,
-        args: list[any] = None,
+        args: list[Any] | None = None,
     ):
         if not isinstance(handles, list):
             handles = [handles]
@@ -276,8 +268,7 @@ class Service:
                         if service
                     ]
                 ),
-                timeout=5
+                timeout=5,
             )
         except asyncio.TimeoutError:
-            logger.warning(
-                "Timeout while closing tasks, proceeding with shutdown.")
+            logger.warning("Timeout while closing tasks, proceeding with shutdown.")

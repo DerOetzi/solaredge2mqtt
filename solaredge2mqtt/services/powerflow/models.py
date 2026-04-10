@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
-from influxdb_client import Point
+from influxdb_client.client.write.point import Point
 from pydantic import Field, computed_field
 from pydantic.json_schema import SkipJsonSchema
 
@@ -27,7 +27,6 @@ if TYPE_CHECKING:
 
 class Powerflow(Component):
     COMPONENT = "powerflow"
-    SOURCE = None
 
     unit: ModbusUnitInfo | None = Field(None, title="Unit Info")
 
@@ -37,7 +36,7 @@ class Powerflow(Component):
     battery: BatteryPowerflow = Field(title="Battery")
     consumer: ConsumerPowerflow = Field(title="Consumer")
 
-    last_powerflow: ClassVar[Powerflow] = None
+    last_powerflow: ClassVar[Powerflow | None] = None
 
     @staticmethod
     def from_modbus(
@@ -49,15 +48,13 @@ class Powerflow(Component):
         grid = GridPowerflow.from_modbus(unit.meters)
         battery = BatteryPowerflow.from_modbus(unit.batteries)
 
-        pv_production = int(
-            inverter_data.dc.power + battery.charge - battery.discharge
-        )
+        pv_production = int(inverter_data.dc.power + battery.charge - battery.discharge)
         if pv_production < 0:
             pv_production = 0
 
         inverter = InverterPowerflow.from_modbus(inverter_data, battery)
 
-        consumer = ConsumerPowerflow(inverter, grid, evcharger, battery)
+        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger, battery)
 
         return Powerflow(
             unit=unit.info,
@@ -80,15 +77,16 @@ class Powerflow(Component):
             power=sum(p.inverter.power for p in powerflows.values()),
             dc_power=sum(p.inverter.dc_power for p in powerflows.values()),
             battery_discharge=sum(
-                p.inverter.battery_discharge for p in powerflows.values()),
+                p.inverter.battery_discharge for p in powerflows.values()
+            ),
         )
 
-        grid = GridPowerflow(
-            power=sum(p.grid.power for p in powerflows.values()))
+        grid = GridPowerflow(power=sum(p.grid.power for p in powerflows.values()))
         battery = BatteryPowerflow(
-            power=sum(p.battery.power for p in powerflows.values()))
+            power=sum(p.battery.power for p in powerflows.values())
+        )
 
-        consumer = ConsumerPowerflow(
+        consumer = ConsumerPowerflow.from_powerflows(
             inverter=inverter,
             grid=grid,
             evcharger=sum(p.consumer.evcharger for p in powerflows.values()),
@@ -112,8 +110,8 @@ class Powerflow(Component):
         if self.pv_production < 0:
             logger.warning("PV production is negative")
         elif (
-            not external_production and
-            self.consumer.used_production + self.grid.delivery
+            not external_production
+            and self.consumer.used_production + self.grid.delivery
             != self.inverter.production
         ):
             logger.warning(
@@ -153,16 +151,16 @@ class Powerflow(Component):
 
     def prepare_point(self, measurement: str = "powerflow_raw") -> Point:
         point = Point(measurement)
-        for key, value in self.model_dump_influxdb(exclude=["unit"]).items():
+        for key, value in self.model_dump_influxdb(exclude={"unit"}).items():
             point.field(key, value)
 
-        if self.has_unit:
+        if self.unit:
             point.tag("unit", self.unit.key)
 
         return point
 
     def prepare_point_energy(
-        self, measurement: str = "energy", prices: PriceSettings = None
+        self, measurement: str = "energy", prices: PriceSettings | None = None
     ) -> Point:
         point = Point(measurement)
         for key, value in self.model_dump_influxdb().items():
@@ -180,22 +178,18 @@ class Powerflow(Component):
 
         return point
 
-    @property
-    def has_unit(self) -> bool:
-        return self.unit is not None
-
     def mqtt_topic(self) -> str:
         topic = super().mqtt_topic()
 
-        if self.has_unit:
+        if self.unit:
             topic += f"/{self.unit.key.lower()}"
 
         return topic
 
-    def homeassistant_device_info(self) -> dict[str, any]:
+    def homeassistant_device_info(self) -> dict[str, Any]:
         name = "Powerflow"
 
-        if self.has_unit:
+        if self.unit:
             name += f" {self.unit.key}"
 
         return self._default_homeassistant_device_info(name)
@@ -203,8 +197,7 @@ class Powerflow(Component):
 
 class InverterPowerflow(Solaredge2MQTTBaseModel):
     power: SkipJsonSchema[int]
-    dc_power: int = Field(
-        **HASensor.POWER_W.field("Power DC", "solar-power"))
+    dc_power: int = Field(**HASensor.POWER_W.field("Power DC", icon="solar-power"))
     battery_discharge: SkipJsonSchema[int] = Field(exclude=True)
 
     @staticmethod
@@ -240,18 +233,17 @@ class InverterPowerflow(Solaredge2MQTTBaseModel):
         return self.power if self.power > 0 else 0
 
     @computed_field(
-        **HASensor.POWER_W.field("Battery production", "home-battery-outline")
+        **HASensor.POWER_W.field("Battery production", icon="home-battery-outline")
     )
     @property
     def battery_production(self) -> int:
         battery_production = 0
         if self.production > 0 and self.battery_factor > 0:
-            battery_production = int(
-                round(self.production * self.battery_factor))
+            battery_production = int(round(self.production * self.battery_factor))
             battery_production = min(battery_production, self.production)
         return battery_production
 
-    @computed_field(**HASensor.POWER_W.field("PV production", "sun-angle-outline"))
+    @computed_field(**HASensor.POWER_W.field("PV production", icon="sun-angle-outline"))
     @property
     def pv_production(self) -> int:
         return self.production - self.battery_production
@@ -280,19 +272,25 @@ class GridPowerflow(Solaredge2MQTTBaseModel):
     def from_modbus(meters_data: dict[str, ModbusMeter]) -> GridPowerflow:
         grid = 0
         for meter in meters_data.values():
-            if "Import" in meter.info.option and "Export" in meter.info.option:
+            if (
+                meter.info.option
+                and "Import" in meter.info.option
+                and "Export" in meter.info.option
+            ):
                 grid += meter.power.actual
 
         return GridPowerflow(power=round(grid))
 
     @computed_field(
-        **HASensor.POWER_W.field("Consumption", "transmission-tower-import")
+        **HASensor.POWER_W.field("Consumption", icon="transmission-tower-import")
     )
     @property
     def consumption(self) -> int:
         return abs(self.power) if self.power < 0 else 0
 
-    @computed_field(**HASensor.POWER_W.field("Delivery", "transmission-tower-export"))
+    @computed_field(
+        **HASensor.POWER_W.field("Delivery", icon="transmission-tower-export")
+    )
     @property
     def delivery(self) -> int:
         return self.power if self.power > 0 else 0
@@ -317,16 +315,16 @@ class BatteryPowerflow(Solaredge2MQTTBaseModel):
     def from_modbus(batteries_data: dict[str, ModbusBattery]) -> BatteryPowerflow:
         batteries_power = 0
         for battery in batteries_data.values():
-            batteries_power += battery.power
+            batteries_power += int(battery.power)
 
         return BatteryPowerflow(power=batteries_power)
 
-    @computed_field(**HASensor.POWER_W.field("Charge", "battery-plus-outline"))
+    @computed_field(**HASensor.POWER_W.field("Charge", icon="battery-plus-outline"))
     @property
     def charge(self) -> int:
         return self.power if self.power > 0 else 0
 
-    @computed_field(**HASensor.POWER_W.field("Discharge", "battery-minus-outline"))
+    @computed_field(**HASensor.POWER_W.field("Discharge", icon="battery-minus-outline"))
     @property
     def discharge(self) -> int:
         return abs(self.power) if self.power < 0 else 0
@@ -346,26 +344,25 @@ class BatteryPowerflow(Solaredge2MQTTBaseModel):
 
 class ConsumerPowerflow(Solaredge2MQTTBaseModel):
     house: int = Field(
-        **HASensor.POWER_W.field("House", "home-lightning-bolt-outline")
+        **HASensor.POWER_W.field("House", icon="home-lightning-bolt-outline")
     )
 
-    evcharger: int = Field(
-        0, **HASensor.POWER_W.field("EV-Charger", "ev-station"))
+    evcharger: int = Field(0, **HASensor.POWER_W.field("EV-Charger", icon="ev-station"))
 
     inverter: int = Field(**HASensor.POWER_W.field("Inverter"))
 
-    used_production: int = Field(
-        0, **HASensor.POWER_W.field("Used production"))
+    used_production: int = Field(0, **HASensor.POWER_W.field("Used production"))
 
     battery_factor: SkipJsonSchema[float] = Field(exclude=True)
 
-    def __init__(
-        self,
+    @classmethod
+    def from_powerflows(
+        cls,
         inverter: InverterPowerflow,
         grid: GridPowerflow,
         evcharger: int,
         battery: BatteryPowerflow | None = None,
-    ):
+    ) -> ConsumerPowerflow:
         house = int(abs(grid.power - inverter.power)) - evcharger
 
         battery_factor = inverter.battery_factor
@@ -377,16 +374,16 @@ class ConsumerPowerflow(Solaredge2MQTTBaseModel):
 
         inverter_consumption = inverter.consumption
         if battery is not None and battery.charge > 0:
-            inverter_consumption = max(
-                0, inverter.consumption - battery.charge
-            )
+            inverter_consumption = max(0, inverter.consumption - battery.charge)
 
-        super().__init__(
-            house=house,
-            evcharger=evcharger,
-            inverter=inverter_consumption,
-            used_production=used_production,
-            battery_factor=battery_factor,
+        return cls.model_validate(
+            {
+                "house": house,
+                "evcharger": evcharger,
+                "inverter": inverter_consumption,
+                "used_production": used_production,
+                "battery_factor": battery_factor,
+            }
         )
 
     @computed_field(**HASensor.POWER_W.field("Total"))
@@ -401,8 +398,7 @@ class ConsumerPowerflow(Solaredge2MQTTBaseModel):
     def used_battery_production(self) -> int:
         battery_production = 0
         if self.used_production > 0 and self.battery_factor > 0:
-            battery_production = int(
-                round(self.used_production * self.battery_factor))
+            battery_production = int(round(self.used_production * self.battery_factor))
             battery_production = min(battery_production, self.used_production)
         return battery_production
 

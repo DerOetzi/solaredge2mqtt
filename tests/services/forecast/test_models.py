@@ -3,6 +3,8 @@
 from datetime import datetime, timezone
 from unittest.mock import patch
 
+import pytest
+
 from solaredge2mqtt.services.forecast.models import Forecast, ForecasterType
 
 
@@ -32,14 +34,14 @@ class TestForecasterType:
     def test_prepare_value_energy_converts_to_kwh(self):
         """Test prepare_value for energy converts to kWh and rounds."""
         # 5000 Wh = 5.0 kWh
-        assert ForecasterType.ENERGY.prepare_value(5000) == 5.0
+        assert ForecasterType.ENERGY.prepare_value(5000) == pytest.approx(5.0)
         # 5123 Wh = 5.123 kWh
-        assert ForecasterType.ENERGY.prepare_value(5123) == 5.123
+        assert ForecasterType.ENERGY.prepare_value(5123) == pytest.approx(5.123)
 
     def test_prepare_value_power_rounds_to_int(self):
         """Test prepare_value for power rounds to integer."""
-        assert ForecasterType.POWER.prepare_value(1000.4) == 1000
-        assert ForecasterType.POWER.prepare_value(1000.6) == 1001
+        assert ForecasterType.POWER.prepare_value(1000.4) == pytest.approx(1000)
+        assert ForecasterType.POWER.prepare_value(1000.6) == pytest.approx(1001)
 
 
 class TestForecast:
@@ -65,7 +67,7 @@ class TestForecast:
 
             # Simulate a bell curve for power (0 at night, peak at noon)
             if 6 <= (hour % 24) <= 18:
-                power = (1000 - abs(12 - (hour % 24)) * 80)
+                power = 1000 - abs(12 - (hour % 24)) * 80
             else:
                 power = 0
 
@@ -164,3 +166,8 @@ class TestForecast:
 
         assert "power_period" not in schema["properties"]
         assert "energy_period" not in schema["properties"]
+
+    def test_current_hour_is_valid_range(self):
+        """Test _current_hour returns a valid hour value."""
+        hour = Forecast._current_hour()  # noqa: SLF001
+        assert 0 <= hour <= 23

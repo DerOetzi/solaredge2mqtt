@@ -1,6 +1,5 @@
 """Tests for core InfluxDB events module."""
 
-
 from solaredge2mqtt.core.events.events import BaseEvent
 from solaredge2mqtt.core.influxdb.events import InfluxDBAggregatedEvent
 

@@ -3,6 +3,9 @@
 import tempfile
 from pathlib import Path
 
+import pytest
+
+from solaredge2mqtt.core.exceptions import ConfigurationException
 from solaredge2mqtt.core.logging.models import LoggingLevelEnum
 from solaredge2mqtt.core.settings.loader import ConfigurationLoader
 from solaredge2mqtt.core.settings.models import LocationSettings
@@ -15,16 +18,33 @@ class TestLocationSettings:
         """Test LocationSettings creation with valid data."""
         location = LocationSettings(latitude=52.520008, longitude=13.404954)
 
-        assert location.latitude == 52.520008
-        assert location.longitude == 13.404954
+        assert location.latitude == pytest.approx(52.520008)
+        assert location.longitude == pytest.approx(13.404954)
 
     def test_location_settings_validation(self):
         """Test LocationSettings validation."""
         try:
-            LocationSettings(latitude="invalid", longitude=13.404954)
+            LocationSettings(
+                latitude="invalid",  # pyright: ignore[reportArgumentType]
+                longitude=13.404954,
+            )
             raise AssertionError("Expected validation error for invalid latitude")
         except (ValueError, TypeError):
             pass
+
+    def test_latitude_value_raises_when_not_configured(self):
+        """latitude_value raises when latitude is missing."""
+        location = LocationSettings(latitude=None, longitude=13.4)
+
+        with pytest.raises(ConfigurationException):
+            _ = location.latitude_value
+
+    def test_longitude_value_raises_when_not_configured(self):
+        """longitude_value raises when longitude is missing."""
+        location = LocationSettings(latitude=52.5, longitude=None)
+
+        with pytest.raises(ConfigurationException):
+            _ = location.longitude_value
 
 
 class TestServiceSettings:
@@ -50,7 +70,7 @@ class TestServiceSettings:
 
             assert settings.interval == 10
             assert settings.logging_level == LoggingLevelEnum.DEBUG
-            assert settings.modbus.host == "192.168.1.100"
+            assert settings.modbus.host == "192.168.1.100"  # noqa: S1313
             assert settings.modbus.port == 1502
             assert settings.mqtt.broker == "mqtt.example.com"
             assert settings.mqtt.port == 1883
@@ -61,10 +81,7 @@ class TestServiceSettings:
             # Create minimal configuration file
             config_file = Path(tmpdir) / "configuration.yml"
             config_file.write_text(
-                "modbus:\n"
-                "  host: 192.168.1.100\n"
-                "mqtt:\n"
-                "  broker: mqtt.example.com\n"
+                "modbus:\n  host: 192.168.1.100\nmqtt:\n  broker: mqtt.example.com\n"
             )
 
             # Override interval for testing
@@ -73,7 +90,7 @@ class TestServiceSettings:
             )
 
             assert settings.interval == 15
-            assert settings.modbus.host == "192.168.1.100"
+            assert settings.modbus.host == "192.168.1.100"  # noqa: S1313
             assert settings.mqtt.broker == "mqtt.example.com"
 
     def test_is_location_configured_true(self):
@@ -82,7 +99,7 @@ class TestServiceSettings:
             config_file = Path(tmpdir) / "configuration.yml"
             config_file.write_text(
                 "modbus:\n"
-                "  host: 192.168.1.100\n"
+                "  host: 192.168.1.100\n"  # noqa: S1313
                 "mqtt:\n"
                 "  broker: mqtt.example.com\n"
                 "location:\n"
@@ -92,25 +109,23 @@ class TestServiceSettings:
 
             settings = ConfigurationLoader.load_configuration(tmpdir)
 
-            assert settings.is_location_configured is True
-            assert settings.location.latitude == 52.520008
-            assert settings.location.longitude == 13.404954
+            assert settings.location.is_configured is True
+            assert settings.location.latitude == pytest.approx(52.520008)
+            assert settings.location.longitude == pytest.approx(13.404954)
 
     def test_is_location_configured_false(self):
         """Test is_location_configured returns False when location is not set."""
         with tempfile.TemporaryDirectory() as tmpdir:
             config_file = Path(tmpdir) / "configuration.yml"
             config_file.write_text(
-                "modbus:\n"
-                "  host: 192.168.1.100\n"
-                "mqtt:\n"
-                "  broker: mqtt.example.com\n"
+                "modbus:\n  host: 192.168.1.100\nmqtt:\n  broker: mqtt.example.com\n"
             )
 
             settings = ConfigurationLoader.load_configuration(tmpdir)
 
-            assert settings.is_location_configured is False
-            assert settings.location is None
+            assert settings.location.is_configured is False
+            assert settings.location.latitude is None
+            assert settings.location.longitude is None
 
     def test_is_influxdb_configured_true(self):
         """Test is_influxdb_configured returns True when influxdb is set."""
@@ -132,7 +147,7 @@ class TestServiceSettings:
 
             settings = ConfigurationLoader.load_configuration(tmpdir)
 
-            assert settings.is_influxdb_configured is True
+            assert settings.influxdb.is_configured is True
             assert settings.influxdb.host == "http://localhost"
 
     def test_is_influxdb_configured_false(self):
@@ -140,16 +155,16 @@ class TestServiceSettings:
         with tempfile.TemporaryDirectory() as tmpdir:
             config_file = Path(tmpdir) / "configuration.yml"
             config_file.write_text(
-                "modbus:\n"
-                "  host: 192.168.1.100\n"
-                "mqtt:\n"
-                "  broker: mqtt.example.com\n"
+                "modbus:\n  host: 192.168.1.100\nmqtt:\n  broker: mqtt.example.com\n"
             )
 
             settings = ConfigurationLoader.load_configuration(tmpdir)
 
-            assert settings.is_influxdb_configured is False
-            assert settings.influxdb is None
+            assert settings.influxdb.is_configured is False
+            assert settings.influxdb.host is None
+            assert settings.influxdb.port == 8086
+            assert settings.influxdb.token is None
+            assert settings.influxdb.org is None
 
     def test_is_weather_configured_requires_location(self):
         """Test is_weather_configured returns False when location is not set."""
@@ -169,8 +184,8 @@ class TestServiceSettings:
             settings = ConfigurationLoader.load_configuration(tmpdir)
 
             # Weather configured but location not, returns False
-            assert settings.is_weather_configured is False
-            assert settings.is_location_configured is False
+            assert settings.is_weather_enabled is False
+            assert settings.location.is_configured is False
 
     def test_is_forecast_configured_requires_location_and_weather(self):
         """Test is_forecast_configured requires both location and weather."""
@@ -188,17 +203,14 @@ class TestServiceSettings:
             settings = ConfigurationLoader.load_configuration(tmpdir)
 
             # Forecast enabled but missing location and weather
-            assert settings.is_forecast_configured is False
+            assert settings.is_forecast_enabled is False
 
     def test_default_values(self):
         """Test ServiceSettings has correct default values."""
         with tempfile.TemporaryDirectory() as tmpdir:
             config_file = Path(tmpdir) / "configuration.yml"
             config_file.write_text(
-                "modbus:\n"
-                "  host: 192.168.1.100\n"
-                "mqtt:\n"
-                "  broker: mqtt.example.com\n"
+                "modbus:\n  host: 192.168.1.100\nmqtt:\n  broker: mqtt.example.com\n"
             )
 
             settings = ConfigurationLoader.load_configuration(tmpdir)
@@ -208,3 +220,28 @@ class TestServiceSettings:
             assert settings.powerflow is not None
             assert settings.energy is not None
             assert settings.prices is not None
+
+    def test_is_forecast_enabled_true_when_weather_and_location_configured(self):
+        """Forecast is enabled when weather and location are configured."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_file = Path(tmpdir) / "configuration.yml"
+            secrets_file = Path(tmpdir) / "secrets.yml"
+            config_file.write_text(
+                "modbus:\n"
+                "  host: 192.168.1.100\n"
+                "mqtt:\n"
+                "  broker: mqtt.example.com\n"
+                "location:\n"
+                "  latitude: 52.520008\n"
+                "  longitude: 13.404954\n"
+                "weather:\n"
+                "  api_key: !secret weather_api_key\n"
+                "forecast:\n"
+                "  enable: true\n"
+            )
+            secrets_file.write_text("weather_api_key: test_key\n")
+
+            settings = ConfigurationLoader.load_configuration(tmpdir)
+
+            assert settings.is_weather_enabled is True
+            assert settings.is_forecast_enabled is True

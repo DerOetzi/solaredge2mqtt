@@ -3,11 +3,16 @@
 import tempfile
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
+import pytest
 import yaml
+from pydantic import BaseModel, SecretStr, ValidationError
 
-from solaredge2mqtt.core.settings.migrator import ConfigurationMigrator
-from solaredge2mqtt.core.settings.models import ServiceSettings
+from solaredge2mqtt.core.settings.migrator import (
+    ConfigurationMigrator,
+    EnvironmentReader,
+)
 
 
 def _has_none_values(obj: Any) -> bool:
@@ -40,15 +45,82 @@ class TestConfigurationMigrator:
         assert key == "meter0"
         assert pos == 4  # Index of 'r', last non-digit character
 
-        key, pos = ConfigurationMigrator._identify_key_and_position(
-            ["follower"]
-        )
+        key, pos = ConfigurationMigrator._identify_key_and_position(["follower"])
         assert key == "follower"
         assert pos == 7
 
+    def test_identify_key_and_position_all_digits(self):
+        """Test key scan path when key contains only digits."""
+        key, pos = ConfigurationMigrator._identify_key_and_position(["123"])
+
+        assert key == "123"
+        assert pos == 0
+
+    def test_environment_reader_read_all_precedence(self):
+        """Environment values override dotenv and secrets values."""
+        with (
+            patch.object(
+                EnvironmentReader,
+                "_read_environment",
+                return_value=[("SE2MQTT_A", "1")],
+            ),
+            patch.object(
+                EnvironmentReader,
+                "_read_dotenv",
+                return_value=[("SE2MQTT_A", "2"), ("SE2MQTT_B", "3")],
+            ),
+            patch.object(
+                EnvironmentReader,
+                "_read_secrets",
+                return_value=[("SE2MQTT_B", "4"), ("SE2MQTT_C", "5")],
+            ),
+        ):
+            result = EnvironmentReader.read_all()
+
+        assert result == {
+            "SE2MQTT_A": "1",
+            "SE2MQTT_B": "3",
+            "SE2MQTT_C": "5",
+        }
+
+    def test_environment_reader_read_secrets(self):
+        """Test reading prefixed secrets from docker secret directory."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            Path(tmpdir, "se2mqtt_token").write_text("abc\n", encoding="utf-8")
+            Path(tmpdir, "not_used").write_text("ignored", encoding="utf-8")
+
+            with (
+                patch(
+                    "solaredge2mqtt.core.settings.migrator.DOCKER_SECRETS_DIR",
+                    tmpdir,
+                ),
+                patch(
+                    "solaredge2mqtt.core.settings.migrator.path.exists",
+                    return_value=True,
+                ),
+                patch(
+                    "solaredge2mqtt.core.settings.migrator.path.isdir",
+                    return_value=True,
+                ),
+            ):
+                result = dict(EnvironmentReader._read_secrets())
+
+        assert result == {"se2mqtt_token": "abc"}
+
+    def test_environment_reader_read_dotenv_filenotfound(self):
+        """Test dotenv reader handles file-not-found race condition."""
+        with (
+            patch(
+                "solaredge2mqtt.core.settings.migrator.path.exists",
+                return_value=True,
+            ),
+            patch("builtins.open", side_effect=FileNotFoundError),
+        ):
+            assert list(EnvironmentReader._read_dotenv()) == []
+
     def test_insert_nested_key_simple(self):
         """Test inserting a simple key-value pair."""
-        migrator = ConfigurationMigrator(ServiceSettings)
+        migrator = ConfigurationMigrator()
         container = {}
 
         migrator._insert_nested_key(container, ["interval"], "5")
@@ -57,21 +129,23 @@ class TestConfigurationMigrator:
 
     def test_insert_nested_key_nested(self):
         """Test inserting nested key-value pairs."""
-        migrator = ConfigurationMigrator(ServiceSettings)
+        migrator = ConfigurationMigrator()
         container = {}
 
         migrator._insert_nested_key(
-            container, ["modbus", "host"], "192.168.1.100"
+            container,
+            ["modbus", "host"],
+            "192.168.1.100",  # noqa: S1313
         )
         migrator._insert_nested_key(container, ["modbus", "port"], "1502")
 
         assert container == {
-            "modbus": {"host": "192.168.1.100", "port": "1502"}
+            "modbus": {"host": "192.168.1.100", "port": "1502"}  # noqa: S1313
         }
 
     def test_insert_nested_key_with_array(self):
         """Test inserting nested key-value pairs with array indices."""
-        migrator = ConfigurationMigrator(ServiceSettings)
+        migrator = ConfigurationMigrator()
         container = {}
 
         migrator._insert_nested_key(container, ["meter0"], "true")
@@ -80,18 +154,222 @@ class TestConfigurationMigrator:
 
         assert container == {"meter": ["true", "false", "true"]}
 
+    def test_process_field_value_unknown_field_passthrough(self):
+        """Unknown model keys should be returned unchanged."""
+        migrator = ConfigurationMigrator()
+
+        class DummyModel(BaseModel):
+            known: int
+
+        value = migrator._process_field_value("unknown", "x", DummyModel)
+
+        assert value == "x"
+
+    def test_process_section_secrets_non_dict_section(self):
+        """Non-dict section should be ignored when extracting secrets."""
+        migrator = ConfigurationMigrator()
+        config_data = {"mqtt": "not-a-dict"}
+        secrets_data: dict[str, Any] = {}
+
+        migrator._process_section_secrets(
+            config_data, secrets_data, "mqtt", ["password"]
+        )
+
+        assert secrets_data == {}
+        assert config_data["mqtt"] == "not-a-dict"
+
+    def test_merge_nested_secrets_extends_existing_key(self):
+        """Nested secret merge should extend existing key entries."""
+        migrator = ConfigurationMigrator()
+
+        class InnerModel(BaseModel):
+            token: SecretStr
+
+        secret_fields = {"nested": ["existing"]}
+
+        migrator._merge_nested_secrets(InnerModel, "nested", secret_fields)
+
+        assert "nested" in secret_fields
+        assert "existing" in secret_fields["nested"]
+        assert "token" in secret_fields["nested"]
+
+    def test_process_field_annotation_secret_branch(self):
+        """Direct SecretStr annotation is added and exits early."""
+        migrator = ConfigurationMigrator()
+        secret_fields: dict[str, list[str]] = {}
+
+        migrator._process_field_annotation(
+            SecretStr,
+            "password",
+            "password",
+            "",
+            secret_fields,
+        )
+
+        assert secret_fields == {"password": ["password"]}
+
+    def test_migrate_success_and_validation_error_paths(self):
+        """Cover migrate success and ValidationError handling branches."""
+        migrator = ConfigurationMigrator()
+
+        class DummySettings(BaseModel):
+            value: int
+
+        with (
+            patch.object(
+                EnvironmentReader, "read_all", return_value={"SE2MQTT_VALUE": "4"}
+            ),
+            patch(
+                "solaredge2mqtt.core.settings.migrator.ServiceSettings",
+                DummySettings,
+            ),
+        ):
+            model = migrator.migrate()
+            assert isinstance(model, DummySettings)
+            assert model.value == 4
+
+        with (
+            patch.object(
+                EnvironmentReader, "read_all", return_value={"SE2MQTT_VALUE": "bad"}
+            ),
+            patch(
+                "solaredge2mqtt.core.settings.migrator.ServiceSettings",
+                DummySettings,
+            ),
+        ):
+            with pytest.raises(ValidationError):
+                migrator.migrate()
+
+    def test_extract_from_environment_validation_error(self):
+        """extract_from_environment should log and re-raise validation errors."""
+        migrator = ConfigurationMigrator()
+
+        class DummySettings(BaseModel):
+            value: int
+
+        with (
+            patch.object(
+                EnvironmentReader, "read_all", return_value={"SE2MQTT_VALUE": "oops"}
+            ),
+            patch(
+                "solaredge2mqtt.core.settings.migrator.ServiceSettings",
+                DummySettings,
+            ),
+        ):
+            with pytest.raises(ValidationError):
+                migrator.extract_from_environment()
+
+    def test_export_to_yaml_calls_internal_pipeline(self):
+        """export_to_yaml should process and forward data to writer."""
+        migrator = ConfigurationMigrator()
+
+        class DummyModel(BaseModel):
+            value: int
+
+        model = DummyModel(value=1)
+
+        with (
+            patch.object(
+                migrator,
+                "_extract_secrets",
+                return_value=({"value": 1}, {}),
+            ) as mock_extract,
+            patch.object(
+                migrator,
+                "_ensure_proper_types",
+                return_value={"value": 1},
+            ) as mock_types,
+            patch.object(
+                migrator,
+                "_write_yaml_files",
+            ) as mock_write,
+        ):
+            migrator.export_to_yaml(model, "config.yml", "secrets.yml")
+
+        mock_extract.assert_called_once()
+        mock_types.assert_called_once()
+        mock_write.assert_called_once_with(
+            {"value": 1}, {}, "config.yml", "secrets.yml"
+        )
+
+    def test_write_yaml_files_creates_missing_directory(self):
+        """Writing files should create target config directory when missing."""
+        migrator = ConfigurationMigrator()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target_dir = Path(tmpdir) / "new-config"
+            config_file = target_dir / "configuration.yml"
+            secrets_file = target_dir / "secrets.yml"
+
+            migrator.write_yaml_files(
+                {"interval": 5}, {}, str(config_file), str(secrets_file)
+            )
+
+            assert target_dir.exists()
+            assert config_file.exists()
+
+    def test_write_yaml_files_generic_exception_on_config(self):
+        """Non-permission exceptions while writing config should propagate."""
+        migrator = ConfigurationMigrator()
+
+        with patch("builtins.open", side_effect=RuntimeError("boom")):
+            with pytest.raises(RuntimeError):
+                migrator.write_yaml_files(
+                    {"interval": 5}, {}, "configuration.yml", "secrets.yml"
+                )
+
+    def test_write_yaml_files_permission_error_on_secrets(self):
+        """Permission errors while writing secrets should be re-raised."""
+        migrator = ConfigurationMigrator()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_file = str(Path(tmpdir) / "configuration.yml")
+            secrets_file = str(Path(tmpdir) / "secrets.yml")
+
+            with patch(
+                "solaredge2mqtt.core.settings.migrator.yaml.safe_dump",
+                side_effect=PermissionError("denied"),
+            ):
+                with pytest.raises(PermissionError):
+                    migrator.write_yaml_files(
+                        {"interval": 5},
+                        {"token": "secret"},
+                        config_file,
+                        secrets_file,
+                    )
+
+    def test_write_yaml_files_generic_exception_on_secrets(self):
+        """Generic exceptions while writing secrets should be re-raised."""
+        migrator = ConfigurationMigrator()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_file = str(Path(tmpdir) / "configuration.yml")
+            secrets_file = str(Path(tmpdir) / "secrets.yml")
+
+            with patch(
+                "solaredge2mqtt.core.settings.migrator.yaml.safe_dump",
+                side_effect=RuntimeError("write failed"),
+            ):
+                with pytest.raises(RuntimeError):
+                    migrator.write_yaml_files(
+                        {"interval": 5},
+                        {"token": "secret"},
+                        config_file,
+                        secrets_file,
+                    )
+
     def test_extract_secrets(self):
         """Test extracting secrets from configuration."""
-        migrator = ConfigurationMigrator(ServiceSettings)
+        migrator = ConfigurationMigrator()
         config_data = {
             "mqtt": {
                 "broker": "mqtt.example.com",
                 "username": "user",
-                "password": "secret123",
+                "password": SecretStr("secret123"),
             },
             "weather": {"api_key": "api_key_123"},
             "influxdb": {"host": "http://localhost", "token": "token_123"},
-            "modbus": {"host": "192.168.1.100"},
+            "modbus": {"host": "192.168.1.100"},  # noqa: S1313
         }
 
         config_data, secrets_data = migrator._extract_secrets(config_data)
@@ -110,9 +388,7 @@ class TestConfigurationMigrator:
         assert isinstance(config_data["mqtt"]["password"], SecretReference)
         assert config_data["mqtt"]["password"].secret_key == "mqtt_password"
         assert isinstance(config_data["weather"]["api_key"], SecretReference)
-        assert (
-            config_data["weather"]["api_key"].secret_key == "weather_api_key"
-        )
+        assert config_data["weather"]["api_key"].secret_key == "weather_api_key"
         assert isinstance(config_data["influxdb"]["token"], SecretReference)
         assert config_data["influxdb"]["token"].secret_key == "influxdb_token"
 
@@ -120,14 +396,14 @@ class TestConfigurationMigrator:
         assert config_data["mqtt"]["broker"] == "mqtt.example.com"
         assert config_data["mqtt"]["username"] == "user"
         assert config_data["influxdb"]["host"] == "http://localhost"
-        assert config_data["modbus"]["host"] == "192.168.1.100"
+        assert config_data["modbus"]["host"] == "192.168.1.100"  # noqa: S1313
 
     def test_extract_secrets_no_sensitive_data(self):
         """Test extracting secrets when there is no sensitive data."""
-        migrator = ConfigurationMigrator(ServiceSettings)
+        migrator = ConfigurationMigrator()
         config_data = {
             "mqtt": {"broker": "mqtt.example.com", "username": "user"},
-            "modbus": {"host": "192.168.1.100"},
+            "modbus": {"host": "192.168.1.100"},  # noqa: S1313
         }
 
         config_data, secrets_data = migrator._extract_secrets(config_data)
@@ -138,17 +414,18 @@ class TestConfigurationMigrator:
         # Check that config data is unchanged
         assert config_data["mqtt"]["broker"] == "mqtt.example.com"
         assert config_data["mqtt"]["username"] == "user"
-        assert config_data["modbus"]["host"] == "192.168.1.100"
+        assert config_data["modbus"]["host"] == "192.168.1.100"  # noqa: S1313
 
     def test_write_yaml_files(self):
         """Test writing configuration and secrets to YAML files."""
-        migrator = ConfigurationMigrator(ServiceSettings)
+        migrator = ConfigurationMigrator()
 
         config_data = {
             "interval": 5,
-            "modbus": {"host": "192.168.1.100", "port": 1502},
+            "modbus": {"host": "192.168.1.100", "port": 1502},  # noqa: S1313
         }
-        secrets_data = {"mqtt": {"password": "secret123"}}
+        test_password = "test_secret_password"  # noqa: S105
+        secrets_data = {"mqtt": {"password": test_password}}
 
         with tempfile.TemporaryDirectory() as tmpdir:
             config_file = Path(tmpdir) / "configuration.yml"
@@ -173,11 +450,11 @@ class TestConfigurationMigrator:
 
     def test_write_yaml_files_no_secrets(self):
         """Test writing configuration when there are no secrets."""
-        migrator = ConfigurationMigrator(ServiceSettings)
+        migrator = ConfigurationMigrator()
 
         config_data = {
             "interval": 5,
-            "modbus": {"host": "192.168.1.100", "port": 1502},
+            "modbus": {"host": "192.168.1.100", "port": 1502},  # noqa: S1313
         }
         secrets_data = {}
 
@@ -197,18 +474,18 @@ class TestConfigurationMigrator:
 
     def test_yaml_output_format(self):
         """Test YAML output format (no quotes on booleans/secrets)."""
-        migrator = ConfigurationMigrator(ServiceSettings)
+        migrator = ConfigurationMigrator()
 
         config_data = {
             "interval": 5,
             "modbus": {
-                "host": "192.168.1.100",
+                "host": "192.168.1.100",  # noqa: S1313
                 "meter": [True, False, True],
                 "battery": [True, False],
             },
             "mqtt": {"broker": "mqtt.example.com"},
         }
-        secrets_data = {"mqtt_password": "secret123"}
+        secrets_data = {"mqtt_password": "test_secret_password"}  # noqa: S105
 
         # Add secret references
         from solaredge2mqtt.core.settings.migrator import SecretReference
@@ -245,14 +522,14 @@ class TestConfigurationMigrator:
 
                 SecretLoader.secrets = secrets_data
                 loaded = yaml.load(f, Loader=SecretLoader)
-                assert loaded["mqtt"]["password"] == "secret123"
+                assert loaded["mqtt"]["password"] == "test_secret_password"  # noqa: S105
                 assert loaded["modbus"]["meter"] == [True, False, True]
 
     def test_extract_from_environment_with_type_conversion(self, monkeypatch):
         """Test extracting from environment with proper type conversion."""
         # Set up environment variables matching user's example
         env_vars = {
-            "SE2MQTT_MODBUS__HOST": "192.168.1.100",
+            "SE2MQTT_MODBUS__HOST": "192.168.1.100",  # noqa: S1313
             "SE2MQTT_MODBUS__PORT": "5020",
             "SE2MQTT_MODBUS__TIMEOUT": "1",
             "SE2MQTT_MODBUS__METER0": "true",
@@ -262,7 +539,6 @@ class TestConfigurationMigrator:
             "SE2MQTT_MODBUS__BATTERY1": "false",
             "SE2MQTT_ENERGY__RETAIN": "false",
             "SE2MQTT_MQTT__BROKER": "mqtt.example.com",
-            "SE2MQTT_MQTT__PASSWORD": "secret123",
             # String type that looks like int
             "SE2MQTT_MONITORING__SITE_ID": "12345",
         }
@@ -271,11 +547,11 @@ class TestConfigurationMigrator:
         for key, value in env_vars.items():
             monkeypatch.setenv(key, value)
 
-        migrator = ConfigurationMigrator(model_class=ServiceSettings)
+        migrator = ConfigurationMigrator()
         config_data, secrets_data = migrator.extract_from_environment()
 
         # Verify types are correct based on Pydantic model
-        assert config_data["modbus"]["host"] == "192.168.1.100"  # String
+        assert config_data["modbus"]["host"] == "192.168.1.100"  # noqa: S1313  # String
         assert config_data["modbus"]["port"] == 5020  # Integer
         assert config_data["modbus"]["timeout"] == 1  # Integer
         assert config_data["modbus"]["meter"] == [
@@ -356,7 +632,7 @@ class TestConfigurationMigrator:
         # Set up minimal environment (many optional fields not set)
         env_vars = {
             "SE2MQTT_INTERVAL": "10",
-            "SE2MQTT_MODBUS__HOST": "192.168.1.100",
+            "SE2MQTT_MODBUS__HOST": "192.168.1.100",  # noqa: S1313
             "SE2MQTT_MODBUS__PORT": "1502",
             "SE2MQTT_MQTT__BROKER": "mqtt.example.com",
             "SE2MQTT_MQTT__PORT": "1883",
@@ -365,7 +641,7 @@ class TestConfigurationMigrator:
         for key, value in env_vars.items():
             monkeypatch.setenv(key, value)
 
-        migrator = ConfigurationMigrator(model_class=ServiceSettings)
+        migrator = ConfigurationMigrator()
         config_data, secrets_data = migrator.extract_from_environment()
 
         # Verify no None values in extracted data using shared helper
@@ -388,12 +664,12 @@ class TestConfigurationMigrator:
 
     def test_write_yaml_files_permission_error_on_directory(self):
         """Test handling of permission error when creating directory."""
-        migrator = ConfigurationMigrator(model_class=ServiceSettings)
+        migrator = ConfigurationMigrator()
 
         # Use minimal valid config data directly
         config_data = {
             "interval": 5,
-            "modbus": {"host": "192.168.1.100", "port": 1502},
+            "modbus": {"host": "192.168.1.100", "port": 1502},  # noqa: S1313
         }
         secrets_data = {}
 
@@ -418,12 +694,12 @@ class TestConfigurationMigrator:
 
     def test_write_yaml_files_permission_error_on_file(self):
         """Test handling of permission error when writing file."""
-        migrator = ConfigurationMigrator(model_class=ServiceSettings)
+        migrator = ConfigurationMigrator()
 
         # Use minimal valid config data directly
         config_data = {
             "interval": 5,
-            "modbus": {"host": "192.168.1.100", "port": 1502},
+            "modbus": {"host": "192.168.1.100", "port": 1502},  # noqa: S1313
         }
         secrets_data = {}
 

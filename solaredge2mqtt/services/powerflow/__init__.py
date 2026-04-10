@@ -13,13 +13,13 @@ from solaredge2mqtt.services.modbus.models.battery import ModbusBattery
 from solaredge2mqtt.services.powerflow.events import PowerflowGeneratedEvent
 from solaredge2mqtt.services.powerflow.models import Powerflow
 from solaredge2mqtt.services.wallbox import WallboxClient
+from solaredge2mqtt.services.wallbox.models import WallboxAPI
 
 if TYPE_CHECKING:
     from solaredge2mqtt.core.settings.models import ServiceSettings
 
 
 class PowerflowService:
-
     def __init__(
         self,
         settings: ServiceSettings,
@@ -34,7 +34,7 @@ class PowerflowService:
 
         self.wallbox = (
             WallboxClient(self.settings.wallbox, event_bus)
-            if self.settings.is_wallbox_configured
+            if self.settings.wallbox.is_configured
             else None
         )
 
@@ -42,50 +42,24 @@ class PowerflowService:
         self._subscribe_events()
 
     def _subscribe_events(self) -> None:
-        self.event_bus.subscribe(
-            IntervalBaseTriggerEvent, self.calculate_powerflow)
+        self.event_bus.subscribe(IntervalBaseTriggerEvent, self.calculate_powerflow)
 
     async def async_init(self) -> None:
         await self.modbus.async_init()
 
-    async def calculate_powerflow(self, _) -> None:
+    async def calculate_powerflow(
+        self, event: IntervalBaseTriggerEvent | None = None
+    ) -> None:
         units = await self.modbus.get_data()
 
         if "leader" not in units:
-            raise InvalidDataException("Invalid modbus data")
+            raise InvalidDataException("Invalid modbus data no leader unit")
 
-        batteries = {
-            f"{unit_key}:{battery_key}": battery
-            for unit_key, unit in units.items()
-            for battery_key, battery in unit.batteries.items()
-        }
+        batteries = self._check_batteries(units)
 
-        for battery in batteries.values():
-            if not battery.is_valid:
-                logger.debug(battery)
-                raise InvalidDataException("Invalid battery data")
+        evcharger, wallbox_data = await self._read_wallbox_data()
 
-        evcharger = 0
-        wallbox_data = None
-        if self.settings.is_wallbox_configured:
-            try:
-                wallbox_data = await self.wallbox.get_data()
-                logger.trace(
-                    "Wallbox: {wallbox_data.power} W", wallbox_data=wallbox_data
-                )
-                evcharger = wallbox_data.power
-            except ConfigurationException as ex:
-                logger.warning(f"{ex.component}: {ex.message}")
-
-        powerflows: dict[str, Powerflow] = {}
-
-        for unit_key, unit in units.items():
-            if unit_key == "leader":
-                powerflows[unit_key] = Powerflow.from_modbus(unit, evcharger)
-            else:
-                powerflows[unit_key] = Powerflow.from_modbus(unit)
-
-            logger.trace(powerflows[unit_key].model_dump_json())
+        powerflows = self._powerflows_from_data(units, evcharger)
 
         if self.settings.modbus.has_followers:
             powerflow = Powerflow.cumulated_powerflow(powerflows)
@@ -99,8 +73,7 @@ class PowerflowService:
 
         if Powerflow.is_not_valid_with_last(powerflow):
             logger.debug(powerflow)
-            raise InvalidDataException(
-                "Value change not valid, skipping this loop")
+            raise InvalidDataException("Value change not valid, skipping this loop")
 
         await self.write_to_influxdb(powerflows, batteries)
 
@@ -122,14 +95,57 @@ class PowerflowService:
 
         await self.publish_powerflow(powerflows)
 
+    def _check_batteries(self, units):
+        batteries = {
+            f"{unit_key}:{battery_key}": battery
+            for unit_key, unit in units.items()
+            for battery_key, battery in unit.batteries.items()
+        }
+
+        for battery in batteries.values():
+            if not battery.is_valid:
+                logger.debug(battery)
+                raise InvalidDataException("Invalid battery data")
+        return batteries
+
+    async def _read_wallbox_data(self) -> tuple[int, WallboxAPI | None]:
+        evcharger = 0
+        wallbox_data = None
+        if self.wallbox:
+            try:
+                wallbox_data = await self.wallbox.get_data()
+                logger.trace(
+                    "Wallbox: {wallbox_data.power} W", wallbox_data=wallbox_data
+                )
+                evcharger = wallbox_data.power
+            except ConfigurationException as ex:
+                logger.warning(f"{ex.component}: {ex.message}")
+            except InvalidDataException as ex:
+                logger.warning(f"Wallbox data invalid: {ex}")
+
+        return evcharger, wallbox_data
+
+    def _powerflows_from_data(self, units, evcharger):
+        powerflows: dict[str, Powerflow] = {}
+
+        for unit_key, unit in units.items():
+            if unit_key == "leader":
+                powerflows[unit_key] = Powerflow.from_modbus(unit, evcharger)
+            else:
+                powerflows[unit_key] = Powerflow.from_modbus(unit)
+
+            logger.trace(powerflows[unit_key].model_dump_json())
+
+        return powerflows
+
     async def publish_modbus(self, units):
         for key, unit in units.items():
             await self.event_bus.emit(
                 MQTTPublishEvent(
-                    unit.inverter.mqtt_topic(
-                        self.settings.modbus.has_followers),
+                    unit.inverter.mqtt_topic(self.settings.modbus.has_followers),
                     unit.inverter,
-                    self.settings.modbus.retain)
+                    self.settings.modbus.retain,
+                )
             )
 
             for key, component in {**unit.meters, **unit.batteries}.items():
@@ -137,7 +153,7 @@ class PowerflowService:
                     MQTTPublishEvent(
                         f"{component.mqtt_topic(self.settings.modbus.has_followers)}/{key.lower()}",
                         component,
-                        self.settings.modbus.retain
+                        self.settings.modbus.retain,
                     )
                 )
 
@@ -147,7 +163,7 @@ class PowerflowService:
                 MQTTPublishEvent(
                     wallbox_data.mqtt_topic(),
                     wallbox_data,
-                    self.settings.wallbox.retain
+                    self.settings.wallbox.retain,
                 )
             )
 
@@ -156,18 +172,14 @@ class PowerflowService:
             for pf in powerflows.values():
                 await self.event_bus.emit(
                     MQTTPublishEvent(
-                        pf.mqtt_topic(),
-                        pf,
-                        self.settings.powerflow.retain
+                        pf.mqtt_topic(), pf, self.settings.powerflow.retain
                     )
                 )
         else:
             powerflow = powerflows["leader"]
             await self.event_bus.emit(
                 MQTTPublishEvent(
-                    powerflow.mqtt_topic(),
-                    powerflow,
-                    self.settings.powerflow.retain
+                    powerflow.mqtt_topic(), powerflow, self.settings.powerflow.retain
                 )
             )
 
@@ -190,5 +202,5 @@ class PowerflowService:
             await self.influxdb.write_points(points)
 
     async def close(self) -> None:
-        if self.settings.is_wallbox_configured:
+        if self.wallbox:
             await self.wallbox.close()

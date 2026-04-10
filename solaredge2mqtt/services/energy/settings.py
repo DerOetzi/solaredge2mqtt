@@ -2,9 +2,9 @@ from pydantic import BaseModel, Field
 
 
 class PriceSettings(BaseModel):
-    consumption: float = Field(None)
-    delivery: float = Field(None)
-    currency: str = Field(None)
+    consumption: float | None = Field(default=None)
+    delivery: float | None = Field(default=None)
+    currency: str | None = Field(default=None)
 
     @property
     def is_configured(self) -> bool:
@@ -28,4 +28,4 @@ class PriceSettings(BaseModel):
 
 
 class EnergySettings(BaseModel):
-    retain: bool = Field(False)
+    retain: bool = Field(default=False)

@@ -43,7 +43,7 @@ class MonitoringSite(HTTPClientAsync):
     def _subscribe_events(self) -> None:
         self.event_bus.subscribe(Interval15MinTriggerEvent, self.get_data)
 
-    async def get_data(self, _):
+    async def get_data(self, event: Interval15MinTriggerEvent | None) -> None:
         energies = await self.get_modules_energy()
         powers = await self.get_modules_power()
 
@@ -57,11 +57,6 @@ class MonitoringSite(HTTPClientAsync):
 
     async def get_modules_energy(self) -> dict[str, LogicalModule]:
         logical = await self._get_logical()
-
-        if logical is None:
-            raise InvalidDataException(
-                "Unable to read logical layout from monitoring site"
-            )
 
         inverters = self._parse_inverters(
             logical["logicalTree"]["children"], logical["reportersData"]
@@ -79,27 +74,28 @@ class MonitoringSite(HTTPClientAsync):
 
         return modules
 
-    async def _get_logical(self) -> dict | None:
-        result = None
+    async def _get_logical(self) -> dict:
         try:
-            if not self.cookie_exists("CSRF-TOKEN"):
-                await self.login()
+            token = await self.login()
 
             async with asyncio.timeout(10):
                 result = await self._get(
-                    LOGICAL_URL.format(
-                        site_id=self.settings.site_id.get_secret_value()
-                    ),
+                    LOGICAL_URL.format(site_id=self.settings.site_id_secret),
                     headers={
                         "Content-Type": CONTENT_TYPE_FORM_URLENCODED,
-                        "X-CSRF-TOKEN": self.get_cookie("CSRF-TOKEN"),
-                    }
+                        "X-CSRF-TOKEN": token,
+                    },
                 )
-        except (ClientResponseError, asyncio.TimeoutError) as error:
-            raise InvalidDataException(
-                "Unable to read logical layout") from error
 
-        return result
+                if not isinstance(result, dict):
+                    raise InvalidDataException(
+                        "Unexpected response format when reading logical layout"
+                    )
+
+                return result
+
+        except (ClientResponseError, asyncio.TimeoutError) as error:
+            raise InvalidDataException("Unable to read logical layout") from error
 
     def _parse_inverters(self, inverter_objs, reporters_data) -> list[LogicalInverter]:
         inverters = []
@@ -107,17 +103,18 @@ class MonitoringSite(HTTPClientAsync):
         for inverter_obj in inverter_objs:
             info = LogicalInfo.map(inverter_obj["data"])
             if "INVERTER" in info["type"]:
-                inverter = LogicalInverter(
-                    info=info,
-                    energy=(
-                        reporters_data[info["identifier"]]["unscaledEnergy"]
-                        if info["identifier"] in reporters_data
-                        else None
-                    ),
+                inverter = LogicalInverter.model_validate(
+                    {
+                        "info": info,
+                        "energy": (
+                            reporters_data[info["identifier"]]["unscaledEnergy"]
+                            if info["identifier"] in reporters_data
+                            else None
+                        ),
+                    }
                 )
 
-                self._parse_strings(
-                    inverter, inverter_obj["children"], reporters_data)
+                self._parse_strings(inverter, inverter_obj["children"], reporters_data)
 
                 inverters.append(inverter)
 
@@ -129,13 +126,15 @@ class MonitoringSite(HTTPClientAsync):
     def _parse_strings(self, inverter, string_objs, reporters_data):
         for string_obj in string_objs:
             info = LogicalInfo.map(string_obj["data"])
-            string = LogicalString(
-                info=info,
-                energy=(
-                    reporters_data[info["identifier"]]["unscaledEnergy"]
-                    if info["identifier"] in reporters_data
-                    else None
-                ),
+            string = LogicalString.model_validate(
+                {
+                    "info": info,
+                    "energy": (
+                        reporters_data[info["identifier"]]["unscaledEnergy"]
+                        if info["identifier"] in reporters_data
+                        else None
+                    ),
+                },
             )
 
             self._parse_panels(string, string_obj["children"], reporters_data)
@@ -145,13 +144,15 @@ class MonitoringSite(HTTPClientAsync):
     def _parse_panels(self, string, panel_objs, reporters_data):
         for panel_obj in panel_objs:
             info = LogicalInfo.map(panel_obj["data"])
-            panel = LogicalModule(
-                info=info,
-                energy=(
-                    reporters_data[info["identifier"]]["unscaledEnergy"]
-                    if info["identifier"] in reporters_data
-                    else None
-                ),
+            panel = LogicalModule.model_validate(
+                {
+                    "info": info,
+                    "energy": (
+                        reporters_data[info["identifier"]]["unscaledEnergy"]
+                        if info["identifier"] in reporters_data
+                        else None
+                    ),
+                },
             )
 
             string.modules.append(panel)
@@ -159,16 +160,10 @@ class MonitoringSite(HTTPClientAsync):
     async def get_modules_power(self) -> dict[str, dict[datetime, float]]:
         playback = await self._get_playback()
 
-        if playback is None:
-            raise InvalidDataException(
-                "Unable to read playback data from monitoring site"
-            )
-
         modules = {}
 
         for date_str, reporters_data in playback["reportersData"].items():
-            date = datetime.strptime(
-                date_str, "%a %b %d %H:%M:%S GMT %Y").astimezone()
+            date = datetime.strptime(date_str, "%a %b %d %H:%M:%S GMT %Y").astimezone()
 
             for entries in reporters_data.values():
                 for entry in entries:
@@ -182,24 +177,28 @@ class MonitoringSite(HTTPClientAsync):
 
         return modules
 
-    async def _get_playback(self) -> dict | None:
-        result = None
+    async def _get_playback(self) -> dict:
         try:
-            if not self.cookie_exists("CSRF-TOKEN"):
-                await self.login()
+            token = await self.login()
+
             async with asyncio.timeout(10):
                 playback_data = await self._post(
                     POWER_PUBLIC_URL,
                     data={
-                        "fieldId": self.settings.site_id.get_secret_value(),
-                        "timeUnit": 4,
-                        "CSRF": self.get_cookie("CSRF-TOKEN"),
+                        "fieldId": self.settings.site_id_secret,
+                        "timeUnit": str(4),
+                        "CSRF": token,
                     },
                     headers={
                         "Content-Type": CONTENT_TYPE_FORM_URLENCODED,
-                        "X-CSRF-TOKEN": self.get_cookie("CSRF-TOKEN"),
+                        "X-CSRF-TOKEN": token,
                     },
                     expect_json=False,
+                )
+
+            if not isinstance(playback_data, str):
+                raise InvalidDataException(
+                    "Unexpected response format when reading playback data"
                 )
 
             response = (
@@ -212,27 +211,38 @@ class MonitoringSite(HTTPClientAsync):
                 .replace("reportersData", '"reportersData"')
             )
 
-            result = json.loads(response)
+            return json.loads(response)
         except (ClientResponseError, asyncio.TimeoutError) as error:
-            raise InvalidDataException(
-                "Unable to read logical layout") from error
+            raise InvalidDataException("Unable to read logical layout") from error
 
-        return result
-
-    async def login(self) -> None:
+    async def login(self) -> str:
         try:
+            token = self.get_cookie("CSRF-TOKEN")
+
+            if token is not None:
+                return token
+
             async with asyncio.timeout(10):
                 await self._post(
                     LOGIN_URL,
                     headers={"Content-Type": CONTENT_TYPE_FORM_URLENCODED},
                     data={
-                        "j_username": self.settings.username,
-                        "j_password": self.settings.password.get_secret_value(),
+                        "j_username": self.settings.username_value,
+                        "j_password": self.settings.password_secret,
                     },
                     expect_json=False,
                 )
 
+            token = self.get_cookie("CSRF-TOKEN")
+
+            if token is None:
+                raise ConfigurationException(
+                    "Monitoring",
+                    "Login to monitoring account failed, CSRF token not found",
+                )
+
             logger.info("Login to monitoring site successful")
+            return token
         except (ClientResponseError, asyncio.TimeoutError) as error:
             raise ConfigurationException(
                 "Monitoring", "Unable to login to monitoring account"
@@ -278,7 +288,7 @@ class MonitoringSite(HTTPClientAsync):
                 MQTTPublishEvent(
                     f"monitoring/module/{module.info.serialnumber}",
                     module,
-                    self.settings.retain
+                    self.settings.retain,
                 )
             )
 

@@ -2,7 +2,8 @@
 
 import asyncio
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from typing import cast
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from aiohttp import ClientResponseError, RequestInfo
@@ -46,8 +47,7 @@ class TestMonitoringSiteInit:
 
     def test_init(self, mock_monitoring_settings, mock_event_bus, mock_influxdb):
         """Test MonitoringSite initialization."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
 
         assert site.settings is mock_monitoring_settings
         assert site.event_bus is mock_event_bus
@@ -61,7 +61,7 @@ class TestMonitoringSiteInit:
 
     def test_subscribes_to_events(self, mock_monitoring_settings, mock_event_bus):
         """Test MonitoringSite subscribes to 15min interval event."""
-        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, None)
+        MonitoringSite(mock_monitoring_settings, mock_event_bus, None)
 
         mock_event_bus.subscribe.assert_called()
 
@@ -74,24 +74,50 @@ class TestMonitoringSiteLogin:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test successful login."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
         site._post = AsyncMock(return_value="success")
+        site.get_cookie = MagicMock(side_effect=[None, "csrf-token"])
 
-        await site.login()
+        token = await site.login()
 
-        site._post.assert_called_once()
+        site._post.assert_called()
+        assert token == "csrf-token"
+
+    @pytest.mark.asyncio
+    async def test_login_returns_existing_token_without_post(
+        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+    ):
+        """Test login returns existing CSRF token without HTTP request."""
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
+        site._post = AsyncMock()
+        site.get_cookie = MagicMock(return_value="existing-csrf-token")
+
+        token = await site.login()
+
+        site._post.assert_not_called()
+        assert token == "existing-csrf-token"
+
+    @pytest.mark.asyncio
+    async def test_login_missing_csrf_token_after_post(
+        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+    ):
+        """Test login raises when CSRF token is missing after POST."""
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
+        site._post = AsyncMock(return_value="success")
+        site.get_cookie = MagicMock(side_effect=[None, None])
+
+        with pytest.raises(ConfigurationException):
+            await site.login()
 
     @pytest.mark.asyncio
     async def test_login_failure(
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test login failure raises ConfigurationException."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
 
         mock_request_info = MagicMock(spec=RequestInfo)
-        mock_request_info.real_url = "http://test.com"
+        mock_request_info.real_url = "https://test.com"
 
         error = ClientResponseError(
             request_info=mock_request_info,
@@ -108,8 +134,7 @@ class TestMonitoringSiteLogin:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test login timeout raises ConfigurationException."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
         site._post = AsyncMock(side_effect=asyncio.TimeoutError())
 
         with pytest.raises(ConfigurationException):
@@ -122,7 +147,7 @@ class TestMonitoringSiteMergeModules:
     def test_merge_modules(self):
         """Test merge_modules combines energy and power data."""
         # Create mock module
-        mock_module = MagicMock(spec=LogicalModule)
+        mock_module: LogicalModule = cast(LogicalModule, MagicMock(spec=LogicalModule))
         mock_module.power = None
 
         energies = {"SN123": mock_module}
@@ -135,7 +160,7 @@ class TestMonitoringSiteMergeModules:
 
     def test_merge_modules_no_power(self):
         """Test merge_modules when module has no power data."""
-        mock_module = MagicMock(spec=LogicalModule)
+        mock_module: LogicalModule = cast(LogicalModule, MagicMock(spec=LogicalModule))
         mock_module.power = None
 
         energies = {"SN123": mock_module}
@@ -154,8 +179,7 @@ class TestMonitoringSiteSaveToInfluxDB:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test save_to_influxdb writes points."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
 
         # Create mock module with power data
         mock_info = MagicMock()
@@ -190,8 +214,7 @@ class TestMonitoringSitePublishMQTT:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test publish_mqtt emits events."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
 
         # Create mock module
         mock_info = MagicMock()
@@ -215,8 +238,7 @@ class TestMonitoringSiteGetData:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test get_data orchestrates data retrieval."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
 
         # Mock the sub-methods
         site.get_modules_energy = AsyncMock(return_value={})
@@ -232,33 +254,49 @@ class TestMonitoringSiteGetData:
         site.publish_mqtt.assert_called_once()
 
 
-class TestMonitoringSiteGetModulesEnergy:
-    """Tests for MonitoringSite get_modules_energy."""
-
-    @pytest.mark.asyncio
-    async def test_get_modules_energy_none_response(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
-    ):
-        """Test get_modules_energy raises when response is None."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
-        site._get_logical = AsyncMock(return_value=None)
-
-        with pytest.raises(InvalidDataException):
-            await site.get_modules_energy()
-
-
 class TestMonitoringSiteGetModulesPower:
     """Tests for MonitoringSite get_modules_power."""
 
     @pytest.mark.asyncio
-    async def test_get_modules_power_none_response(
+    async def test_get_modules_power_http_error_raises_invalid_data(
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
-        """Test get_modules_power raises when response is None."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
-        site._get_playback = AsyncMock(return_value=None)
+        """Test get_modules_power raises InvalidDataException on HTTP error."""
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
+        site.login = AsyncMock(return_value="csrf-token")
+
+        mock_request_info = MagicMock(spec=RequestInfo)
+        mock_request_info.real_url = "https://test.com"
+        error = ClientResponseError(
+            request_info=mock_request_info,
+            history=(),
+            status=500,
+        )
+        site._post = AsyncMock(side_effect=error)
+
+        with pytest.raises(InvalidDataException):
+            await site.get_modules_power()
+
+    @pytest.mark.asyncio
+    async def test_get_modules_power_non_string_response_raises_invalid_data(
+        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+    ):
+        """Test get_modules_power raises InvalidDataException on non-string response."""
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
+        site.login = AsyncMock(return_value="csrf-token")
+        site._post = AsyncMock(return_value={"unexpected": "dict"})
+
+        with pytest.raises(InvalidDataException):
+            await site.get_modules_power()
+
+    @pytest.mark.asyncio
+    async def test_get_modules_power_timeout_raises_invalid_data(
+        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+    ):
+        """Test get_modules_power raises InvalidDataException on timeout."""
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
+        site.login = AsyncMock(return_value="csrf-token")
+        site._post = AsyncMock(side_effect=asyncio.TimeoutError())
 
         with pytest.raises(InvalidDataException):
             await site.get_modules_power()
@@ -272,8 +310,7 @@ class TestMonitoringSiteGetLogical:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test _get_logical logs in if no CSRF token."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
         site.cookie_exists = MagicMock(return_value=False)
         site.login = AsyncMock()
         site.get_cookie = MagicMock(return_value="test_token")
@@ -289,13 +326,12 @@ class TestMonitoringSiteGetLogical:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test _get_logical raises on error."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
         site.cookie_exists = MagicMock(return_value=True)
         site.get_cookie = MagicMock(return_value="test_token")
 
         mock_request_info = MagicMock(spec=RequestInfo)
-        mock_request_info.real_url = "http://test.com"
+        mock_request_info.real_url = "https://test.com"
 
         error = ClientResponseError(
             request_info=mock_request_info,
@@ -307,6 +343,20 @@ class TestMonitoringSiteGetLogical:
         with pytest.raises(InvalidDataException):
             await site._get_logical()
 
+    @pytest.mark.asyncio
+    async def test_get_logical_non_dict_response_raises_invalid_data(
+        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+    ):
+        """Test _get_logical raises on non-dict response payload."""
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
+        site.login = AsyncMock(return_value="test_token")
+        site._get = AsyncMock(return_value=["unexpected", "list"])
+
+        with pytest.raises(InvalidDataException) as exc_info:
+            await site._get_logical()
+
+        assert "Unexpected response format" in exc_info.value.message
+
 
 class TestMonitoringSiteGetPlayback:
     """Tests for MonitoringSite _get_playback."""
@@ -316,13 +366,12 @@ class TestMonitoringSiteGetPlayback:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test _get_playback raises on error."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
         site.cookie_exists = MagicMock(return_value=True)
         site.get_cookie = MagicMock(return_value="test_token")
 
         mock_request_info = MagicMock(spec=RequestInfo)
-        mock_request_info.real_url = "http://test.com"
+        mock_request_info.real_url = "https://test.com"
 
         error = ClientResponseError(
             request_info=mock_request_info,
@@ -334,6 +383,24 @@ class TestMonitoringSiteGetPlayback:
         with pytest.raises(InvalidDataException):
             await site._get_playback()
 
+    @pytest.mark.asyncio
+    async def test_get_playback_success_parses_response(
+        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+    ):
+        """Test _get_playback parses playback JS-like payload into dict."""
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
+        site.login = AsyncMock(return_value="test_token")
+        site._post = AsyncMock(return_value="{'reportersData': {}}")
+
+        with patch("solaredge2mqtt.services.monitoring.json.loads") as loads_mock:
+            loads_mock.return_value = {"reportersData": {}}
+            result = await site._get_playback()
+
+        loads_mock.assert_called_once()
+
+        assert isinstance(result, dict)
+        assert "reportersData" in result
+
 
 class TestMonitoringSiteParseInverters:
     """Tests for MonitoringSite _parse_inverters."""
@@ -342,8 +409,7 @@ class TestMonitoringSiteParseInverters:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test _parse_inverters parses inverter data."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
 
         inverter_objs = [
             {
@@ -370,8 +436,7 @@ class TestMonitoringSiteParseInverters:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test _parse_inverters logs unknown type."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
 
         inverter_objs = [
             {
@@ -400,8 +465,7 @@ class TestMonitoringSiteParseStrings:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test _parse_strings parses string data."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
 
         inverter = MagicMock()
         inverter.strings = []
@@ -434,8 +498,7 @@ class TestMonitoringSiteParsePanels:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test _parse_panels parses panel data."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
 
         string = MagicMock()
         string.modules = []
@@ -468,8 +531,7 @@ class TestMonitoringSiteGetModulesEnergyFull:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test get_modules_energy with full data parsing."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
 
         logical_response = {
             "logicalTree": {
@@ -528,8 +590,7 @@ class TestMonitoringSiteGetModulesPowerFull:
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
         """Test get_modules_power with full data parsing."""
-        site = MonitoringSite(mock_monitoring_settings,
-                              mock_event_bus, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
 
         playback_response = {
             "reportersData": {
@@ -547,3 +608,82 @@ class TestMonitoringSiteGetModulesPowerFull:
 
         assert "PAN1" in result
         assert "PAN2" in result
+
+    @pytest.mark.asyncio
+    async def test_get_modules_power_merges_same_module_over_multiple_timestamps(
+        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+    ):
+        """Test get_modules_power appends date entries for existing module key."""
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
+
+        playback_response = {
+            "reportersData": {
+                SAMPLE_PLAYBACK_DATE: {
+                    "group1": [
+                        {"key": "PAN1", "value": "100.5"},
+                    ]
+                },
+                "Mon Jan 01 12:15:00 GMT 2024": {
+                    "group1": [
+                        {"key": "PAN1", "value": "101.0"},
+                    ]
+                },
+            }
+        }
+        site._get_playback = AsyncMock(return_value=playback_response)
+
+        result = await site.get_modules_power()
+
+        assert "PAN1" in result
+        assert len(result["PAN1"]) == 2
+
+
+class TestMonitoringSiteExtraBranches:
+    """Extra tests to cover remaining monitoring service branches."""
+
+    @pytest.mark.asyncio
+    async def test_save_to_influxdb_skips_modules_without_power(
+        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+    ):
+        """save_to_influxdb ignores modules with no power data."""
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
+
+        with_power_info = MagicMock()
+        with_power_info.serialnumber = "SN123"
+        with_power_info.name = "Module 1"
+        with_power_info.identifier = "ID123"
+        with_power = MagicMock()
+        with_power.info = with_power_info
+        with_power.power = {datetime.now(timezone.utc): 111.0}
+
+        without_power_info = MagicMock()
+        without_power_info.serialnumber = "SN999"
+        without_power_info.name = "Module X"
+        without_power_info.identifier = "IDX"
+        without_power = MagicMock()
+        without_power.info = without_power_info
+        without_power.power = None
+
+        await site.save_to_influxdb({"a": with_power, "b": without_power})
+
+        mock_influxdb.write_points.assert_called_once()
+        points = mock_influxdb.write_points.call_args[0][0]
+        assert len(points) == 1
+
+    @pytest.mark.asyncio
+    async def test_publish_mqtt_with_none_energy_still_emits_module_event(
+        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+    ):
+        """publish_mqtt emits module event even when module.energy is None."""
+        site = MonitoringSite(mock_monitoring_settings, mock_event_bus, mock_influxdb)
+
+        module_info = MagicMock()
+        module_info.serialnumber = "SN123"
+        module = MagicMock()
+        module.info = module_info
+        module.energy = None
+
+        await site.publish_mqtt({"SN123": module}, 0, 0)
+
+        # One module publish + one total publish
+        assert mock_event_bus.emit.call_count == 2

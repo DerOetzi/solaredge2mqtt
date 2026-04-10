@@ -1,16 +1,13 @@
 """Tests for homeassistant models module."""
 
-import hashlib
-import base64
-
 import pytest
+from pydantic import ValidationError
 
 from solaredge2mqtt.services.homeassistant.models import (
     HomeAssistantBaseModel,
     HomeAssistantBinarySensorType,
     HomeAssistantDevice,
     HomeAssistantEntity,
-    HomeAssistantEntityBaseType,
     HomeAssistantNumberType,
     HomeAssistantSensorType,
     HomeAssistantStatus,
@@ -42,15 +39,21 @@ class TestHomeAssistantStatusInput:
 
     def test_status_input_online(self):
         """Test StatusInput with online status."""
-        input_model = HomeAssistantStatusInput("online")
+        input_model = HomeAssistantStatusInput.model_validate("online")
 
         assert input_model.status == HomeAssistantStatus.ONLINE
 
     def test_status_input_offline(self):
         """Test StatusInput with offline status."""
-        input_model = HomeAssistantStatusInput("offline")
+        input_model = HomeAssistantStatusInput.model_validate("offline")
 
         assert input_model.status == HomeAssistantStatus.OFFLINE
+
+    def test_status_input_invalid(self):
+        """Test StatusInput with invalid status."""
+
+        with pytest.raises(ValidationError):
+            HomeAssistantStatusInput.model_validate("invalid_status")
 
 
 class TestHomeAssistantBaseModel:
@@ -559,6 +562,22 @@ class TestHomeAssistantEntity:
 
         assert entity.command_topic is None
 
+    def test_entity_command_topic_without_path(self):
+        """Test command_topic for NUMBER type."""
+        device = HomeAssistantDevice(
+            client_id="test_client",
+            name="Test Device",
+            state_topic="solaredge/inverter",
+        )
+
+        entity = HomeAssistantEntity(
+            device=device,
+            name="Power Limit",
+            ha_type=HomeAssistantNumberType.ACTIVE_POWER_LIMIT,
+        )
+
+        assert entity.command_topic == "solaredge/inverter"
+
     def test_entity_model_dump_json(self):
         """Test model_dump_json includes additional fields."""
         device = HomeAssistantDevice(
@@ -584,3 +603,22 @@ class TestHomeAssistantEntity:
         assert "max" in json_str
         assert "step" in json_str
         assert "mode" in json_str
+
+    def test_entity_unique_id_without_value_template(self):
+        """Test unique_id path where value_template is None."""
+        device = HomeAssistantDevice(
+            client_id="test_client",
+            name="Test Device",
+            state_topic="solaredge/powerflow",
+        )
+
+        entity = HomeAssistantEntity(
+            device=device,
+            name="Power",
+            path=None,
+            ha_type=HomeAssistantSensorType.POWER_W,
+        )
+
+        unique_id = entity.unique_id
+        assert isinstance(unique_id, str)
+        assert len(unique_id) == 10

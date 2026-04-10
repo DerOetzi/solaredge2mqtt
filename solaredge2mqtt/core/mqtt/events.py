@@ -1,7 +1,9 @@
+from typing import Generic, TypeVar, get_args, get_origin
+
 from pydantic import BaseModel
 
 from solaredge2mqtt.core.events.events import BaseEvent
-from solaredge2mqtt.core.models import BaseInputField
+from solaredge2mqtt.core.models import TBaseInputField
 
 
 class MQTTPublishEvent(BaseEvent):
@@ -48,31 +50,72 @@ class MQTTPublishEvent(BaseEvent):
         return self._exclude_none
 
 
-class MQTTReceivedEvent(BaseEvent):
-    def __init__(self, topic: str, input: BaseInputField):
+class MQTTReceivedEvent(Generic[TBaseInputField], BaseEvent):
+    _model_type: type[TBaseInputField]
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+
+        for base in getattr(cls, "__orig_bases__", []):
+            origin = get_origin(base)
+            if origin is MQTTReceivedEvent:
+                args = get_args(base)
+                if args:
+                    cls._model_type = args[0]
+                    return
+
+        raise TypeError(
+            f"{cls.__name__} must specify a generic input model "
+            "for MQTTReceivedEvent[TBaseInputField]"
+        )
+
+    def __init__(self, topic: str, input: TBaseInputField):
         self._topic: str = topic
-        self._input: BaseInputField = input
+        self._input: TBaseInputField = input
 
     @property
     def topic(self) -> str:
         return self._topic
 
     @property
-    def input(self) -> BaseInputField:
+    def input(self) -> TBaseInputField:
         return self._input
 
+    @classmethod
+    def input_model(cls) -> type[TBaseInputField]:
+        return cls._model_type
 
-class MQTTSubscribeEvent(BaseEvent):
+
+TMQTTReceivedEvent = TypeVar("TMQTTReceivedEvent", bound=MQTTReceivedEvent)
+
+
+class MQTTSubscribeEvent(Generic[TMQTTReceivedEvent], BaseEvent):
     AWAIT = True
+    _event_type: type[TMQTTReceivedEvent]
 
-    def __init__(self, topic: str, model: type[BaseInputField]):
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+
+        for base in getattr(cls, "__orig_bases__", []):
+            origin = get_origin(base)
+            if origin is MQTTSubscribeEvent:
+                args = get_args(base)
+                if args:
+                    cls._event_type = args[0]
+                    return
+
+        raise TypeError(
+            f"{cls.__name__} must specify a generic received event "
+            "for MQTTSubscribeEvent[TMQTTReceivedEvent]"
+        )
+
+    def __init__(self, topic: str):
         self._topic: str = topic
-        self._model: type[BaseInputField] = model
 
     @property
     def topic(self) -> str:
         return self._topic
 
-    @property
-    def model(self) -> type[BaseInputField]:
-        return self._model
+    @classmethod
+    def event(cls) -> type[TMQTTReceivedEvent]:
+        return cls._event_type

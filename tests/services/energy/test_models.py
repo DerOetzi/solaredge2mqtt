@@ -2,6 +2,8 @@
 
 from datetime import datetime, timezone
 
+import pytest
+
 from solaredge2mqtt.services.energy.models import (
     BatteryEnergy,
     ConsumerEnergy,
@@ -117,9 +119,9 @@ class TestHistoricMoney:
             price_out=0.08,
         )
 
-        assert money.delivered == 50.0
-        assert money.saved == 30.0
-        assert money.consumed == 20.0
+        assert money.delivered == pytest.approx(50.0)
+        assert money.saved == pytest.approx(30.0)
+        assert money.consumed == pytest.approx(20.0)
 
     def test_historic_money_balance_grid(self):
         """Test balance_grid computed field."""
@@ -131,7 +133,7 @@ class TestHistoricMoney:
             price_out=0.08,
         )
 
-        assert money.balance_grid == 30.0  # 50.0 - 20.0
+        assert money.balance_grid == pytest.approx(30.0)  # 50.0 - 20.0
 
     def test_historic_money_balance_total(self):
         """Test balance_total computed field."""
@@ -143,7 +145,7 @@ class TestHistoricMoney:
             price_out=0.08,
         )
 
-        assert money.balance_total == 60.0  # 30.0 + 30.0
+        assert money.balance_total == pytest.approx(60.0)  # 30.0 + 30.0
 
     def test_historic_money_total_revenue(self):
         """Test total_revenue computed field."""
@@ -155,7 +157,7 @@ class TestHistoricMoney:
             price_out=0.08,
         )
 
-        assert money.total_revenue == 80.0  # 50.0 + 30.0
+        assert money.total_revenue == pytest.approx(80.0)  # 50.0 + 30.0
 
 
 class TestInverterEnergy:
@@ -171,11 +173,11 @@ class TestInverterEnergy:
             battery_production=20.0,
         )
 
-        assert inverter.production == 100.0
-        assert inverter.consumption == 10.0
-        assert inverter.dc_power == 5000.0
-        assert inverter.pv_production == 80.0
-        assert inverter.battery_production == 20.0
+        assert inverter.production == pytest.approx(100.0)
+        assert inverter.consumption == pytest.approx(10.0)
+        assert inverter.dc_power == pytest.approx(5000.0)
+        assert inverter.pv_production == pytest.approx(80.0)
+        assert inverter.battery_production == pytest.approx(20.0)
 
 
 class TestGridEnergy:
@@ -188,8 +190,8 @@ class TestGridEnergy:
             consumption=10.0,
         )
 
-        assert grid.delivery == 30.0
-        assert grid.consumption == 10.0
+        assert grid.delivery == pytest.approx(30.0)
+        assert grid.consumption == pytest.approx(10.0)
 
 
 class TestBatteryEnergy:
@@ -202,8 +204,8 @@ class TestBatteryEnergy:
             discharge=20.0,
         )
 
-        assert battery.charge == 15.0
-        assert battery.discharge == 20.0
+        assert battery.charge == pytest.approx(15.0)
+        assert battery.discharge == pytest.approx(20.0)
 
 
 class TestConsumerEnergy:
@@ -221,13 +223,13 @@ class TestConsumerEnergy:
             used_battery_production=20.0,
         )
 
-        assert consumer.house == 60.0
-        assert consumer.evcharger == 10.0
-        assert consumer.inverter == 5.0
-        assert consumer.total == 75.0
-        assert consumer.used_production == 70.0
-        assert consumer.used_pv_production == 50.0
-        assert consumer.used_battery_production == 20.0
+        assert consumer.house == pytest.approx(60.0)
+        assert consumer.evcharger == pytest.approx(10.0)
+        assert consumer.inverter == pytest.approx(5.0)
+        assert consumer.total == pytest.approx(75.0)
+        assert consumer.used_production == pytest.approx(70.0)
+        assert consumer.used_pv_production == pytest.approx(50.0)
+        assert consumer.used_battery_production == pytest.approx(20.0)
 
 
 def make_historic_energy_data() -> dict:
@@ -261,7 +263,7 @@ class TestSelfConsumptionRate:
     def test_self_consumption_with_production(self):
         """Test self consumption rate with production."""
         data = make_historic_energy_data()
-        energy = HistoricEnergy(data, HistoricPeriod.TODAY)
+        energy = HistoricEnergy.from_energy_data(data, HistoricPeriod.TODAY)
 
         rate = energy.self_consumption_rates
 
@@ -274,7 +276,7 @@ class TestSelfConsumptionRate:
         """Test self consumption rate with no production."""
         data = make_historic_energy_data()
         data["inverter_production"] = 0.0
-        energy = HistoricEnergy(data, HistoricPeriod.TODAY)
+        energy = HistoricEnergy.from_energy_data(data, HistoricPeriod.TODAY)
 
         rate = energy.self_consumption_rates
 
@@ -290,7 +292,7 @@ class TestSelfSufficiencyRate:
     def test_self_sufficiency_with_consumption(self):
         """Test self sufficiency rate with consumption."""
         data = make_historic_energy_data()
-        energy = HistoricEnergy(data, HistoricPeriod.TODAY)
+        energy = HistoricEnergy.from_energy_data(data, HistoricPeriod.TODAY)
 
         rate = energy.self_sufficiency_rates
 
@@ -303,7 +305,7 @@ class TestSelfSufficiencyRate:
         """Test self sufficiency rate with no consumption."""
         data = make_historic_energy_data()
         data["consumer_total"] = 0.0
-        energy = HistoricEnergy(data, HistoricPeriod.TODAY)
+        energy = HistoricEnergy.from_energy_data(data, HistoricPeriod.TODAY)
 
         rate = energy.self_sufficiency_rates
 
@@ -319,18 +321,18 @@ class TestHistoricEnergy:
     def test_historic_energy_creation(self):
         """Test HistoricEnergy creation."""
         data = make_historic_energy_data()
-        energy = HistoricEnergy(data, HistoricPeriod.TODAY)
+        energy = HistoricEnergy.from_energy_data(data, HistoricPeriod.TODAY)
 
-        assert energy.pv_production == 100.0
-        assert energy.inverter.production == 100.0
-        assert energy.grid.delivery == 30.0
-        assert energy.battery.charge == 15.0
-        assert energy.consumer.house == 50.0
+        assert energy.pv_production == pytest.approx(100.0)
+        assert energy.inverter.production == pytest.approx(100.0)
+        assert energy.grid.delivery == pytest.approx(30.0)
+        assert energy.battery.charge == pytest.approx(15.0)
+        assert energy.consumer.house == pytest.approx(50.0)
 
     def test_historic_energy_mqtt_topic_without_unit(self):
         """Test mqtt_topic without unit."""
         data = make_historic_energy_data()
-        energy = HistoricEnergy(data, HistoricPeriod.TODAY)
+        energy = HistoricEnergy.from_energy_data(data, HistoricPeriod.TODAY)
 
         topic = energy.mqtt_topic()
 
@@ -340,7 +342,7 @@ class TestHistoricEnergy:
         """Test mqtt_topic with unit."""
         data = make_historic_energy_data()
         data["unit"] = "leader"
-        energy = HistoricEnergy(data, HistoricPeriod.TODAY)
+        energy = HistoricEnergy.from_energy_data(data, HistoricPeriod.TODAY)
 
         topic = energy.mqtt_topic()
 
@@ -349,7 +351,7 @@ class TestHistoricEnergy:
     def test_historic_energy_str(self):
         """Test __str__ method."""
         data = make_historic_energy_data()
-        energy = HistoricEnergy(data, HistoricPeriod.TODAY)
+        energy = HistoricEnergy.from_energy_data(data, HistoricPeriod.TODAY)
 
         assert str(energy) == "energy: today"
 
@@ -362,15 +364,15 @@ class TestHistoricEnergy:
         data["money_price_in"] = 0.30
         data["money_price_out"] = 0.08
 
-        energy = HistoricEnergy(data, HistoricPeriod.TODAY)
+        energy = HistoricEnergy.from_energy_data(data, HistoricPeriod.TODAY)
 
         assert energy.money is not None
-        assert energy.money.delivered == 50.0
+        assert energy.money.delivered == pytest.approx(50.0)
 
     def test_historic_energy_homeassistant_device_info(self):
         """Test homeassistant_device_info method."""
         data = make_historic_energy_data()
-        energy = HistoricEnergy(data, HistoricPeriod.TODAY)
+        energy = HistoricEnergy.from_energy_data(data, HistoricPeriod.TODAY)
 
         ha_info = energy.homeassistant_device_info()
 
@@ -381,10 +383,87 @@ class TestHistoricEnergy:
         """Test homeassistant_device_info with unit."""
         data = make_historic_energy_data()
         data["unit"] = "leader"
-        energy = HistoricEnergy(data, HistoricPeriod.TODAY)
+        energy = HistoricEnergy.from_energy_data(data, HistoricPeriod.TODAY)
 
         ha_info = energy.homeassistant_device_info()
 
         assert "Energy" in ha_info["name"]
         assert "leader" in ha_info["name"]
         assert "Today" in ha_info["name"]
+
+    def test_historic_energy_has_unit_property(self):
+        """Test has_unit property toggles with unit presence."""
+        data = make_historic_energy_data()
+        no_unit = HistoricEnergy.from_energy_data(data, HistoricPeriod.TODAY)
+
+        data_with_unit = make_historic_energy_data()
+        data_with_unit["unit"] = "leader"
+        with_unit = HistoricEnergy.from_energy_data(
+            data_with_unit, HistoricPeriod.TODAY
+        )
+
+        assert no_unit.has_unit is False
+        assert with_unit.has_unit is True
+
+    def test_historic_info_filled_correctly(self):
+        """Test that HistoricInfo is filled correctly from energy_data."""
+        data = make_historic_energy_data()
+        start_time = datetime(2024, 6, 15, 0, 0, tzinfo=timezone.utc)
+        stop_time = datetime(2024, 6, 15, 23, 59, tzinfo=timezone.utc)
+        data["_start"] = start_time
+        data["_stop"] = stop_time
+        data["unit"] = "leader"
+
+        energy = HistoricEnergy.from_energy_data(data, HistoricPeriod.TODAY)
+
+        assert energy.info.unit == "leader"
+        assert energy.info.period == HistoricPeriod.TODAY
+        assert energy.info.start == start_time
+        assert energy.info.stop == stop_time
+
+    def test_historic_info_unit_none_when_not_provided(self):
+        """Test that HistoricInfo.unit is None when not in energy_data."""
+        data = make_historic_energy_data()
+        energy = HistoricEnergy.from_energy_data(data, HistoricPeriod.TODAY)
+
+        assert energy.info.unit is None
+
+    def test_from_energy_data_missing_start_raises_key_error(self):
+        """Test that from_energy_data raises KeyError when _start is missing."""
+        data = make_historic_energy_data()
+        del data["_start"]
+
+        with pytest.raises(KeyError):
+            HistoricEnergy.from_energy_data(data, HistoricPeriod.TODAY)
+
+    def test_from_energy_data_missing_stop_raises_key_error(self):
+        """Test that from_energy_data raises KeyError when _stop is missing."""
+        data = make_historic_energy_data()
+        del data["_stop"]
+
+        with pytest.raises(KeyError):
+            HistoricEnergy.from_energy_data(data, HistoricPeriod.TODAY)
+
+    def test_from_energy_data_missing_pv_production_raises_key_error(self):
+        """Test that from_energy_data raises KeyError when pv_production is missing."""
+        data = make_historic_energy_data()
+        del data["pv_production"]
+
+        with pytest.raises(KeyError):
+            HistoricEnergy.from_energy_data(data, HistoricPeriod.TODAY)
+
+    def test_historic_info_different_periods(self):
+        """Test HistoricInfo with different HistoricPeriod values."""
+        data = make_historic_energy_data()
+
+        periods = [
+            HistoricPeriod.TODAY,
+            HistoricPeriod.YESTERDAY,
+            HistoricPeriod.THIS_WEEK,
+            HistoricPeriod.LAST_MONTH,
+            HistoricPeriod.THIS_YEAR,
+        ]
+
+        for period in periods:
+            energy = HistoricEnergy.from_energy_data(data, period)
+            assert energy.info.period == period

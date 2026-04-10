@@ -4,11 +4,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from solaredge2mqtt.core.exceptions import InvalidRegisterDataException
 from solaredge2mqtt.services.modbus import Modbus
+from solaredge2mqtt.services.modbus.exceptions import InvalidRegisterDataException
 from solaredge2mqtt.services.modbus.sunspec.meter import (
     SunSpecMeterOffset,
 )
+from solaredge2mqtt.services.modbus.sunspec.values import SunSpecPayload
 
 
 @pytest.fixture
@@ -16,7 +17,7 @@ def mock_service_settings():
     """Create mock service settings for testing."""
     settings = MagicMock()
     settings.modbus = MagicMock()
-    settings.modbus.host = "192.168.1.100"
+    settings.modbus.host = "192.168.1.100"  # noqa: S1313
     settings.modbus.port = 1502
     settings.modbus.timeout = 5
     settings.modbus.unit = 1
@@ -63,11 +64,9 @@ class TestShouldDetectMeter:
         unit_settings.meter = [True, True, False]
 
         meter = SunSpecMeterOffset.METER0
-        inverter_raw = {"meter0": 172, "meter1": 173}
+        inverter_raw: SunSpecPayload = {"meter0": 172, "meter1": 173}
 
-        result = Modbus._should_detect_meter(
-            unit_settings, meter, inverter_raw
-        )
+        result = Modbus._should_detect_meter(unit_settings, meter, inverter_raw)
 
         assert result is True
 
@@ -77,11 +76,9 @@ class TestShouldDetectMeter:
         unit_settings.meter = [False, True, False]
 
         meter = SunSpecMeterOffset.METER0
-        inverter_raw = {"meter0": 172, "meter1": 173}
+        inverter_raw: SunSpecPayload = {"meter0": 172, "meter1": 173}
 
-        result = Modbus._should_detect_meter(
-            unit_settings, meter, inverter_raw
-        )
+        result = Modbus._should_detect_meter(unit_settings, meter, inverter_raw)
 
         assert result is False
 
@@ -91,11 +88,9 @@ class TestShouldDetectMeter:
         unit_settings.meter = [True, True, False]
 
         meter = SunSpecMeterOffset.METER2
-        inverter_raw = {"meter0": 172, "meter1": 173}
+        inverter_raw: SunSpecPayload = {"meter0": 172, "meter1": 173}
 
-        result = Modbus._should_detect_meter(
-            unit_settings, meter, inverter_raw
-        )
+        result = Modbus._should_detect_meter(unit_settings, meter, inverter_raw)
 
         assert result is False
 
@@ -105,11 +100,9 @@ class TestShouldDetectMeter:
         unit_settings.meter = [False, False, False]
 
         meter = SunSpecMeterOffset.METER0
-        inverter_raw = {}
+        inverter_raw: SunSpecPayload = {}
 
-        result = Modbus._should_detect_meter(
-            unit_settings, meter, inverter_raw
-        )
+        result = Modbus._should_detect_meter(unit_settings, meter, inverter_raw)
 
         assert result is False
 
@@ -118,9 +111,7 @@ class TestLogMeterDetectionError:
     """Tests for _log_meter_detection_error method."""
 
     @patch("solaredge2mqtt.services.modbus.logger")
-    def test_log_meter_detection_error_with_meter_address(
-        self, mock_logger
-    ):
+    def test_log_meter_detection_error_with_meter_address(self, mock_logger):
         """Test error logging includes meter address from inverter."""
         meter_id = "meter1"
         inverter_raw = {
@@ -142,9 +133,7 @@ class TestLogMeterDetectionError:
             ),
         )
 
-        Modbus._log_meter_detection_error(
-            meter_id, inverter_raw, exception
-        )
+        Modbus._log_meter_detection_error(meter_id, inverter_raw, exception)
 
         # Check that error was logged
         assert mock_logger.error.call_count == 1
@@ -152,28 +141,23 @@ class TestLogMeterDetectionError:
         assert "Skipping meter1" in error_call
         assert "invalid register data" in error_call
 
-        # Check that info logs were called (now 4: address, inverter info, 
+        # Check that info logs were called (now 4: address, inverter info,
         # communication issue, and configuration hint)
         assert mock_logger.info.call_count == 4
 
         # Find info calls
-        info_calls = [
-            call[0][0] for call in mock_logger.info.call_args_list
-        ]
+        info_calls = [call[0][0] for call in mock_logger.info.call_args_list]
 
         # Check meter address is logged
-        meter_address_logged = any(
-            "meter1=173" in call for call in info_calls
-        )
+        meter_address_logged = any("meter1=173" in call for call in info_calls)
         assert meter_address_logged
 
         # Check inverter info is logged
         inverter_info_logged = any(
-            "SolarEdge" in call and "SE5000H" in call
-            for call in info_calls
+            "SolarEdge" in call and "SE5000H" in call for call in info_calls
         )
         assert inverter_info_logged
-        
+
         # Check configuration hint is logged with array index format
         config_hint_logged = any(
             "disable detection in configuration.yml" in call
@@ -183,9 +167,7 @@ class TestLogMeterDetectionError:
         assert config_hint_logged
 
     @patch("solaredge2mqtt.services.modbus.logger")
-    def test_log_meter_detection_error_without_meter_address(
-        self, mock_logger
-    ):
+    def test_log_meter_detection_error_without_meter_address(self, mock_logger):
         """Test error logging when meter address not in data."""
         meter_id = "meter2"
         inverter_raw = {
@@ -202,27 +184,21 @@ class TestLogMeterDetectionError:
             register_id="c_model",
             address=40125,
             raw_values=[0xFFFF],
-            original_error=UnicodeDecodeError(
-                "utf-8", b"\xff", 0, 1, "invalid byte"
-            ),
+            original_error=UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid byte"),
         )
 
-        Modbus._log_meter_detection_error(
-            meter_id, inverter_raw, exception
-        )
+        Modbus._log_meter_detection_error(meter_id, inverter_raw, exception)
 
         # Should still log error and info (now 4 info logs)
         assert mock_logger.error.call_count == 1
         assert mock_logger.info.call_count == 4
 
         # meter2 should still be logged (with None value from .get())
-        info_calls = [
-            call[0][0] for call in mock_logger.info.call_args_list
-        ]
+        info_calls = [call[0][0] for call in mock_logger.info.call_args_list]
         meter2_logged = any("meter2" in call for call in info_calls)
         # Should use .get() which returns None, logged as "meter2=None"
         assert meter2_logged
-        
+
         # Check configuration hint is logged for meter2 with array index
         config_hint_logged = any(
             "disable detection in configuration.yml" in call
@@ -241,9 +217,7 @@ class TestDetectMetersExceptionHandling:
         self, mock_logger, mock_service_settings, mock_event_bus
     ):
         """Test that _detect_meters skips meter on exception."""
-        with patch(
-            "solaredge2mqtt.services.modbus.AsyncModbusTcpClient"
-        ):
+        with patch("solaredge2mqtt.services.modbus.AsyncModbusTcpClient"):
             modbus = Modbus(mock_service_settings, mock_event_bus)
 
             unit_key = "leader"
@@ -258,7 +232,7 @@ class TestDetectMetersExceptionHandling:
             }
 
             # Mock read_device_info to raise exception for meter0
-            async def mock_read_device_info(
+            async def mock_read_device_info(  # noqa: S7503
                 register_class, uk, identifier, us, offset
             ):
                 if identifier == "meter0":
@@ -271,19 +245,13 @@ class TestDetectMetersExceptionHandling:
                         ),
                     )
 
-            modbus.read_device_info = AsyncMock(
-                side_effect=mock_read_device_info
-            )
+            modbus.read_device_info = AsyncMock(side_effect=mock_read_device_info)
 
             # Should not raise exception
-            await modbus._detect_meters(
-                unit_key, unit_settings, inverter_raw
-            )
+            await modbus._detect_meters(unit_key, unit_settings, inverter_raw)
 
             # Verify error was logged for meter0
-            error_calls = [
-                call[0][0] for call in mock_logger.error.call_args_list
-            ]
+            error_calls = [call[0][0] for call in mock_logger.error.call_args_list]
             assert any("meter0" in call for call in error_calls)
 
     @pytest.mark.asyncio
@@ -291,9 +259,7 @@ class TestDetectMetersExceptionHandling:
         self, mock_service_settings, mock_event_bus
     ):
         """Test that other meters are still processed after exception."""
-        with patch(
-            "solaredge2mqtt.services.modbus.AsyncModbusTcpClient"
-        ):
+        with patch("solaredge2mqtt.services.modbus.AsyncModbusTcpClient"):
             modbus = Modbus(mock_service_settings, mock_event_bus)
 
             unit_key = "leader"
@@ -310,7 +276,7 @@ class TestDetectMetersExceptionHandling:
 
             call_count = 0
 
-            async def mock_read_device_info(
+            async def mock_read_device_info(  # noqa: S7503
                 register_class, uk, identifier, us, offset
             ):
                 nonlocal call_count
@@ -326,13 +292,9 @@ class TestDetectMetersExceptionHandling:
                     )
                 # meter1 and meter2 succeed
 
-            modbus.read_device_info = AsyncMock(
-                side_effect=mock_read_device_info
-            )
+            modbus.read_device_info = AsyncMock(side_effect=mock_read_device_info)
 
-            await modbus._detect_meters(
-                unit_key, unit_settings, inverter_raw
-            )
+            await modbus._detect_meters(unit_key, unit_settings, inverter_raw)
 
             # Should have tried all 3 meters
             assert call_count == 3
@@ -342,24 +304,18 @@ class TestDetectBatteries:
     """Tests for _detect_batteries method."""
 
     @pytest.mark.asyncio
-    async def test_detect_batteries_basic(
-        self, mock_service_settings, mock_event_bus
-    ):
+    async def test_detect_batteries_basic(self, mock_service_settings, mock_event_bus):
         """Test basic battery detection."""
-        with patch(
-            "solaredge2mqtt.services.modbus.AsyncModbusTcpClient"
-        ):
+        with patch("solaredge2mqtt.services.modbus.AsyncModbusTcpClient"):
             modbus = Modbus(mock_service_settings, mock_event_bus)
 
             unit_key = "leader"
             unit_settings = mock_service_settings.modbus.units[unit_key]
-            inverter_raw = {"battery0": 57344}
+            inverter_raw: SunSpecPayload = {"battery0": 57344}
 
             modbus.read_device_info = AsyncMock()
 
-            await modbus._detect_batteries(
-                unit_key, unit_settings, inverter_raw
-            )
+            await modbus._detect_batteries(unit_key, unit_settings, inverter_raw)
 
             # Should have called read_device_info once for battery0
             assert modbus.read_device_info.call_count == 1
@@ -383,22 +339,16 @@ class TestInverterInfoContext:
             register_id="c_test",
             address=40000,
             raw_values=[0x0000],
-            original_error=UnicodeDecodeError(
-                "utf-8", b"\x00", 0, 1, "null byte"
-            ),
+            original_error=UnicodeDecodeError("utf-8", b"\x00", 0, 1, "null byte"),
         )
 
         Modbus._log_meter_detection_error("meter1", inverter_raw, exception)
 
         # Find the info call with inverter details
-        info_calls = [
-            call[0][0] for call in mock_logger.info.call_args_list
-        ]
+        info_calls = [call[0][0] for call in mock_logger.info.call_args_list]
 
         inverter_context_call = [
-            call
-            for call in info_calls
-            if "Manufacturer=" in call and "Model=" in call
+            call for call in info_calls if "Manufacturer=" in call and "Model=" in call
         ]
         assert len(inverter_context_call) > 0
 
@@ -423,9 +373,7 @@ class TestInverterInfoContext:
             register_id="c_test",
             address=40000,
             raw_values=[0x0000],
-            original_error=UnicodeDecodeError(
-                "utf-8", b"\x00", 0, 1, "null byte"
-            ),
+            original_error=UnicodeDecodeError("utf-8", b"\x00", 0, 1, "null byte"),
         )
 
         Modbus._log_meter_detection_error("meter0", inverter_raw, exception)

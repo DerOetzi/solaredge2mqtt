@@ -3,9 +3,10 @@ from __future__ import annotations
 from collections.abc import MutableMapping
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Any, Callable, Self, TypeVar, cast
 
 import jsonref
-from pydantic import BaseModel, model_serializer, model_validator
+from pydantic import BaseModel, Field, model_serializer, model_validator
 
 from solaredge2mqtt import __version__
 
@@ -29,21 +30,41 @@ class EnumModel(Enum):
         return hash(self.value)
 
     @classmethod
-    def from_string(cls, value: str) -> EnumModel:
+    def from_string(cls, value: str) -> Self:
         for item in cls.__members__.values():
             if item.value == value:
-                return item
+                return cast(Self, item)
+
         raise ValueError(f"No enum value {value} found.")
 
     @model_serializer
-    def serialize(self) -> any:
+    def serialize(self) -> Any:
         return self.value
 
 
 class BaseInputField(BaseModel):
-    model_config = {
-        "extra": "forbid"
-    }
+    model_config = {"extra": "forbid"}
+
+
+TBaseInputField = TypeVar("TBaseInputField", bound=BaseInputField)
+
+
+class BaseInputScalarField(BaseInputField):
+    @model_validator(mode="before")
+    @classmethod
+    def validate_scalar(cls, value: Any) -> dict[str, Any]:
+        if isinstance(value, dict):
+            return value
+        return cls._wrap_scalar(value)
+
+    @classmethod
+    def _wrap_scalar(cls, scalar: Any) -> dict[str, Any]:
+        field_names = tuple(cls.model_fields.keys())
+        if len(field_names) == 1:
+            return {field_names[0]: scalar}
+        raise TypeError(
+            "Scalar input requires exactly one model field or a mapping input."
+        )
 
 
 class BaseInputFieldEnumModel(EnumModel):
@@ -65,12 +86,12 @@ class BaseField(EnumModel):
         self._key: str = key
         self._input_field: BaseInputFieldEnumModel | None = input_field
 
-    def field(self, title: str | None,
-              json_schema_extra: dict[str, any] | None = None,
-              input_field: BaseInputFieldEnumModel | None = None) -> dict[str, any]:
-
-        if json_schema_extra is None:
-            json_schema_extra = {}
+    def field(
+        self,
+        title: str | None,
+        input_field: BaseInputFieldEnumModel | None = None,
+        **json_schema_extra: Any,
+    ) -> dict[str, Any]:
 
         input_field = input_field or self._input_field
 
@@ -89,39 +110,34 @@ class BaseField(EnumModel):
 
 
 class Solaredge2MQTTBaseModel(BaseModel):
-    timestamp: datetime | None = None
+    timestamp: datetime | None = Field(
+        default_factory=lambda: datetime.now(tz=timezone.utc)
+    )
 
-    @model_validator(mode="before")
-    def _set_always(cls, data: dict[str, any]) -> dict[str, any]:
-        data = dict(data or {})
-        if "timestamp" not in data or data["timestamp"] is None:
-            data["timestamp"] = datetime.now(tz=timezone.utc)
-        return data
-
-    def model_dump_influxdb(self, exclude: list[str] | None = None) -> dict[str, any]:
+    def model_dump_influxdb(self, exclude: set[str] | None = None) -> dict[str, Any]:
         ignore_keys = {"timestamp"}
         return self._flatten_dict(
-            self.model_dump(exclude=exclude, exclude_none=True),
-            ignore_keys=ignore_keys
+            self.model_dump(exclude=exclude, exclude_none=True), ignore_keys=ignore_keys
         )
 
     def _flatten_dict(
         self,
-        d: MutableMapping,
-        ignore_keys: set[str] = set(),
+        d: MutableMapping[str, Any],
+        ignore_keys: set[str] | None = None,
         join_chr: str = "_",
         parent_key: str = "",
-    ) -> MutableMapping:
-        items = []
+    ) -> dict[str, Any]:
+        if ignore_keys is None:
+            ignore_keys = set()
+
+        items: list[tuple[str, Any]] = []
         for k, v in d.items():
             if k in ignore_keys:
                 continue
             new_key = parent_key + join_chr + k if parent_key else k
             if isinstance(v, MutableMapping):
                 items.extend(
-                    self._flatten_dict(
-                        v, ignore_keys, join_chr, new_key
-                    ).items()
+                    self._flatten_dict(v, ignore_keys, join_chr, new_key).items()
                 )
             else:
                 if isinstance(v, int):
@@ -132,7 +148,7 @@ class Solaredge2MQTTBaseModel(BaseModel):
                 items.append((new_key, v))
         return dict(items)
 
-    def _default_homeassistant_device_info(self, name: str) -> dict[str, any]:
+    def _default_homeassistant_device_info(self, name: str) -> dict[str, Any]:
         return {
             "name": f"SolarEdge2MQTT {name}",
             "manufacturer": "DerOetzi",
@@ -141,31 +157,36 @@ class Solaredge2MQTTBaseModel(BaseModel):
         }
 
     @classmethod
-    def parse_schema(cls, property_parser: callable | None = None) -> list[dict]:
-        return cls._walk_schema(
-            jsonref.replace_refs(
-                cls.model_json_schema(mode="serialization"),
-                merge_props=True
-            )[
-                "properties"
-            ], property_parser or cls.property_parser
+    def parse_schema(cls, property_parser: Callable | None = None) -> list[dict]:
+        resolved_schema: Any = jsonref.replace_refs(
+            cls.model_json_schema(mode="serialization"),
+            merge_props=True,
+        )
 
+        properties: dict[str, dict[str, Any]] = {}
+        if isinstance(resolved_schema, MutableMapping):
+            raw_properties = resolved_schema.get("properties")
+            if isinstance(raw_properties, MutableMapping):
+                properties = cast(dict[str, dict[str, Any]], raw_properties)
+
+        return cls._walk_schema(
+            properties,
+            property_parser or cls.property_parser,
         )
 
     @classmethod
     def _walk_schema(
         cls,
         properties: dict[str, dict],
-        property_parser: callable,
+        property_parser: Callable,
         parent_name: str | None = None,
-        parent_path: list[str] = []
+        parent_path: list[str] = [],
     ) -> list[dict]:
         items: list[dict] = []
         for key, prop in properties.items():
             new_path = [*parent_path, key]
             new_name = (
-                parent_name + " " +
-                prop["title"] if parent_name else prop["title"]
+                parent_name + " " + prop["title"] if parent_name else prop["title"]
             )
             if "properties" in prop:
                 items.extend(
@@ -179,7 +200,7 @@ class Solaredge2MQTTBaseModel(BaseModel):
                         prop["allOf"][0]["properties"],
                         property_parser,
                         new_name,
-                        new_path
+                        new_path,
                     )
                 )
             elif "anyOf" in prop and "properties" in prop["anyOf"][0]:
@@ -188,7 +209,7 @@ class Solaredge2MQTTBaseModel(BaseModel):
                         prop["anyOf"][0]["properties"],
                         property_parser,
                         new_name,
-                        new_path
+                        new_path,
                     )
                 )
             else:
@@ -200,7 +221,7 @@ class Solaredge2MQTTBaseModel(BaseModel):
 
     @staticmethod
     def property_parser(
-        prop: dict[str, any],
+        prop: dict[str, Any],
         name: str,
         path: list[str],
     ) -> dict | None:

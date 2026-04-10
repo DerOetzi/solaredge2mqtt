@@ -2,6 +2,9 @@
 
 from datetime import datetime, timezone
 
+import pytest
+
+from solaredge2mqtt.core.exceptions import InvalidDataException
 from solaredge2mqtt.services.monitoring.models import (
     LogicalInfo,
     LogicalInverter,
@@ -68,6 +71,11 @@ class TestLogicalInfo:
         assert isinstance(result["identifier"], str)
         assert result["identifier"] == "12345"
 
+    def test_logical_info_map_invalid_input_raises(self):
+        """Test LogicalInfo.map raises on non-dict data."""
+        with pytest.raises(InvalidDataException):
+            LogicalInfo.map("invalid")
+
 
 class TestLogicalInverter:
     """Tests for LogicalInverter class."""
@@ -83,7 +91,7 @@ class TestLogicalInverter:
         inverter = LogicalInverter(info=info, energy=5000.0)
 
         assert inverter.info.identifier == "1"
-        assert inverter.energy == 5000.0
+        assert inverter.energy == pytest.approx(5000.0)
         assert inverter.strings == []
 
     def test_logical_inverter_with_none_energy(self):
@@ -126,7 +134,7 @@ class TestLogicalString:
         string = LogicalString(info=info, energy=2500.0)
 
         assert string.info.identifier == "2"
-        assert string.energy == 2500.0
+        assert string.energy == pytest.approx(2500.0)
         assert string.modules == []
 
     def test_logical_string_with_none_energy(self):
@@ -169,7 +177,7 @@ class TestLogicalModule:
         module = LogicalModule(info=info, energy=100.0)
 
         assert module.info.identifier == "3"
-        assert module.energy == 100.0
+        assert module.energy == pytest.approx(100.0)
         assert module.power is None
 
     def test_logical_module_with_none_energy(self):
@@ -232,8 +240,8 @@ class TestLogicalModule:
         assert power_today is not None
         assert "12:30" in power_today
         assert "13:45" in power_today
-        assert power_today["12:30"] == 150.5
-        assert power_today["13:45"] == 145.2
+        assert power_today["12:30"] == pytest.approx(150.5)
+        assert power_today["13:45"] == pytest.approx(145.2)
 
     def test_logical_module_model_dump_includes_power_today(self):
         """Test model dump includes power_today computed field."""
@@ -251,4 +259,4 @@ class TestLogicalModule:
         dump = module.model_dump()
 
         assert "power_today" in dump
-        assert dump["power_today"]["12:00"] == 150.0
+        assert dump["power_today"]["12:00"] == pytest.approx(150.0)

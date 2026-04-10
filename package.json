@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "devDependencies": {
+    "pyright": "1.1.404"
+  },
+  "scripts": {
+    "typecheck": "pyright"
+  }
+}

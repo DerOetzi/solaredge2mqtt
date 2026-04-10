@@ -1,4 +1,8 @@
-from solaredge2mqtt.services.modbus.sunspec.base import SunSpecOffset, SunSpecRegister
+from solaredge2mqtt.services.modbus.sunspec.base import (
+    SunSpecOffset,
+    SunSpecRegister,
+    SunSpecWordOrder,
+)
 from solaredge2mqtt.services.modbus.sunspec.values import SunSpecValueType
 
 
@@ -75,7 +79,7 @@ class SunSpecBatteryRegister(SunSpecRegister):
     EVENT_LOG_INTERNAL = "event_log_internal", 57746, SunSpecValueType.UINT32
 
     @staticmethod
-    def wordorder() -> str:
+    def wordorder() -> SunSpecWordOrder:
         return "little"
 
 
