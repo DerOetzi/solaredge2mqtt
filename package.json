@@ -1,7 +1,7 @@
 {
   "private": true,
   "devDependencies": {
-    "pyright": "1.1.404"
+    "pyright": "1.1.408"
   },
   "scripts": {
     "typecheck": "pyright"
