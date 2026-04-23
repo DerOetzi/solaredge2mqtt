@@ -1,8 +1,9 @@
 from datetime import datetime, timedelta, timezone
+from typing import cast
 from unittest.mock import patch
 
 import pytest
-from pandas import DataFrame
+from pandas import DataFrame, Series
 
 from solaredge2mqtt.core.settings.models import LocationSettings
 from solaredge2mqtt.services.forecast.models import ForecasterType
@@ -50,7 +51,7 @@ class TestForecasterHyperparameterTuning:
         )
         data["time"] = data["time"].dt.tz_convert(LOCAL_TZ)
 
-        y_vector = data["energy"]
+        y_vector = cast(Series, data["energy"])
         x_data = data.drop(columns=["energy"])
         pipeline = forecaster._prepare_model_pipeline(x_data.columns.to_list())
 
