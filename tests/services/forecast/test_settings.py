@@ -25,6 +25,7 @@ class TestForecastSettings:
 
         assert settings.enable is False
         assert settings.hyperparametertuning is False
+        assert settings.cache_size_limit_mb == 512
         assert settings.retain is False
 
     def test_forecast_settings_is_configured_false(self):
