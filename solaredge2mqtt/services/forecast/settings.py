@@ -16,8 +16,7 @@ def _get_default_cache_dir() -> str:
     DOCKER_CONTAINER environment variable.
     """
     # Check for Docker environment indicators
-    is_docker = Path(
-        "/.dockerenv").exists() or getenv("DOCKER_CONTAINER") == "true"
+    is_docker = Path("/.dockerenv").exists() or getenv("DOCKER_CONTAINER") == "true"
 
     if is_docker:
         return "/app/cache"

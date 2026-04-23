@@ -103,8 +103,7 @@ class TestMQTTReceivedEvent:
         class TestInput(BaseInputField):
             value: int
 
-        class TestReceivedEvent(MQTTReceivedEvent[TestInput]):
-            ...  # pragma: no cover
+        class TestReceivedEvent(MQTTReceivedEvent[TestInput]): ...  # pragma: no cover
 
         assert TestReceivedEvent.input_model() == TestInput
         assert TestReceivedEvent._model_type is TestInput
@@ -139,8 +138,7 @@ class TestMQTTReceivedEvent:
 
             class InvalidReceivedEvent(  # noqa: S5603
                 MQTTReceivedEvent[TestInput]
-            ):
-                ...
+            ): ...
 
     def test_mqtt_received_event_init_subclass_raises_when_generic_args_empty(
         self, monkeypatch
@@ -166,8 +164,7 @@ class TestMQTTReceivedEvent:
 
             class InvalidReceivedEvent(  # noqa: S5603
                 MQTTReceivedEvent[TestInput]
-            ):
-                ...
+            ): ...
 
 
 class TestMQTTSubscribeEvent:
@@ -187,13 +184,11 @@ class TestMQTTSubscribeEvent:
         class TestInput(BaseInputField):
             value: float
 
-        class TestReceivedEvent(MQTTReceivedEvent[TestInput]):
-            ...  # pragma: no cover
+        class TestReceivedEvent(MQTTReceivedEvent[TestInput]): ...  # pragma: no cover
 
         class TestSubscribeEvent(
             MQTTSubscribeEvent[TestReceivedEvent]
-        ):
-            ...  # pragma: no cover
+        ): ...  # pragma: no cover
 
         event = TestSubscribeEvent("test/topic")
 
@@ -220,8 +215,7 @@ class TestMQTTSubscribeEvent:
         class TestInput(BaseInputField):
             value: float
 
-        class TestReceivedEvent(MQTTReceivedEvent[TestInput]):
-            ...  # pragma: no cover
+        class TestReceivedEvent(MQTTReceivedEvent[TestInput]): ...  # pragma: no cover
 
         import solaredge2mqtt.core.mqtt.events as mqtt_events
 
@@ -234,8 +228,7 @@ class TestMQTTSubscribeEvent:
 
             class InvalidSubscribeEvent(  # noqa: S5603
                 MQTTSubscribeEvent[TestReceivedEvent]
-            ):
-                ...
+            ): ...
 
     def test_mqtt_subscribe_event_init_subclass_raises_when_generic_args_empty(
         self, monkeypatch
@@ -245,8 +238,7 @@ class TestMQTTSubscribeEvent:
         class TestInput(BaseInputField):
             value: float
 
-        class TestReceivedEvent(MQTTReceivedEvent[TestInput]):
-            ...  # pragma: no cover
+        class TestReceivedEvent(MQTTReceivedEvent[TestInput]): ...  # pragma: no cover
 
         import solaredge2mqtt.core.mqtt.events as mqtt_events
 
@@ -264,5 +256,4 @@ class TestMQTTSubscribeEvent:
 
             class InvalidSubscribeEvent(  # noqa: S5603
                 MQTTSubscribeEvent[TestReceivedEvent]
-            ):
-                ...
+            ): ...

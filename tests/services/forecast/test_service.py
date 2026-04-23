@@ -75,8 +75,7 @@ class MockWeatherData:
 
     def __init__(self, hourly=None):
         if hourly is None:
-            hourly = [MockOpenWeatherMapForecastData(
-                hour=i) for i in range(48)]
+            hourly = [MockOpenWeatherMapForecastData(hour=i) for i in range(48)]
         self.hourly = hourly
 
 
@@ -110,10 +109,8 @@ class TestForecastServiceInit:
 
         assert ForecasterType.ENERGY in service.forecasters
         assert ForecasterType.POWER in service.forecasters
-        assert isinstance(
-            service.forecasters[ForecasterType.ENERGY], Forecaster)
-        assert isinstance(
-            service.forecasters[ForecasterType.POWER], Forecaster)
+        assert isinstance(service.forecasters[ForecasterType.ENERGY], Forecaster)
+        assert isinstance(service.forecasters[ForecasterType.POWER], Forecaster)
 
     def test_forecast_service_subscribes_events(self):
         """Test ForecastService subscribes to events."""
@@ -229,8 +226,7 @@ class TestForecastServiceWeatherUpdate:
             mock_now.hour = 12
             mock_dt.now.return_value = mock_now
             mock_now.astimezone.return_value = mock_now
-            mock_now.__sub__ = lambda self, x: MagicMock(
-                spec=["hour"], hour=11)
+            mock_now.__sub__ = lambda self, x: MagicMock(spec=["hour"], hour=11)
 
             await service.weather_update(event)
 
@@ -267,8 +263,7 @@ class TestForecastServiceWeatherUpdate:
 
             await service.weather_update(event)
 
-        service.write_new_training_data.assert_awaited_once_with(
-            hourly_data[0])
+        service.write_new_training_data.assert_awaited_once_with(hourly_data[0])
 
 
 class TestForecastServiceWriteTrainingData:
@@ -637,8 +632,7 @@ class TestForecasterTrain:
                 "weather_main": ["Clear"] * 100,
             }
         )
-        data["time"] = data["time"].astype(
-            pd.DatetimeTZDtype(unit="ns", tz=LOCAL_TZ))
+        data["time"] = data["time"].astype(pd.DatetimeTZDtype(unit="ns", tz=LOCAL_TZ))
 
         forecaster.train(data)
 
@@ -659,8 +653,7 @@ class TestForecasterTrain:
                 "energy": [100.0 + i for i in range(70)],
             }
         )
-        data["time"] = data["time"].astype(
-            pd.DatetimeTZDtype(unit="ns", tz=LOCAL_TZ))
+        data["time"] = data["time"].astype(pd.DatetimeTZDtype(unit="ns", tz=LOCAL_TZ))
 
         prepared_pipeline = MagicMock()
         tuned_pipeline = MagicMock()
@@ -1034,5 +1027,4 @@ class TestForecastServiceAddLastHourPvProduction:
         # Power is rounded using Python's built-in round()
         assert result[ForecasterType.POWER.target_column] == round(1234.5)
         # Energy is rounded to 2 decimal places
-        assert result[ForecasterType.ENERGY.target_column] == pytest.approx(
-            1.57)
+        assert result[ForecasterType.ENERGY.target_column] == pytest.approx(1.57)

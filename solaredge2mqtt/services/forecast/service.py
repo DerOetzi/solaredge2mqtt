@@ -63,8 +63,7 @@ class ForecastService:
         }
 
         self.last_weather_forecast: list[OpenWeatherMapForecastData] | None = None
-        self.last_hour_forecast: dict[int,
-                                      OpenWeatherMapForecastData] | None = None
+        self.last_hour_forecast: dict[int, OpenWeatherMapForecastData] | None = None
 
     def _subscribe_events(self) -> None:
         self.event_bus.subscribe(WeatherUpdateEvent, self.weather_update)
@@ -96,8 +95,7 @@ class ForecastService:
         self, last_hour_weather_forecast: OpenWeatherMapForecastData
     ) -> None:
         now = datetime.now().astimezone()
-        last_hour = now.replace(
-            minute=0, second=0, microsecond=0) - timedelta(hours=1)
+        last_hour = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)
 
         training_data = last_hour_weather_forecast.model_dump_estimation_data()
         training_data["time"] = last_hour
@@ -176,8 +174,7 @@ class ForecastService:
         ]
 
         data = DataFrame(estimation_data_list)
-        data["time"] = to_datetime(
-            data["time"], utc=True).dt.tz_convert(LOCAL_TZ)
+        data["time"] = to_datetime(data["time"], utc=True).dt.tz_convert(LOCAL_TZ)
 
         for typed, forecaster in self.forecasters.items():
             predicted_data = await forecaster.predict(data)
@@ -194,8 +191,7 @@ class ForecastService:
             point.field(typed.target_column, period[typed.target_column])
             period_time = period["time"]
             if not isinstance(period_time, datetime):
-                raise InvalidDataException(
-                    "Forecast period time must be datetime")
+                raise InvalidDataException("Forecast period time must be datetime")
 
             utc_time = period_time.astimezone(timezone.utc)
             point.time(utc_time)
@@ -207,8 +203,7 @@ class ForecastService:
     async def publish_forecast(self) -> None:
         forecast_data = await self.influxdb.query_dataframe("forecast")
         if not forecast_data.empty:
-            forecast_data["time"] = forecast_data["_time"].dt.tz_convert(
-                LOCAL_TZ)
+            forecast_data["time"] = forecast_data["_time"].dt.tz_convert(LOCAL_TZ)
             power_hours: dict[datetime, int] = {}
             energy_hours: dict[datetime, int] = {}
             for _, row in forecast_data.iterrows():
@@ -232,8 +227,7 @@ class ForecastService:
                 power_hours[row_time] = int(round(row_power))
                 energy_hours[row_time] = int(round(row_energy * 1000))
 
-            forecast = Forecast(power_period=power_hours,
-                                energy_period=energy_hours)
+            forecast = Forecast(power_period=power_hours, energy_period=energy_hours)
             logger.debug(forecast)
 
             await self.event_bus.emit(
@@ -307,8 +301,7 @@ class Forecaster:
         pipeline = self._prepare_model_pipeline(data.columns.to_list())
 
         if self.enable_hyperparameter_tuning:
-            self.model_pipeline = self._hyperparametertuning(
-                data, y_vector, pipeline)
+            self.model_pipeline = self._hyperparametertuning(data, y_vector, pipeline)
         else:
             self.model_pipeline = pipeline
 
@@ -370,8 +363,7 @@ class Forecaster:
                 (
                     "num",
                     "passthrough",
-                    self._extract_used_columns(
-                        self.NUMERIC_FEATURES, x_vector_columns),
+                    self._extract_used_columns(self.NUMERIC_FEATURES, x_vector_columns),
                 ),
                 (
                     "time",
@@ -410,8 +402,7 @@ class Forecaster:
         logger.info(
             "Training with best parameters: {params}", params=grid_search.best_params_
         )
-        logger.info(
-            "Training with best score: {score}", score=grid_search.best_score_)
+        logger.info("Training with best score: {score}", score=grid_search.best_score_)
 
         return cast(Pipeline, clone(grid_search.best_estimator_))
 
