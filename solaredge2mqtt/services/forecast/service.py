@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, cast
 from joblib import Memory
 from numpy import percentile
 from numpy.typing import NDArray
-from pandas import DataFrame, to_datetime
+from pandas import DataFrame, Series, to_datetime
 from sklearn import clone
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
@@ -296,7 +296,7 @@ class Forecaster:
 
         self.training_completed.clear()
         start_time = time.time()
-        y_vector = data[self.typed.target_column]
+        y_vector = cast(Series, data[self.typed.target_column])
 
         pipeline = self._prepare_model_pipeline(data.columns.to_list())
 
@@ -384,7 +384,12 @@ class Forecaster:
         ct.set_output(transform="pandas")
         return ct
 
-    def _hyperparametertuning(self, data, y_vector, pipeline) -> Pipeline:
+    def _hyperparametertuning(
+        self,
+        data: DataFrame,
+        y_vector: Series,
+        pipeline: Pipeline,
+    ) -> Pipeline:
         param_grid = {
             "model__max_iter": [100, 200, 300],
             "model__max_depth": [None, 5, 10],
