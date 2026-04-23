@@ -1,4 +1,5 @@
 {
+  "name": "solaredge2mqtt",
   "private": true,
   "devDependencies": {
     "pyright": "1.1.409"
