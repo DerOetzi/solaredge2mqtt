@@ -29,6 +29,7 @@ class ForecastSettings(BaseModel):
     enable: bool = Field(default=False)
     hyperparametertuning: bool = Field(default=False)
     cachingdir: str | None = Field(default_factory=_get_default_cache_dir)
+    cache_size_limit_mb: int = Field(default=512, ge=1)
     retain: bool = Field(default=False)
 
     @property

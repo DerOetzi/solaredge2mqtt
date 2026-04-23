@@ -30,8 +30,7 @@ class InfluxDBSettings(BaseModel):
     def url(self) -> str:
         if self._url is None:
             if self.host is None:
-                raise ConfigurationException(
-                    "influxdb", "No InfluxDB host set.")
+                raise ConfigurationException("influxdb", "No InfluxDB host set.")
 
             self._url = f"{self.host}:{self.port}"
 

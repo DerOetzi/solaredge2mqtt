@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, cast
 from joblib import Memory
 from numpy import percentile
 from numpy.typing import NDArray
-from pandas import DataFrame, to_datetime
+from pandas import DataFrame, Series, to_datetime
 from sklearn import clone
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
@@ -275,6 +275,7 @@ class Forecaster:
         self.enable_hyperparameter_tuning = settings.hyperparametertuning
         self.model_pipeline: Pipeline | None = None
         self.training_completed: Event = Event()
+        self.cache_size_limit_bytes = settings.cache_size_limit_mb * 1024 * 1024
 
         self.memory: Memory | None = (
             Memory(settings.cachingdir, verbose=0)
@@ -295,7 +296,7 @@ class Forecaster:
 
         self.training_completed.clear()
         start_time = time.time()
-        y_vector = data[self.typed.target_column]
+        y_vector = cast(Series, data[self.typed.target_column])
 
         pipeline = self._prepare_model_pipeline(data.columns.to_list())
 
@@ -305,6 +306,7 @@ class Forecaster:
             self.model_pipeline = pipeline
 
         self.model_pipeline.fit(data, y_vector)
+        self._cleanup_cache()
 
         execution_time = time.time() - start_time
         self.training_completed.set()
@@ -328,28 +330,6 @@ class Forecaster:
         )
 
         logger.info(f"Training execution time: {execution_time:.2f} seconds")
-
-    def _hyperparametertuning(self, data, y_vector, pipeline) -> Pipeline:
-        param_grid = {
-            "model__max_iter": [100, 200, 300],
-            "model__max_depth": [None, 5, 10],
-            "model__learning_rate": [0.01, 0.1],
-        }
-
-        grid_search = GridSearchCV(
-            estimator=pipeline,
-            param_grid=param_grid,
-            cv=TimeSeriesSplit(n_splits=2),
-            scoring="neg_mean_squared_error",
-        )
-        grid_search.fit(data, y_vector)
-
-        logger.info(
-            "Training with best parameters: {params}", params=grid_search.best_params_
-        )
-        logger.info("Training with best score: {score}", score=grid_search.best_score_)
-
-        return cast(Pipeline, clone(grid_search.best_estimator_))
 
     def _prepare_model_pipeline(self, x_vector_columns: list[str]) -> Pipeline:
         base_estimator = HistGradientBoostingRegressor(
@@ -403,6 +383,39 @@ class Forecaster:
         )
         ct.set_output(transform="pandas")
         return ct
+
+    def _hyperparametertuning(
+        self,
+        data: DataFrame,
+        y_vector: Series,
+        pipeline: Pipeline,
+    ) -> Pipeline:
+        param_grid = {
+            "model__max_iter": [100, 200, 300],
+            "model__max_depth": [None, 5, 10],
+            "model__learning_rate": [0.01, 0.1],
+        }
+
+        grid_search = GridSearchCV(
+            estimator=pipeline,
+            param_grid=param_grid,
+            cv=TimeSeriesSplit(n_splits=2),
+            scoring="neg_mean_squared_error",
+        )
+        grid_search.fit(data, y_vector)
+
+        logger.info(
+            "Training with best parameters: {params}", params=grid_search.best_params_
+        )
+        logger.info("Training with best score: {score}", score=grid_search.best_score_)
+
+        return cast(Pipeline, clone(grid_search.best_estimator_))
+
+    def _cleanup_cache(self) -> None:
+        if self.memory is None:
+            return
+
+        self.memory.reduce_size(bytes_limit=self.cache_size_limit_bytes)
 
     @staticmethod
     def _extract_used_columns(

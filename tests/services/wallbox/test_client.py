@@ -201,11 +201,35 @@ class TestWallboxClientRefreshToken:
 
         client = WallboxClient(wallbox_settings, mock_event_bus)
         client.authorization = MagicMock()
+        client.authorization.access_token = "old_access_token"
         client.authorization.refresh_token = "old_refresh_token"
 
         await client._refresh_token()
 
         assert client.authorization.access_token == "new_access_token"
+        assert client.authorization.refresh_token == "old_refresh_token"
+
+    @pytest.mark.asyncio
+    async def test_refresh_token_repeated_refresh_uses_same_refresh_token(
+        self, wallbox_settings, mock_event_bus, mock_http_client
+    ):
+        """Test repeated refresh keeps refresh token available for next call."""
+        _, mock_post = mock_http_client
+        mock_post.side_effect = [
+            {"accessToken": "new_access_token_1"},
+            {"accessToken": "new_access_token_2"},
+        ]
+
+        client = WallboxClient(wallbox_settings, mock_event_bus)
+        client.authorization = MagicMock()
+        client.authorization.access_token = "old_access_token"
+        client.authorization.refresh_token = "old_refresh_token"
+
+        await client._refresh_token()
+        await client._refresh_token()
+
+        assert client.authorization.access_token == "new_access_token_2"
+        assert client.authorization.refresh_token == "old_refresh_token"
 
     @pytest.mark.asyncio
     async def test_refresh_token_missing_authorization_raises(
@@ -250,6 +274,23 @@ class TestWallboxClientRefreshToken:
             await client._refresh_token()
 
         assert "No valid token refresh response" in exc_info.value.message
+
+    @pytest.mark.asyncio
+    async def test_refresh_token_missing_access_token_in_response_raises(
+        self, wallbox_settings, mock_event_bus, mock_http_client
+    ):
+        """Test _refresh_token raises when response has no access token."""
+        _, mock_post = mock_http_client
+        mock_post.return_value = {"refreshToken": "unexpected_refresh_token"}
+
+        client = WallboxClient(wallbox_settings, mock_event_bus)
+        client.authorization = MagicMock()
+        client.authorization.refresh_token = "old_refresh_token"
+
+        with pytest.raises(InvalidDataException) as exc_info:
+            await client._refresh_token()
+
+        assert "No access token in refresh response" in exc_info.value.message
 
 
 class TestWallboxClientGetData:
