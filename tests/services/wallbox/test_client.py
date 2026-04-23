@@ -201,11 +201,35 @@ class TestWallboxClientRefreshToken:
 
         client = WallboxClient(wallbox_settings, mock_event_bus)
         client.authorization = MagicMock()
+        client.authorization.access_token = "old_access_token"
         client.authorization.refresh_token = "old_refresh_token"
 
         await client._refresh_token()
 
         assert client.authorization.access_token == "new_access_token"
+        assert client.authorization.refresh_token == "old_refresh_token"
+
+    @pytest.mark.asyncio
+    async def test_refresh_token_repeated_refresh_uses_same_refresh_token(
+        self, wallbox_settings, mock_event_bus, mock_http_client
+    ):
+        """Test repeated refresh keeps refresh token available for next call."""
+        _, mock_post = mock_http_client
+        mock_post.side_effect = [
+            {"accessToken": "new_access_token_1"},
+            {"accessToken": "new_access_token_2"},
+        ]
+
+        client = WallboxClient(wallbox_settings, mock_event_bus)
+        client.authorization = MagicMock()
+        client.authorization.access_token = "old_access_token"
+        client.authorization.refresh_token = "old_refresh_token"
+
+        await client._refresh_token()
+        await client._refresh_token()
+
+        assert client.authorization.access_token == "new_access_token_2"
+        assert client.authorization.refresh_token == "old_refresh_token"
 
     @pytest.mark.asyncio
     async def test_refresh_token_missing_authorization_raises(

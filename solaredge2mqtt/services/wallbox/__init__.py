@@ -142,6 +142,8 @@ class WallboxClient(HTTPClientAsync):
             raise InvalidDataException(
                 "Missing previous Wallbox authorization")
 
+        refresh_token = self.authorization.refresh_token
+
         async with asyncio.timeout(5):
             response = await self._post(
                 REFRESH_URL.format(host=self.settings.host),
@@ -154,5 +156,13 @@ class WallboxClient(HTTPClientAsync):
         if response is None:
             raise InvalidDataException("No valid token refresh response")
 
-        self.authorization = AuthorizationTokens.model_validate(response)
+        updated_authorization = AuthorizationTokens.model_validate(response)
+
+        if updated_authorization.access_token is None:
+            raise InvalidDataException("No access token in refresh response")
+
+        self.authorization = AuthorizationTokens(
+            accessToken=updated_authorization.access_token,
+            refreshToken=refresh_token,
+        )
         logger.info("Refreshed access token Wallbox")
