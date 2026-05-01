@@ -51,10 +51,9 @@ class AuthorizationTokens(BaseModel):
 
 
 class WallboxClient(HTTPClientAsync):
-    def __init__(self, settings: WallboxSettings, event_bus: EventBus):
+    def __init__(self, settings: WallboxSettings):
         super().__init__("Wallbox API")
         self.settings = settings
-        self.event_bus = event_bus
         self.authorization: AuthorizationTokens | None = None
 
         logger.info(
@@ -88,7 +87,7 @@ class WallboxClient(HTTPClientAsync):
                 wallbox=wallbox,
             )
 
-            await self.event_bus.emit(WallboxReadEvent(wallbox))
+            await EventBus.emit(WallboxReadEvent(wallbox))
 
             return wallbox
         except (ClientResponseError, asyncio.TimeoutError) as error:

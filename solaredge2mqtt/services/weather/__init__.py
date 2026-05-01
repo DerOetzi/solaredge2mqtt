@@ -22,22 +22,19 @@ TIMEMACHINE_URL = "https://api.openweathermap.org/data/3.0/onecall/timemachine"
 
 
 class WeatherClient(HTTPClientAsync):
-    def __init__(self, settings: ServiceSettings, event_bus: EventBus) -> None:
+    def __init__(self, settings: ServiceSettings) -> None:
         super().__init__("Weather API")
 
         self.location = settings.location
         self.settings = settings.weather
 
-        self.event_bus = event_bus
-        self._subscribe_events()
+        EventBus.register(self)
 
-    def _subscribe_events(self):
-        self.event_bus.subscribe(Interval10MinTriggerEvent, self.loop)
-
+    @EventBus.subscribe(Interval10MinTriggerEvent)
     async def loop(self, event: Interval10MinTriggerEvent | None) -> None:
         weather = await self.get_weather()
-        await self.event_bus.emit(WeatherUpdateEvent(weather))
-        await self.event_bus.emit(
+        await EventBus.emit(WeatherUpdateEvent(weather))
+        await EventBus.emit(
             MQTTPublishEvent(
                 "weather/current",
                 weather.current,

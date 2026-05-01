@@ -58,7 +58,7 @@ LOGGING_DEVICE_INFO = (
 
 
 class Modbus:
-    def __init__(self, settings: ServiceSettings, event_bus: EventBus):
+    def __init__(self, settings: ServiceSettings):
         self.settings = settings.modbus
 
         logger.info(
@@ -69,8 +69,6 @@ class Modbus:
 
         logger.debug(f"Modbus settings: {self.settings}")
 
-        self.event_bus = event_bus
-
         self._block_unreadable: set[int] = set()
 
         self._initialized = False
@@ -79,10 +77,10 @@ class Modbus:
         self._client: AsyncModbusTcpClient | None = None
 
         self._control: ModbusAdvancedControl = ModbusAdvancedControl(
-            settings, event_bus
+            settings
         )
 
-        self._subscribe_events()
+        EventBus.register(self)
 
     @property
     def client(self) -> AsyncModbusTcpClient:
@@ -90,9 +88,6 @@ class Modbus:
             raise RuntimeError("Modbus client not initialized")
 
         return self._client
-
-    def _subscribe_events(self) -> None:
-        self.event_bus.subscribe(ModbusWriteEvent, self._handle_write_event)
 
     async def async_init(self) -> None:
         logger.info("Initializing modbus")
@@ -160,7 +155,8 @@ class Modbus:
                     meter.offset,
                 )
             except InvalidRegisterDataException as e:
-                self._log_meter_detection_error(meter.identifier, inverter_raw, e)
+                self._log_meter_detection_error(
+                    meter.identifier, inverter_raw, e)
 
     @staticmethod
     def _should_detect_meter(
@@ -246,7 +242,8 @@ class Modbus:
             else None,
         )
 
-        logger.info(f"Found {key} {info.manufacturer} {info.model} {info.serialnumber}")
+        logger.info(
+            f"Found {key} {info.manufacturer} {info.model} {info.serialnumber}")
         self._device_info[unit_key][key] = info
         return raw_data
 
@@ -281,7 +278,8 @@ class Modbus:
 
                     inverter_data = self._map_inverter(unit_key, inverter_raw)
                     meters_data = self._map_meters(unit_key, meters_raw)
-                    batteries_data = self._map_batteries(unit_key, batteries_raw)
+                    batteries_data = self._map_batteries(
+                        unit_key, batteries_raw)
 
                     units[unit_key] = ModbusUnit(
                         info=inverter_data.info.unit,
@@ -293,7 +291,7 @@ class Modbus:
         except KeyError as error:
             raise InvalidDataException("Invalid modbus data") from error
 
-        await self.event_bus.emit(ModbusUnitsReadEvent(units))
+        await EventBus.emit(ModbusUnitsReadEvent(units))
 
         return units
 
@@ -358,7 +356,8 @@ class Modbus:
             address_start = register_or_bundle.address + offset
 
             if address_start in self._block_unreadable:
-                logger.trace(f"Skip unreadable registers beginning at {address_start}")
+                logger.trace(
+                    f"Skip unreadable registers beginning at {address_start}")
                 continue
 
             logger.trace(
@@ -380,7 +379,8 @@ class Modbus:
                     logger.debug(f"Modbus read error: {result}")
                     self._block_register(address_start)
                 else:
-                    data = register_or_bundle.decode_response(result.registers, data)
+                    data = register_or_bundle.decode_response(
+                        result.registers, data)
 
                 if not self._initialized:
                     logger.trace(
@@ -447,7 +447,8 @@ class Modbus:
             )
             logger.debug(meter_data)
             logger.info(
-                LOGGING_DEVICE_INFO + ": {power} W, {consumption} kWh, {delivery} kWh",
+                LOGGING_DEVICE_INFO +
+                ": {power} W, {consumption} kWh, {delivery} kWh",
                 unit_key=meter_data.info.unit_key(":"),
                 device=meter_key,
                 info=meter_data.info,
@@ -476,7 +477,8 @@ class Modbus:
             )
             logger.debug(battery_data)
             logger.info(
-                LOGGING_DEVICE_INFO + ": {status}, {power} W, {state_of_charge} %",
+                LOGGING_DEVICE_INFO +
+                ": {status}, {power} W, {state_of_charge} %",
                 unit_key=battery_data.info.unit_key(":"),
                 device=battery_key,
                 info=battery_data.info,
@@ -489,13 +491,15 @@ class Modbus:
 
         return batteries
 
+    @EventBus.subscribe(ModbusWriteEvent)
     async def _handle_write_event(self, event: ModbusWriteEvent):
         await self._write_to_modbus(event.register, event.payload)
 
     async def _write_to_modbus(
         self, register: SunSpecRegister, value: SunSpecRawData
     ) -> None:
-        logger.info(f"Writing {value} to register {register.address} ({register.name})")
+        logger.info(
+            f"Writing {value} to register {register.address} ({register.name})")
 
         value_decoded = register.encode_request(value)
         logger.trace(f"Encoded value: {value_decoded}")

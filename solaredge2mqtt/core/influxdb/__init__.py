@@ -33,13 +33,9 @@ class InfluxDBAsync:
         self,
         settings: InfluxDBSettings,
         prices: PriceSettings,
-        event_bus: EventBus | None = None,
     ) -> None:
         self.settings: InfluxDBSettings = settings
         self.prices: PriceSettings = prices
-
-        self.event_bus = event_bus
-        self._subscribe_events()
 
         self.client_async: InfluxDBClientAsync | None = None
         self.client_sync: InfluxDBClient = InfluxDBClient(
@@ -48,9 +44,7 @@ class InfluxDBAsync:
 
         self.flux_cache: dict[str, str] = {}
 
-    def _subscribe_events(self) -> None:
-        if self.event_bus:
-            self.event_bus.subscribe(Interval10MinTriggerEvent, self.loop)
+        EventBus.register(self)
 
     def init(self) -> None:
         self.client_async = InfluxDBClientAsync(
@@ -84,8 +78,10 @@ class InfluxDBAsync:
     def buckets_api(self) -> BucketsApi:
         return self.client_sync.buckets_api()
 
+    @EventBus.subscribe(Interval10MinTriggerEvent)
     async def loop(self, event: Interval10MinTriggerEvent) -> None:
-        now = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0)
+        now = datetime.now(tz=timezone.utc).replace(
+            minute=0, second=0, microsecond=0)
 
         logger.info("Aggregate powerflow and energy raw data")
         aggregate_query = self._get_flux_query(
@@ -102,8 +98,7 @@ class InfluxDBAsync:
             ["powerflow_raw", "battery_raw"],
         )
 
-        if self.event_bus:
-            await self.event_bus.emit(InfluxDBAggregatedEvent())
+        await EventBus.emit(InfluxDBAggregatedEvent())
 
     @property
     def query_api(self) -> QueryApiAsync:
@@ -148,7 +143,8 @@ class InfluxDBAsync:
         self, period: HistoricPeriod, measurement: str
     ) -> list[dict[str, Any]] | None:
         results = await self.query(
-            period.query.query, {"UNIT": period.unit, "MEASUREMENT": measurement}
+            period.query.query, {"UNIT": period.unit,
+                                 "MEASUREMENT": measurement}
         )
 
         return results if len(results) > 0 else None
