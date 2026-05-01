@@ -23,7 +23,7 @@ class EnergyService:
     ):
         self.influxdb = influxdb
         self.settings = settings
-        
+
         EventBus.register(self)
 
     @EventBus.subscribe(InfluxDBAggregatedEvent)

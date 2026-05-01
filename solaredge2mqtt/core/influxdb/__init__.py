@@ -80,8 +80,7 @@ class InfluxDBAsync:
 
     @EventBus.subscribe(Interval10MinTriggerEvent)
     async def loop(self, event: Interval10MinTriggerEvent) -> None:
-        now = datetime.now(tz=timezone.utc).replace(
-            minute=0, second=0, microsecond=0)
+        now = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0)
 
         logger.info("Aggregate powerflow and energy raw data")
         aggregate_query = self._get_flux_query(
@@ -143,8 +142,7 @@ class InfluxDBAsync:
         self, period: HistoricPeriod, measurement: str
     ) -> list[dict[str, Any]] | None:
         results = await self.query(
-            period.query.query, {"UNIT": period.unit,
-                                 "MEASUREMENT": measurement}
+            period.query.query, {"UNIT": period.unit, "MEASUREMENT": measurement}
         )
 
         return results if len(results) > 0 else None

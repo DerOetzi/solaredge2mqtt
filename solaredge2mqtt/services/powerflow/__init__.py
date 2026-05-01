@@ -69,8 +69,7 @@ class PowerflowService:
 
         if Powerflow.is_not_valid_with_last(powerflow):
             logger.debug(powerflow)
-            raise InvalidDataException(
-                "Value change not valid, skipping this loop")
+            raise InvalidDataException("Value change not valid, skipping this loop")
 
         await self.write_to_influxdb(powerflows, batteries)
 
@@ -139,8 +138,7 @@ class PowerflowService:
         for key, unit in units.items():
             await EventBus.emit(
                 MQTTPublishEvent(
-                    unit.inverter.mqtt_topic(
-                        self.settings.modbus.has_followers),
+                    unit.inverter.mqtt_topic(self.settings.modbus.has_followers),
                     unit.inverter,
                     self.settings.modbus.retain,
                 )

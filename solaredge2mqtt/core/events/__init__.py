@@ -22,16 +22,15 @@ _EVENT_SUBSCRIPTIONS_ATTR = "_event_subscriptions"
 
 
 class Listener(Protocol[TEventContra]):
-    def __call__(
-        self, event: TEventContra
-    ) -> Awaitable[None]: ...  # pragma: no cover
+    def __call__(self, event: TEventContra) -> Awaitable[None]: ...  # pragma: no cover
 
 
 AnyListener = Listener[Any]
 TInstance = TypeVar("TInstance")
 ListenerMethod = Callable[[TInstance, TEvent], Awaitable[None]]
-ListenerDecorator = Callable[[
-    ListenerMethod[TInstance, TEvent]], ListenerMethod[TInstance, TEvent]]
+ListenerDecorator = Callable[
+    [ListenerMethod[TInstance, TEvent]], ListenerMethod[TInstance, TEvent]
+]
 
 
 class EventBus:
@@ -90,8 +89,7 @@ class EventBus:
 
         event_key = event.event_key()
         logger.info(f"Event subscribed: {event_key}")
-        cls._listeners.setdefault(event_key, []).append(
-            cast(AnyListener, listener))
+        cls._listeners.setdefault(event_key, []).append(cast(AnyListener, listener))
         cls._subscribed_events[event_key] = event
 
     @classmethod
@@ -169,9 +167,7 @@ class EventBus:
             task.add_done_callback(cls._handle_task_done)
 
     @classmethod
-    def _resolve_listeners(
-        cls, event_type: type[BaseEvent]
-    ) -> list[AnyListener]:
+    def _resolve_listeners(cls, event_type: type[BaseEvent]) -> list[AnyListener]:
         listeners: list[AnyListener] = []
         seen_listeners: set[int] = set()
 
@@ -205,15 +201,11 @@ class EventBus:
                 logger.error("Unhandled listener error: {exc}", exc=repr(r))
 
     @classmethod
-    async def _notify_listener(
-        cls, listener: AnyListener, event: BaseEvent
-    ) -> None:
+    async def _notify_listener(cls, listener: AnyListener, event: BaseEvent) -> None:
         try:
             await listener(event)
         except InvalidDataException as error:
-            logger.warning(
-                "{message}, skipping this loop", message=error.message
-            )
+            logger.warning("{message}, skipping this loop", message=error.message)
 
     @classmethod
     def _handle_task_done(cls, task: asyncio.Task) -> None:
@@ -231,8 +223,7 @@ class EventBus:
                 cls._critical_error = exc
             else:
                 logger.warning(
-                    "New critical error occurred before previous was handled:"
-                    " {exc}",
+                    "New critical error occurred before previous was handled: {exc}",
                     exc=repr(exc),
                 )
             return

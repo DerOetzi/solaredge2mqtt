@@ -78,9 +78,7 @@ class Service:
         )
 
         self.weather: WeatherClient | None = (
-            WeatherClient(self.settings)
-            if self.settings.is_weather_enabled
-            else None
+            WeatherClient(self.settings) if self.settings.is_weather_enabled else None
         )
 
         self.forecast: ForecastService | None = None
@@ -95,8 +93,7 @@ class Service:
                 else None
             )
         elif self.settings.is_forecast_enabled:
-            logger.warning(
-                "Forecast service not available, please refer to README")
+            logger.warning("Forecast service not available, please refer to README")
 
         self.homeassistant: HomeAssistantDiscovery | None = (
             HomeAssistantDiscovery(self.settings)
@@ -270,5 +267,4 @@ class Service:
                 timeout=5,
             )
         except asyncio.TimeoutError:
-            logger.warning(
-                "Timeout while closing tasks, proceeding with shutdown.")
+            logger.warning("Timeout while closing tasks, proceeding with shutdown.")

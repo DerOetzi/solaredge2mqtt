@@ -36,8 +36,7 @@ class ModbusAdvancedControl:
 
     def _subscribe_events(self) -> None:
         if self.settings.advanced_power_controls_enabled:
-            EventBus.subscribe(MQTTReceivedEvent,
-                               self.handle_mqtt_received_event)
+            EventBus.subscribe(MQTTReceivedEvent, self.handle_mqtt_received_event)
 
     async def async_init(self) -> None:
         await self.handle_advanced_power_control_settings()
@@ -49,8 +48,7 @@ class ModbusAdvancedControl:
         elif self.settings.advanced_power_controls == AdvancedControlsSettings.DISABLE:
             await self.disable_advanced_control_settings()
 
-            logger.warning(
-                "Change setting to disabled and restart the service.")
+            logger.warning("Change setting to disabled and restart the service.")
         else:
             logger.info("Advanced power control is disabled in settings")
 
@@ -64,8 +62,7 @@ class ModbusAdvancedControl:
     async def disable_advanced_control_settings(self):
         logger.debug("Disabling advanced power control")
         await EventBus.emit(
-            ModbusWriteEvent(
-                SunSpecPowerControlRegister.REACTIVE_POWER_CONFIG, 0)
+            ModbusWriteEvent(SunSpecPowerControlRegister.REACTIVE_POWER_CONFIG, 0)
         )
 
         await EventBus.emit(
