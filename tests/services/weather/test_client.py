@@ -195,14 +195,12 @@ class TestWeatherClientLoop:
 
         await client.loop(None)
 
-        # Should emit WeatherUpdateEvent and MQTTPublishEvent
-        assert mock_event_bus.emit.call_count == 2
-
-        # Check first call is WeatherUpdateEvent
-        first_call = mock_event_bus.emit.call_args_list[0]
-        assert isinstance(first_call[0][0], WeatherUpdateEvent)
-
-        # Check second call is MQTTPublishEvent
-        second_call = mock_event_bus.emit.call_args_list[1]
-        assert isinstance(second_call[0][0], MQTTPublishEvent)
-        assert second_call[0][0].topic == "weather/current"
+        # Should emit WeatherUpdateEvent, MQTTPublishEvent, and state MQTTPublishEvent
+        emitted = [call[0][0] for call in mock_event_bus.emit.call_args_list]
+        assert any(isinstance(e, WeatherUpdateEvent) for e in emitted)
+        weather_publishes = [
+            e
+            for e in emitted
+            if isinstance(e, MQTTPublishEvent) and e.topic == "weather/current"
+        ]
+        assert len(weather_publishes) == 1

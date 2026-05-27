@@ -22,3 +22,11 @@ class LoggingLevelEnum(EnumModel):
     @property
     def level(self) -> int:
         return self._level
+
+
+class ServiceStateEnum(EnumModel):
+    UNKNOWN = "unknown"
+    CONNECTED = "connected"
+    DISCONNECTED = "disconnected"
+    ERROR = "error"
+    WARNING = "warning"

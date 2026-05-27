@@ -8,6 +8,8 @@ from pydantic import BaseModel, Field
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
 from solaredge2mqtt.core.logging import logger
+from solaredge2mqtt.core.logging.models import ServiceStateEnum
+from solaredge2mqtt.core.logging.service_state import ServiceStateMixin
 from solaredge2mqtt.services.http_async import HTTPClientAsync
 from solaredge2mqtt.services.wallbox.events import WallboxReadEvent
 from solaredge2mqtt.services.wallbox.models import WallboxAPI
@@ -50,12 +52,15 @@ class AuthorizationTokens(BaseModel):
             raise InvalidDataException("Cannot read token expiration") from e
 
 
-class WallboxClient(HTTPClientAsync):
+class WallboxClient(ServiceStateMixin, HTTPClientAsync):
+    SERVICE_STATE_NAME = "wallbox"
+
     def __init__(self, settings: WallboxSettings, event_bus: EventBus):
         super().__init__("Wallbox API")
         self.settings = settings
         self.event_bus = event_bus
         self.authorization: AuthorizationTokens | None = None
+        self._init_service_state()
 
         logger.info(
             "Using Wallbox charger: {host}",
@@ -89,9 +94,11 @@ class WallboxClient(HTTPClientAsync):
             )
 
             await self.event_bus.emit(WallboxReadEvent(wallbox))
+            await self._set_service_state(ServiceStateEnum.CONNECTED, self.event_bus)
 
             return wallbox
         except (ClientResponseError, asyncio.TimeoutError) as error:
+            await self._set_service_state(ServiceStateEnum.ERROR, self.event_bus)
             raise InvalidDataException(f"Cannot read Wallbox data: {error}") from error
 
     async def _get_access(self) -> None:

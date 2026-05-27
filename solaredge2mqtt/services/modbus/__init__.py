@@ -12,6 +12,8 @@ from solaredge2mqtt.core.exceptions import (
     InvalidDataException,
 )
 from solaredge2mqtt.core.logging import logger
+from solaredge2mqtt.core.logging.models import ServiceStateEnum
+from solaredge2mqtt.core.logging.service_state import ServiceStateMixin
 from solaredge2mqtt.services.modbus.control import ModbusAdvancedControl
 from solaredge2mqtt.services.modbus.events import (
     ModbusUnitsReadEvent,
@@ -57,7 +59,9 @@ LOGGING_DEVICE_INFO = (
 )
 
 
-class Modbus:
+class Modbus(ServiceStateMixin):
+    SERVICE_STATE_NAME = "modbus"
+
     def __init__(self, settings: ServiceSettings, event_bus: EventBus):
         self.settings = settings.modbus
 
@@ -82,6 +86,7 @@ class Modbus:
             settings, event_bus
         )
 
+        self._init_service_state()
         self._subscribe_events()
 
     @property
@@ -118,6 +123,8 @@ class Modbus:
                 "Not readable registers: {registers}",
                 registers=self._block_unreadable,
             )
+
+        await self._set_service_state(ServiceStateEnum.CONNECTED, self.event_bus)
 
         # await self._control.async_init()
 
@@ -291,8 +298,10 @@ class Modbus:
                     )
 
         except KeyError as error:
+            await self._set_service_state(ServiceStateEnum.ERROR, self.event_bus)
             raise InvalidDataException("Invalid modbus data") from error
 
+        await self._set_service_state(ServiceStateEnum.CONNECTED, self.event_bus)
         await self.event_bus.emit(ModbusUnitsReadEvent(units))
 
         return units

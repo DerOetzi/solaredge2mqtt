@@ -4,7 +4,7 @@ import logging
 
 import pytest
 
-from solaredge2mqtt.core.logging.models import LoggingLevelEnum
+from solaredge2mqtt.core.logging.models import LoggingLevelEnum, ServiceStateEnum
 
 
 class TestLoggingLevelEnum:
@@ -61,3 +61,25 @@ class TestLoggingLevelEnum:
         """Test from_string raises error for invalid level."""
         with pytest.raises(ValueError):
             LoggingLevelEnum.from_string("INVALID_LEVEL")
+
+
+class TestServiceStateEnum:
+    """Tests for ServiceStateEnum."""
+
+    def test_all_states_exist(self):
+        """All expected states should be members of ServiceStateEnum."""
+        for name in ("UNKNOWN", "CONNECTED", "DISCONNECTED", "ERROR", "WARNING"):
+            assert hasattr(ServiceStateEnum, name)
+
+    def test_values(self):
+        """Each member should have the expected string value."""
+        assert ServiceStateEnum.UNKNOWN.value == "unknown"
+        assert ServiceStateEnum.CONNECTED.value == "connected"
+        assert ServiceStateEnum.DISCONNECTED.value == "disconnected"
+        assert ServiceStateEnum.ERROR.value == "error"
+        assert ServiceStateEnum.WARNING.value == "warning"
+
+    def test_string_representation(self):
+        """str() should return the member's string value."""
+        assert str(ServiceStateEnum.CONNECTED) == "connected"
+        assert str(ServiceStateEnum.ERROR) == "error"

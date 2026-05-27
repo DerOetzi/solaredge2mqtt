@@ -8,6 +8,8 @@ from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
 from solaredge2mqtt.core.influxdb import InfluxDBAsync, Point
 from solaredge2mqtt.core.logging import logger
+from solaredge2mqtt.core.logging.models import ServiceStateEnum
+from solaredge2mqtt.core.logging.service_state import ServiceStateMixin
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.core.timer.events import Interval15MinTriggerEvent
 from solaredge2mqtt.services.http_async import HTTPClientAsync
@@ -25,7 +27,9 @@ POWER_PUBLIC_URL = "https://monitoring.solaredge.com/solaredge-web/p/playbackDat
 CONTENT_TYPE_FORM_URLENCODED = "application/x-www-form-urlencoded"
 
 
-class MonitoringSite(HTTPClientAsync):
+class MonitoringSite(ServiceStateMixin, HTTPClientAsync):
+    SERVICE_STATE_NAME = "monitoring"
+
     def __init__(
         self,
         settings: MonitoringSettings,
@@ -38,14 +42,19 @@ class MonitoringSite(HTTPClientAsync):
         self.influxdb: InfluxDBAsync | None = influxdb
 
         self.event_bus = event_bus
+        self._init_service_state()
         self._subscribe_events()
 
     def _subscribe_events(self) -> None:
         self.event_bus.subscribe(Interval15MinTriggerEvent, self.get_data)
 
     async def get_data(self, event: Interval15MinTriggerEvent | None) -> None:
-        energies = await self.get_modules_energy()
-        powers = await self.get_modules_power()
+        try:
+            energies = await self.get_modules_energy()
+            powers = await self.get_modules_power()
+        except (InvalidDataException, ConfigurationException) as exc:
+            await self._set_service_state(ServiceStateEnum.ERROR, self.event_bus)
+            raise exc
 
         modules = self.merge_modules(energies, powers)
 
@@ -54,6 +63,7 @@ class MonitoringSite(HTTPClientAsync):
 
         await self.save_to_influxdb(modules)
         await self.publish_mqtt(modules, energy_total, count_modules)
+        await self._set_service_state(ServiceStateEnum.CONNECTED, self.event_bus)
 
     async def get_modules_energy(self) -> dict[str, LogicalModule]:
         logical = await self._get_logical()

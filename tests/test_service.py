@@ -18,6 +18,7 @@ def _build_service() -> Service:
     service.loops = set()
     service._run_task = None
     service.mqtt = None
+    service._mqtt_log_sink_id = None
     service.event_bus = MagicMock()
     service.event_bus.cancel_tasks = AsyncMock()
     service.influxdb = None
@@ -458,7 +459,10 @@ class TestServiceMainLoop:
     async def test_main_loop_initializes_services_and_exits_on_cancel(self):
         """Main loop should initialize dependencies and finalize cleanly."""
         service = _build_service()
-        service.settings = cast(Any, SimpleNamespace(mqtt=SimpleNamespace()))
+        service.settings = cast(
+            Any,
+            SimpleNamespace(mqtt=SimpleNamespace(), logging_level=MagicMock()),
+        )
         service.influxdb = MagicMock()
         service.influxdb.init = MagicMock()
         service.homeassistant = MagicMock()
@@ -487,6 +491,9 @@ class TestServiceMainLoop:
             patch(
                 "solaredge2mqtt.service.asyncio.gather", side_effect=gather_side_effect
             ),
+            patch(
+                "solaredge2mqtt.service.register_mqtt_log_sink", return_value=42
+            ),
         ):
             await service.main_loop()
 
@@ -502,7 +509,10 @@ class TestServiceMainLoop:
     async def test_main_loop_logs_reconnect_on_mqtt_error(self):
         """Main loop should log reconnect and sleep when MQTT errors occur."""
         service = _build_service()
-        service.settings = cast(Any, SimpleNamespace(mqtt=SimpleNamespace()))
+        service.settings = cast(
+            Any,
+            SimpleNamespace(mqtt=SimpleNamespace(), logging_level=MagicMock()),
+        )
         service.influxdb = None
         service.homeassistant = None
         service.powerflow = MagicMock()
@@ -537,7 +547,10 @@ class TestServiceMainLoop:
     async def test_main_loop_breaks_on_mqtt_error_when_cancelled(self):
         """Main loop should break immediately on MQTT error after cancellation."""
         service = _build_service()
-        service.settings = cast(Any, SimpleNamespace(mqtt=SimpleNamespace()))
+        service.settings = cast(
+            Any,
+            SimpleNamespace(mqtt=SimpleNamespace(), logging_level=MagicMock()),
+        )
         service.influxdb = None
         service.homeassistant = None
         service.powerflow = MagicMock()
@@ -564,7 +577,10 @@ class TestServiceMainLoop:
     async def test_main_loop_reraises_cancelled_error(self):
         """Main loop should re-raise cancellation errors after logging."""
         service = _build_service()
-        service.settings = cast(Any, SimpleNamespace(mqtt=SimpleNamespace()))
+        service.settings = cast(
+            Any,
+            SimpleNamespace(mqtt=SimpleNamespace(), logging_level=MagicMock()),
+        )
         service.influxdb = None
         service.homeassistant = None
         service.powerflow = MagicMock()
@@ -585,6 +601,9 @@ class TestServiceMainLoop:
             patch(
                 "solaredge2mqtt.service.asyncio.gather",
                 side_effect=asyncio.CancelledError,
+            ),
+            patch(
+                "solaredge2mqtt.service.register_mqtt_log_sink", return_value=42
             ),
             patch("solaredge2mqtt.service.logger") as mock_logger,
         ):

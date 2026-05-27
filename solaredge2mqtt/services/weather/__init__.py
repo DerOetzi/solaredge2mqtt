@@ -8,6 +8,8 @@ from aiohttp import ClientResponseError
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
 from solaredge2mqtt.core.logging import logger
+from solaredge2mqtt.core.logging.models import ServiceStateEnum
+from solaredge2mqtt.core.logging.service_state import ServiceStateMixin
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.core.timer.events import Interval10MinTriggerEvent
 from solaredge2mqtt.services.http_async import HTTPClientAsync
@@ -21,7 +23,9 @@ ONECALL_URL = "https://api.openweathermap.org/data/3.0/onecall"
 TIMEMACHINE_URL = "https://api.openweathermap.org/data/3.0/onecall/timemachine"
 
 
-class WeatherClient(HTTPClientAsync):
+class WeatherClient(ServiceStateMixin, HTTPClientAsync):
+    SERVICE_STATE_NAME = "weather"
+
     def __init__(self, settings: ServiceSettings, event_bus: EventBus) -> None:
         super().__init__("Weather API")
 
@@ -29,13 +33,18 @@ class WeatherClient(HTTPClientAsync):
         self.settings = settings.weather
 
         self.event_bus = event_bus
+        self._init_service_state()
         self._subscribe_events()
 
     def _subscribe_events(self):
         self.event_bus.subscribe(Interval10MinTriggerEvent, self.loop)
 
     async def loop(self, event: Interval10MinTriggerEvent | None) -> None:
-        weather = await self.get_weather()
+        try:
+            weather = await self.get_weather()
+        except (InvalidDataException, ConfigurationException) as exc:
+            await self._set_service_state(ServiceStateEnum.ERROR, self.event_bus)
+            raise exc
         await self.event_bus.emit(WeatherUpdateEvent(weather))
         await self.event_bus.emit(
             MQTTPublishEvent(
@@ -44,6 +53,7 @@ class WeatherClient(HTTPClientAsync):
                 self.settings is not None and self.settings.retain,
             )
         )
+        await self._set_service_state(ServiceStateEnum.CONNECTED, self.event_bus)
 
     async def get_weather(self) -> OpenWeatherMapOneCall:
         if self.location is None or self.settings is None:

@@ -11,6 +11,7 @@ from solaredge2mqtt.core.exceptions import (
     InvalidDataException,
 )
 from solaredge2mqtt.services.wallbox import WallboxClient
+from solaredge2mqtt.services.wallbox.events import WallboxReadEvent
 from solaredge2mqtt.services.wallbox.settings import WallboxSettings
 
 
@@ -69,7 +70,7 @@ class TestWallboxClientLogin:
 
         # Mock get_exp_claim
         with patch.object(
-            client.__class__.__bases__[0], "_post", new_callable=AsyncMock
+            WallboxClient, "_post", new_callable=AsyncMock
         ) as base_post:
             base_post.return_value = mock_post.return_value
             await client.login()
@@ -324,7 +325,11 @@ class TestWallboxClientGetData:
             result = await client.get_data()
 
             assert result is mock_wallbox_instance
-            mock_event_bus.emit.assert_called_once()
+            # WallboxReadEvent plus a state MQTTPublishEvent may both be emitted
+            emitted_types = [
+                type(call[0][0]) for call in mock_event_bus.emit.call_args_list
+            ]
+            assert WallboxReadEvent in emitted_types
 
     @pytest.mark.asyncio
     async def test_get_data_none_response(

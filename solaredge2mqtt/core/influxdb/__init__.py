@@ -17,6 +17,8 @@ from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.influxdb.events import InfluxDBAggregatedEvent
 from solaredge2mqtt.core.influxdb.settings import InfluxDBSettings
 from solaredge2mqtt.core.logging import logger
+from solaredge2mqtt.core.logging.models import ServiceStateEnum
+from solaredge2mqtt.core.logging.service_state import ServiceStateMixin
 from solaredge2mqtt.core.timer.events import Interval10MinTriggerEvent
 
 if TYPE_CHECKING:
@@ -28,7 +30,9 @@ if TYPE_CHECKING:
 LOCAL_TZ = get_localzone_name()
 
 
-class InfluxDBAsync:
+class InfluxDBAsync(ServiceStateMixin):
+    SERVICE_STATE_NAME = "influxdb"
+
     def __init__(
         self,
         settings: InfluxDBSettings,
@@ -40,6 +44,7 @@ class InfluxDBAsync:
 
         self.event_bus = event_bus
         self._subscribe_events()
+        self._init_service_state()
 
         self.client_async: InfluxDBClientAsync | None = None
         self.client_sync: InfluxDBClient = InfluxDBClient(
@@ -140,9 +145,18 @@ class InfluxDBAsync:
         if self.client_async is None:
             raise RuntimeError("InfluxDB client not initialized")
 
-        await self.client_async.write_api().write(
-            bucket=self.bucket_name, record=points
-        )
+        try:
+            await self.client_async.write_api().write(
+                bucket=self.bucket_name, record=points
+            )
+            if self.event_bus:
+                await self._set_service_state(
+                    ServiceStateEnum.CONNECTED, self.event_bus
+                )
+        except Exception as exc:
+            if self.event_bus:
+                await self._set_service_state(ServiceStateEnum.ERROR, self.event_bus)
+            raise exc
 
     async def query_timeunit(
         self, period: HistoricPeriod, measurement: str

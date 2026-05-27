@@ -11,7 +11,12 @@ from solaredge2mqtt import __version__
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import ConfigurationException
 from solaredge2mqtt.core.influxdb import InfluxDBAsync
-from solaredge2mqtt.core.logging import initialize_logging, logger
+from solaredge2mqtt.core.logging import (
+    deregister_mqtt_log_sink,
+    initialize_logging,
+    logger,
+    register_mqtt_log_sink,
+)
 from solaredge2mqtt.core.mqtt import MQTTClient
 from solaredge2mqtt.core.settings import service_settings
 from solaredge2mqtt.core.timer import Timer
@@ -53,6 +58,7 @@ class Service:
         self.timer = Timer(self.event_bus, self.settings.interval)
 
         self.mqtt: MQTTClient | None = None
+        self._mqtt_log_sink_id: int | None = None
 
         self.cancel_request = asyncio.Event()
         self.loops: set[asyncio.Task] = set()
@@ -152,6 +158,10 @@ class Service:
                 async with self.mqtt:
                     await self.mqtt.publish_status_online()
 
+                    self._mqtt_log_sink_id = register_mqtt_log_sink(
+                        self.event_bus, self.settings.logging_level
+                    )
+
                     if self.homeassistant:
                         await self.homeassistant.async_init()
 
@@ -188,6 +198,9 @@ class Service:
         self.loops.clear()
 
     async def finalize(self):
+        deregister_mqtt_log_sink(self._mqtt_log_sink_id)
+        self._mqtt_log_sink_id = None
+
         await self._stop_loops()
 
         if self.mqtt is not None:

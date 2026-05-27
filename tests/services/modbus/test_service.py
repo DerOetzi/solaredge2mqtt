@@ -446,10 +446,12 @@ class TestModbusGetData:
 
             await modbus.get_data()
 
-            # Should emit event
-            mock_event_bus.emit.assert_called_once()
-            call_args = mock_event_bus.emit.call_args
-            assert isinstance(call_args[0][0], ModbusUnitsReadEvent)
+            # Should emit a ModbusUnitsReadEvent (plus a state change event)
+            emitted_types = [
+                type(call[0][0]).__name__
+                for call in mock_event_bus.emit.call_args_list
+            ]
+            assert ModbusUnitsReadEvent.__name__ in emitted_types
 
     @pytest.mark.asyncio
     async def test_get_data_key_error(
