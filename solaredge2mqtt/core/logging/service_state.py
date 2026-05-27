@@ -25,7 +25,7 @@ class ServiceStateMixin:
     async def _set_service_state(
         self, state: ServiceStateEnum, event_bus: EventBus
     ) -> None:
-        if not hasattr(self, "_service_state") or self._service_state != state:
+        if self._service_state != state:
             self._service_state = state
             logger.debug(
                 "Service state changed: {name} -> {state}",
