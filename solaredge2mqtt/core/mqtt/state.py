@@ -12,6 +12,8 @@ class ServiceState(StrEnum):
 
 
 class ServiceStateController:
+    """Publish service online/offline state with optional transition debouncing."""
+
     def __init__(self, service_name: str, debounce_cycles: int = 0) -> None:
         self.service_name = service_name
         self.debounce_cycles = max(0, debounce_cycles)
@@ -26,6 +28,7 @@ class ServiceStateController:
         await self._set_state(ServiceState.OFFLINE)
 
     async def _set_state(self, state: ServiceState) -> None:
+        """Apply debounce rules and publish state only after stable transitions."""
         if self._state == state:
             self._pending_state = None
             self._pending_count = 0

@@ -9,6 +9,8 @@ from solaredge2mqtt.core.logging.models import LoggingLevelEnum
 
 
 class MQTTLoggingSink:
+    """Manage MQTT log forwarding state, filtering, and asynchronous publishing."""
+
     def __init__(self) -> None:
         self._enabled = False
 
@@ -16,6 +18,7 @@ class MQTTLoggingSink:
         self._enabled = enabled
 
     def log_filter(self, record: dict[str, Any]) -> bool:
+        """Allow MQTT log forwarding and suppress recursive MQTT warning/error logs."""
         if not self._enabled:
             return False
 
@@ -28,6 +31,7 @@ class MQTTLoggingSink:
         return True
 
     def sink(self, message: Any) -> asyncio.Task[None] | None:
+        """Format a loguru message and publish it to the MQTT logging topic."""
         from solaredge2mqtt.core.events import EventBus
         from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 
