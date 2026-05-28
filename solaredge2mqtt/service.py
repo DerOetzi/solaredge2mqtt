@@ -11,8 +11,9 @@ from solaredge2mqtt import __version__
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import ConfigurationException
 from solaredge2mqtt.core.influxdb import InfluxDBAsync
-from solaredge2mqtt.core.logging import initialize_logging, logger
+from solaredge2mqtt.core.logging import initialize_logging, logger, set_mqtt_logging
 from solaredge2mqtt.core.mqtt import MQTTClient
+from solaredge2mqtt.core.mqtt.state import ServiceStateController
 from solaredge2mqtt.core.settings import service_settings
 from solaredge2mqtt.core.timer import Timer
 from solaredge2mqtt.services.energy import EnergyService
@@ -70,6 +71,7 @@ class Service:
         )
 
         self.powerflow = PowerflowService(self.settings, self.influxdb)
+        self.influxdb_state = ServiceStateController("influxdb")
 
         self.monitoring: MonitoringSite | None = (
             MonitoringSite(self.settings.monitoring, self.influxdb)
@@ -139,7 +141,12 @@ class Service:
         logger.info("Timezone: {timezone}", timezone=LOCAL_TZ)
 
         if self.influxdb:
-            self.influxdb.init()
+            try:
+                self.influxdb.init()
+                await self.influxdb_state.set_online()
+            except Exception:
+                await self.influxdb_state.set_offline()
+                raise
 
         while not self.cancel_request.is_set():
             try:
@@ -147,6 +154,7 @@ class Service:
 
                 async with self.mqtt:
                     await self.mqtt.publish_status_online()
+                    set_mqtt_logging(True)
 
                     if self.homeassistant:
                         await self.homeassistant.async_init()
@@ -165,6 +173,7 @@ class Service:
                 logger.debug("Loops cancelled")
                 raise
             finally:
+                set_mqtt_logging(False)
                 await self.finalize()
 
             if self.cancel_request.is_set():
@@ -193,6 +202,9 @@ class Service:
                 logger.debug("Unable to publish offline status during cleanup")
             finally:
                 self.mqtt = None
+
+        if self.influxdb:
+            await self.influxdb_state.set_offline()
 
         await EventBus.cancel_tasks()
 

@@ -232,6 +232,12 @@ mqtt:
 # secrets.yml
 mqtt_password: "your_actual_password"
 ```
+
+The service also publishes operational topics below the configured `topic_prefix`:
+
+- `status/<service>` for subservice connection states (`online`/`offline`) such as `modbus`, `wallbox`, `monitoring`, `influxdb`, and `weather_api`
+- `logging` for runtime log messages (MQTT warnings/errors are excluded from MQTT log forwarding)
+
 ### Retain Configuration
 
 By default, MQTT messages are not retained. You can configure the retain flag for each message type:

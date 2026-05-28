@@ -19,6 +19,9 @@ def _build_service() -> Service:
     service._run_task = None
     service.mqtt = None
     service.influxdb = None
+    service.influxdb_state = MagicMock()
+    service.influxdb_state.set_online = AsyncMock()
+    service.influxdb_state.set_offline = AsyncMock()
     service.powerflow = cast(Any, None)
     service.monitoring = None
     service.weather = None
@@ -453,6 +456,8 @@ class TestServiceMainLoop:
         service.settings = cast(Any, SimpleNamespace(mqtt=SimpleNamespace()))
         service.influxdb = MagicMock()
         service.influxdb.init = MagicMock()
+        service.influxdb_state = MagicMock()
+        service.influxdb_state.set_online = AsyncMock()
         service.homeassistant = MagicMock()
         service.homeassistant.async_init = AsyncMock()
         service.powerflow = MagicMock()
@@ -479,6 +484,7 @@ class TestServiceMainLoop:
             patch(
                 "solaredge2mqtt.service.asyncio.gather", side_effect=gather_side_effect
             ),
+            patch("solaredge2mqtt.service.set_mqtt_logging") as set_mqtt_logging,
         ):
             await service.main_loop()
 
@@ -489,6 +495,8 @@ class TestServiceMainLoop:
         service._start_mqtt_listener.assert_called_once()
         service.schedule_loop.assert_called_once_with(1, service.timer.loop)
         service.finalize.assert_awaited_once()
+        set_mqtt_logging.assert_any_call(True)
+        set_mqtt_logging.assert_any_call(False)
 
     @pytest.mark.asyncio
     async def test_main_loop_logs_reconnect_on_mqtt_error(self):
@@ -517,6 +525,7 @@ class TestServiceMainLoop:
                 "solaredge2mqtt.service.asyncio.sleep", side_effect=sleep_side_effect
             ),
             patch("solaredge2mqtt.service.logger") as mock_logger,
+            patch("solaredge2mqtt.service.set_mqtt_logging"),
         ):
             await service.main_loop()
 
@@ -546,6 +555,7 @@ class TestServiceMainLoop:
             patch("solaredge2mqtt.service.MQTTClient", side_effect=mqtt_side_effect),
             patch("solaredge2mqtt.service.MqttError", Exception),
             patch("solaredge2mqtt.service.logger") as mock_logger,
+            patch("solaredge2mqtt.service.set_mqtt_logging"),
         ):
             await service.main_loop()
 
@@ -579,6 +589,7 @@ class TestServiceMainLoop:
                 side_effect=asyncio.CancelledError,
             ),
             patch("solaredge2mqtt.service.logger") as mock_logger,
+            patch("solaredge2mqtt.service.set_mqtt_logging"),
         ):
             with pytest.raises(asyncio.CancelledError):
                 await service.main_loop()

@@ -9,6 +9,7 @@ from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataEx
 from solaredge2mqtt.core.influxdb import InfluxDBAsync, Point
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
+from solaredge2mqtt.core.mqtt.state import ServiceStateController
 from solaredge2mqtt.core.timer.events import Interval15MinTriggerEvent
 from solaredge2mqtt.services.http_async import HTTPClientAsync
 from solaredge2mqtt.services.monitoring.models import (
@@ -35,21 +36,27 @@ class MonitoringSite(HTTPClientAsync):
         self.settings = settings
 
         self.influxdb: InfluxDBAsync | None = influxdb
+        self.state = ServiceStateController("monitoring")
 
         EventBus.register(self)
 
     @EventBus.subscribe(Interval15MinTriggerEvent)
     async def get_data(self, event: Interval15MinTriggerEvent | None) -> None:
-        energies = await self.get_modules_energy()
-        powers = await self.get_modules_power()
+        try:
+            energies = await self.get_modules_energy()
+            powers = await self.get_modules_power()
 
-        modules = self.merge_modules(energies, powers)
+            modules = self.merge_modules(energies, powers)
 
-        energy_total = 0
-        count_modules = 0
+            energy_total = 0
+            count_modules = 0
 
-        await self.save_to_influxdb(modules)
-        await self.publish_mqtt(modules, energy_total, count_modules)
+            await self.save_to_influxdb(modules)
+            await self.publish_mqtt(modules, energy_total, count_modules)
+            await self.state.set_online()
+        except Exception:
+            await self.state.set_offline()
+            raise
 
     async def get_modules_energy(self) -> dict[str, LogicalModule]:
         logical = await self._get_logical()

@@ -9,6 +9,7 @@ from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
+from solaredge2mqtt.core.mqtt.state import ServiceStateController
 from solaredge2mqtt.core.timer.events import Interval10MinTriggerEvent
 from solaredge2mqtt.services.http_async import HTTPClientAsync
 from solaredge2mqtt.services.weather.events import WeatherUpdateEvent
@@ -27,20 +28,26 @@ class WeatherClient(HTTPClientAsync):
 
         self.location = settings.location
         self.settings = settings.weather
+        self.state = ServiceStateController("weather_api")
 
         EventBus.register(self)
 
     @EventBus.subscribe(Interval10MinTriggerEvent)
     async def loop(self, event: Interval10MinTriggerEvent | None) -> None:
-        weather = await self.get_weather()
-        await EventBus.emit(WeatherUpdateEvent(weather))
-        await EventBus.emit(
-            MQTTPublishEvent(
-                "weather/current",
-                weather.current,
-                self.settings is not None and self.settings.retain,
+        try:
+            weather = await self.get_weather()
+            await self.state.set_online()
+            await EventBus.emit(WeatherUpdateEvent(weather))
+            await EventBus.emit(
+                MQTTPublishEvent(
+                    "weather/current",
+                    weather.current,
+                    self.settings is not None and self.settings.retain,
+                )
             )
-        )
+        except Exception:
+            await self.state.set_offline()
+            raise
 
     async def get_weather(self) -> OpenWeatherMapOneCall:
         if self.location is None or self.settings is None:

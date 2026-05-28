@@ -196,14 +196,20 @@ class TestWeatherClientLoop:
 
         await client.loop(Interval10MinTriggerEvent())
 
-        # Should emit WeatherUpdateEvent and MQTTPublishEvent
-        assert mock_event_bus.emit.call_count == 2
+        # Should emit service state, WeatherUpdateEvent and weather MQTT event
+        assert mock_event_bus.emit.call_count == 3
 
-        # Check first call is WeatherUpdateEvent
+        # Check first call is service state event
         first_call = mock_event_bus.emit.call_args_list[0]
-        assert isinstance(first_call[0][0], WeatherUpdateEvent)
+        assert isinstance(first_call[0][0], MQTTPublishEvent)
+        assert first_call[0][0].topic == "status/weather_api"
+        assert first_call[0][0].payload == "online"
 
-        # Check second call is MQTTPublishEvent
+        # Check second call is WeatherUpdateEvent
         second_call = mock_event_bus.emit.call_args_list[1]
-        assert isinstance(second_call[0][0], MQTTPublishEvent)
-        assert second_call[0][0].topic == "weather/current"
+        assert isinstance(second_call[0][0], WeatherUpdateEvent)
+
+        # Check third call is MQTTPublishEvent
+        third_call = mock_event_bus.emit.call_args_list[2]
+        assert isinstance(third_call[0][0], MQTTPublishEvent)
+        assert third_call[0][0].topic == "weather/current"

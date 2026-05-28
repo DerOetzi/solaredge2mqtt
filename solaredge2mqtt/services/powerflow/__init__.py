@@ -7,6 +7,7 @@ from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataEx
 from solaredge2mqtt.core.influxdb import InfluxDBAsync
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
+from solaredge2mqtt.core.mqtt.state import ServiceStateController
 from solaredge2mqtt.core.timer.events import IntervalBaseTriggerEvent
 from solaredge2mqtt.services.modbus import Modbus
 from solaredge2mqtt.services.modbus.models.battery import ModbusBattery
@@ -30,6 +31,8 @@ class PowerflowService:
         self.influxdb = influxdb
 
         self.modbus = Modbus(self.settings)
+        self.modbus_state = ServiceStateController("modbus")
+        self.wallbox_state = ServiceStateController("wallbox")
 
         self.wallbox = (
             WallboxClient(self.settings.wallbox)
@@ -40,13 +43,23 @@ class PowerflowService:
         EventBus.register(self)
 
     async def async_init(self) -> None:
-        await self.modbus.async_init()
+        try:
+            await self.modbus.async_init()
+            await self.modbus_state.set_online()
+        except Exception:
+            await self.modbus_state.set_offline()
+            raise
 
     @EventBus.subscribe(IntervalBaseTriggerEvent)
     async def calculate_powerflow(
         self, event: IntervalBaseTriggerEvent | None = None
     ) -> None:
-        units = await self.modbus.get_data()
+        try:
+            units = await self.modbus.get_data()
+            await self.modbus_state.set_online()
+        except Exception:
+            await self.modbus_state.set_offline()
+            raise
 
         if "leader" not in units:
             raise InvalidDataException("Invalid modbus data no leader unit")
@@ -110,13 +123,16 @@ class PowerflowService:
         if self.wallbox:
             try:
                 wallbox_data = await self.wallbox.get_data()
+                await self.wallbox_state.set_online()
                 logger.trace(
                     "Wallbox: {wallbox_data.power} W", wallbox_data=wallbox_data
                 )
                 evcharger = wallbox_data.power
             except ConfigurationException as ex:
+                await self.wallbox_state.set_offline()
                 logger.warning(f"{ex.component}: {ex.message}")
             except InvalidDataException as ex:
+                await self.wallbox_state.set_offline()
                 logger.warning(f"Wallbox data invalid: {ex}")
 
         return evcharger, wallbox_data
@@ -199,4 +215,5 @@ class PowerflowService:
 
     async def close(self) -> None:
         if self.wallbox:
+            await self.wallbox_state.set_offline()
             await self.wallbox.close()
