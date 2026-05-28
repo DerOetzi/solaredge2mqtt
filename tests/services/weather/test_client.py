@@ -176,6 +176,8 @@ class TestWeatherClientGetWeather:
         mock_settings = MagicMock()
         mock_settings.location = None
         mock_settings.weather = MagicMock()
+        mock_settings.service_state = MagicMock()
+        mock_settings.service_state.debounce_for.return_value = 0
 
         client = WeatherClient(mock_settings)
 

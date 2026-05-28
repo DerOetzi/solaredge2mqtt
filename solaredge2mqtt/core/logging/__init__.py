@@ -7,6 +7,7 @@ from loguru import logger
 
 from solaredge2mqtt.core.logging.models import LoggingLevelEnum
 
+
 class MQTTLoggingSink:
     def __init__(self) -> None:
         self._enabled = False
@@ -40,7 +41,9 @@ class MQTTLoggingSink:
             f"{message.record['level'].name} | "
             f"{message.record['message']}"
         )
-        return loop.create_task(EventBus.emit(MQTTPublishEvent("logging", payload, False)))
+        return loop.create_task(
+            EventBus.emit(MQTTPublishEvent("logging", payload, False))
+        )
 
 
 _mqtt_logging_sink = MQTTLoggingSink()
