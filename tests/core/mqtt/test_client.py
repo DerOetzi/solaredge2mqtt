@@ -54,44 +54,22 @@ def mock_aiomqtt_client():
         yield
 
 
-@pytest.fixture
-def event_bus():
-    """Create an EventBus instance for testing."""
-    from solaredge2mqtt.core.events import EventBus
-
-    return EventBus()
-
-
-@pytest.fixture
-def mock_event_bus():
-    """Create a mock event bus with mocked emit method."""
-    from unittest.mock import AsyncMock, MagicMock
-
-    bus = MagicMock()
-    bus.emit = AsyncMock()
-    bus.subscribe = MagicMock()
-    bus.unsubscribe = MagicMock()
-    bus.unsubscribe_all = MagicMock()
-    return bus
-
-
 class TestMQTTClientInit:
     """Tests for MQTTClient initialization."""
 
-    def test_mqtt_client_init(self, mqtt_settings, event_bus, mock_aiomqtt_client):
+    def test_mqtt_client_init(self, mqtt_settings, mock_aiomqtt_client):
         """Test MQTTClient initialization."""
-        client = MQTTClient(mqtt_settings, event_bus)
+        client = MQTTClient(mqtt_settings)
 
         assert client.broker == "localhost"
         assert client.port == 1883
         assert client.topic_prefix == "test"
-        assert client.event_bus is event_bus
 
     def test_mqtt_client_subscribes_to_events(
         self, mqtt_settings, mock_event_bus, mock_aiomqtt_client
     ):
         """Test MQTTClient subscribes to MQTT events."""
-        client = MQTTClient(mqtt_settings, mock_event_bus)
+        client = MQTTClient(mqtt_settings)
 
         # Verify event subscriptions
         mock_event_bus.subscribe.assert_any_call(
@@ -106,7 +84,7 @@ class TestMQTTClientInit:
         self, mqtt_settings, event_bus, mock_aiomqtt_client
     ):
         """Test __aenter__ marks client as connected."""
-        client = MQTTClient(mqtt_settings, event_bus)
+        client = MQTTClient(mqtt_settings)
 
         with patch(
             "solaredge2mqtt.core.mqtt.Client.__aenter__",
@@ -123,7 +101,7 @@ class TestMQTTClientInit:
         self, mqtt_settings, event_bus, mock_aiomqtt_client
     ):
         """Test __aexit__ marks client as disconnected."""
-        client = MQTTClient(mqtt_settings, event_bus)
+        client = MQTTClient(mqtt_settings)
         client._is_connected = True
 
         with patch(
@@ -144,7 +122,7 @@ class TestMQTTClientSubscribeTopic:
         self, mqtt_settings, event_bus, mock_aiomqtt_client
     ):
         """Test subscribing to a new topic."""
-        client = MQTTClient(mqtt_settings, event_bus)
+        client = MQTTClient(mqtt_settings)
         client.subscribe = AsyncMock()
 
         event = SampleSubscribeEvent("test/topic")
@@ -160,7 +138,7 @@ class TestMQTTClientSubscribeTopic:
         self, mqtt_settings, event_bus, mock_aiomqtt_client
     ):
         """Test subscribing to an already subscribed topic does nothing."""
-        client = MQTTClient(mqtt_settings, event_bus)
+        client = MQTTClient(mqtt_settings)
         client.subscribe = AsyncMock()
         client._subscribed_topics["test/topic"] = SampleInputEvent
 
@@ -179,7 +157,7 @@ class TestMQTTClientHandleMessage:
         self, mqtt_settings, mock_event_bus, mock_aiomqtt_client
     ):
         """Test handling a valid message with dict payload."""
-        client = MQTTClient(mqtt_settings, mock_event_bus)
+        client = MQTTClient(mqtt_settings)
         client._subscribed_topics["test/topic"] = SampleInputEvent
 
         # Create mock message
@@ -203,7 +181,7 @@ class TestMQTTClientHandleMessage:
         self, mqtt_settings, mock_event_bus, mock_aiomqtt_client
     ):
         """Test handling a valid message with string payload that becomes JSON."""
-        client = MQTTClient(mqtt_settings, mock_event_bus)
+        client = MQTTClient(mqtt_settings)
         client._subscribed_topics["test/topic"] = SampleInputEvent
 
         # The handler tries to parse as JSON then as dict/scalar
@@ -227,7 +205,7 @@ class TestMQTTClientHandleMessage:
         mock_aiomqtt_client,
     ):
         """Test handling Home Assistant online/offline scalar payload."""
-        client = MQTTClient(mqtt_settings, mock_event_bus)
+        client = MQTTClient(mqtt_settings)
         client._subscribed_topics["homeassistant/status"] = HomeAssistantStatusEvent
 
         mock_message = MagicMock()
@@ -248,7 +226,7 @@ class TestMQTTClientHandleMessage:
         self, mqtt_settings, mock_event_bus, mock_aiomqtt_client
     ):
         """Test handling message for unexpected topic."""
-        client = MQTTClient(mqtt_settings, mock_event_bus)
+        client = MQTTClient(mqtt_settings)
 
         mock_message = MagicMock()
         mock_message.topic = MagicMock()
@@ -265,7 +243,7 @@ class TestMQTTClientHandleMessage:
         self, mqtt_settings, mock_event_bus, mock_aiomqtt_client
     ):
         """Test handling message with invalid JSON."""
-        client = MQTTClient(mqtt_settings, mock_event_bus)
+        client = MQTTClient(mqtt_settings)
         client._subscribed_topics["test/topic"] = SampleInputEvent
 
         mock_message = MagicMock()
@@ -286,7 +264,7 @@ class TestMQTTClientPublish:
         self, mqtt_settings, event_bus, mock_aiomqtt_client
     ):
         """Test publishing online status."""
-        client = MQTTClient(mqtt_settings, event_bus)
+        client = MQTTClient(mqtt_settings)
         client.publish_to = AsyncMock()
 
         await client.publish_status_online()
@@ -298,7 +276,7 @@ class TestMQTTClientPublish:
         self, mqtt_settings, event_bus, mock_aiomqtt_client
     ):
         """Test publishing offline status."""
-        client = MQTTClient(mqtt_settings, event_bus)
+        client = MQTTClient(mqtt_settings)
         client.publish_to = AsyncMock()
 
         await client.publish_status_offline()
@@ -308,7 +286,7 @@ class TestMQTTClientPublish:
     @pytest.mark.asyncio
     async def test_event_listener(self, mqtt_settings, event_bus, mock_aiomqtt_client):
         """Test event listener calls publish_to."""
-        client = MQTTClient(mqtt_settings, event_bus)
+        client = MQTTClient(mqtt_settings)
         client.publish_to = AsyncMock()
 
         event = MQTTPublishEvent(
@@ -335,7 +313,7 @@ class TestMQTTClientPublish:
         self, mqtt_settings, event_bus, mock_aiomqtt_client
     ):
         """Test publish_to with string payload."""
-        client = MQTTClient(mqtt_settings, event_bus)
+        client = MQTTClient(mqtt_settings)
         client._is_connected = True
         client.publish = AsyncMock()
 
@@ -353,7 +331,7 @@ class TestMQTTClientPublish:
         self, mqtt_settings, event_bus, mock_aiomqtt_client
     ):
         """Test publish_to with BaseModel payload."""
-        client = MQTTClient(mqtt_settings, event_bus)
+        client = MQTTClient(mqtt_settings)
         client._is_connected = True
         client.publish = AsyncMock()
 
@@ -372,7 +350,7 @@ class TestMQTTClientPublish:
         self, mqtt_settings, event_bus, mock_aiomqtt_client
     ):
         """Test publish_to with custom topic prefix."""
-        client = MQTTClient(mqtt_settings, event_bus)
+        client = MQTTClient(mqtt_settings)
         client._is_connected = True
         client.publish = AsyncMock()
 
@@ -387,7 +365,7 @@ class TestMQTTClientPublish:
         self, mqtt_settings, event_bus, mock_aiomqtt_client
     ):
         """Test publish_to when not connected does nothing."""
-        client = MQTTClient(mqtt_settings, event_bus)
+        client = MQTTClient(mqtt_settings)
         client._is_connected = False
         client.publish = AsyncMock()
 
@@ -404,7 +382,7 @@ class TestMQTTClientListen:
         self, mqtt_settings, event_bus, mock_aiomqtt_client
     ):
         """Test listen returns immediately with no subscriptions."""
-        client = MQTTClient(mqtt_settings, event_bus)
+        client = MQTTClient(mqtt_settings)
         client._subscribed_topics = {}
 
         # Should return immediately without blocking
@@ -415,7 +393,7 @@ class TestMQTTClientListen:
         self, mqtt_settings, event_bus, mock_aiomqtt_client
     ):
         """Skip messages received on topics that are not subscribed."""
-        client = MQTTClient(mqtt_settings, event_bus)
+        client = MQTTClient(mqtt_settings)
         client._subscribed_topics = {"test/topic": SampleInputEvent}
 
         msg = MagicMock()
@@ -440,7 +418,7 @@ class TestMQTTClientListen:
         self, mqtt_settings, event_bus, mock_aiomqtt_client
     ):
         """Skip messages that exceed maximum payload size."""
-        client = MQTTClient(mqtt_settings, event_bus)
+        client = MQTTClient(mqtt_settings)
         client._subscribed_topics = {"test/topic": SampleInputEvent}
 
         msg = MagicMock()
@@ -465,7 +443,7 @@ class TestMQTTClientListen:
         self, mqtt_settings, event_bus, mock_aiomqtt_client
     ):
         """Drop messages when processing queue is full."""
-        client = MQTTClient(mqtt_settings, event_bus)
+        client = MQTTClient(mqtt_settings)
         client._subscribed_topics = {"test/topic": SampleInputEvent}
         client._received_message_queue = asyncio.Queue(maxsize=1)
 
@@ -499,7 +477,7 @@ class TestMQTTClientProcessQueue:
         self, mqtt_settings, event_bus, mock_aiomqtt_client
     ):
         """Test process_queue returns immediately with no subscriptions."""
-        client = MQTTClient(mqtt_settings, event_bus)
+        client = MQTTClient(mqtt_settings)
         client._subscribed_topics = {}
 
         # Should return immediately without blocking
@@ -510,7 +488,7 @@ class TestMQTTClientProcessQueue:
         self, mqtt_settings, mock_event_bus, mock_aiomqtt_client
     ):
         """Test process_queue handles exceptions in message handling."""
-        client = MQTTClient(mqtt_settings, mock_event_bus)
+        client = MQTTClient(mqtt_settings)
         client._subscribed_topics["test/topic"] = SampleInputEvent
 
         # Add a message to the queue
@@ -543,7 +521,7 @@ class TestMQTTClientHandleMessageErrors:
         self, mqtt_settings, mock_event_bus, mock_aiomqtt_client
     ):
         """Invalid payload type should not emit events."""
-        client = MQTTClient(mqtt_settings, mock_event_bus)
+        client = MQTTClient(mqtt_settings)
         client._subscribed_topics["test/topic"] = SampleInputEvent
 
         mock_message = MagicMock()
@@ -559,7 +537,7 @@ class TestMQTTClientHandleMessageErrors:
         self, mqtt_settings, mock_event_bus, mock_aiomqtt_client
     ):
         """Validation errors are handled without raising."""
-        client = MQTTClient(mqtt_settings, mock_event_bus)
+        client = MQTTClient(mqtt_settings)
         client._subscribed_topics["test/topic"] = SampleInputEvent
 
         mock_message = MagicMock()
@@ -575,7 +553,7 @@ class TestMQTTClientHandleMessageErrors:
         self, mqtt_settings, mock_event_bus, mock_aiomqtt_client
     ):
         """JSON null payload should be rejected as invalid input type."""
-        client = MQTTClient(mqtt_settings, mock_event_bus)
+        client = MQTTClient(mqtt_settings)
         client._subscribed_topics["test/topic"] = SampleInputEvent
 
         mock_message = MagicMock()

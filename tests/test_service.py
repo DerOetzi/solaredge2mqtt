@@ -18,8 +18,6 @@ def _build_service() -> Service:
     service.loops = set()
     service._run_task = None
     service.mqtt = None
-    service.event_bus = MagicMock()
-    service.event_bus.cancel_tasks = AsyncMock()
     service.influxdb = None
     service.powerflow = cast(Any, None)
     service.monitoring = None
@@ -143,13 +141,11 @@ class TestServiceInitialization:
             homeassistant_enabled=True,
         )
 
-        event_bus = MagicMock()
         influx = MagicMock()
 
         with (
             patch("solaredge2mqtt.service.service_settings", return_value=settings),
             patch("solaredge2mqtt.service.initialize_logging") as init_logging,
-            patch("solaredge2mqtt.service.EventBus", return_value=event_bus),
             patch("solaredge2mqtt.service.Timer") as timer_cls,
             patch(
                 "solaredge2mqtt.service.InfluxDBAsync", return_value=influx
@@ -165,18 +161,16 @@ class TestServiceInitialization:
             service = Service("config")
 
         init_logging.assert_called_once_with("INFO")
-        timer_cls.assert_called_once_with(event_bus, settings.interval)
-        influx_cls.assert_called_once_with(
-            settings.influxdb, settings.prices, event_bus
-        )
-        energy_cls.assert_called_once_with(settings.energy, event_bus, influx)
-        powerflow_cls.assert_called_once_with(settings, event_bus, influx)
-        monitoring_cls.assert_called_once_with(settings.monitoring, event_bus, influx)
-        weather_cls.assert_called_once_with(settings, event_bus)
+        timer_cls.assert_called_once_with(settings.interval)
+        influx_cls.assert_called_once_with(settings.influxdb, settings.prices)
+        energy_cls.assert_called_once_with(settings.energy, influx)
+        powerflow_cls.assert_called_once_with(settings, influx)
+        monitoring_cls.assert_called_once_with(settings.monitoring, influx)
+        weather_cls.assert_called_once_with(settings)
         forecast_cls.assert_called_once_with(
-            settings.forecast, settings.location, event_bus, influx
+            settings.forecast, settings.location, influx
         )
-        homeassistant_cls.assert_called_once_with(settings, event_bus)
+        homeassistant_cls.assert_called_once_with(settings)
         assert service.forecast is forecast_cls.return_value
 
     def test_init_logs_warning_when_forecast_unavailable_but_enabled(self):
@@ -192,7 +186,6 @@ class TestServiceInitialization:
         with (
             patch("solaredge2mqtt.service.service_settings", return_value=settings),
             patch("solaredge2mqtt.service.initialize_logging"),
-            patch("solaredge2mqtt.service.EventBus", return_value=MagicMock()),
             patch("solaredge2mqtt.service.Timer"),
             patch("solaredge2mqtt.service.PowerflowService"),
             patch("solaredge2mqtt.service.FORECAST_AVAILABLE", False),
@@ -223,7 +216,6 @@ class TestServiceInitialization:
         with (
             patch("solaredge2mqtt.service.service_settings", return_value=settings),
             patch("solaredge2mqtt.service.initialize_logging"),
-            patch("solaredge2mqtt.service.EventBus", return_value=MagicMock()),
             patch("solaredge2mqtt.service.Timer"),
             patch("solaredge2mqtt.service.PowerflowService"),
             patch("solaredge2mqtt.service.FORECAST_AVAILABLE", False),
@@ -603,13 +595,14 @@ class TestServiceShutdown:
         """Finalize should stop loops, set offline status, and cancel event tasks."""
         service = _build_service()
         service._stop_loops = AsyncMock()
-        cancel_tasks_mock = AsyncMock()
-        service.event_bus.cancel_tasks = cancel_tasks_mock
         mqtt = MagicMock()
         mqtt.publish_status_offline = AsyncMock()
         service.mqtt = mqtt
 
-        await service.finalize()
+        with patch(
+            "solaredge2mqtt.service.EventBus.cancel_tasks", new=AsyncMock()
+        ) as cancel_tasks_mock:
+            await service.finalize()
 
         service._stop_loops.assert_awaited_once()
         mqtt.publish_status_offline.assert_awaited_once()
@@ -621,14 +614,17 @@ class TestServiceShutdown:
         """Finalize should continue cleanup if offline status publish fails."""
         service = _build_service()
         service._stop_loops = AsyncMock()
-        cancel_tasks_mock = AsyncMock()
-        service.event_bus.cancel_tasks = cancel_tasks_mock
         service.mqtt = MagicMock()
         service.mqtt.publish_status_offline = AsyncMock(
             side_effect=Exception("unavailable")
         )
 
-        with patch("solaredge2mqtt.service.MqttError", Exception):
+        with (
+            patch("solaredge2mqtt.service.MqttError", Exception),
+            patch(
+                "solaredge2mqtt.service.EventBus.cancel_tasks", new=AsyncMock()
+            ) as cancel_tasks_mock,
+        ):
             await service.finalize()
 
         cancel_tasks_mock.assert_awaited_once()
@@ -639,11 +635,12 @@ class TestServiceShutdown:
         """Finalize should cancel event tasks even when mqtt is absent."""
         service = _build_service()
         service._stop_loops = AsyncMock()
-        cancel_tasks_mock = AsyncMock()
-        service.event_bus.cancel_tasks = cancel_tasks_mock
         service.mqtt = None
 
-        await service.finalize()
+        with patch(
+            "solaredge2mqtt.service.EventBus.cancel_tasks", new=AsyncMock()
+        ) as cancel_tasks_mock:
+            await service.finalize()
 
         service._stop_loops.assert_awaited_once()
         cancel_tasks_mock.assert_awaited_once()

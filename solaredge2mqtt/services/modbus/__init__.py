@@ -58,7 +58,7 @@ LOGGING_DEVICE_INFO = (
 
 
 class Modbus:
-    def __init__(self, settings: ServiceSettings, event_bus: EventBus):
+    def __init__(self, settings: ServiceSettings):
         self.settings = settings.modbus
 
         logger.info(
@@ -69,8 +69,6 @@ class Modbus:
 
         logger.debug(f"Modbus settings: {self.settings}")
 
-        self.event_bus = event_bus
-
         self._block_unreadable: set[int] = set()
 
         self._initialized = False
@@ -78,11 +76,9 @@ class Modbus:
 
         self._client: AsyncModbusTcpClient | None = None
 
-        self._control: ModbusAdvancedControl = ModbusAdvancedControl(
-            settings, event_bus
-        )
+        self._control: ModbusAdvancedControl = ModbusAdvancedControl(settings)
 
-        self._subscribe_events()
+        EventBus.register(self)
 
     @property
     def client(self) -> AsyncModbusTcpClient:
@@ -90,9 +86,6 @@ class Modbus:
             raise RuntimeError("Modbus client not initialized")
 
         return self._client
-
-    def _subscribe_events(self) -> None:
-        self.event_bus.subscribe(ModbusWriteEvent, self._handle_write_event)
 
     async def async_init(self) -> None:
         logger.info("Initializing modbus")
@@ -293,7 +286,7 @@ class Modbus:
         except KeyError as error:
             raise InvalidDataException("Invalid modbus data") from error
 
-        await self.event_bus.emit(ModbusUnitsReadEvent(units))
+        await EventBus.emit(ModbusUnitsReadEvent(units))
 
         return units
 
@@ -489,6 +482,7 @@ class Modbus:
 
         return batteries
 
+    @EventBus.subscribe(ModbusWriteEvent)
     async def _handle_write_event(self, event: ModbusWriteEvent):
         await self._write_to_modbus(event.register, event.payload)
 

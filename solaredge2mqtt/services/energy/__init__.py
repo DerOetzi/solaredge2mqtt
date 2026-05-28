@@ -19,18 +19,14 @@ class EnergyService:
     def __init__(
         self,
         settings: EnergySettings,
-        event_bus: EventBus,
         influxdb: InfluxDBAsync,
     ):
         self.influxdb = influxdb
         self.settings = settings
 
-        self.event_bus = event_bus
-        self._subscribe_events()
+        EventBus.register(self)
 
-    def _subscribe_events(self) -> None:
-        self.event_bus.subscribe(InfluxDBAggregatedEvent, self.read_historic_energy)
-
+    @EventBus.subscribe(InfluxDBAggregatedEvent)
     async def read_historic_energy(self, event: InfluxDBAggregatedEvent | None) -> None:
         for period in HistoricPeriod:
             records = await self.influxdb.query_timeunit(period, "energy")
@@ -53,8 +49,8 @@ class EnergyService:
                     energy=energy,
                 )
 
-                await self.event_bus.emit(EnergyReadEvent(energy))
-                await self.event_bus.emit(
+                await EventBus.emit(EnergyReadEvent(energy))
+                await EventBus.emit(
                     MQTTPublishEvent(
                         energy.mqtt_topic(),
                         energy,

@@ -48,13 +48,10 @@ class ForecastService:
         self,
         settings: ForecastSettings,
         location: LocationSettings,
-        event_bus: EventBus,
         influxdb: InfluxDBAsync,
     ) -> None:
         self.settings = settings
         self.location = location
-        self.event_bus = event_bus
-        self._subscribe_events()
 
         self.influxdb = influxdb
 
@@ -65,10 +62,9 @@ class ForecastService:
         self.last_weather_forecast: list[OpenWeatherMapForecastData] | None = None
         self.last_hour_forecast: dict[int, OpenWeatherMapForecastData] | None = None
 
-    def _subscribe_events(self) -> None:
-        self.event_bus.subscribe(WeatherUpdateEvent, self.weather_update)
-        self.event_bus.subscribe(Interval10MinTriggerEvent, self.forecast_loop)
+        EventBus.register(self)
 
+    @EventBus.subscribe(WeatherUpdateEvent)
     async def weather_update(self, event: WeatherUpdateEvent) -> None:
         self.last_weather_forecast = event.weather.hourly
 
@@ -145,6 +141,7 @@ class ForecastService:
         for forecaster in self.forecasters.values():
             forecaster.train(data)
 
+    @EventBus.subscribe(Interval10MinTriggerEvent)
     async def forecast_loop(self, event: Interval10MinTriggerEvent) -> None:
         if (
             not self.forecasters[ForecasterType.ENERGY].is_trained
@@ -230,14 +227,14 @@ class ForecastService:
             forecast = Forecast(power_period=power_hours, energy_period=energy_hours)
             logger.debug(forecast)
 
-            await self.event_bus.emit(
+            await EventBus.emit(
                 MQTTPublishEvent(
                     forecast.mqtt_topic(),
                     forecast,
                     self.settings.retain,
                 )
             )
-            await self.event_bus.emit(ForecastEvent(forecast))
+            await EventBus.emit(ForecastEvent(forecast))
 
 
 class Forecaster:

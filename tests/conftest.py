@@ -1,7 +1,7 @@
 """Shared pytest fixtures and configuration for solaredge2mqtt tests."""
 
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -32,19 +32,43 @@ def pytest_collection_modifyitems(
 
 @pytest.fixture
 def event_bus():
-    """Create an EventBus instance for testing."""
-    return EventBus()
+    """Provide EventBus class access for tests that use classmethods."""
+    return EventBus
+
+
+@pytest.fixture(autouse=True)
+def reset_event_bus_state():
+    """Reset EventBus singleton state to avoid cross-test leakage."""
+    EventBus._listeners = {}
+    EventBus._subscribed_events = {}
+    EventBus._tasks = set()
+    EventBus._critical_error = None
+    yield
+    EventBus._listeners = {}
+    EventBus._subscribed_events = {}
+    EventBus._tasks = set()
+    EventBus._critical_error = None
 
 
 @pytest.fixture
 def mock_event_bus():
-    """Create a mock event bus with mocked emit method."""
-    bus = MagicMock()
-    bus.emit = AsyncMock()
-    bus.subscribe = MagicMock()
-    bus.unsubscribe = MagicMock()
-    bus.unsubscribe_all = MagicMock()
-    return bus
+    """Patch EventBus classmethods and expose a mock handle for assertions."""
+    with (
+        patch("solaredge2mqtt.core.events.EventBus.register") as register,
+        patch("solaredge2mqtt.core.events.EventBus.subscribe") as subscribe,
+        patch("solaredge2mqtt.core.events.EventBus.unsubscribe") as unsubscribe,
+        patch("solaredge2mqtt.core.events.EventBus.unsubscribe_all") as unsubscribe_all,
+        patch(
+            "solaredge2mqtt.core.events.EventBus.emit", new_callable=AsyncMock
+        ) as emit,
+    ):
+        bus = MagicMock()
+        bus.register = register
+        bus.subscribe = subscribe
+        bus.unsubscribe = unsubscribe
+        bus.unsubscribe_all = unsubscribe_all
+        bus.emit = emit
+        yield bus
 
 
 @pytest.fixture

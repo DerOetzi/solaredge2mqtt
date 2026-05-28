@@ -29,7 +29,6 @@ class MonitoringSite(HTTPClientAsync):
     def __init__(
         self,
         settings: MonitoringSettings,
-        event_bus: EventBus,
         influxdb: InfluxDBAsync | None,
     ) -> None:
         super().__init__("Monitoring Site")
@@ -37,12 +36,9 @@ class MonitoringSite(HTTPClientAsync):
 
         self.influxdb: InfluxDBAsync | None = influxdb
 
-        self.event_bus = event_bus
-        self._subscribe_events()
+        EventBus.register(self)
 
-    def _subscribe_events(self) -> None:
-        self.event_bus.subscribe(Interval15MinTriggerEvent, self.get_data)
-
+    @EventBus.subscribe(Interval15MinTriggerEvent)
     async def get_data(self, event: Interval15MinTriggerEvent | None) -> None:
         energies = await self.get_modules_energy()
         powers = await self.get_modules_power()
@@ -284,7 +280,7 @@ class MonitoringSite(HTTPClientAsync):
                 count_modules += 1
                 energy_total += module.energy
 
-            await self.event_bus.emit(
+            await EventBus.emit(
                 MQTTPublishEvent(
                     f"monitoring/module/{module.info.serialnumber}",
                     module,
@@ -299,7 +295,7 @@ class MonitoringSite(HTTPClientAsync):
             count_modules=count_modules,
         )
 
-        await self.event_bus.emit(
+        await EventBus.emit(
             MQTTPublishEvent(
                 "monitoring/pv_energy_today",
                 energy_total,

@@ -23,30 +23,26 @@ class PowerflowService:
     def __init__(
         self,
         settings: ServiceSettings,
-        event_bus: EventBus,
         influxdb: InfluxDBAsync | None = None,
     ):
         self.settings = settings
 
         self.influxdb = influxdb
 
-        self.modbus = Modbus(self.settings, event_bus)
+        self.modbus = Modbus(self.settings)
 
         self.wallbox = (
-            WallboxClient(self.settings.wallbox, event_bus)
+            WallboxClient(self.settings.wallbox)
             if self.settings.wallbox.is_configured
             else None
         )
 
-        self.event_bus = event_bus
-        self._subscribe_events()
-
-    def _subscribe_events(self) -> None:
-        self.event_bus.subscribe(IntervalBaseTriggerEvent, self.calculate_powerflow)
+        EventBus.register(self)
 
     async def async_init(self) -> None:
         await self.modbus.async_init()
 
+    @EventBus.subscribe(IntervalBaseTriggerEvent)
     async def calculate_powerflow(
         self, event: IntervalBaseTriggerEvent | None = None
     ) -> None:
@@ -140,7 +136,7 @@ class PowerflowService:
 
     async def publish_modbus(self, units):
         for key, unit in units.items():
-            await self.event_bus.emit(
+            await EventBus.emit(
                 MQTTPublishEvent(
                     unit.inverter.mqtt_topic(self.settings.modbus.has_followers),
                     unit.inverter,
@@ -149,7 +145,7 @@ class PowerflowService:
             )
 
             for key, component in {**unit.meters, **unit.batteries}.items():
-                await self.event_bus.emit(
+                await EventBus.emit(
                     MQTTPublishEvent(
                         f"{component.mqtt_topic(self.settings.modbus.has_followers)}/{key.lower()}",
                         component,
@@ -159,7 +155,7 @@ class PowerflowService:
 
     async def publish_wallbox(self, wallbox_data):
         if wallbox_data is not None:
-            await self.event_bus.emit(
+            await EventBus.emit(
                 MQTTPublishEvent(
                     wallbox_data.mqtt_topic(),
                     wallbox_data,
@@ -170,20 +166,20 @@ class PowerflowService:
     async def publish_powerflow(self, powerflows: dict[str, Powerflow]) -> None:
         if self.settings.modbus.has_followers:
             for pf in powerflows.values():
-                await self.event_bus.emit(
+                await EventBus.emit(
                     MQTTPublishEvent(
                         pf.mqtt_topic(), pf, self.settings.powerflow.retain
                     )
                 )
         else:
             powerflow = powerflows["leader"]
-            await self.event_bus.emit(
+            await EventBus.emit(
                 MQTTPublishEvent(
                     powerflow.mqtt_topic(), powerflow, self.settings.powerflow.retain
                 )
             )
 
-        await self.event_bus.emit(PowerflowGeneratedEvent(powerflows))
+        await EventBus.emit(PowerflowGeneratedEvent(powerflows))
 
     async def write_to_influxdb(
         self,

@@ -11,31 +11,31 @@ from solaredge2mqtt.core.timer.events import (
 
 
 class Timer:
-    def __init__(self, event_bus: EventBus, base_interval: int) -> None:
-        self.event_bus = event_bus
+    def __init__(self, base_interval: int) -> None:
         self.base_interval = base_interval
+        EventBus.register(self)
 
     async def loop(self) -> None:
         timestamp = int(datetime.now().timestamp())
 
         if timestamp % self.base_interval == 0:
-            await self.event_bus.emit(IntervalBaseTriggerEvent())
+            await EventBus.emit(IntervalBaseTriggerEvent())
 
         timestamp -= self.base_interval - 1
 
         if timestamp % 60 == 0:
-            await self.event_bus.emit(Interval1MinTriggerEvent())
+            await EventBus.emit(Interval1MinTriggerEvent())
 
         timestamp -= self.base_interval
 
         if timestamp % 300 == 0:
-            await self.event_bus.emit(Interval5MinTriggerEvent())
+            await EventBus.emit(Interval5MinTriggerEvent())
 
         timestamp -= self.base_interval
 
         if timestamp % 600 == 0:
-            await self.event_bus.emit(Interval10MinTriggerEvent())
+            await EventBus.emit(Interval10MinTriggerEvent())
         timestamp -= self.base_interval
 
         if timestamp % 900 == 0:
-            await self.event_bus.emit(Interval15MinTriggerEvent())
+            await EventBus.emit(Interval15MinTriggerEvent())

@@ -18,7 +18,7 @@ from solaredge2mqtt.core.mqtt.settings import MQTTSettings
 
 
 class MQTTClient(Client):
-    def __init__(self, settings: MQTTSettings, event_bus: EventBus):
+    def __init__(self, settings: MQTTSettings):
         self.broker = settings.broker
         self.port = settings.port
         self._is_connected = False
@@ -39,7 +39,6 @@ class MQTTClient(Client):
 
         self._received_message_queue: Queue[Message] = Queue(maxsize=10)
 
-        self.event_bus = event_bus
         self._subscribe_events()
 
         super().__init__(
@@ -64,11 +63,11 @@ class MQTTClient(Client):
         return await super().__aexit__(exc_type, exc_val, exc_tb)
 
     def _subscribe_events(self) -> None:
-        self.event_bus.unsubscribe_all(MQTTPublishEvent)
-        self.event_bus.unsubscribe_all(MQTTSubscribeEvent)
+        EventBus.unsubscribe_all(MQTTPublishEvent)
+        EventBus.unsubscribe_all(MQTTSubscribeEvent)
 
-        self.event_bus.subscribe(MQTTPublishEvent, self.event_listener)
-        self.event_bus.subscribe(MQTTSubscribeEvent, self._subscribe_topic)
+        EventBus.subscribe(MQTTPublishEvent, self.event_listener)
+        EventBus.subscribe(MQTTSubscribeEvent, self._subscribe_topic)
 
     async def _subscribe_topic(self, event: MQTTSubscribeEvent[Any]) -> None:
         if event.topic not in self._subscribed_topics:
@@ -126,7 +125,7 @@ class MQTTClient(Client):
                 logger.warning(f"Received invalid payload type on topic: {topic}")
                 return
 
-            await self.event_bus.emit(event(topic, parsed_input))
+            await EventBus.emit(event(topic, parsed_input))
         except (ValidationError, json.JSONDecodeError, TypeError) as ex:
             logger.warning(f"Received invalid message on topic: {topic}, error: {ex}")
 

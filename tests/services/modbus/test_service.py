@@ -65,24 +65,24 @@ class TestModbusInit:
 
     def test_modbus_init(self, mock_service_settings, mock_event_bus):
         """Test Modbus initialization."""
-        modbus = Modbus(mock_service_settings, mock_event_bus)
+        modbus = Modbus(mock_service_settings)
 
         assert modbus.settings is mock_service_settings.modbus
-        assert modbus.event_bus is mock_event_bus
         assert modbus._client is None
         assert modbus._initialized is False
+        mock_event_bus.register.assert_called_once_with(modbus)
 
     def test_modbus_subscribes_to_events(self, mock_service_settings, mock_event_bus):
-        """Test Modbus subscribes to write events."""
-        Modbus(mock_service_settings, mock_event_bus)
+        """Test Modbus registers for decorated event handlers."""
+        Modbus(mock_service_settings)
 
-        mock_event_bus.subscribe.assert_called()
+        mock_event_bus.register.assert_called_once()
 
     def test_client_property_raises_when_uninitialized(
         self, mock_service_settings, mock_event_bus
     ):
         """Client property should raise before async_init."""
-        modbus = Modbus(mock_service_settings, mock_event_bus)
+        modbus = Modbus(mock_service_settings)
 
         with pytest.raises(RuntimeError):
             _ = modbus.client
@@ -96,7 +96,7 @@ class TestModbusAsyncInit:
         self, mock_service_settings, mock_event_bus, mock_modbus_client
     ):
         """Test async_init initializes client and detects devices."""
-        modbus = Modbus(mock_service_settings, mock_event_bus)
+        modbus = Modbus(mock_service_settings)
         modbus.detect_devices = AsyncMock()
         modbus.check_readable_registers = AsyncMock()
 
@@ -115,7 +115,7 @@ class TestModbusAsyncInit:
         self, mock_service_settings, mock_event_bus, mock_modbus_client
     ):
         """async_init should warn when unreadable registers were blocked."""
-        modbus = Modbus(mock_service_settings, mock_event_bus)
+        modbus = Modbus(mock_service_settings)
         modbus.detect_devices = AsyncMock()
         modbus.check_readable_registers = AsyncMock()
         modbus._block_unreadable = {40000}
@@ -135,7 +135,7 @@ class TestModbusAsyncInit:
         self, mock_service_settings, mock_event_bus, mock_modbus_client
     ):
         """detect_devices should read inverter info and run detectors."""
-        modbus = Modbus(mock_service_settings, mock_event_bus)
+        modbus = Modbus(mock_service_settings)
         modbus._client = mock_modbus_client
         modbus.read_device_info = AsyncMock(return_value={"meter0": 1})
         modbus._detect_meters = AsyncMock()
@@ -152,7 +152,7 @@ class TestModbusAsyncInit:
         self, mock_service_settings, mock_event_bus
     ):
         """check_readable_registers should iterate all configured units."""
-        modbus = Modbus(mock_service_settings, mock_event_bus)
+        modbus = Modbus(mock_service_settings)
         modbus._get_raw_data = AsyncMock(return_value=({}, {}, {}))
 
         with patch("solaredge2mqtt.services.modbus.AsyncModbusTcpClient") as client_cls:
@@ -168,7 +168,7 @@ class TestModbusAsyncInit:
         self, mock_service_settings, mock_event_bus
     ):
         """read_device_info stores ModbusDeviceInfo in internal map."""
-        modbus = Modbus(mock_service_settings, mock_event_bus)
+        modbus = Modbus(mock_service_settings)
         modbus._device_info = {"leader": {}}
         modbus._read_from_modbus = AsyncMock(return_value={"c_model": "X"})
 
@@ -199,7 +199,7 @@ class TestModbusRawDataCollection:
         mock_service_settings.modbus.check_grid_status = True
         mock_service_settings.modbus.advanced_power_controls_enabled = True
 
-        modbus = Modbus(mock_service_settings, mock_event_bus)
+        modbus = Modbus(mock_service_settings)
         modbus._device_info = {
             "leader": {
                 "inverter": MagicMock(),
@@ -258,7 +258,7 @@ class TestModbusRawDataCollection:
         mock_service_settings.modbus.check_grid_status = False
         mock_service_settings.modbus.advanced_power_controls_enabled = False
 
-        modbus = Modbus(mock_service_settings, mock_event_bus)
+        modbus = Modbus(mock_service_settings)
         modbus._device_info = {"leader": {"inverter": MagicMock()}}
 
         with patch(
@@ -278,7 +278,7 @@ class TestModbusRawDataCollection:
         self, mock_service_settings, mock_event_bus
     ):
         """_block_register should not add blocks after initialization."""
-        modbus = Modbus(mock_service_settings, mock_event_bus)
+        modbus = Modbus(mock_service_settings)
         modbus._initialized = True
 
         modbus._block_register(40000)
@@ -294,7 +294,7 @@ class TestModbusReadFromModbus:
         self, mock_service_settings, mock_event_bus, mock_modbus_client
     ):
         """Test successful modbus read."""
-        modbus = Modbus(mock_service_settings, mock_event_bus)
+        modbus = Modbus(mock_service_settings)
         modbus._client = mock_modbus_client
 
         # Mock register bundle
@@ -319,7 +319,7 @@ class TestModbusReadFromModbus:
         self, mock_service_settings, mock_event_bus, mock_modbus_client
     ):
         """Successful read should also work when service is already initialized."""
-        modbus = Modbus(mock_service_settings, mock_event_bus)
+        modbus = Modbus(mock_service_settings)
         modbus._client = mock_modbus_client
         modbus._initialized = True
 
@@ -342,7 +342,7 @@ class TestModbusReadFromModbus:
         self, mock_service_settings, mock_event_bus, mock_modbus_client
     ):
         """Test modbus read error blocks register."""
-        modbus = Modbus(mock_service_settings, mock_event_bus)
+        modbus = Modbus(mock_service_settings)
         modbus._client = mock_modbus_client
         modbus._initialized = False
 
@@ -365,7 +365,7 @@ class TestModbusReadFromModbus:
         self, mock_service_settings, mock_event_bus, mock_modbus_client
     ):
         """Test modbus exception blocks register."""
-        modbus = Modbus(mock_service_settings, mock_event_bus)
+        modbus = Modbus(mock_service_settings)
         modbus._client = mock_modbus_client
         modbus._initialized = False
 
@@ -388,7 +388,7 @@ class TestModbusReadFromModbus:
         self, mock_service_settings, mock_event_bus, mock_modbus_client
     ):
         """Test modbus read skips blocked registers."""
-        modbus = Modbus(mock_service_settings, mock_event_bus)
+        modbus = Modbus(mock_service_settings)
         modbus._client = mock_modbus_client
         modbus._block_unreadable = {40000}
 
@@ -411,7 +411,7 @@ class TestModbusGetData:
         self, mock_service_settings, mock_event_bus, mock_modbus_client
     ):
         """Test get_data returns units."""
-        modbus = Modbus(mock_service_settings, mock_event_bus)
+        modbus = Modbus(mock_service_settings)
         modbus._client = mock_modbus_client
         modbus._initialized = True
 
@@ -456,7 +456,7 @@ class TestModbusGetData:
         self, mock_service_settings, mock_event_bus, mock_modbus_client
     ):
         """Test get_data raises on KeyError."""
-        modbus = Modbus(mock_service_settings, mock_event_bus)
+        modbus = Modbus(mock_service_settings)
         modbus._client = mock_modbus_client
         modbus._initialized = True
         modbus._device_info = {}
@@ -475,7 +475,7 @@ class TestModbusMappers:
         self, mock_service_settings, mock_event_bus, mock_device_info
     ):
         """Test _map_inverter creates ModbusInverter."""
-        modbus = Modbus(mock_service_settings, mock_event_bus)
+        modbus = Modbus(mock_service_settings)
         modbus._device_info = {"leader": {"inverter": mock_device_info}}
 
         with patch(
@@ -496,7 +496,7 @@ class TestModbusMappers:
 
     def test_map_meters(self, mock_service_settings, mock_event_bus, mock_device_info):
         """Test _map_meters creates ModbusMeter dict."""
-        modbus = Modbus(mock_service_settings, mock_event_bus)
+        modbus = Modbus(mock_service_settings)
         modbus._device_info = {"leader": {"meter0": mock_device_info}}
 
         with patch("solaredge2mqtt.services.modbus.ModbusMeter") as mock_meter_class:
@@ -515,7 +515,7 @@ class TestModbusMappers:
         self, mock_service_settings, mock_event_bus, mock_device_info
     ):
         """Test _map_batteries creates ModbusBattery dict."""
-        modbus = Modbus(mock_service_settings, mock_event_bus)
+        modbus = Modbus(mock_service_settings)
         modbus._device_info = {"leader": {"battery0": mock_device_info}}
 
         with patch(
@@ -542,7 +542,7 @@ class TestModbusWriteToModbus:
         self, mock_service_settings, mock_event_bus, mock_modbus_client
     ):
         """Test successful modbus write."""
-        modbus = Modbus(mock_service_settings, mock_event_bus)
+        modbus = Modbus(mock_service_settings)
         modbus._client = mock_modbus_client
 
         mock_register = MagicMock()
@@ -559,7 +559,7 @@ class TestModbusWriteToModbus:
         self, mock_service_settings, mock_event_bus, mock_modbus_client
     ):
         """Test modbus write handles exception."""
-        modbus = Modbus(mock_service_settings, mock_event_bus)
+        modbus = Modbus(mock_service_settings)
         modbus._client = mock_modbus_client
 
         mock_register = MagicMock()
@@ -581,7 +581,7 @@ class TestModbusHandleWriteEvent:
         self, mock_service_settings, mock_event_bus, mock_modbus_client
     ):
         """Test handling write event."""
-        modbus = Modbus(mock_service_settings, mock_event_bus)
+        modbus = Modbus(mock_service_settings)
         modbus._write_to_modbus = AsyncMock()
 
         mock_register = MagicMock()

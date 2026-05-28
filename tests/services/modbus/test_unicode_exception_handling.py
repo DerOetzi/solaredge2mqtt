@@ -38,12 +38,6 @@ def mock_service_settings():
 
 
 @pytest.fixture
-def mock_event_bus():
-    """Create mock event bus."""
-    return MagicMock()
-
-
-@pytest.fixture
 def mock_modbus_client():
     """Mock pymodbus client."""
     with patch(
@@ -218,7 +212,7 @@ class TestDetectMetersExceptionHandling:
     ):
         """Test that _detect_meters skips meter on exception."""
         with patch("solaredge2mqtt.services.modbus.AsyncModbusTcpClient"):
-            modbus = Modbus(mock_service_settings, mock_event_bus)
+            modbus = Modbus(mock_service_settings)
 
             unit_key = "leader"
             unit_settings = mock_service_settings.modbus.units[unit_key]
@@ -260,7 +254,7 @@ class TestDetectMetersExceptionHandling:
     ):
         """Test that other meters are still processed after exception."""
         with patch("solaredge2mqtt.services.modbus.AsyncModbusTcpClient"):
-            modbus = Modbus(mock_service_settings, mock_event_bus)
+            modbus = Modbus(mock_service_settings)
 
             unit_key = "leader"
             unit_settings = mock_service_settings.modbus.units[unit_key]
@@ -307,7 +301,7 @@ class TestDetectBatteries:
     async def test_detect_batteries_basic(self, mock_service_settings, mock_event_bus):
         """Test basic battery detection."""
         with patch("solaredge2mqtt.services.modbus.AsyncModbusTcpClient"):
-            modbus = Modbus(mock_service_settings, mock_event_bus)
+            modbus = Modbus(mock_service_settings)
 
             unit_key = "leader"
             unit_settings = mock_service_settings.modbus.units[unit_key]
