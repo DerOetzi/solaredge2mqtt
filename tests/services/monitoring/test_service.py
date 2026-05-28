@@ -32,6 +32,7 @@ def mock_monitoring_settings():
     settings.password = MagicMock()
     settings.password.get_secret_value.return_value = "test_password"
     settings.retain = False
+    settings.debounce_cycles = 0
     return settings
 
 

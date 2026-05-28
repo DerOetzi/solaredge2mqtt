@@ -73,14 +73,13 @@ class Service:
         self.powerflow = PowerflowService(self.settings, self.influxdb)
         self.influxdb_state = ServiceStateController(
             "influxdb",
-            self.settings.service_state.debounce_for("influxdb"),
+            self.settings.influxdb.debounce_cycles,
         )
 
         self.monitoring: MonitoringSite | None = (
             MonitoringSite(
                 self.settings.monitoring,
                 self.influxdb,
-                self.settings.service_state.debounce_for("monitoring"),
             )
             if self.settings.monitoring.is_configured
             else None

@@ -24,6 +24,7 @@ def wallbox_settings():
     settings.password = MagicMock()
     settings.password.get_secret_value.return_value = "test_password"
     settings.retain = False
+    settings.debounce_cycles = 0
     return settings
 
 
@@ -323,7 +324,11 @@ class TestWallboxClientGetData:
             result = await client.get_data()
 
             assert result is mock_wallbox_instance
-            mock_event_bus.emit.assert_called_once()
+            # WallboxReadEvent + MQTTPublishEvent from state.set_online()
+            assert mock_event_bus.emit.call_count >= 1
+            first_call_arg = mock_event_bus.emit.call_args_list[0][0][0]
+            from solaredge2mqtt.services.wallbox.events import WallboxReadEvent
+            assert isinstance(first_call_arg, WallboxReadEvent)
 
     @pytest.mark.asyncio
     async def test_get_data_none_response(

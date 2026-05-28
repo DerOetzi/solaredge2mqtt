@@ -8,16 +8,6 @@ interval: 5
 # Set logging level to DEBUG, INFO (default), WARNING, ERROR, CRITICAL
 logging_level: INFO
 
-# Optional: Require repeated state observations before publishing status changes.
-# Value is the number of consecutive checks needed before switching online/offline.
-# service_state:
-#   debounce_cycles:
-#     modbus: 2
-#     wallbox: 2
-#     monitoring: 2
-#     weather_api: 2
-#     influxdb: 2
-
 # Location settings (required for weather and forecast features)
 # location:
 #   latitude: 52.520008
@@ -29,6 +19,7 @@ modbus:
   port: 1502           # Port of your inverter
   timeout: 1           # Timeout for the modbus connection in seconds
   unit: 1              # Modbus unit address
+  # debounce_cycles: 2  # Optional: consecutive checks before switching online/offline
   
   # Enable or disable detection of meters
   # meter0 is typically the export/import meter (default: true)
@@ -88,6 +79,7 @@ prices:
 #   username: "user@example.com"
 #   password: !secret monitoring_password  # Reference to secrets.yml
 #   retain: false
+#   debounce_cycles: 2  # Optional: consecutive checks before switching online/offline
 
 # SolarEdge Wallbox (optional)
 # wallbox:
@@ -95,6 +87,7 @@ prices:
 #   password: !secret wallbox_password  # Reference to secrets.yml
 #   serial: !secret wallbox_serial  # Reference to secrets.yml
 #   retain: false
+#   debounce_cycles: 2  # Optional: consecutive checks before switching online/offline
 
 # Home Assistant Auto Discovery (optional)
 # homeassistant:
@@ -111,12 +104,14 @@ prices:
 #   bucket: solaredge
 #   retention: 63072000      # Retention for aggregated data in seconds (2 years)
 #   retention_raw: 25        # Retention for raw data in hours
+#   debounce_cycles: 2  # Optional: consecutive checks before switching online/offline
 
 # Weather configuration (optional, requires location)
 # weather:
 #   api_key: !secret weather_api_key  # Reference to secrets.yml
 #   language: en
 #   retain: false
+#   debounce_cycles: 2  # Optional: consecutive checks before switching online/offline
 
 # Forecast configuration (optional, requires weather and InfluxDB)
 # forecast:

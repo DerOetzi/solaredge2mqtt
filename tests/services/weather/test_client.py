@@ -26,8 +26,7 @@ def mock_service_settings():
     settings.weather.api_key.get_secret_value.return_value = "test_api_key"
     settings.weather.language = "en"
     settings.weather.retain = False
-    settings.service_state = MagicMock()
-    settings.service_state.debounce_for.return_value = 0
+    settings.weather.debounce_cycles = 0
 
     return settings
 
@@ -176,8 +175,7 @@ class TestWeatherClientGetWeather:
         mock_settings = MagicMock()
         mock_settings.location = None
         mock_settings.weather = MagicMock()
-        mock_settings.service_state = MagicMock()
-        mock_settings.service_state.debounce_for.return_value = 0
+        mock_settings.weather.debounce_cycles = 0
 
         client = WeatherClient(mock_settings)
 

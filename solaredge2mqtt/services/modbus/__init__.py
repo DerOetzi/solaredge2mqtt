@@ -12,6 +12,7 @@ from solaredge2mqtt.core.exceptions import (
     InvalidDataException,
 )
 from solaredge2mqtt.core.logging import logger
+from solaredge2mqtt.core.mqtt.state import ServiceStateController
 from solaredge2mqtt.services.modbus.control import ModbusAdvancedControl
 from solaredge2mqtt.services.modbus.events import (
     ModbusUnitsReadEvent,
@@ -78,6 +79,8 @@ class Modbus:
 
         self._control: ModbusAdvancedControl = ModbusAdvancedControl(settings)
 
+        self.state = ServiceStateController("modbus", self.settings.debounce_cycles)
+
         EventBus.register(self)
 
     @property
@@ -88,31 +91,37 @@ class Modbus:
         return self._client
 
     async def async_init(self) -> None:
-        logger.info("Initializing modbus")
+        try:
+            logger.info("Initializing modbus")
 
-        self._client = AsyncModbusTcpClient(
-            host=self.settings.host,
-            port=self.settings.port,
-            timeout=self.settings.timeout,
-            retries=0,
-        )
-
-        await self.detect_devices()
-
-        await asyncio.sleep(self.settings.timeout + 5)
-
-        await self.check_readable_registers()
-
-        self._initialized = True
-
-        await asyncio.sleep(self.settings.timeout + 5)
-        if self._block_unreadable:
-            logger.warning(
-                "Not readable registers: {registers}",
-                registers=self._block_unreadable,
+            self._client = AsyncModbusTcpClient(
+                host=self.settings.host,
+                port=self.settings.port,
+                timeout=self.settings.timeout,
+                retries=0,
             )
 
-        # await self._control.async_init()
+            await self.detect_devices()
+
+            await asyncio.sleep(self.settings.timeout + 5)
+
+            await self.check_readable_registers()
+
+            self._initialized = True
+
+            await asyncio.sleep(self.settings.timeout + 5)
+            if self._block_unreadable:
+                logger.warning(
+                    "Not readable registers: {registers}",
+                    registers=self._block_unreadable,
+                )
+
+            # await self._control.async_init()
+
+            await self.state.set_online()
+        except (InvalidDataException, InvalidRegisterDataException, RuntimeError):
+            await self.state.set_offline()
+            raise
 
     async def detect_devices(self):
         async with self.client:
@@ -284,7 +293,13 @@ class Modbus:
                     )
 
         except KeyError as error:
+            await self.state.set_offline()
             raise InvalidDataException("Invalid modbus data") from error
+        except (InvalidDataException, RuntimeError):
+            await self.state.set_offline()
+            raise
+
+        await self.state.set_online()
 
         await EventBus.emit(ModbusUnitsReadEvent(units))
 

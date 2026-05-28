@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
 from solaredge2mqtt.core.logging import logger
+from solaredge2mqtt.core.mqtt.state import ServiceStateController
 from solaredge2mqtt.services.http_async import HTTPClientAsync
 from solaredge2mqtt.services.wallbox.events import WallboxReadEvent
 from solaredge2mqtt.services.wallbox.models import WallboxAPI
@@ -55,6 +56,7 @@ class WallboxClient(HTTPClientAsync):
         super().__init__("Wallbox API")
         self.settings = settings
         self.authorization: AuthorizationTokens | None = None
+        self.state = ServiceStateController("wallbox", settings.debounce_cycles)
 
         logger.info(
             "Using Wallbox charger: {host}",
@@ -75,7 +77,7 @@ class WallboxClient(HTTPClientAsync):
                         serial=self.settings.serial_secret,
                     ),
                     headers={
-                        "Authorization": f"Bearer {self.authorization.access_token}"
+                        "Authorization": f"******"
                     },
                     verify=False,
                     login=self.login,
@@ -89,9 +91,19 @@ class WallboxClient(HTTPClientAsync):
 
             await EventBus.emit(WallboxReadEvent(wallbox))
 
+            await self.state.set_online()
+
             return wallbox
         except (ClientResponseError, asyncio.TimeoutError) as error:
+            await self.state.set_offline()
             raise InvalidDataException(f"Cannot read Wallbox data: {error}") from error
+        except (ConfigurationException, InvalidDataException):
+            await self.state.set_offline()
+            raise
+
+    async def close(self) -> None:
+        await self.state.set_offline()
+        await super().close()
 
     async def _get_access(self) -> None:
         current_timestamp = int(time.time())

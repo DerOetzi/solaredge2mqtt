@@ -31,13 +31,12 @@ class MonitoringSite(HTTPClientAsync):
         self,
         settings: MonitoringSettings,
         influxdb: InfluxDBAsync | None,
-        debounce_cycles: int = 0,
     ) -> None:
         super().__init__("Monitoring Site")
         self.settings = settings
 
         self.influxdb: InfluxDBAsync | None = influxdb
-        self.state = ServiceStateController("monitoring", debounce_cycles)
+        self.state = ServiceStateController("monitoring", settings.debounce_cycles)
 
         EventBus.register(self)
 

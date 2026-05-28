@@ -7,6 +7,7 @@ class WeatherSettings(BaseModel):
     api_key: SecretStr | None = Field(default=None)
     language: str = Field(default="en")
     retain: bool = Field(default=False)
+    debounce_cycles: int = Field(default=0)
 
     @property
     def api_key_secret(self) -> str:

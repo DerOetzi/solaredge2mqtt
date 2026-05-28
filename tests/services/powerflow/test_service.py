@@ -39,8 +39,6 @@ def mock_service_settings():
     settings.location = MagicMock()
     settings.location.latitude = 52.52
     settings.location.longitude = 13.405
-    settings.service_state = MagicMock()
-    settings.service_state.debounce_for.return_value = 0
 
     return settings
 
@@ -158,23 +156,19 @@ class TestPowerflowServiceAsyncInit:
             mock_modbus.async_init.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_async_init_sets_offline_state_on_error(
+    async def test_async_init_propagates_error(
         self, mock_service_settings, mock_event_bus
     ):
-        """async_init should set modbus state offline on initialization errors."""
+        """async_init should propagate errors from modbus initialization."""
         with patch("solaredge2mqtt.services.powerflow.Modbus") as mock_modbus_class:
             mock_modbus = AsyncMock()
             mock_modbus.async_init.side_effect = RuntimeError("modbus failed")
             mock_modbus_class.return_value = mock_modbus
 
             service = PowerflowService(mock_service_settings, None)
-            service.modbus_state = MagicMock()
-            service.modbus_state.set_offline = AsyncMock()
 
             with pytest.raises(RuntimeError):
                 await service.async_init()
-
-            service.modbus_state.set_offline.assert_awaited_once()
 
 
 class TestPowerflowServiceCalculate:
@@ -230,23 +224,19 @@ class TestPowerflowServiceCalculate:
             assert "Invalid modbus data" in exc_info.value.message
 
     @pytest.mark.asyncio
-    async def test_calculate_powerflow_sets_offline_state_on_modbus_error(
+    async def test_calculate_powerflow_propagates_modbus_error(
         self, mock_service_settings, mock_event_bus
     ):
-        """calculate_powerflow should set modbus state offline on read errors."""
+        """calculate_powerflow should propagate modbus read errors."""
         with patch("solaredge2mqtt.services.powerflow.Modbus") as mock_modbus_class:
             mock_modbus = AsyncMock()
             mock_modbus.get_data.side_effect = InvalidDataException("modbus down")
             mock_modbus_class.return_value = mock_modbus
 
             service = PowerflowService(mock_service_settings, None)
-            service.modbus_state = MagicMock()
-            service.modbus_state.set_offline = AsyncMock()
 
             with pytest.raises(InvalidDataException):
                 await service.calculate_powerflow(IntervalBaseTriggerEvent())
-
-            service.modbus_state.set_offline.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_calculate_powerflow_invalid_battery(
@@ -644,20 +634,14 @@ class TestPowerflowServiceClose:
             patch(
                 "solaredge2mqtt.services.powerflow.WallboxClient"
             ) as mock_wallbox_class,
-            patch(
-                "solaredge2mqtt.services.powerflow.WallboxClient"
-            ) as mock_wallbox_class,
         ):
             mock_wallbox = AsyncMock()
             mock_wallbox_class.return_value = mock_wallbox
 
             service = PowerflowService(mock_service_settings, None)
-            service.wallbox_state = MagicMock()
-            service.wallbox_state.set_offline = AsyncMock()
 
             await service.close()
 
-            service.wallbox_state.set_offline.assert_awaited_once()
             mock_wallbox.close.assert_called_once()
 
     @pytest.mark.asyncio

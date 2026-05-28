@@ -34,6 +34,7 @@ def mock_service_settings():
     mock_unit_settings.battery = [True, False]
 
     settings.modbus.units = {"leader": mock_unit_settings}
+    settings.modbus.debounce_cycles = 0
 
     return settings
 
@@ -446,10 +447,10 @@ class TestModbusGetData:
 
             await modbus.get_data()
 
-            # Should emit event
-            mock_event_bus.emit.assert_called_once()
-            call_args = mock_event_bus.emit.call_args
-            assert isinstance(call_args[0][0], ModbusUnitsReadEvent)
+            # Should emit ModbusUnitsReadEvent (plus MQTTPublishEvent from state.set_online)
+            assert mock_event_bus.emit.call_count >= 1
+            emitted_types = [type(c[0][0]) for c in mock_event_bus.emit.call_args_list]
+            assert ModbusUnitsReadEvent in emitted_types
 
     @pytest.mark.asyncio
     async def test_get_data_key_error(
