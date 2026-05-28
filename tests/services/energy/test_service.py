@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from solaredge2mqtt.core.exceptions import InvalidDataException
+from solaredge2mqtt.core.influxdb.events import InfluxDBAggregatedEvent
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.services.energy import EnergyService
 from solaredge2mqtt.services.energy.events import EnergyReadEvent
@@ -32,19 +33,19 @@ class TestEnergyServiceInit:
 
     def test_init(self, mock_energy_settings, mock_event_bus, mock_influxdb):
         """Test EnergyService initialization."""
-        service = EnergyService(mock_energy_settings, mock_event_bus, mock_influxdb)
+        service = EnergyService(mock_energy_settings, mock_influxdb)
 
         assert service.settings is mock_energy_settings
-        assert service.event_bus is mock_event_bus
         assert service.influxdb is mock_influxdb
+        mock_event_bus.register.assert_called_once_with(service)
 
     def test_subscribes_to_events(
         self, mock_energy_settings, mock_event_bus, mock_influxdb
     ):
         """Test EnergyService subscribes to influxdb aggregated event."""
-        EnergyService(mock_energy_settings, mock_event_bus, mock_influxdb)
+        EnergyService(mock_energy_settings, mock_influxdb)
 
-        mock_event_bus.subscribe.assert_called()
+        mock_event_bus.register.assert_called_once()
 
 
 class TestEnergyServiceReadHistoricEnergy:
@@ -57,7 +58,7 @@ class TestEnergyServiceReadHistoricEnergy:
         """Test successful energy reading."""
         from datetime import datetime, timezone
 
-        service = EnergyService(mock_energy_settings, mock_event_bus, mock_influxdb)
+        service = EnergyService(mock_energy_settings, mock_influxdb)
 
         # Mock query result with valid record data
         mock_record = {
@@ -85,7 +86,7 @@ class TestEnergyServiceReadHistoricEnergy:
         # Return data for first period, None for others to test both paths
         mock_influxdb.query_timeunit.return_value = [mock_record]
 
-        await service.read_historic_energy(None)
+        await service.read_historic_energy(InfluxDBAggregatedEvent())
 
         # Should emit events for each period that returned data
         assert mock_event_bus.emit.call_count > 0
@@ -95,7 +96,7 @@ class TestEnergyServiceReadHistoricEnergy:
         self, mock_energy_settings, mock_event_bus, mock_influxdb
     ):
         """Test reading energy with no data for LAST query type."""
-        service = EnergyService(mock_energy_settings, mock_event_bus, mock_influxdb)
+        service = EnergyService(mock_energy_settings, mock_influxdb)
 
         # Return None for all queries
         mock_influxdb.query_timeunit.return_value = None
@@ -103,7 +104,7 @@ class TestEnergyServiceReadHistoricEnergy:
         # Should not raise for LAST query type - just skip
         # But will raise for other query types
         with pytest.raises(InvalidDataException):
-            await service.read_historic_energy(None)
+            await service.read_historic_energy(InfluxDBAggregatedEvent())
 
     @pytest.mark.asyncio
     async def test_read_historic_energy_emits_events(
@@ -112,7 +113,7 @@ class TestEnergyServiceReadHistoricEnergy:
         """Test read_historic_energy emits correct events."""
         from datetime import datetime, timezone
 
-        service = EnergyService(mock_energy_settings, mock_event_bus, mock_influxdb)
+        service = EnergyService(mock_energy_settings, mock_influxdb)
 
         mock_record = {
             "_start": datetime(2024, 1, 1, tzinfo=timezone.utc),
@@ -137,7 +138,7 @@ class TestEnergyServiceReadHistoricEnergy:
         }
         mock_influxdb.query_timeunit.return_value = [mock_record]
 
-        await service.read_historic_energy(None)
+        await service.read_historic_energy(InfluxDBAggregatedEvent())
 
         # Check that EnergyReadEvent and MQTTPublishEvent were emitted
         emit_calls = mock_event_bus.emit.call_args_list

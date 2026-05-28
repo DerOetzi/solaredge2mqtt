@@ -4,7 +4,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.mqtt.events import MQTTReceivedEvent
 from solaredge2mqtt.services.modbus.control import ModbusAdvancedControl
 from solaredge2mqtt.services.modbus.settings import AdvancedControlsSettings
@@ -21,44 +20,37 @@ def mock_settings():
     return mock_settings
 
 
-@pytest.fixture
-def event_bus():
-    """Create an event bus."""
-    return EventBus()
-
-
 class TestModbusAdvancedControl:
     """Tests for ModbusAdvancedControl class."""
 
-    def test_init_without_followers(self, mock_settings, event_bus):
+    def test_init_without_followers(self, mock_settings, mock_event_bus):
         """Test initialization without followers."""
-        control = ModbusAdvancedControl(mock_settings, event_bus)
+        control = ModbusAdvancedControl(mock_settings)
 
         assert control.settings == mock_settings.modbus
-        assert control.event_bus == event_bus
         assert "modbus" in control.topic_prefix
         assert "inverter" in control.topic_prefix
 
-    def test_init_with_followers(self, mock_settings, event_bus):
+    def test_init_with_followers(self, mock_settings, mock_event_bus):
         """Test initialization with followers."""
         mock_settings.modbus.has_followers = True
-        control = ModbusAdvancedControl(mock_settings, event_bus)
+        control = ModbusAdvancedControl(mock_settings)
 
         assert control.settings == mock_settings.modbus
         assert "leader" in control.topic_prefix
 
-    def test_topic_prefix_construction(self, mock_settings, event_bus):
+    def test_topic_prefix_construction(self, mock_settings, mock_event_bus):
         """Test topic prefix is correctly constructed."""
         mock_settings.mqtt.topic_prefix = "my_prefix"
-        control = ModbusAdvancedControl(mock_settings, event_bus)
+        control = ModbusAdvancedControl(mock_settings)
 
         assert control.topic_prefix.startswith("my_prefix/")
 
     @pytest.mark.asyncio
-    async def test_async_init_disabled(self, mock_settings, event_bus):
+    async def test_async_init_disabled(self, mock_settings, mock_event_bus):
         """Test async_init with disabled controls."""
         mock_settings.modbus.advanced_power_controls = AdvancedControlsSettings.DISABLED
-        control = ModbusAdvancedControl(mock_settings, event_bus)
+        control = ModbusAdvancedControl(mock_settings)
 
         await control.async_init()
 
@@ -66,10 +58,10 @@ class TestModbusAdvancedControl:
         # (test passes if no exceptions are raised)
 
     @pytest.mark.asyncio
-    async def test_async_init_enable(self, mock_settings, event_bus):
+    async def test_async_init_enable(self, mock_settings, mock_event_bus):
         """Test async_init with enabled controls."""
         mock_settings.modbus.advanced_power_controls = AdvancedControlsSettings.ENABLED
-        control = ModbusAdvancedControl(mock_settings, event_bus)
+        control = ModbusAdvancedControl(mock_settings)
 
         # Mock the methods to avoid actual operations
         control.enable_advanced_power_control = AsyncMock()
@@ -81,10 +73,10 @@ class TestModbusAdvancedControl:
         control.subscribe_topics.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_async_init_disable(self, mock_settings, event_bus):
+    async def test_async_init_disable(self, mock_settings, mock_event_bus):
         """Test async_init with disable controls."""
         mock_settings.modbus.advanced_power_controls = AdvancedControlsSettings.DISABLE
-        control = ModbusAdvancedControl(mock_settings, event_bus)
+        control = ModbusAdvancedControl(mock_settings)
 
         # Mock the method to avoid actual operations
         control.disable_advanced_control_settings = AsyncMock()
@@ -94,52 +86,46 @@ class TestModbusAdvancedControl:
         control.disable_advanced_control_settings.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_enable_advanced_power_control(self, mock_settings, event_bus):
+    async def test_enable_advanced_power_control(self, mock_settings, mock_event_bus):
         """Test enabling advanced power control."""
-        control = ModbusAdvancedControl(mock_settings, event_bus)
-
-        # Mock emit to verify events are emitted
-        control.event_bus.emit = AsyncMock()
+        control = ModbusAdvancedControl(mock_settings)
 
         await control.enable_advanced_power_control()
 
         # Should not emit any events by default (no-op in current implementation)
+        mock_event_bus.emit.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_disable_advanced_control_settings(self, mock_settings, event_bus):
+    async def test_disable_advanced_control_settings(
+        self, mock_settings, mock_event_bus
+    ):
         """Test disabling advanced control settings."""
-        control = ModbusAdvancedControl(mock_settings, event_bus)
-
-        # Mock emit to verify events are emitted
-        control.event_bus.emit = AsyncMock()
+        control = ModbusAdvancedControl(mock_settings)
 
         await control.disable_advanced_control_settings()
 
         # Should emit 3 events
-        assert control.event_bus.emit.call_count == 3
+        assert mock_event_bus.emit.call_count == 3
 
     @pytest.mark.asyncio
-    async def test_subscribe_events_when_enabled(self, mock_settings, event_bus):
+    async def test_subscribe_events_when_enabled(self, mock_settings, mock_event_bus):
         """Test _subscribe_events when controls are enabled."""
         mock_settings.modbus.advanced_power_controls_enabled = True
-        control = ModbusAdvancedControl(mock_settings, event_bus)
+        ModbusAdvancedControl(mock_settings)
 
-        # Verify that event subscription was called
-        # (event_bus.subscribe should have been called)
-        assert control.event_bus is not None
+        mock_event_bus.subscribe.assert_called_once()
 
-    def test_subscribe_events_when_disabled(self, mock_settings, event_bus):
+    def test_subscribe_events_when_disabled(self, mock_settings, mock_event_bus):
         """Test _subscribe_events when controls are disabled."""
         mock_settings.modbus.advanced_power_controls_enabled = False
-        control = ModbusAdvancedControl(mock_settings, event_bus)
+        ModbusAdvancedControl(mock_settings)
 
-        # Should not raise any errors
-        assert control.event_bus is not None
+        mock_event_bus.subscribe.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_handle_mqtt_received_event(self, mock_settings, event_bus):
+    async def test_handle_mqtt_received_event(self, mock_settings, mock_event_bus):
         """Test handling MQTT received event."""
-        control = ModbusAdvancedControl(mock_settings, event_bus)
+        control = ModbusAdvancedControl(mock_settings)
 
         # Create a mock event
         mock_event = MagicMock(spec=MQTTReceivedEvent)
@@ -149,9 +135,9 @@ class TestModbusAdvancedControl:
         await control.handle_mqtt_received_event(mock_event)
 
     @pytest.mark.asyncio
-    async def test_subscribe_topics_with_fields(self, mock_settings, event_bus):
+    async def test_subscribe_topics_with_fields(self, mock_settings, mock_event_bus):
         """subscribe_topics should iterate schema fields and log topic usage."""
-        control = ModbusAdvancedControl(mock_settings, event_bus)
+        control = ModbusAdvancedControl(mock_settings)
 
         with patch(
             "solaredge2mqtt.services.modbus.control.ModbusInverter.parse_schema",

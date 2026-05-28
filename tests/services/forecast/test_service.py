@@ -10,7 +10,6 @@ from pandas import DataFrame
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 
-from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import InvalidDataException
 from solaredge2mqtt.core.settings.models import LocationSettings
 from solaredge2mqtt.services.forecast.models import ForecasterType
@@ -75,8 +74,7 @@ class MockWeatherData:
 
     def __init__(self, hourly=None):
         if hourly is None:
-            hourly = [MockOpenWeatherMapForecastData(
-                hour=i) for i in range(48)]
+            hourly = [MockOpenWeatherMapForecastData(hour=i) for i in range(48)]
         self.hourly = hourly
 
 
@@ -87,14 +85,12 @@ class TestForecastServiceInit:
         """Test ForecastService initialization."""
         settings = ForecastSettings(enable=True)
         location = MockLocationSettings()
-        event_bus = MagicMock(spec=EventBus)
         influxdb = MagicMock()
 
-        service = ForecastService(settings, location, event_bus, influxdb)
+        service = ForecastService(settings, location, influxdb)
 
         assert service.settings == settings
         assert service.location == location
-        assert service.event_bus == event_bus
         assert service.influxdb == influxdb
         assert service.last_weather_forecast is None
         assert service.last_hour_forecast is None
@@ -103,29 +99,24 @@ class TestForecastServiceInit:
         """Test ForecastService creates forecasters for each type."""
         settings = ForecastSettings(enable=True)
         location = MockLocationSettings()
-        event_bus = MagicMock(spec=EventBus)
         influxdb = MagicMock()
 
-        service = ForecastService(settings, location, event_bus, influxdb)
+        service = ForecastService(settings, location, influxdb)
 
         assert ForecasterType.ENERGY in service.forecasters
         assert ForecasterType.POWER in service.forecasters
-        assert isinstance(
-            service.forecasters[ForecasterType.ENERGY], Forecaster)
-        assert isinstance(
-            service.forecasters[ForecasterType.POWER], Forecaster)
+        assert isinstance(service.forecasters[ForecasterType.ENERGY], Forecaster)
+        assert isinstance(service.forecasters[ForecasterType.POWER], Forecaster)
 
-    def test_forecast_service_subscribes_events(self):
-        """Test ForecastService subscribes to events."""
+    def test_forecast_service_subscribes_events(self, mock_event_bus):
+        """Test ForecastService registers event handlers."""
         settings = ForecastSettings(enable=True)
         location = MockLocationSettings()
-        event_bus = MagicMock(spec=EventBus)
         influxdb = MagicMock()
 
-        ForecastService(settings, location, event_bus, influxdb)
+        service = ForecastService(settings, location, influxdb)
 
-        # Check that subscribe was called for both event types
-        assert event_bus.subscribe.call_count == 2
+        mock_event_bus.register.assert_called_once_with(service)
 
 
 class TestForecastServiceWeatherUpdate:
@@ -136,10 +127,9 @@ class TestForecastServiceWeatherUpdate:
         """Test weather_update stores the weather forecast."""
         settings = ForecastSettings(enable=True)
         location = MockLocationSettings()
-        event_bus = MagicMock(spec=EventBus)
         influxdb = MagicMock()
 
-        service = ForecastService(settings, location, event_bus, influxdb)
+        service = ForecastService(settings, location, influxdb)
 
         weather_data = MockWeatherData()
         event = MagicMock(spec=WeatherUpdateEvent)
@@ -154,10 +144,9 @@ class TestForecastServiceWeatherUpdate:
         """Test weather_update initializes last_hour_forecast dict."""
         settings = ForecastSettings(enable=True)
         location = MockLocationSettings()
-        event_bus = MagicMock(spec=EventBus)
         influxdb = MagicMock()
 
-        service = ForecastService(settings, location, event_bus, influxdb)
+        service = ForecastService(settings, location, influxdb)
 
         weather_data = MockWeatherData()
         event = MagicMock(spec=WeatherUpdateEvent)
@@ -173,10 +162,9 @@ class TestForecastServiceWeatherUpdate:
         """Test weather_update stores current hour's forecast."""
         settings = ForecastSettings(enable=True)
         location = MockLocationSettings()
-        event_bus = MagicMock(spec=EventBus)
         influxdb = MagicMock()
 
-        service = ForecastService(settings, location, event_bus, influxdb)
+        service = ForecastService(settings, location, influxdb)
 
         # Use the current UTC datetime to construct forecast data so the
         # local-hour conversion inside the service matches what we expect.
@@ -206,10 +194,9 @@ class TestForecastServiceWeatherUpdate:
         """Test weather_update removes old hour forecasts."""
         settings = ForecastSettings(enable=True)
         location = MockLocationSettings()
-        event_bus = MagicMock(spec=EventBus)
         influxdb = MagicMock()
 
-        service = ForecastService(settings, location, event_bus, influxdb)
+        service = ForecastService(settings, location, influxdb)
 
         # Pre-populate with old hours
         service.last_hour_forecast = {
@@ -229,8 +216,7 @@ class TestForecastServiceWeatherUpdate:
             mock_now.hour = 12
             mock_dt.now.return_value = mock_now
             mock_now.astimezone.return_value = mock_now
-            mock_now.__sub__ = lambda self, x: MagicMock(
-                spec=["hour"], hour=11)
+            mock_now.__sub__ = lambda self, x: MagicMock(spec=["hour"], hour=11)
 
             await service.weather_update(event)
 
@@ -244,10 +230,9 @@ class TestForecastServiceWeatherUpdate:
         """weather_update should trigger training write for previous hour."""
         settings = ForecastSettings(enable=True)
         location = MockLocationSettings()
-        event_bus = MagicMock(spec=EventBus)
         influxdb = MagicMock()
 
-        service = ForecastService(settings, location, event_bus, influxdb)
+        service = ForecastService(settings, location, influxdb)
         service.write_new_training_data = AsyncMock()
 
         hourly_data = [MockOpenWeatherMapForecastData(hour=11)]
@@ -267,8 +252,7 @@ class TestForecastServiceWeatherUpdate:
 
             await service.weather_update(event)
 
-        service.write_new_training_data.assert_awaited_once_with(
-            hourly_data[0])
+        service.write_new_training_data.assert_awaited_once_with(hourly_data[0])
 
 
 class TestForecastServiceWriteTrainingData:
@@ -279,7 +263,6 @@ class TestForecastServiceWriteTrainingData:
         """Test write_new_training_data writes to InfluxDB."""
         settings = ForecastSettings(enable=True)
         location = MockLocationSettings()
-        event_bus = MagicMock(spec=EventBus)
         influxdb = AsyncMock()
         influxdb.query_first = AsyncMock(
             return_value={
@@ -289,7 +272,7 @@ class TestForecastServiceWriteTrainingData:
         )
         influxdb.write_point = AsyncMock()
 
-        service = ForecastService(settings, location, event_bus, influxdb)
+        service = ForecastService(settings, location, influxdb)
 
         weather_forecast = MockOpenWeatherMapForecastData(hour=11)
 
@@ -309,11 +292,10 @@ class TestForecastServiceWriteTrainingData:
         """Test write_new_training_data raises when production data missing."""
         settings = ForecastSettings(enable=True)
         location = MockLocationSettings()
-        event_bus = MagicMock(spec=EventBus)
         influxdb = AsyncMock()
         influxdb.query_first = AsyncMock(return_value=None)
 
-        service = ForecastService(settings, location, event_bus, influxdb)
+        service = ForecastService(settings, location, influxdb)
 
         weather_forecast = MockOpenWeatherMapForecastData(hour=11)
 
@@ -327,7 +309,6 @@ class TestForecastServiceWriteTrainingData:
         """Test write_new_training_data triggers training at minute 20."""
         settings = ForecastSettings(enable=True)
         location = MockLocationSettings()
-        event_bus = MagicMock(spec=EventBus)
         influxdb = AsyncMock()
         influxdb.query_first = AsyncMock(
             return_value={
@@ -338,7 +319,7 @@ class TestForecastServiceWriteTrainingData:
         influxdb.write_point = AsyncMock()
         influxdb.query_dataframe = AsyncMock(return_value=DataFrame())
 
-        service = ForecastService(settings, location, event_bus, influxdb)
+        service = ForecastService(settings, location, influxdb)
         service.train = AsyncMock()
 
         weather_forecast = MockOpenWeatherMapForecastData(hour=11)
@@ -363,10 +344,9 @@ class TestForecastServiceForecastLoop:
         """Test forecast_loop raises when no weather forecast available."""
         settings = ForecastSettings(enable=True)
         location = MockLocationSettings()
-        event_bus = MagicMock(spec=EventBus)
         influxdb = AsyncMock()
 
-        service = ForecastService(settings, location, event_bus, influxdb)
+        service = ForecastService(settings, location, influxdb)
 
         # Mock forecasters as trained
         for forecaster in service.forecasters.values():
@@ -382,12 +362,11 @@ class TestForecastServiceForecastLoop:
         """Test forecast_loop triggers training when models not trained."""
         settings = ForecastSettings(enable=True)
         location = MockLocationSettings()
-        event_bus = MagicMock(spec=EventBus)
         influxdb = AsyncMock()
         influxdb.query_dataframe = AsyncMock(return_value=DataFrame())
         influxdb.write_points = AsyncMock()
 
-        service = ForecastService(settings, location, event_bus, influxdb)
+        service = ForecastService(settings, location, influxdb)
 
         # Create mock train that sets up forecasters as trained
         def mock_train_impl():
@@ -417,27 +396,25 @@ class TestForecastServicePublishForecast:
     """Tests for ForecastService publish_forecast method."""
 
     @pytest.mark.asyncio
-    async def test_publish_forecast_empty_data(self):
+    async def test_publish_forecast_empty_data(self, mock_event_bus):
         """Test publish_forecast does nothing with empty data."""
         settings = ForecastSettings(enable=True, retain=True)
         location = MockLocationSettings()
-        event_bus = AsyncMock(spec=EventBus)
         influxdb = AsyncMock()
         influxdb.query_dataframe = AsyncMock(return_value=DataFrame())
 
-        service = ForecastService(settings, location, event_bus, influxdb)
+        service = ForecastService(settings, location, influxdb)
 
         await service.publish_forecast()
 
         # No events should be emitted when data is empty
-        event_bus.emit.assert_not_called()
+        mock_event_bus.emit.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_publish_forecast_emits_events(self):
+    async def test_publish_forecast_emits_events(self, mock_event_bus):
         """Test publish_forecast emits MQTT and Forecast events."""
         settings = ForecastSettings(enable=True, retain=True)
         location = MockLocationSettings()
-        event_bus = AsyncMock(spec=EventBus)
         influxdb = AsyncMock()
 
         # Create mock forecast data
@@ -455,19 +432,18 @@ class TestForecastServicePublishForecast:
 
         influxdb.query_dataframe = AsyncMock(return_value=forecast_data)
 
-        service = ForecastService(settings, location, event_bus, influxdb)
+        service = ForecastService(settings, location, influxdb)
 
         await service.publish_forecast()
 
         # Should emit 2 events (MQTTPublishEvent and ForecastEvent)
-        assert event_bus.emit.call_count == 2
+        assert mock_event_bus.emit.call_count == 2
 
     @pytest.mark.asyncio
     async def test_publish_forecast_raises_on_invalid_time(self):
         """publish_forecast should reject non-datetime time values."""
         settings = ForecastSettings(enable=True)
         location = MockLocationSettings()
-        event_bus = AsyncMock(spec=EventBus)
         influxdb = AsyncMock()
 
         forecast_data = DataFrame(
@@ -479,7 +455,7 @@ class TestForecastServicePublishForecast:
         )
         influxdb.query_dataframe = AsyncMock(return_value=forecast_data)
 
-        service = ForecastService(settings, location, event_bus, influxdb)
+        service = ForecastService(settings, location, influxdb)
         with patch.object(
             forecast_data,
             "iterrows",
@@ -504,7 +480,6 @@ class TestForecastServicePublishForecast:
         """publish_forecast should reject non-numeric power values."""
         settings = ForecastSettings(enable=True)
         location = MockLocationSettings()
-        event_bus = AsyncMock(spec=EventBus)
         influxdb = AsyncMock()
 
         forecast_data = DataFrame(
@@ -516,7 +491,7 @@ class TestForecastServicePublishForecast:
         )
         influxdb.query_dataframe = AsyncMock(return_value=forecast_data)
 
-        service = ForecastService(settings, location, event_bus, influxdb)
+        service = ForecastService(settings, location, influxdb)
         with pytest.raises(InvalidDataException):
             await service.publish_forecast()
 
@@ -525,7 +500,6 @@ class TestForecastServicePublishForecast:
         """publish_forecast should reject non-numeric energy values."""
         settings = ForecastSettings(enable=True)
         location = MockLocationSettings()
-        event_bus = AsyncMock(spec=EventBus)
         influxdb = AsyncMock()
 
         forecast_data = DataFrame(
@@ -537,7 +511,7 @@ class TestForecastServicePublishForecast:
         )
         influxdb.query_dataframe = AsyncMock(return_value=forecast_data)
 
-        service = ForecastService(settings, location, event_bus, influxdb)
+        service = ForecastService(settings, location, influxdb)
         with pytest.raises(InvalidDataException):
             await service.publish_forecast()
 
@@ -637,8 +611,7 @@ class TestForecasterTrain:
                 "weather_main": ["Clear"] * 100,
             }
         )
-        data["time"] = data["time"].astype(
-            pd.DatetimeTZDtype(unit="ns", tz=LOCAL_TZ))
+        data["time"] = data["time"].astype(pd.DatetimeTZDtype(unit="ns", tz=LOCAL_TZ))
 
         forecaster.train(data)
 
@@ -659,8 +632,7 @@ class TestForecasterTrain:
                 "energy": [100.0 + i for i in range(70)],
             }
         )
-        data["time"] = data["time"].astype(
-            pd.DatetimeTZDtype(unit="ns", tz=LOCAL_TZ))
+        data["time"] = data["time"].astype(pd.DatetimeTZDtype(unit="ns", tz=LOCAL_TZ))
 
         prepared_pipeline = MagicMock()
         tuned_pipeline = MagicMock()
@@ -702,8 +674,7 @@ class TestForecasterTrain:
                 "energy": [100.0 + i for i in range(70)],
             }
         )
-        data["time"] = data["time"].astype(
-            pd.DatetimeTZDtype(unit="ns", tz=LOCAL_TZ))
+        data["time"] = data["time"].astype(pd.DatetimeTZDtype(unit="ns", tz=LOCAL_TZ))
 
         prepared_pipeline = MagicMock()
         prepared_pipeline.named_steps = {
@@ -951,11 +922,10 @@ class TestForecastServiceWritePeriodsToInfluxDB:
         """Test _write_periods_to_influxdb creates points."""
         settings = ForecastSettings(enable=True)
         location = MockLocationSettings()
-        event_bus = MagicMock(spec=EventBus)
         influxdb = AsyncMock()
         influxdb.write_points = AsyncMock()
 
-        service = ForecastService(settings, location, event_bus, influxdb)
+        service = ForecastService(settings, location, influxdb)
 
         periods = DataFrame(
             {
@@ -979,10 +949,9 @@ class TestForecastServiceWritePeriodsToInfluxDB:
         """_write_periods_to_influxdb should reject non-datetime values."""
         settings = ForecastSettings(enable=True)
         location = MockLocationSettings()
-        event_bus = MagicMock(spec=EventBus)
         influxdb = AsyncMock()
 
-        service = ForecastService(settings, location, event_bus, influxdb)
+        service = ForecastService(settings, location, influxdb)
         periods = DataFrame({"time": ["invalid"], "energy": [1.5]})
 
         with pytest.raises(InvalidDataException):
@@ -997,7 +966,6 @@ class TestForecastServiceTrain:
         """Test train queries training data from InfluxDB."""
         settings = ForecastSettings(enable=True)
         location = MockLocationSettings()
-        event_bus = MagicMock(spec=EventBus)
         influxdb = AsyncMock()
 
         # Create mock dataframe
@@ -1015,7 +983,7 @@ class TestForecastServiceTrain:
 
         influxdb.query_dataframe = AsyncMock(return_value=mock_df)
 
-        service = ForecastService(settings, location, event_bus, influxdb)
+        service = ForecastService(settings, location, influxdb)
 
         # Mock the training method to avoid actual ML training
         with patch.object(service, "training"):
@@ -1027,9 +995,8 @@ class TestForecastServiceTrain:
         """training should dispatch data to each forecaster."""
         settings = ForecastSettings(enable=True)
         location = MockLocationSettings()
-        event_bus = MagicMock(spec=EventBus)
         influxdb = MagicMock()
-        service = ForecastService(settings, location, event_bus, influxdb)
+        service = ForecastService(settings, location, influxdb)
 
         first = MagicMock()
         second = MagicMock()
@@ -1053,7 +1020,6 @@ class TestForecastServiceAddLastHourPvProduction:
         """Test add_last_hour_pv_production adds production data."""
         settings = ForecastSettings(enable=True)
         location = MockLocationSettings()
-        event_bus = MagicMock(spec=EventBus)
         influxdb = AsyncMock()
         influxdb.query_first = AsyncMock(
             return_value={
@@ -1062,7 +1028,7 @@ class TestForecastServiceAddLastHourPvProduction:
             }
         )
 
-        service = ForecastService(settings, location, event_bus, influxdb)
+        service = ForecastService(settings, location, influxdb)
 
         training_data = {"temp": 25.0, "clouds": 20}
 
@@ -1071,5 +1037,4 @@ class TestForecastServiceAddLastHourPvProduction:
         # Power is rounded using Python's built-in round()
         assert result[ForecasterType.POWER.target_column] == round(1234.5)
         # Energy is rounded to 2 decimal places
-        assert result[ForecasterType.ENERGY.target_column] == pytest.approx(
-            1.57)
+        assert result[ForecasterType.ENERGY.target_column] == pytest.approx(1.57)

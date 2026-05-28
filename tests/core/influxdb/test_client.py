@@ -56,26 +56,23 @@ def mock_influxdb_client():
 class TestInfluxDBAsyncInit:
     """Tests for InfluxDBAsync initialization."""
 
-    def test_influxdb_async_init_without_event_bus(
+    def test_influxdb_async_init(
         self, influxdb_settings, price_settings, mock_influxdb_client
     ):
-        """Test InfluxDBAsync initialization without event bus."""
+        """Test InfluxDBAsync initialization."""
         influxdb = InfluxDBAsync(influxdb_settings, price_settings)
 
         assert influxdb.settings == influxdb_settings
         assert influxdb.prices == price_settings
-        assert influxdb.event_bus is None
         assert influxdb.client_async is None
 
-    def test_influxdb_async_init_with_event_bus(
+    def test_influxdb_async_registers_to_event_bus(
         self, influxdb_settings, price_settings, mock_event_bus, mock_influxdb_client
     ):
-        """Test InfluxDBAsync initialization with event bus."""
-        influxdb = InfluxDBAsync(influxdb_settings, price_settings, mock_event_bus)
+        """Test InfluxDBAsync registers itself on EventBus."""
+        InfluxDBAsync(influxdb_settings, price_settings)
 
-        assert influxdb.event_bus is mock_event_bus
-        # Verify it subscribed to the 10min trigger event
-        mock_event_bus.subscribe.assert_called()
+        mock_event_bus.register.assert_called_once()
 
     def test_influxdb_async_bucket_name(
         self, influxdb_settings, price_settings, mock_influxdb_client
@@ -401,7 +398,7 @@ class TestInfluxDBAsyncLoop:
         mock_delete_api = MagicMock()
         mock_sync.delete_api.return_value = mock_delete_api
 
-        influxdb = InfluxDBAsync(influxdb_settings, price_settings, mock_event_bus)
+        influxdb = InfluxDBAsync(influxdb_settings, price_settings)
         influxdb.client_async = mock_async
 
         # Cache the aggregate query
@@ -419,29 +416,6 @@ class TestInfluxDBAsyncLoop:
         mock_event_bus.emit.assert_called_once()
         call_args = mock_event_bus.emit.call_args
         assert isinstance(call_args[0][0], InfluxDBAggregatedEvent)
-
-    @pytest.mark.asyncio
-    async def test_loop_without_event_bus_skips_emit(
-        self, influxdb_settings, price_settings, mock_influxdb_client
-    ):
-        """loop should not emit aggregation event when no event bus exists."""
-        mock_sync, mock_async = mock_influxdb_client
-
-        mock_query_api = MagicMock()
-        mock_query_api.query = AsyncMock(return_value=[])
-        mock_async.query_api = MagicMock(return_value=mock_query_api)
-
-        mock_delete_api = MagicMock()
-        mock_sync.delete_api.return_value = mock_delete_api
-
-        influxdb = InfluxDBAsync(influxdb_settings, price_settings)
-        influxdb.client_async = mock_async
-        influxdb.flux_cache["aggregate"] = "aggregate query"
-
-        await influxdb.loop(MagicMock())
-
-        mock_query_api.query.assert_called_once()
-        mock_delete_api.delete.assert_called()
 
 
 class TestInfluxDBAsyncClose:

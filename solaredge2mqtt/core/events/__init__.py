@@ -242,10 +242,3 @@ class EventBus:
         cls._critical_error = None
 
         logger.info("Running tasks cancelled: {count}", count=len(tasks))
-
-    @classmethod
-    def reset(cls) -> None:
-        cls._listeners = {}
-        cls._subscribed_events = {}
-        cls._tasks = set()
-        cls._critical_error = None
