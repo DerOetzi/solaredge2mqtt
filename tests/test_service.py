@@ -40,6 +40,7 @@ def _build_settings(
     return SimpleNamespace(
         logging_level="INFO",
         interval=5,
+        service_state=SimpleNamespace(debounce_for=MagicMock(return_value=0)),
         influxdb=SimpleNamespace(is_configured=influx_configured),
         prices=SimpleNamespace(),
         energy=SimpleNamespace(),
@@ -168,7 +169,7 @@ class TestServiceInitialization:
         influx_cls.assert_called_once_with(settings.influxdb, settings.prices)
         energy_cls.assert_called_once_with(settings.energy, influx)
         powerflow_cls.assert_called_once_with(settings, influx)
-        monitoring_cls.assert_called_once_with(settings.monitoring, influx)
+        monitoring_cls.assert_called_once_with(settings.monitoring, influx, 0)
         weather_cls.assert_called_once_with(settings)
         forecast_cls.assert_called_once_with(
             settings.forecast, settings.location, influx

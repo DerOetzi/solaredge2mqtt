@@ -154,6 +154,15 @@ location:
 # Set to true if you have additional producers
 powerflow:
   external_production: false
+
+# Optional status debounce (consecutive checks required before state switch)
+service_state:
+  debounce_cycles:
+    modbus: 2
+    wallbox: 2
+    monitoring: 2
+    weather_api: 2
+    influxdb: 2
 ```
 
 ### Basic Modbus configuration
@@ -237,6 +246,9 @@ The service also publishes operational topics below the configured `topic_prefix
 
 - `status/<service>` for subservice connection states (`online`/`offline`) such as `modbus`, `wallbox`, `monitoring`, `influxdb`, and `weather_api`
 - `logging` for runtime log messages (MQTT warnings/errors are excluded from MQTT log forwarding)
+
+Use `service_state.debounce_cycles` to reduce status flapping by requiring repeated
+online/offline observations before a state change is published.
 
 ### Retain Configuration
 

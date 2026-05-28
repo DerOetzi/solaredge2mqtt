@@ -28,3 +28,19 @@ class TestServiceStateController:
         await controller.set_online()
 
         mock_event_bus.emit.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_state_change_is_debounced_until_threshold(self, mock_event_bus):
+        controller = ServiceStateController("modbus", debounce_cycles=2)
+
+        await controller.set_online()
+        await controller.set_offline()
+
+        assert mock_event_bus.emit.call_count == 1
+
+        await controller.set_offline()
+
+        assert mock_event_bus.emit.call_count == 2
+        event = mock_event_bus.emit.call_args.args[0]
+        assert isinstance(event, MQTTPublishEvent)
+        assert event.payload == "offline"

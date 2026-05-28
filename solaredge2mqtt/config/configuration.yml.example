@@ -8,6 +8,16 @@ interval: 5
 # Set logging level to DEBUG, INFO (default), WARNING, ERROR, CRITICAL
 logging_level: INFO
 
+# Optional: Require repeated state observations before publishing status changes.
+# Value is the number of consecutive checks needed before switching online/offline.
+# service_state:
+#   debounce_cycles:
+#     modbus: 2
+#     wallbox: 2
+#     monitoring: 2
+#     weather_api: 2
+#     influxdb: 2
+
 # Location settings (required for weather and forecast features)
 # location:
 #   latitude: 52.520008

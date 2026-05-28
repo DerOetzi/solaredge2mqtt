@@ -7,7 +7,43 @@ from loguru import logger
 
 from solaredge2mqtt.core.logging.models import LoggingLevelEnum
 
-_mqtt_logging_enabled = False
+class MQTTLoggingSink:
+    def __init__(self) -> None:
+        self._enabled = False
+
+    def set_enabled(self, enabled: bool) -> None:
+        self._enabled = enabled
+
+    def log_filter(self, record: dict[str, Any]) -> bool:
+        if not self._enabled:
+            return False
+
+        if (
+            record["name"].startswith("solaredge2mqtt.core.mqtt")
+            and record["level"].name in {"WARNING", "ERROR", "CRITICAL"}
+        ):
+            return False
+
+        return True
+
+    def sink(self, message: Any) -> asyncio.Task[None] | None:
+        from solaredge2mqtt.core.events import EventBus
+        from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return None
+
+        payload = (
+            f"{message.record['time'].isoformat()} | "
+            f"{message.record['level'].name} | "
+            f"{message.record['message']}"
+        )
+        return loop.create_task(EventBus.emit(MQTTPublishEvent("logging", payload, False)))
+
+
+_mqtt_logging_sink = MQTTLoggingSink()
 
 
 def _disable_pymodbus_stdout_logging() -> None:
@@ -18,38 +54,15 @@ def _disable_pymodbus_stdout_logging() -> None:
 
 
 def set_mqtt_logging(enabled: bool) -> None:
-    global _mqtt_logging_enabled
-    _mqtt_logging_enabled = enabled
+    _mqtt_logging_sink.set_enabled(enabled)
 
 
 def _mqtt_log_filter(record: dict[str, Any]) -> bool:
-    if not _mqtt_logging_enabled:
-        return False
-
-    if (
-        record["name"].startswith("solaredge2mqtt.core.mqtt")
-        and record["level"].name in {"WARNING", "ERROR", "CRITICAL"}
-    ):
-        return False
-
-    return True
+    return _mqtt_logging_sink.log_filter(record)
 
 
 def _mqtt_log_sink(message: Any) -> asyncio.Task[None] | None:
-    from solaredge2mqtt.core.events import EventBus
-    from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
-
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        return None
-
-    payload = (
-        f"{message.record['time'].isoformat()} | "
-        f"{message.record['level'].name} | "
-        f"{message.record['message']}"
-    )
-    return loop.create_task(EventBus.emit(MQTTPublishEvent("logging", payload, False)))
+    return _mqtt_logging_sink.sink(message)
 
 
 def initialize_logging(logging_level: LoggingLevelEnum) -> None:

@@ -43,12 +43,20 @@ class LocationSettings(BaseModel):
         return self.latitude is not None and self.longitude is not None
 
 
+class ServiceStateSettings(BaseModel):
+    debounce_cycles: dict[str, int] = Field(default_factory=dict)
+
+    def debounce_for(self, service_name: str) -> int:
+        return max(0, self.debounce_cycles.get(service_name, 0))
+
+
 class ServiceSettings(BaseModel):
     interval: int = Field(default=5)
     logging_level: LoggingLevelEnum = Field(default=LoggingLevelEnum.INFO)
 
     modbus: ModbusSettings
     mqtt: MQTTSettings
+    service_state: ServiceStateSettings = Field(default_factory=ServiceStateSettings)
 
     powerflow: PowerflowSettings = Field(default_factory=PowerflowSettings)
     energy: EnergySettings = Field(default_factory=EnergySettings)

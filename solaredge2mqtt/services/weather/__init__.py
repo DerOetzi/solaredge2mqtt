@@ -28,7 +28,10 @@ class WeatherClient(HTTPClientAsync):
 
         self.location = settings.location
         self.settings = settings.weather
-        self.state = ServiceStateController("weather_api")
+        self.state = ServiceStateController(
+            "weather_api",
+            settings.service_state.debounce_for("weather_api"),
+        )
 
         EventBus.register(self)
 

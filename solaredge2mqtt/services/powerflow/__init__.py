@@ -32,8 +32,14 @@ class PowerflowService:
         self.influxdb = influxdb
 
         self.modbus = Modbus(self.settings)
-        self.modbus_state = ServiceStateController("modbus")
-        self.wallbox_state = ServiceStateController("wallbox")
+        self.modbus_state = ServiceStateController(
+            "modbus",
+            self.settings.service_state.debounce_for("modbus"),
+        )
+        self.wallbox_state = ServiceStateController(
+            "wallbox",
+            self.settings.service_state.debounce_for("wallbox"),
+        )
 
         self.wallbox = (
             WallboxClient(self.settings.wallbox)

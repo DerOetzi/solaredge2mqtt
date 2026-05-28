@@ -39,6 +39,8 @@ def mock_service_settings():
     settings.location = MagicMock()
     settings.location.latitude = 52.52
     settings.location.longitude = 13.405
+    settings.service_state = MagicMock()
+    settings.service_state.debounce_for.return_value = 0
 
     return settings
 
