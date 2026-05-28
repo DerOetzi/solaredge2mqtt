@@ -141,12 +141,8 @@ class Service:
         logger.info("Timezone: {timezone}", timezone=LOCAL_TZ)
 
         if self.influxdb:
-            try:
-                self.influxdb.init()
-                await self.influxdb_state.set_online()
-            except Exception:
-                await self.influxdb_state.set_offline()
-                raise
+            self.influxdb.init()
+            await self.influxdb_state.set_online()
 
         while not self.cancel_request.is_set():
             try:

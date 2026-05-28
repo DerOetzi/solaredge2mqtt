@@ -10,6 +10,7 @@ from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.core.mqtt.state import ServiceStateController
 from solaredge2mqtt.core.timer.events import IntervalBaseTriggerEvent
 from solaredge2mqtt.services.modbus import Modbus
+from solaredge2mqtt.services.modbus.exceptions import InvalidRegisterDataException
 from solaredge2mqtt.services.modbus.models.battery import ModbusBattery
 from solaredge2mqtt.services.powerflow.events import PowerflowGeneratedEvent
 from solaredge2mqtt.services.powerflow.models import Powerflow
@@ -46,7 +47,7 @@ class PowerflowService:
         try:
             await self.modbus.async_init()
             await self.modbus_state.set_online()
-        except Exception:
+        except (InvalidDataException, InvalidRegisterDataException, RuntimeError):
             await self.modbus_state.set_offline()
             raise
 
@@ -57,7 +58,7 @@ class PowerflowService:
         try:
             units = await self.modbus.get_data()
             await self.modbus_state.set_online()
-        except Exception:
+        except (InvalidDataException, RuntimeError):
             await self.modbus_state.set_offline()
             raise
 

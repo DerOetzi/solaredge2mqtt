@@ -45,7 +45,7 @@ class WeatherClient(HTTPClientAsync):
                     self.settings is not None and self.settings.retain,
                 )
             )
-        except Exception:
+        except (ConfigurationException, InvalidDataException):
             await self.state.set_offline()
             raise
 

@@ -254,6 +254,23 @@ class TestMonitoringSiteGetData:
         site.save_to_influxdb.assert_called_once()
         site.publish_mqtt.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_get_data_sets_offline_state_on_known_errors(
+        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+    ):
+        """get_data should set monitoring state offline on data errors."""
+        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site.get_modules_energy = AsyncMock(
+            side_effect=InvalidDataException("unable to read")
+        )
+        site.state = MagicMock()
+        site.state.set_offline = AsyncMock()
+
+        with pytest.raises(InvalidDataException):
+            await site.get_data(Interval15MinTriggerEvent())
+
+        site.state.set_offline.assert_awaited_once()
+
 
 class TestMonitoringSiteGetModulesPower:
     """Tests for MonitoringSite get_modules_power."""

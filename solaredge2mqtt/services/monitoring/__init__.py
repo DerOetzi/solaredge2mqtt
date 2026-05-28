@@ -54,7 +54,7 @@ class MonitoringSite(HTTPClientAsync):
             await self.save_to_influxdb(modules)
             await self.publish_mqtt(modules, energy_total, count_modules)
             await self.state.set_online()
-        except Exception:
+        except (ConfigurationException, InvalidDataException):
             await self.state.set_offline()
             raise
 

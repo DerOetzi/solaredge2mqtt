@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import sys
+from typing import Any
 
 from loguru import logger
 
@@ -21,7 +22,7 @@ def set_mqtt_logging(enabled: bool) -> None:
     _mqtt_logging_enabled = enabled
 
 
-def _mqtt_log_filter(record: dict) -> bool:
+def _mqtt_log_filter(record: dict[str, Any]) -> bool:
     if not _mqtt_logging_enabled:
         return False
 
@@ -34,21 +35,21 @@ def _mqtt_log_filter(record: dict) -> bool:
     return True
 
 
-def _mqtt_log_sink(message) -> None:
+def _mqtt_log_sink(message: Any) -> asyncio.Task[None] | None:
     from solaredge2mqtt.core.events import EventBus
     from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
-        return
+        return None
 
     payload = (
         f"{message.record['time'].isoformat()} | "
         f"{message.record['level'].name} | "
         f"{message.record['message']}"
     )
-    loop.create_task(EventBus.emit(MQTTPublishEvent("logging", payload, False)))
+    return loop.create_task(EventBus.emit(MQTTPublishEvent("logging", payload, False)))
 
 
 def initialize_logging(logging_level: LoggingLevelEnum) -> None:

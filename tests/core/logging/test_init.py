@@ -1,10 +1,20 @@
 """Tests for logging initialization module."""
 
 import sys
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
-from solaredge2mqtt.core.logging import initialize_logging
+import pytest
+
+from solaredge2mqtt.core.logging import (
+    _disable_pymodbus_stdout_logging,
+    _mqtt_log_filter,
+    _mqtt_log_sink,
+    initialize_logging,
+    set_mqtt_logging,
+)
 from solaredge2mqtt.core.logging.models import LoggingLevelEnum
+from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 
 
 class TestLoggingInit:
@@ -26,3 +36,65 @@ class TestLoggingInit:
         assert callable(handlers[1]["sink"])
         assert handlers[1]["level"] == LoggingLevelEnum.WARNING.level
         assert callable(handlers[1]["filter"])
+
+    def test_disable_pymodbus_stdout_logging(self):
+        """pymodbus logger should be silenced for stdout logging."""
+        pymodbus_logger = MagicMock()
+        with patch(
+            "solaredge2mqtt.core.logging.logging.getLogger",
+            return_value=pymodbus_logger,
+        ):
+            _disable_pymodbus_stdout_logging()
+
+        pymodbus_logger.setLevel.assert_called_once()
+        assert pymodbus_logger.propagate is False
+        pymodbus_logger.handlers.clear.assert_called_once()
+
+    def test_mqtt_log_filter(self):
+        """MQTT log filter should suppress configured MQTT warning/error records."""
+        set_mqtt_logging(False)
+        assert (
+            _mqtt_log_filter({"name": "x", "level": SimpleNamespace(name="INFO")})
+            is False
+        )
+
+        set_mqtt_logging(True)
+        assert (
+            _mqtt_log_filter(
+                {
+                    "name": "solaredge2mqtt.core.mqtt.test",
+                    "level": SimpleNamespace(name="WARNING"),
+                }
+            )
+            is False
+        )
+        assert (
+            _mqtt_log_filter(
+                {
+                    "name": "solaredge2mqtt.service",
+                    "level": SimpleNamespace(name="INFO"),
+                }
+            )
+            is True
+        )
+
+    @pytest.mark.asyncio
+    async def test_mqtt_log_sink_emits_mqtt_publish_event(self, mock_event_bus):
+        """MQTT log sink should emit a logging topic publish event."""
+        message = SimpleNamespace(
+            record={
+                "time": SimpleNamespace(isoformat=lambda: "2026-01-01T00:00:00"),
+                "level": SimpleNamespace(name="INFO"),
+                "message": "hello",
+            }
+        )
+
+        task = _mqtt_log_sink(message)
+        assert task is not None
+        await task
+
+        mock_event_bus.emit.assert_called_once()
+        event = mock_event_bus.emit.call_args.args[0]
+        assert isinstance(event, MQTTPublishEvent)
+        assert event.topic == "logging"
+        assert event.payload == "2026-01-01T00:00:00 | INFO | hello"

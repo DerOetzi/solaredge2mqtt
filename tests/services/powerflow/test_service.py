@@ -155,6 +155,25 @@ class TestPowerflowServiceAsyncInit:
 
             mock_modbus.async_init.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_async_init_sets_offline_state_on_error(
+        self, mock_service_settings, mock_event_bus
+    ):
+        """async_init should set modbus state offline on initialization errors."""
+        with patch("solaredge2mqtt.services.powerflow.Modbus") as mock_modbus_class:
+            mock_modbus = AsyncMock()
+            mock_modbus.async_init.side_effect = RuntimeError("modbus failed")
+            mock_modbus_class.return_value = mock_modbus
+
+            service = PowerflowService(mock_service_settings, None)
+            service.modbus_state = MagicMock()
+            service.modbus_state.set_offline = AsyncMock()
+
+            with pytest.raises(RuntimeError):
+                await service.async_init()
+
+            service.modbus_state.set_offline.assert_awaited_once()
+
 
 class TestPowerflowServiceCalculate:
     """Tests for PowerflowService calculate_powerflow."""
@@ -207,6 +226,25 @@ class TestPowerflowServiceCalculate:
                 await service.calculate_powerflow(IntervalBaseTriggerEvent())
 
             assert "Invalid modbus data" in exc_info.value.message
+
+    @pytest.mark.asyncio
+    async def test_calculate_powerflow_sets_offline_state_on_modbus_error(
+        self, mock_service_settings, mock_event_bus
+    ):
+        """calculate_powerflow should set modbus state offline on read errors."""
+        with patch("solaredge2mqtt.services.powerflow.Modbus") as mock_modbus_class:
+            mock_modbus = AsyncMock()
+            mock_modbus.get_data.side_effect = InvalidDataException("modbus down")
+            mock_modbus_class.return_value = mock_modbus
+
+            service = PowerflowService(mock_service_settings, None)
+            service.modbus_state = MagicMock()
+            service.modbus_state.set_offline = AsyncMock()
+
+            with pytest.raises(InvalidDataException):
+                await service.calculate_powerflow(IntervalBaseTriggerEvent())
+
+            service.modbus_state.set_offline.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_calculate_powerflow_invalid_battery(
@@ -612,9 +650,12 @@ class TestPowerflowServiceClose:
             mock_wallbox_class.return_value = mock_wallbox
 
             service = PowerflowService(mock_service_settings, None)
+            service.wallbox_state = MagicMock()
+            service.wallbox_state.set_offline = AsyncMock()
 
             await service.close()
 
+            service.wallbox_state.set_offline.assert_awaited_once()
             mock_wallbox.close.assert_called_once()
 
     @pytest.mark.asyncio

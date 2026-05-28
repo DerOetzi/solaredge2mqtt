@@ -204,6 +204,7 @@ class TestWeatherClientLoop:
         assert isinstance(first_call[0][0], MQTTPublishEvent)
         assert first_call[0][0].topic == "status/weather_api"
         assert first_call[0][0].payload == "online"
+        assert first_call[0][0].retain is True
 
         # Check second call is WeatherUpdateEvent
         second_call = mock_event_bus.emit.call_args_list[1]
@@ -213,3 +214,18 @@ class TestWeatherClientLoop:
         third_call = mock_event_bus.emit.call_args_list[2]
         assert isinstance(third_call[0][0], MQTTPublishEvent)
         assert third_call[0][0].topic == "weather/current"
+
+    @pytest.mark.asyncio
+    async def test_loop_sets_offline_state_on_weather_error(
+        self, mock_service_settings, mock_event_bus
+    ):
+        """Loop should set weather service state to offline on known errors."""
+        client = WeatherClient(mock_service_settings)
+        client.get_weather = AsyncMock(side_effect=InvalidDataException("boom"))
+        client.state = MagicMock()
+        client.state.set_offline = AsyncMock()
+
+        with pytest.raises(InvalidDataException):
+            await client.loop(Interval10MinTriggerEvent())
+
+        client.state.set_offline.assert_awaited_once()
