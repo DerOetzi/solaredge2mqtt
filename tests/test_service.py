@@ -35,12 +35,15 @@ def _build_settings(
     weather_enabled: bool,
     forecast_enabled: bool,
     homeassistant_enabled: bool,
+    debounce_cycles: int = 0,
 ) -> SimpleNamespace:
     """Create lightweight settings object for Service initialization tests."""
     return SimpleNamespace(
         logging_level="INFO",
         interval=5,
-        service_state=SimpleNamespace(debounce_for=MagicMock(return_value=0)),
+        service_state=SimpleNamespace(
+            debounce_for=MagicMock(return_value=debounce_cycles)
+        ),
         influxdb=SimpleNamespace(is_configured=influx_configured),
         prices=SimpleNamespace(),
         energy=SimpleNamespace(),
@@ -143,6 +146,7 @@ class TestServiceInitialization:
             weather_enabled=True,
             forecast_enabled=True,
             homeassistant_enabled=True,
+            debounce_cycles=2,
         )
 
         influx = MagicMock()
@@ -169,7 +173,11 @@ class TestServiceInitialization:
         influx_cls.assert_called_once_with(settings.influxdb, settings.prices)
         energy_cls.assert_called_once_with(settings.energy, influx)
         powerflow_cls.assert_called_once_with(settings, influx)
-        monitoring_cls.assert_called_once_with(settings.monitoring, influx, 0)
+        monitoring_cls.assert_called_once_with(
+            settings.monitoring,
+            influx,
+            settings.service_state.debounce_for.return_value,
+        )
         weather_cls.assert_called_once_with(settings)
         forecast_cls.assert_called_once_with(
             settings.forecast, settings.location, influx
