@@ -149,6 +149,48 @@ class TestModbusAsyncInit:
         modbus._detect_batteries.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_get_data_exception_sets_offline(
+        self, mock_service_settings, mock_event_bus, mock_modbus_client
+    ):
+        """get_data should set offline and re-raise on exception."""
+        modbus = Modbus(mock_service_settings)
+        modbus._client = mock_modbus_client
+        modbus._get_raw_data = AsyncMock(
+            side_effect=InvalidDataException("Invalid data")
+        )
+
+        with pytest.raises(InvalidDataException):
+            await modbus.get_data()
+
+    @pytest.mark.asyncio
+    async def test_async_init_exception_sets_offline(
+        self, mock_service_settings, mock_event_bus, mock_modbus_client
+    ):
+        """async_init should set offline state and re-raise on exception."""
+        modbus = Modbus(mock_service_settings)
+        modbus._client = mock_modbus_client
+        modbus.detect_devices = AsyncMock(
+            side_effect=InvalidDataException("Invalid data")
+        )
+
+        with pytest.raises(InvalidDataException):
+            await modbus.async_init()
+
+    @pytest.mark.asyncio
+    async def test_detect_devices_exception_sets_offline(
+        self, mock_service_settings, mock_event_bus, mock_modbus_client
+    ):
+        """detect_devices should set offline state and re-raise on exception."""
+        modbus = Modbus(mock_service_settings)
+        modbus._client = mock_modbus_client
+        modbus.read_device_info = AsyncMock(
+            side_effect=InvalidDataException("Invalid data")
+        )
+
+        with pytest.raises(InvalidDataException):
+            await modbus.detect_devices()
+
+    @pytest.mark.asyncio
     async def test_check_readable_registers_reads_all_units(
         self, mock_service_settings, mock_event_bus
     ):
@@ -449,7 +491,8 @@ class TestModbusGetData:
 
             # Should emit ModbusUnitsReadEvent (plus MQTTPublishEvent from state)
             assert mock_event_bus.emit.call_count >= 1
-            emitted_types = [type(c[0][0]) for c in mock_event_bus.emit.call_args_list]
+            emitted_types = [type(c[0][0])
+                             for c in mock_event_bus.emit.call_args_list]
             assert ModbusUnitsReadEvent in emitted_types
 
     @pytest.mark.asyncio
@@ -568,7 +611,8 @@ class TestModbusWriteToModbus:
         mock_register.name = "test_register"
         mock_register.encode_request.return_value = [1, 2, 3]
 
-        mock_modbus_client.write_registers.side_effect = ModbusException("Write error")
+        mock_modbus_client.write_registers.side_effect = ModbusException(
+            "Write error")
 
         # Should not raise, just log error
         await modbus._write_to_modbus(mock_register, 100)

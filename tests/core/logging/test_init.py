@@ -1,5 +1,6 @@
 """Tests for logging initialization module."""
 
+import asyncio
 import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -8,10 +9,9 @@ import pytest
 
 from solaredge2mqtt.core.logging import (
     _disable_pymodbus_stdout_logging,
-    _mqtt_log_filter,
-    _mqtt_log_sink,
+    _mqtt_logging_sink,
+    configure_mqtt_logging,
     initialize_logging,
-    set_mqtt_logging,
 )
 from solaredge2mqtt.core.logging.models import LoggingLevelEnum
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
@@ -54,18 +54,18 @@ class TestLoggingInit:
         """MQTT log filter should suppress configured MQTT warning/error records."""
         import logging as stdlib_logging
 
-        set_mqtt_logging(False)
+        configure_mqtt_logging(False)
         assert (
-            _mqtt_log_filter(
+            _mqtt_logging_sink.log_filter(
                 {"name": "x", "level": SimpleNamespace(name="INFO", no=20)}
             )
             is False
         )
 
         # Default min level is ERROR - messages below ERROR are filtered
-        set_mqtt_logging(True)
+        configure_mqtt_logging(True)
         assert (
-            _mqtt_log_filter(
+            _mqtt_logging_sink.log_filter(
                 {
                     "name": "solaredge2mqtt.service",
                     "level": SimpleNamespace(name="INFO", no=20),
@@ -75,7 +75,7 @@ class TestLoggingInit:
         )
         # ERROR level from non-MQTT source passes through
         assert (
-            _mqtt_log_filter(
+            _mqtt_logging_sink.log_filter(
                 {
                     "name": "solaredge2mqtt.service",
                     "level": SimpleNamespace(name="ERROR", no=40),
@@ -83,9 +83,18 @@ class TestLoggingInit:
             )
             is True
         )
+        assert (
+            _mqtt_logging_sink.log_filter(
+                {
+                    "name": "solaredge2mqtt.core.mqtt.test",
+                    "level": SimpleNamespace(name="ERROR", no=40),
+                }
+            )
+            is False
+        )
         # MQTT module warnings/errors are suppressed to avoid recursion
         assert (
-            _mqtt_log_filter(
+            _mqtt_logging_sink.log_filter(
                 {
                     "name": "solaredge2mqtt.core.mqtt.test",
                     "level": SimpleNamespace(name="WARNING", no=30),
@@ -95,9 +104,9 @@ class TestLoggingInit:
         )
 
         # With INFO level configured, INFO passes through
-        set_mqtt_logging(True, stdlib_logging.INFO)
+        configure_mqtt_logging(True, stdlib_logging.INFO)
         assert (
-            _mqtt_log_filter(
+            _mqtt_logging_sink.log_filter(
                 {
                     "name": "solaredge2mqtt.service",
                     "level": SimpleNamespace(name="INFO", no=20),
@@ -117,12 +126,24 @@ class TestLoggingInit:
             }
         )
 
-        task = _mqtt_log_sink(message)
-        assert task is not None
-        await task
+        _mqtt_logging_sink.sink(message)
+        await asyncio.sleep(0)
 
-        mock_event_bus.emit.assert_called_once()
+        mock_event_bus.emit.assert_awaited_once()
         event = mock_event_bus.emit.call_args.args[0]
         assert isinstance(event, MQTTPublishEvent)
         assert event.topic == "logging"
         assert event.payload == "2026-01-01T00:00:00 | INFO | hello"
+
+    def test_mqtt_log_sink_returns_none_outside_event_loop(self):
+        """MQTT log sink should return None when called outside async context."""
+        message = SimpleNamespace(
+            record={
+                "time": SimpleNamespace(isoformat=lambda: "2026-01-01T00:00:00"),
+                "level": SimpleNamespace(name="INFO"),
+                "message": "hello",
+            }
+        )
+
+        result = _mqtt_logging_sink.sink(message)
+        assert result is None

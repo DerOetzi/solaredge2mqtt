@@ -11,7 +11,11 @@ from solaredge2mqtt import __version__
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import ConfigurationException
 from solaredge2mqtt.core.influxdb import InfluxDBAsync
-from solaredge2mqtt.core.logging import initialize_logging, logger, set_mqtt_logging
+from solaredge2mqtt.core.logging import (
+    configure_mqtt_logging,
+    initialize_logging,
+    logger,
+)
 from solaredge2mqtt.core.mqtt import MQTTClient
 from solaredge2mqtt.core.settings import service_settings
 from solaredge2mqtt.core.timer import Timer
@@ -81,7 +85,8 @@ class Service:
         )
 
         self.weather: WeatherClient | None = (
-            WeatherClient(self.settings) if self.settings.is_weather_enabled else None
+            WeatherClient(
+                self.settings) if self.settings.is_weather_enabled else None
         )
 
         self.forecast: ForecastService | None = None
@@ -96,7 +101,8 @@ class Service:
                 else None
             )
         elif self.settings.is_forecast_enabled:
-            logger.warning("Forecast service not available, please refer to README")
+            logger.warning(
+                "Forecast service not available, please refer to README")
 
         self.homeassistant: HomeAssistantDiscovery | None = (
             HomeAssistantDiscovery(self.settings)
@@ -150,7 +156,9 @@ class Service:
 
                 async with self.mqtt:
                     await self.mqtt.publish_status_online()
-                    set_mqtt_logging(True, self.settings.mqtt.logging_level.level)
+                    configure_mqtt_logging(
+                        True, self.settings.mqtt.logging_level.level
+                    )
 
                     if self.homeassistant:
                         await self.homeassistant.async_init()
@@ -169,7 +177,7 @@ class Service:
                 logger.debug("Loops cancelled")
                 raise
             finally:
-                set_mqtt_logging(False)
+                configure_mqtt_logging(False)
                 await self.finalize()
 
             if self.cancel_request.is_set():
@@ -272,4 +280,5 @@ class Service:
                 timeout=5,
             )
         except asyncio.TimeoutError:
-            logger.warning("Timeout while closing tasks, proceeding with shutdown.")
+            logger.warning(
+                "Timeout while closing tasks, proceeding with shutdown.")

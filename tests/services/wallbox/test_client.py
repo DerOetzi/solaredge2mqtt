@@ -10,6 +10,7 @@ from solaredge2mqtt.core.exceptions import (
     ConfigurationException,
     InvalidDataException,
 )
+from solaredge2mqtt.services.http_async import HTTPClientAsync
 from solaredge2mqtt.services.wallbox import WallboxClient
 from solaredge2mqtt.services.wallbox.settings import WallboxSettings
 
@@ -103,6 +104,39 @@ class TestWallboxClientLogin:
             await client.login()
 
         assert exc_info.value.component == "wallbox"
+
+
+class TestWallboxClientAsyncInit:
+    """Tests for WallboxClient close and _get_access handling."""
+
+    @pytest.mark.asyncio
+    async def test_close_sets_offline_and_closes_parent(
+        self, wallbox_settings, mock_event_bus
+    ):
+        client = WallboxClient(wallbox_settings)
+        client.state.set_offline = AsyncMock()
+
+        with patch.object(
+            HTTPClientAsync, "close", new_callable=AsyncMock
+        ) as mock_close:
+            await client.close()
+
+        client.state.set_offline.assert_awaited_once()
+        mock_close.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_get_access_exception_sets_offline(
+        self, wallbox_settings, mock_event_bus, mock_http_client
+    ):
+        """_get_access should set offline state and re-raise on login exception."""
+        client = WallboxClient(wallbox_settings)
+        client.login = AsyncMock(
+            side_effect=ConfigurationException("wallbox", "Connection failed")
+        )
+        client.authorization = None  # Trigger login() call path
+
+        with pytest.raises(ConfigurationException):
+            await client._get_access()
 
 
 class TestWallboxClientGetAccess:

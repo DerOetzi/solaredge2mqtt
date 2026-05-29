@@ -8,7 +8,7 @@ from loguru import logger
 from solaredge2mqtt.core.logging.models import LoggingLevelEnum
 
 if TYPE_CHECKING:
-    from loguru import HandlerConfig, Message, Record
+    from loguru import HandlerConfig
 
 
 class MQTTLoggingSink:
@@ -40,7 +40,7 @@ class MQTTLoggingSink:
 
         return True
 
-    def sink(self, message: Any) -> asyncio.Task[None] | None:
+    def sink(self, message: Any) -> None:
         """Format a loguru message and publish it to the MQTT logging topic."""
         from solaredge2mqtt.core.events import EventBus
         from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
@@ -48,16 +48,15 @@ class MQTTLoggingSink:
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
-            return None
+            return
 
         payload = (
             f"{message.record['time'].isoformat()} | "
             f"{message.record['level'].name} | "
             f"{message.record['message']}"
         )
-        return loop.create_task(
-            EventBus.emit(MQTTPublishEvent("logging", payload, False))
-        )
+        loop.create_task(EventBus.emit(
+            MQTTPublishEvent("logging", payload, False)))
 
 
 _mqtt_logging_sink = MQTTLoggingSink()
@@ -70,24 +69,7 @@ def _disable_pymodbus_stdout_logging() -> None:
     pymodbus_logger.handlers.clear()
 
 
-def set_mqtt_logging(enabled: bool, level: int = logging.ERROR) -> None:
-    _mqtt_logging_sink.set_enabled(enabled, level)
-
-
-def _mqtt_log_filter(record: Mapping[str, Any]) -> bool:
-    return _mqtt_logging_sink.log_filter(record)
-
-
-def _mqtt_log_sink(message: Any) -> asyncio.Task[None] | None:
-    return _mqtt_logging_sink.sink(message)
-
-
-def _mqtt_log_handler_filter(record: "Record") -> bool:
-    return _mqtt_log_filter(record)
-
-
-def _mqtt_log_handler_sink(message: "Message") -> None:
-    _mqtt_log_sink(message)
+configure_mqtt_logging = _mqtt_logging_sink.set_enabled
 
 
 def initialize_logging(logging_level: LoggingLevelEnum) -> None:
@@ -95,9 +77,9 @@ def initialize_logging(logging_level: LoggingLevelEnum) -> None:
     handlers: list[HandlerConfig] = [
         {"sink": sys.stdout, "level": logging_level.level},
         {
-            "sink": _mqtt_log_handler_sink,
+            "sink": _mqtt_logging_sink.sink,
             "level": logging_level.level,
-            "filter": _mqtt_log_handler_filter,
+            "filter": _mqtt_logging_sink.log_filter,
         },
     ]
     logger.configure(handlers=handlers)

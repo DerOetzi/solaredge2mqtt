@@ -159,6 +159,23 @@ class TestInfluxDBAsyncInitialize:
 
         mock_buckets_api.update_bucket.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_async_init_exception_sets_offline(
+            self,
+            influxdb_settings,
+            price_settings,
+            mock_influxdb_client
+    ):
+        influxdb = InfluxDBAsync(influxdb_settings, price_settings)
+
+        with patch.object(influxdb, "init") as mock_init, patch.object(
+            influxdb.state, "set_online", new_callable=AsyncMock
+        ) as mock_set_online:
+            await influxdb.async_init()
+
+        mock_init.assert_called_once()
+        mock_set_online.assert_awaited_once()
+
 
 class TestInfluxDBAsyncWrite:
     """Tests for InfluxDBAsync write methods."""
@@ -197,12 +214,30 @@ class TestInfluxDBAsyncWrite:
         influxdb = InfluxDBAsync(influxdb_settings, price_settings)
         influxdb.client_async = mock_async
 
-        mock_points: list[Point] = [MagicMock(spec=Point), MagicMock(spec=Point)]
+        mock_points: list[Point] = [
+            MagicMock(spec=Point), MagicMock(spec=Point)]
         await influxdb.write_points(mock_points)
 
         mock_write_api.write.assert_called_once_with(
             bucket="test_bucket", record=mock_points
         )
+
+    @pytest.mark.asyncio
+    async def test_write_points_exception_sets_offline(
+        self, influxdb_settings, price_settings, mock_influxdb_client
+    ):
+        """write_points should set offline and re-raise on write failure."""
+        _, mock_async = mock_influxdb_client
+
+        mock_write_api = MagicMock()
+        mock_write_api.write = AsyncMock(side_effect=RuntimeError("Boom"))
+        mock_async.write_api = MagicMock(return_value=mock_write_api)
+
+        influxdb = InfluxDBAsync(influxdb_settings, price_settings)
+        influxdb.client_async = mock_async
+
+        with pytest.raises(RuntimeError):
+            await influxdb.write_points([MagicMock(spec=Point)])
 
     @pytest.mark.asyncio
     async def test_write_points_raises_when_not_initialized(
@@ -292,6 +327,43 @@ class TestInfluxDBAsyncQuery:
         result = await influxdb.query_first("test_query")
 
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_query_exception_sets_offline(
+        self, influxdb_settings, price_settings, mock_influxdb_client
+    ):
+        """query should set offline and re-raise on exception."""
+        _, mock_async = mock_influxdb_client
+
+        mock_query_api = MagicMock()
+        mock_query_api.query = AsyncMock(side_effect=RuntimeError("Boom"))
+        mock_async.query_api = MagicMock(return_value=mock_query_api)
+
+        influxdb = InfluxDBAsync(influxdb_settings, price_settings)
+        influxdb.client_async = mock_async
+        influxdb.flux_cache["test_query"] = "test flux query"
+
+        with pytest.raises(RuntimeError):
+            await influxdb.query("test_query")
+
+    @pytest.mark.asyncio
+    async def test_query_dataframe_exception_sets_offline(
+        self, influxdb_settings, price_settings, mock_influxdb_client
+    ):
+        """query_dataframe should set offline and re-raise on exception."""
+        _, mock_async = mock_influxdb_client
+
+        mock_query_api = MagicMock()
+        mock_query_api.query_data_frame = AsyncMock(
+            side_effect=RuntimeError("Boom"))
+        mock_async.query_api = MagicMock(return_value=mock_query_api)
+
+        influxdb = InfluxDBAsync(influxdb_settings, price_settings)
+        influxdb.client_async = mock_async
+        influxdb.flux_cache["test_query"] = "test flux query"
+
+        with pytest.raises(RuntimeError):
+            await influxdb.query_dataframe("test_query")
 
     def test_query_api_raises_when_not_initialized(
         self, influxdb_settings, price_settings, mock_influxdb_client
@@ -414,7 +486,8 @@ class TestInfluxDBAsyncLoop:
 
         # Should have emitted aggregated event (plus state change events)
         mock_event_bus.emit.assert_called()
-        emitted_types = [type(c[0][0]) for c in mock_event_bus.emit.call_args_list]
+        emitted_types = [type(c[0][0])
+                         for c in mock_event_bus.emit.call_args_list]
         assert InfluxDBAggregatedEvent in emitted_types
 
 
