@@ -58,5 +58,10 @@ class ServiceStateController:
         self._pending_state = None
         self._pending_count = 0
         await EventBus.emit(
-            MQTTPublishEvent(f"status/{self.service_name}", state.value, True)
+            MQTTPublishEvent(
+                f"status/{self.service_name}",
+                state.value,
+                False,
+                suppress_connection_error=True
+            )
         )

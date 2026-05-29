@@ -206,7 +206,7 @@ class TestWeatherClientLoop:
         assert isinstance(first_call[0][0], MQTTPublishEvent)
         assert first_call[0][0].topic == "status/weather_api"
         assert first_call[0][0].payload == "online"
-        assert first_call[0][0].retain is True
+        assert first_call[0][0].retain is False
 
         # Check second call is WeatherUpdateEvent
         second_call = mock_event_bus.emit.call_args_list[1]

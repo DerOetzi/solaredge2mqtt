@@ -44,7 +44,8 @@ class InfluxDBAsync:
         )
 
         self.flux_cache: dict[str, str] = {}
-        self.state = ServiceStateController("influxdb", settings.debounce_cycles)
+        self.state = ServiceStateController(
+            "influxdb", settings.debounce_cycles)
 
         EventBus.register(self)
 
@@ -55,8 +56,7 @@ class InfluxDBAsync:
 
         self.initialize_buckets()
 
-    async def async_init(self) -> None:
-        self.init()
+    async def set_online(self) -> None:
         await self.state.set_online()
 
     def initialize_buckets(self) -> None:
@@ -86,7 +86,8 @@ class InfluxDBAsync:
 
     @EventBus.subscribe(Interval10MinTriggerEvent)
     async def loop(self, event: Interval10MinTriggerEvent) -> None:
-        now = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0)
+        now = datetime.now(tz=timezone.utc).replace(
+            minute=0, second=0, microsecond=0)
 
         logger.info("Aggregate powerflow and energy raw data")
         await self.query(
@@ -152,7 +153,8 @@ class InfluxDBAsync:
         self, period: HistoricPeriod, measurement: str
     ) -> list[dict[str, Any]] | None:
         results = await self.query(
-            period.query.query, {"UNIT": period.unit, "MEASUREMENT": measurement}
+            period.query.query, {"UNIT": period.unit,
+                                 "MEASUREMENT": measurement}
         )
 
         return results if len(results) > 0 else None

@@ -12,7 +12,6 @@ from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import ConfigurationException
 from solaredge2mqtt.core.influxdb import InfluxDBAsync
 from solaredge2mqtt.core.logging import (
-    configure_mqtt_logging,
     initialize_logging,
     logger,
 )
@@ -148,7 +147,7 @@ class Service:
         logger.info("Timezone: {timezone}", timezone=LOCAL_TZ)
 
         if self.influxdb:
-            await self.influxdb.async_init()
+            self.influxdb.init()
 
         while not self.cancel_request.is_set():
             try:
@@ -156,9 +155,9 @@ class Service:
 
                 async with self.mqtt:
                     await self.mqtt.publish_status_online()
-                    configure_mqtt_logging(
-                        True, self.settings.mqtt.logging_level.level
-                    )
+
+                    if self.influxdb:
+                        await self.influxdb.set_online()
 
                     if self.homeassistant:
                         await self.homeassistant.async_init()
@@ -177,7 +176,6 @@ class Service:
                 logger.debug("Loops cancelled")
                 raise
             finally:
-                configure_mqtt_logging(False)
                 await self.finalize()
 
             if self.cancel_request.is_set():

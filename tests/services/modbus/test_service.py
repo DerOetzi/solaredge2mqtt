@@ -155,6 +155,7 @@ class TestModbusAsyncInit:
         """get_data should set offline and re-raise on exception."""
         modbus = Modbus(mock_service_settings)
         modbus._client = mock_modbus_client
+        modbus._device_info = {"leader": {"inverter": MagicMock()}}
         modbus._get_raw_data = AsyncMock(
             side_effect=InvalidDataException("Invalid data")
         )

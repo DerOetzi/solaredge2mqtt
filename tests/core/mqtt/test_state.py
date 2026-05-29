@@ -18,7 +18,8 @@ class TestServiceStateController:
         assert isinstance(event, MQTTPublishEvent)
         assert event.topic == "status/modbus"
         assert event.payload == "online"
-        assert event.retain is True
+        assert event.retain is False
+        assert event.suppress_connection_error is True
 
     @pytest.mark.asyncio
     async def test_state_change_without_debounce_emits_immediately(
@@ -34,7 +35,8 @@ class TestServiceStateController:
         assert isinstance(event, MQTTPublishEvent)
         assert event.topic == "status/modbus"
         assert event.payload == "offline"
-        assert event.retain is True
+        assert event.retain is False
+        assert event.suppress_connection_error is True
 
     @pytest.mark.asyncio
     async def test_same_state_is_not_emitted_twice(self, mock_event_bus):

@@ -1,7 +1,6 @@
-import asyncio
 import logging
 import sys
-from typing import TYPE_CHECKING, Any, Mapping
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
@@ -11,57 +10,6 @@ if TYPE_CHECKING:
     from loguru import HandlerConfig
 
 
-class MQTTLoggingSink:
-    """Manage MQTT log forwarding state, filtering, and asynchronous publishing."""
-
-    def __init__(self) -> None:
-        self._enabled = False
-        self._min_level: int = logging.ERROR
-
-    def set_enabled(self, enabled: bool, level: int = logging.ERROR) -> None:
-        self._enabled = enabled
-        self._min_level = level
-
-    def log_filter(self, record: Mapping[str, Any]) -> bool:
-        """Allow MQTT log forwarding and suppress recursive MQTT warning/error logs."""
-        if not self._enabled:
-            return False
-
-        if record["level"].no < self._min_level:
-            return False
-
-        record_name = record.get("name")
-        if (
-            record_name is not None
-            and record_name.startswith("solaredge2mqtt.core.mqtt")
-            and record["level"].name in {"WARNING", "ERROR", "CRITICAL"}
-        ):
-            return False
-
-        return True
-
-    def sink(self, message: Any) -> None:
-        """Format a loguru message and publish it to the MQTT logging topic."""
-        from solaredge2mqtt.core.events import EventBus
-        from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
-
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            return
-
-        payload = (
-            f"{message.record['time'].isoformat()} | "
-            f"{message.record['level'].name} | "
-            f"{message.record['message']}"
-        )
-        loop.create_task(EventBus.emit(
-            MQTTPublishEvent("logging", payload, False)))
-
-
-_mqtt_logging_sink = MQTTLoggingSink()
-
-
 def _disable_pymodbus_stdout_logging() -> None:
     pymodbus_logger = logging.getLogger("pymodbus")
     pymodbus_logger.setLevel(logging.CRITICAL + 1)
@@ -69,17 +17,9 @@ def _disable_pymodbus_stdout_logging() -> None:
     pymodbus_logger.handlers.clear()
 
 
-configure_mqtt_logging = _mqtt_logging_sink.set_enabled
-
-
 def initialize_logging(logging_level: LoggingLevelEnum) -> None:
     _disable_pymodbus_stdout_logging()
     handlers: list[HandlerConfig] = [
-        {"sink": sys.stdout, "level": logging_level.level},
-        {
-            "sink": _mqtt_logging_sink.sink,
-            "level": logging_level.level,
-            "filter": _mqtt_logging_sink.log_filter,
-        },
+        {"sink": sys.stdout, "level": logging_level.level}
     ]
     logger.configure(handlers=handlers)

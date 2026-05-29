@@ -114,14 +114,15 @@ class TestWallboxClientAsyncInit:
         self, wallbox_settings, mock_event_bus
     ):
         client = WallboxClient(wallbox_settings)
-        client.state.set_offline = AsyncMock()
 
         with patch.object(
+            client.state, "set_offline", new_callable=AsyncMock
+        ) as mock_set_offline, patch.object(
             HTTPClientAsync, "close", new_callable=AsyncMock
         ) as mock_close:
             await client.close()
 
-        client.state.set_offline.assert_awaited_once()
+        mock_set_offline.assert_awaited_once()
         mock_close.assert_awaited_once()
 
     @pytest.mark.asyncio

@@ -66,6 +66,36 @@ class TestInfluxDBAsyncInit:
         assert influxdb.prices == price_settings
         assert influxdb.client_async is None
 
+    def test_influxdb_init(
+        self, influxdb_settings, price_settings, mock_influxdb_client
+    ):
+        """Test init method creates async client."""
+        _, mock_async = mock_influxdb_client
+        influxdb = InfluxDBAsync(influxdb_settings, price_settings)
+
+        mock_buckets_api = MagicMock()
+        mock_buckets_api.find_bucket_by_name.return_value = None
+        mock_sync_instance = mock_influxdb_client[0]
+        mock_sync_instance.buckets_api.return_value = mock_buckets_api
+
+        influxdb.init()
+
+        assert influxdb.client_async is not None
+
+    @pytest.mark.asyncio
+    async def test_set_online(
+        self, influxdb_settings, price_settings, mock_influxdb_client
+    ):
+        """Test set_online sets state to online."""
+        influxdb = InfluxDBAsync(influxdb_settings, price_settings)
+
+        with patch.object(
+            influxdb.state, "set_online", new_callable=AsyncMock
+        ) as mock_set_online:
+            await influxdb.set_online()
+
+        mock_set_online.assert_awaited_once()
+
     def test_influxdb_async_registers_to_event_bus(
         self, influxdb_settings, price_settings, mock_event_bus, mock_influxdb_client
     ):
@@ -160,20 +190,20 @@ class TestInfluxDBAsyncInitialize:
         mock_buckets_api.update_bucket.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_async_init_exception_sets_offline(
+    async def test_set_online_sets_online_state(
             self,
             influxdb_settings,
             price_settings,
             mock_influxdb_client
     ):
+        """Test set_online method."""
         influxdb = InfluxDBAsync(influxdb_settings, price_settings)
 
-        with patch.object(influxdb, "init") as mock_init, patch.object(
+        with patch.object(
             influxdb.state, "set_online", new_callable=AsyncMock
         ) as mock_set_online:
-            await influxdb.async_init()
+            await influxdb.set_online()
 
-        mock_init.assert_called_once()
         mock_set_online.assert_awaited_once()
 
 

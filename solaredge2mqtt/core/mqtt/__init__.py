@@ -1,9 +1,9 @@
 import json
 from asyncio import Queue, QueueFull
 from types import TracebackType
-from typing import Any, Self
+from typing import Any, Mapping, Self
 
-from aiomqtt import Client, Message, Will
+from aiomqtt import Client, Message, MqttError, Will
 from pydantic import BaseModel, ValidationError
 
 from solaredge2mqtt.core.events import EventBus
@@ -22,6 +22,8 @@ class MQTTClient(Client):
         self.broker = settings.broker
         self.port = settings.port
         self._is_connected = False
+        self._min_log_level = settings.logging_level
+        self._logging_handler_id = None
 
         self.topic_prefix = settings.topic_prefix
 
@@ -51,6 +53,11 @@ class MQTTClient(Client):
     async def __aenter__(self) -> Self:
         await super().__aenter__()
         self._is_connected = True
+        self._logging_handler_id = logger.add(
+            self.logging_sink,
+            level=self._min_log_level.level,
+            filter=self.log_filter
+        )
         return self
 
     async def __aexit__(
@@ -59,6 +66,10 @@ class MQTTClient(Client):
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> None:
+        if (self._logging_handler_id):
+            logger.remove(self._logging_handler_id)
+            self._logging_handler_id = None
+
         self._is_connected = False
         return await super().__aexit__(exc_type, exc_val, exc_tb)
 
@@ -80,7 +91,8 @@ class MQTTClient(Client):
             async for message in self.messages:
                 topic = str(message.topic)
                 if topic not in self._subscribed_topics:
-                    logger.warning(f"Received message on unsubscribed topic: {topic}")
+                    logger.warning(
+                        f"Received message on unsubscribed topic: {topic}")
                     continue
                 if len(message.payload) > MAX_MQTT_PAYLOAD_SIZE:
                     logger.warning(
@@ -91,7 +103,36 @@ class MQTTClient(Client):
                 try:
                     self._received_message_queue.put_nowait(message)
                 except QueueFull:
-                    logger.warning("MQTT processing queue full – dropping message")
+                    logger.warning(
+                        "MQTT processing queue full – dropping message")
+
+    async def logging_sink(self, message: Any) -> None:
+        payload = (
+            f"{message.record['time'].isoformat()} | "
+            f"{message.record['level'].name} | "
+            f"{message.record['message']}"
+        )
+
+        try:
+            await self.publish_to(
+                "logging",
+                payload,
+                retain=False,
+                suppress_connection_error=True
+            )
+        except MqttError:
+            pass
+
+    def log_filter(self, record: Mapping[str, Any]) -> bool:
+        record_name = record.get("name")
+        if (
+            record_name is not None
+            and record_name.startswith("solaredge2mqtt.core.mqtt")
+            and record["level"].name in {"WARNING", "ERROR", "CRITICAL"}
+        ):
+            return False
+
+        return True
 
     async def process_queue(self) -> None:
         if self._subscribed_topics:
@@ -107,7 +148,8 @@ class MQTTClient(Client):
         try:
             event = self._subscribed_topics.get(topic)
             if not event:
-                logger.warning(f"Received message for unexpected topic: {topic}")
+                logger.warning(
+                    f"Received message for unexpected topic: {topic}")
                 return
 
             payload = message.payload.decode()
@@ -122,18 +164,20 @@ class MQTTClient(Client):
             if isinstance(input_raw, (dict, list, int, float, bool, str)):
                 parsed_input = model.model_validate(input_raw)
             else:
-                logger.warning(f"Received invalid payload type on topic: {topic}")
+                logger.warning(
+                    f"Received invalid payload type on topic: {topic}")
                 return
 
             await EventBus.emit(event(topic, parsed_input))
         except (ValidationError, json.JSONDecodeError, TypeError) as ex:
-            logger.warning(f"Received invalid message on topic: {topic}, error: {ex}")
+            logger.warning(
+                f"Received invalid message on topic: {topic}, error: {ex}")
 
     async def publish_status_online(self) -> None:
         await self.publish_to("status", "online", True)
 
     async def publish_status_offline(self) -> None:
-        await self.publish_to("status", "offline", True)
+        await self.publish_to("status", "offline", True, suppress_connection_error=True)
 
     async def event_listener(self, event: MQTTPublishEvent) -> None:
         await self.publish_to(
@@ -143,6 +187,7 @@ class MQTTClient(Client):
             event.qos,
             event.topic_prefix,
             event.exclude_none,
+            event.suppress_connection_error
         )
 
     async def publish_to(
@@ -153,6 +198,7 @@ class MQTTClient(Client):
         qos: int = 1,
         topic_prefix: str | None = None,
         exclude_none: bool = False,
+        suppress_connection_error: bool = False,
     ) -> None:
         if self._is_connected:
             topic = f"{topic_prefix or self.topic_prefix}/{topic}"
@@ -162,7 +208,7 @@ class MQTTClient(Client):
                 payload = payload.model_dump_json(exclude_none=exclude_none)
 
             await self.publish(topic, payload, qos=qos, retain=retain)
-        else:
+        elif not suppress_connection_error:
             logger.warning(
                 f"Cannot publish to topic {topic} – MQTT client not connected"
             )
