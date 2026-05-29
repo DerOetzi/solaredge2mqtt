@@ -8,7 +8,7 @@ class WallboxSettings(BaseModel):
     password: SecretStr | None = Field(default=None)
     serial: SecretStr | None = Field(default=None)
     retain: bool = Field(default=False)
-    debounce_cycles: int = Field(default=0)
+    debounce_cycles: int = Field(default=2)
 
     @property
     def password_secret(self) -> str:

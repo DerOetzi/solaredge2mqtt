@@ -52,27 +52,55 @@ class TestLoggingInit:
 
     def test_mqtt_log_filter(self):
         """MQTT log filter should suppress configured MQTT warning/error records."""
+        import logging as stdlib_logging
+
         set_mqtt_logging(False)
         assert (
-            _mqtt_log_filter({"name": "x", "level": SimpleNamespace(name="INFO")})
+            _mqtt_log_filter(
+                {"name": "x", "level": SimpleNamespace(name="INFO", no=20)}
+            )
             is False
         )
 
+        # Default min level is ERROR - messages below ERROR are filtered
         set_mqtt_logging(True)
         assert (
             _mqtt_log_filter(
                 {
-                    "name": "solaredge2mqtt.core.mqtt.test",
-                    "level": SimpleNamespace(name="WARNING"),
+                    "name": "solaredge2mqtt.service",
+                    "level": SimpleNamespace(name="INFO", no=20),
                 }
             )
-            is False
+            is False  # INFO (20) is below ERROR (40) threshold
         )
+        # ERROR level from non-MQTT source passes through
         assert (
             _mqtt_log_filter(
                 {
                     "name": "solaredge2mqtt.service",
-                    "level": SimpleNamespace(name="INFO"),
+                    "level": SimpleNamespace(name="ERROR", no=40),
+                }
+            )
+            is True
+        )
+        # MQTT module warnings/errors are suppressed to avoid recursion
+        assert (
+            _mqtt_log_filter(
+                {
+                    "name": "solaredge2mqtt.core.mqtt.test",
+                    "level": SimpleNamespace(name="WARNING", no=30),
+                }
+            )
+            is False
+        )
+
+        # With INFO level configured, INFO passes through
+        set_mqtt_logging(True, stdlib_logging.INFO)
+        assert (
+            _mqtt_log_filter(
+                {
+                    "name": "solaredge2mqtt.service",
+                    "level": SimpleNamespace(name="INFO", no=20),
                 }
             )
             is True

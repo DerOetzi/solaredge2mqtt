@@ -13,7 +13,6 @@ from solaredge2mqtt.core.exceptions import ConfigurationException
 from solaredge2mqtt.core.influxdb import InfluxDBAsync
 from solaredge2mqtt.core.logging import initialize_logging, logger, set_mqtt_logging
 from solaredge2mqtt.core.mqtt import MQTTClient
-from solaredge2mqtt.core.mqtt.state import ServiceStateController
 from solaredge2mqtt.core.settings import service_settings
 from solaredge2mqtt.core.timer import Timer
 from solaredge2mqtt.services.energy import EnergyService
@@ -71,10 +70,6 @@ class Service:
         )
 
         self.powerflow = PowerflowService(self.settings, self.influxdb)
-        self.influxdb_state = ServiceStateController(
-            "influxdb",
-            self.settings.influxdb.debounce_cycles,
-        )
 
         self.monitoring: MonitoringSite | None = (
             MonitoringSite(
@@ -147,8 +142,7 @@ class Service:
         logger.info("Timezone: {timezone}", timezone=LOCAL_TZ)
 
         if self.influxdb:
-            self.influxdb.init()
-            await self.influxdb_state.set_online()
+            await self.influxdb.async_init()
 
         while not self.cancel_request.is_set():
             try:
@@ -156,7 +150,7 @@ class Service:
 
                 async with self.mqtt:
                     await self.mqtt.publish_status_online()
-                    set_mqtt_logging(True)
+                    set_mqtt_logging(True, self.settings.mqtt.logging_level.level)
 
                     if self.homeassistant:
                         await self.homeassistant.async_init()
@@ -204,9 +198,6 @@ class Service:
                 logger.debug("Unable to publish offline status during cleanup")
             finally:
                 self.mqtt = None
-
-        if self.influxdb:
-            await self.influxdb_state.set_offline()
 
         await EventBus.cancel_tasks()
 

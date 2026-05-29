@@ -9,7 +9,6 @@ from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.core.timer.events import IntervalBaseTriggerEvent
 from solaredge2mqtt.services.modbus import Modbus
-from solaredge2mqtt.services.modbus.exceptions import InvalidRegisterDataException
 from solaredge2mqtt.services.modbus.models.battery import ModbusBattery
 from solaredge2mqtt.services.powerflow.events import PowerflowGeneratedEvent
 from solaredge2mqtt.services.powerflow.models import Powerflow

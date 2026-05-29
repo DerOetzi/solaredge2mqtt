@@ -13,13 +13,18 @@ class MQTTLoggingSink:
 
     def __init__(self) -> None:
         self._enabled = False
+        self._min_level: int = logging.ERROR
 
-    def set_enabled(self, enabled: bool) -> None:
+    def set_enabled(self, enabled: bool, level: int = logging.ERROR) -> None:
         self._enabled = enabled
+        self._min_level = level
 
     def log_filter(self, record: dict[str, Any]) -> bool:
         """Allow MQTT log forwarding and suppress recursive MQTT warning/error logs."""
         if not self._enabled:
+            return False
+
+        if record["level"].no < self._min_level:
             return False
 
         if (
@@ -60,8 +65,8 @@ def _disable_pymodbus_stdout_logging() -> None:
     pymodbus_logger.handlers.clear()
 
 
-def set_mqtt_logging(enabled: bool) -> None:
-    _mqtt_logging_sink.set_enabled(enabled)
+def set_mqtt_logging(enabled: bool, level: int = logging.ERROR) -> None:
+    _mqtt_logging_sink.set_enabled(enabled, level)
 
 
 def _mqtt_log_filter(record: dict[str, Any]) -> bool:

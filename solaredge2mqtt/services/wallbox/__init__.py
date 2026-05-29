@@ -77,7 +77,7 @@ class WallboxClient(HTTPClientAsync):
                         serial=self.settings.serial_secret,
                     ),
                     headers={
-                        "Authorization": f"******"
+                        "Authorization": f"Bearer {self.authorization.access_token}"
                     },
                     verify=False,
                     login=self.login,

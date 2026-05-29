@@ -19,9 +19,6 @@ def _build_service() -> Service:
     service._run_task = None
     service.mqtt = None
     service.influxdb = None
-    service.influxdb_state = MagicMock()
-    service.influxdb_state.set_online = AsyncMock()
-    service.influxdb_state.set_offline = AsyncMock()
     service.powerflow = cast(Any, None)
     service.monitoring = None
     service.weather = None
@@ -49,7 +46,7 @@ def _build_settings(
         location=SimpleNamespace(),
         is_forecast_enabled=forecast_enabled,
         homeassistant=SimpleNamespace(enable=homeassistant_enabled),
-        mqtt=SimpleNamespace(),
+        mqtt=SimpleNamespace(logging_level=SimpleNamespace(level=40)),
     )
 
 
@@ -456,11 +453,12 @@ class TestServiceMainLoop:
     async def test_main_loop_initializes_services_and_exits_on_cancel(self):
         """Main loop should initialize dependencies and finalize cleanly."""
         service = _build_service()
-        service.settings = cast(Any, SimpleNamespace(mqtt=SimpleNamespace()))
+        service.settings = cast(
+            Any,
+            SimpleNamespace(mqtt=SimpleNamespace(logging_level=SimpleNamespace(level=40))),
+        )
         service.influxdb = MagicMock()
-        service.influxdb.init = MagicMock()
-        service.influxdb_state = MagicMock()
-        service.influxdb_state.set_online = AsyncMock()
+        service.influxdb.async_init = AsyncMock()
         service.homeassistant = MagicMock()
         service.homeassistant.async_init = AsyncMock()
         service.powerflow = MagicMock()
@@ -491,21 +489,21 @@ class TestServiceMainLoop:
         ):
             await service.main_loop()
 
-        service.influxdb.init.assert_called_once()
+        service.influxdb.async_init.assert_awaited_once()
         mqtt_client.publish_status_online.assert_awaited_once()
         service.homeassistant.async_init.assert_awaited_once()
         service.powerflow.async_init.assert_awaited_once()
         service._start_mqtt_listener.assert_called_once()
         service.schedule_loop.assert_called_once_with(1, service.timer.loop)
         service.finalize.assert_awaited_once()
-        set_mqtt_logging.assert_any_call(True)
+        set_mqtt_logging.assert_any_call(True, 40)
         set_mqtt_logging.assert_any_call(False)
 
     @pytest.mark.asyncio
     async def test_main_loop_logs_reconnect_on_mqtt_error(self):
         """Main loop should log reconnect and sleep when MQTT errors occur."""
         service = _build_service()
-        service.settings = cast(Any, SimpleNamespace(mqtt=SimpleNamespace()))
+        service.settings = cast(Any, SimpleNamespace(mqtt=SimpleNamespace(logging_level=SimpleNamespace(level=40))))
         service.influxdb = None
         service.homeassistant = None
         service.powerflow = MagicMock()
@@ -541,7 +539,7 @@ class TestServiceMainLoop:
     async def test_main_loop_breaks_on_mqtt_error_when_cancelled(self):
         """Main loop should break immediately on MQTT error after cancellation."""
         service = _build_service()
-        service.settings = cast(Any, SimpleNamespace(mqtt=SimpleNamespace()))
+        service.settings = cast(Any, SimpleNamespace(mqtt=SimpleNamespace(logging_level=SimpleNamespace(level=40))))
         service.influxdb = None
         service.homeassistant = None
         service.powerflow = MagicMock()
@@ -569,7 +567,7 @@ class TestServiceMainLoop:
     async def test_main_loop_reraises_cancelled_error(self):
         """Main loop should re-raise cancellation errors after logging."""
         service = _build_service()
-        service.settings = cast(Any, SimpleNamespace(mqtt=SimpleNamespace()))
+        service.settings = cast(Any, SimpleNamespace(mqtt=SimpleNamespace(logging_level=SimpleNamespace(level=40))))
         service.influxdb = None
         service.homeassistant = None
         service.powerflow = MagicMock()

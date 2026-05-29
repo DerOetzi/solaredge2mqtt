@@ -90,7 +90,7 @@ class ModbusSettings(ModbusUnitSettings):
 
     retain: bool = Field(default=False)
 
-    debounce_cycles: int = Field(default=0)
+    debounce_cycles: int = Field(default=2)
 
     @model_validator(mode="before")
     @classmethod

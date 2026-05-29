@@ -58,6 +58,7 @@ mqtt:
 # use_tls: false                # MQTT over TLS
 # ca_certs: path_to_CA          # Path to trusted CA boundle - usefull for self sign certificates
 # tls_verify: true              # Verify mqtt certificate. If set to false ignore certificate expiration, CN missmatch, etc.
+# logging_level: ERROR          # Minimum log level forwarded to MQTT logging topic (default: ERROR)
 
 # Powerflow configuration
 powerflow:

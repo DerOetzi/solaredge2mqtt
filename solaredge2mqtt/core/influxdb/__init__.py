@@ -17,6 +17,7 @@ from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.influxdb.events import InfluxDBAggregatedEvent
 from solaredge2mqtt.core.influxdb.settings import InfluxDBSettings
 from solaredge2mqtt.core.logging import logger
+from solaredge2mqtt.core.mqtt.state import ServiceStateController
 from solaredge2mqtt.core.timer.events import Interval10MinTriggerEvent
 
 if TYPE_CHECKING:
@@ -43,6 +44,7 @@ class InfluxDBAsync:
         )
 
         self.flux_cache: dict[str, str] = {}
+        self.state = ServiceStateController("influxdb", settings.debounce_cycles)
 
         EventBus.register(self)
 
@@ -52,6 +54,10 @@ class InfluxDBAsync:
         )
 
         self.initialize_buckets()
+
+    async def async_init(self) -> None:
+        self.init()
+        await self.state.set_online()
 
     def initialize_buckets(self) -> None:
         bucket = self.buckets_api.find_bucket_by_name(self.bucket_name)
@@ -201,6 +207,7 @@ class InfluxDBAsync:
         return query
 
     async def close(self) -> None:
+        await self.state.set_offline()
         if self.client_async:
             await self.client_async.close()
             self.client_async = None
