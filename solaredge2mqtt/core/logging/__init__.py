@@ -30,7 +30,7 @@ class MQTTLoggingSink:
         if record["level"].no < self._min_level:
             return False
 
-        record_name = record["name"]
+        record_name = record.get("name")
         if (
             record_name is not None
             and record_name.startswith("solaredge2mqtt.core.mqtt")
