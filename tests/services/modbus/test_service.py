@@ -447,7 +447,7 @@ class TestModbusGetData:
 
             await modbus.get_data()
 
-            # Should emit ModbusUnitsReadEvent (plus MQTTPublishEvent from state.set_online)
+            # Should emit ModbusUnitsReadEvent (plus MQTTPublishEvent from state)
             assert mock_event_bus.emit.call_count >= 1
             emitted_types = [type(c[0][0]) for c in mock_event_bus.emit.call_args_list]
             assert ModbusUnitsReadEvent in emitted_types
