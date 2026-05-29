@@ -503,7 +503,10 @@ class TestServiceMainLoop:
     async def test_main_loop_logs_reconnect_on_mqtt_error(self):
         """Main loop should log reconnect and sleep when MQTT errors occur."""
         service = _build_service()
-        service.settings = cast(Any, SimpleNamespace(mqtt=SimpleNamespace(logging_level=SimpleNamespace(level=40))))
+        service.settings = cast(
+            Any,
+            SimpleNamespace(mqtt=SimpleNamespace(logging_level=SimpleNamespace(level=40))),
+        )
         service.influxdb = None
         service.homeassistant = None
         service.powerflow = MagicMock()
@@ -539,7 +542,10 @@ class TestServiceMainLoop:
     async def test_main_loop_breaks_on_mqtt_error_when_cancelled(self):
         """Main loop should break immediately on MQTT error after cancellation."""
         service = _build_service()
-        service.settings = cast(Any, SimpleNamespace(mqtt=SimpleNamespace(logging_level=SimpleNamespace(level=40))))
+        service.settings = cast(
+            Any,
+            SimpleNamespace(mqtt=SimpleNamespace(logging_level=SimpleNamespace(level=40))),
+        )
         service.influxdb = None
         service.homeassistant = None
         service.powerflow = MagicMock()
@@ -567,7 +573,10 @@ class TestServiceMainLoop:
     async def test_main_loop_reraises_cancelled_error(self):
         """Main loop should re-raise cancellation errors after logging."""
         service = _build_service()
-        service.settings = cast(Any, SimpleNamespace(mqtt=SimpleNamespace(logging_level=SimpleNamespace(level=40))))
+        service.settings = cast(
+            Any,
+            SimpleNamespace(mqtt=SimpleNamespace(logging_level=SimpleNamespace(level=40))),
+        )
         service.influxdb = None
         service.homeassistant = None
         service.powerflow = MagicMock()
