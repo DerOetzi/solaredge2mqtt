@@ -79,13 +79,12 @@ def _mqtt_log_sink(message: Any) -> asyncio.Task[None] | None:
 
 def initialize_logging(logging_level: LoggingLevelEnum) -> None:
     _disable_pymodbus_stdout_logging()
-    logger.configure(
-        handlers=[
-            {"sink": sys.stdout, "level": logging_level.level},
-            {
-                "sink": _mqtt_log_sink,
-                "level": logging_level.level,
-                "filter": _mqtt_log_filter,
-            },
-        ]
-    )
+    handlers: list[Any] = [
+        {"sink": sys.stdout, "level": logging_level.level},
+        {
+            "sink": _mqtt_log_sink,
+            "level": logging_level.level,
+            "filter": _mqtt_log_filter,
+        },
+    ]
+    logger.configure(handlers=handlers)

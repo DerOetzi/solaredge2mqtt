@@ -23,7 +23,7 @@ class InfluxDBSettings(BaseModel):
     bucket: str = Field(default="solaredge")
     retention: int = Field(default=SECONDS_PER_2_YEARS)
     retention_raw: int = Field(default=25)
-    debounce_cycles: int = Field(default=2)
+    debounce_cycles: int = Field(default=10)
 
     _url: str | None = PrivateAttr(default=None)
 

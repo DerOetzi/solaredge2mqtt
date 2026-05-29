@@ -412,10 +412,10 @@ class TestInfluxDBAsyncLoop:
         # Should have deleted old raw data
         mock_delete_api.delete.assert_called()
 
-        # Should have emitted aggregated event
-        mock_event_bus.emit.assert_called_once()
-        call_args = mock_event_bus.emit.call_args
-        assert isinstance(call_args[0][0], InfluxDBAggregatedEvent)
+        # Should have emitted aggregated event (plus state change events)
+        mock_event_bus.emit.assert_called()
+        emitted_types = [type(c[0][0]) for c in mock_event_bus.emit.call_args_list]
+        assert InfluxDBAggregatedEvent in emitted_types
 
 
 class TestInfluxDBAsyncClose:

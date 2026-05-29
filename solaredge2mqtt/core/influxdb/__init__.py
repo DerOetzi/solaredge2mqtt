@@ -89,11 +89,10 @@ class InfluxDBAsync:
         now = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0)
 
         logger.info("Aggregate powerflow and energy raw data")
-        aggregate_query = self._get_flux_query(
+        await self.query(
             "aggregate",
             {"PRICE_IN": self.prices.price_in, "PRICE_OUT": self.prices.price_out},
         )
-        await self.query_api.query(aggregate_query)
 
         logger.info("Apply retention on raw data")
         retention_time = now - timedelta(hours=self.settings.retention_raw)
@@ -140,9 +139,14 @@ class InfluxDBAsync:
         if self.client_async is None:
             raise RuntimeError("InfluxDB client not initialized")
 
-        await self.client_async.write_api().write(
-            bucket=self.bucket_name, record=points
-        )
+        try:
+            await self.client_async.write_api().write(
+                bucket=self.bucket_name, record=points
+            )
+            await self.state.set_online()
+        except Exception:
+            await self.state.set_offline()
+            raise
 
     async def query_timeunit(
         self, period: HistoricPeriod, measurement: str
@@ -162,21 +166,31 @@ class InfluxDBAsync:
     async def query(
         self, query_name: str, additional_replacements: dict[str, Any] | None = None
     ) -> list[dict[str, Any]]:
-
-        tables = await self.query_api.query(
-            self._get_flux_query(query_name, additional_replacements)
-        )
-        return [record.values for table in tables for record in table.records]
+        try:
+            tables = await self.query_api.query(
+                self._get_flux_query(query_name, additional_replacements)
+            )
+            await self.state.set_online()
+            return [record.values for table in tables for record in table.records]
+        except Exception:
+            await self.state.set_offline()
+            raise
 
     async def query_dataframe(
         self, query_name: str, additional_replacements: dict[str, Any] | None = None
     ) -> DataFrame:
-        return cast(
-            "DataFrame",
-            await self.query_api.query_data_frame(
-                self._get_flux_query(query_name, additional_replacements)
-            ),
-        )
+        try:
+            result = cast(
+                "DataFrame",
+                await self.query_api.query_data_frame(
+                    self._get_flux_query(query_name, additional_replacements)
+                ),
+            )
+            await self.state.set_online()
+            return result
+        except Exception:
+            await self.state.set_offline()
+            raise
 
     def _get_flux_query(
         self, query_name: str, additional_replacements: dict[str, Any] | None = None
