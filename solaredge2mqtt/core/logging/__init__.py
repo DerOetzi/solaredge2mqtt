@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import sys
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Mapping
 
 from loguru import logger
 
@@ -22,7 +22,7 @@ class MQTTLoggingSink:
         self._enabled = enabled
         self._min_level = level
 
-    def log_filter(self, record: dict[str, Any]) -> bool:
+    def log_filter(self, record: Mapping[str, Any]) -> bool:
         """Allow MQTT log forwarding and suppress recursive MQTT warning/error logs."""
         if not self._enabled:
             return False
@@ -74,7 +74,7 @@ def set_mqtt_logging(enabled: bool, level: int = logging.ERROR) -> None:
     _mqtt_logging_sink.set_enabled(enabled, level)
 
 
-def _mqtt_log_filter(record: dict[str, Any]) -> bool:
+def _mqtt_log_filter(record: Mapping[str, Any]) -> bool:
     return _mqtt_logging_sink.log_filter(record)
 
 
@@ -83,11 +83,11 @@ def _mqtt_log_sink(message: Any) -> asyncio.Task[None] | None:
 
 
 def _mqtt_log_handler_filter(record: "Record") -> bool:
-    return _mqtt_log_filter(cast(dict[str, Any], record))
+    return _mqtt_log_filter(record)
 
 
 def _mqtt_log_handler_sink(message: "Message") -> None:
-    _mqtt_log_sink(cast(Any, message))
+    _mqtt_log_sink(message)
 
 
 def initialize_logging(logging_level: LoggingLevelEnum) -> None:
