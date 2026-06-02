@@ -125,6 +125,7 @@ class HomeAssistantDiscovery:
         device = HomeAssistantDevice(
             client_id=self.settings.mqtt.client_id,
             state_topic=state_topic,
+            availability_topic=self.availability_topic(component),
             **device_info,
         )
         logger.debug(device)
@@ -173,6 +174,14 @@ class HomeAssistantDiscovery:
                     exclude_none=True,
                 )
             )
+
+    def availability_topic(self, component: Component) -> str:
+        topic = f"{self.settings.mqtt.topic_prefix}/status"
+        service_name = component.AVAILABILITY_SERVICE
+        if service_name:
+            topic += f"/{service_name}"
+        return topic
+
 
     @EventBus.subscribe(HomeAssistantStatusEvent)
     async def homeassistant_status(self, event: HomeAssistantStatusEvent) -> None:
