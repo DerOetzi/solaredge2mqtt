@@ -8,9 +8,12 @@ from pydantic import BaseModel, Field
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
 from solaredge2mqtt.core.logging import logger
-from solaredge2mqtt.core.mqtt.state import ServiceStateController
 from solaredge2mqtt.services.http_async import HTTPClientAsync
-from solaredge2mqtt.services.wallbox.events import WallboxReadEvent
+from solaredge2mqtt.services.wallbox.events import (
+    WallboxOfflineEvent,
+    WallboxOnlineEvent,
+    WallboxReadEvent,
+)
 from solaredge2mqtt.services.wallbox.models import WallboxAPI
 from solaredge2mqtt.services.wallbox.settings import WallboxSettings
 
@@ -47,7 +50,8 @@ class AuthorizationTokens(BaseModel):
             payload = jwt.decode(token, options={"verify_signature": False})  # noqa: S5659
             return payload["exp"]
         except Exception as e:
-            logger.warning("Failed to decode JWT for exp claim: {error}", error=e)
+            logger.warning(
+                "Failed to decode JWT for exp claim: {error}", error=e)
             raise InvalidDataException("Cannot read token expiration") from e
 
 
@@ -56,7 +60,6 @@ class WallboxClient(HTTPClientAsync):
         super().__init__("Wallbox API")
         self.settings = settings
         self.authorization: AuthorizationTokens | None = None
-        self.state = ServiceStateController("wallbox", settings.debounce_cycles)
 
         logger.info(
             "Using Wallbox charger: {host}",
@@ -91,18 +94,19 @@ class WallboxClient(HTTPClientAsync):
 
             await EventBus.emit(WallboxReadEvent(wallbox))
 
-            await self.state.set_online()
+            await EventBus.emit(WallboxOnlineEvent(self.settings.debounce_cycles))
 
             return wallbox
         except (ClientResponseError, asyncio.TimeoutError) as error:
-            await self.state.set_offline()
-            raise InvalidDataException(f"Cannot read Wallbox data: {error}") from error
+            await EventBus.emit(WallboxOfflineEvent())
+            raise InvalidDataException(
+                f"Cannot read Wallbox data: {error}") from error
         except (ConfigurationException, InvalidDataException):
-            await self.state.set_offline()
+            await EventBus.emit(WallboxOfflineEvent())
             raise
 
     async def close(self) -> None:
-        await self.state.set_offline()
+        await EventBus.emit(WallboxOfflineEvent())
         await super().close()
 
     async def _get_access(self) -> None:
@@ -133,7 +137,8 @@ class WallboxClient(HTTPClientAsync):
                 )
 
             if response is None:
-                raise ConfigurationException("wallbox", "Invalid Wallbox login")
+                raise ConfigurationException(
+                    "wallbox", "Invalid Wallbox login")
 
             self.authorization = AuthorizationTokens.model_validate(response)
 
@@ -147,14 +152,16 @@ class WallboxClient(HTTPClientAsync):
         logger.info("Refreshing access token Wallbox...")
 
         if self.authorization is None or self.authorization.refresh_token is None:
-            raise InvalidDataException("Missing previous Wallbox authorization")
+            raise InvalidDataException(
+                "Missing previous Wallbox authorization")
 
         refresh_token = self.authorization.refresh_token
 
         async with asyncio.timeout(5):
             response = await self._post(
                 REFRESH_URL.format(host=self.settings.host),
-                headers={"Authorization": f"Bearer {self.authorization.refresh_token}"},
+                headers={
+                    "Authorization": f"Bearer {self.authorization.refresh_token}"},
                 verify=False,
                 login=self.login,
             )

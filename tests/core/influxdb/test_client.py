@@ -82,20 +82,6 @@ class TestInfluxDBAsyncInit:
 
         assert influxdb.client_async is not None
 
-    @pytest.mark.asyncio
-    async def test_set_online(
-        self, influxdb_settings, price_settings, mock_influxdb_client
-    ):
-        """Test set_online sets state to online."""
-        influxdb = InfluxDBAsync(influxdb_settings, price_settings)
-
-        with patch.object(
-            influxdb.state, "set_online", new_callable=AsyncMock
-        ) as mock_set_online:
-            await influxdb.set_online()
-
-        mock_set_online.assert_awaited_once()
-
     def test_influxdb_async_registers_to_event_bus(
         self, influxdb_settings, price_settings, mock_event_bus, mock_influxdb_client
     ):
@@ -194,17 +180,22 @@ class TestInfluxDBAsyncInitialize:
             self,
             influxdb_settings,
             price_settings,
+            mock_event_bus,
             mock_influxdb_client
     ):
-        """Test set_online method."""
+        """Test set_online method emits event."""
+        from solaredge2mqtt.core.influxdb.events import InfluxDBOnlineEvent
+
         influxdb = InfluxDBAsync(influxdb_settings, price_settings)
 
-        with patch.object(
-            influxdb.state, "set_online", new_callable=AsyncMock
-        ) as mock_set_online:
-            await influxdb.set_online()
+        await influxdb.set_online()
 
-        mock_set_online.assert_awaited_once()
+        # Check that InfluxDBOnlineEvent was emitted
+        emit_calls = mock_event_bus.emit.call_args_list
+        assert any(
+            isinstance(call[0][0], InfluxDBOnlineEvent)
+            for call in emit_calls
+        )
 
 
 class TestInfluxDBAsyncWrite:

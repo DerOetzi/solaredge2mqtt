@@ -193,6 +193,8 @@ class TestWeatherClientLoop:
         self, mock_service_settings, mock_event_bus, mock_weather_response
     ):
         """Test loop publishes weather data."""
+        from solaredge2mqtt.services.weather.events import WeatherOnlineEvent
+
         client = WeatherClient(mock_service_settings)
         client._get = AsyncMock(return_value=mock_weather_response)
 
@@ -201,12 +203,9 @@ class TestWeatherClientLoop:
         # Should emit service state, WeatherUpdateEvent and weather MQTT event
         assert mock_event_bus.emit.call_count == 3
 
-        # Check first call is service state event
+        # Check first call is WeatherOnlineEvent
         first_call = mock_event_bus.emit.call_args_list[0]
-        assert isinstance(first_call[0][0], MQTTPublishEvent)
-        assert first_call[0][0].topic == "status/weather_api"
-        assert first_call[0][0].payload == "online"
-        assert first_call[0][0].retain is False
+        assert isinstance(first_call[0][0], WeatherOnlineEvent)
 
         # Check second call is WeatherUpdateEvent
         second_call = mock_event_bus.emit.call_args_list[1]
@@ -221,13 +220,19 @@ class TestWeatherClientLoop:
     async def test_loop_sets_offline_state_on_weather_error(
         self, mock_service_settings, mock_event_bus
     ):
-        """Loop should set weather service state to offline on known errors."""
+        """Loop should emit offline event on known errors."""
+        from solaredge2mqtt.services.weather.events import WeatherOfflineEvent
+
         client = WeatherClient(mock_service_settings)
-        client.get_weather = AsyncMock(side_effect=InvalidDataException("boom"))
-        client.state = MagicMock()
-        client.state.set_offline = AsyncMock()
+        client.get_weather = AsyncMock(
+            side_effect=InvalidDataException("boom"))
 
         with pytest.raises(InvalidDataException):
             await client.loop(Interval10MinTriggerEvent())
 
-        client.state.set_offline.assert_awaited_once()
+        # Check that WeatherOfflineEvent was emitted
+        emit_calls = mock_event_bus.emit.call_args_list
+        assert any(
+            isinstance(call[0][0], WeatherOfflineEvent)
+            for call in emit_calls
+        )

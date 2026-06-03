@@ -17,6 +17,7 @@ from solaredge2mqtt.core.logging import (
 )
 from solaredge2mqtt.core.mqtt import MQTTClient
 from solaredge2mqtt.core.settings import service_settings
+from solaredge2mqtt.core.status import ServiceStatusController
 from solaredge2mqtt.core.timer import Timer
 from solaredge2mqtt.services.energy import EnergyService
 from solaredge2mqtt.services.forecast import FORECAST_AVAILABLE, ForecastService
@@ -53,6 +54,8 @@ class Service:
         logger.debug(self.settings)
 
         self.timer = Timer(self.settings.interval)
+
+        self.status_controller = ServiceStatusController()
 
         self.mqtt: MQTTClient | None = None
 
@@ -154,7 +157,7 @@ class Service:
                 self.mqtt = MQTTClient(self.settings.mqtt)
 
                 async with self.mqtt:
-                    await self.mqtt.publish_status_online()
+                    await self.status_controller.online()
 
                     if self.influxdb:
                         await self.influxdb.set_online()
@@ -199,9 +202,10 @@ class Service:
 
         if self.mqtt is not None:
             try:
-                await self.mqtt.publish_status_offline()
+                await self.status_controller.offline()
             except MqttError:
-                logger.debug("Unable to publish offline status during cleanup")
+                logger.warning(
+                    "Unable to publish offline status during cleanup")
             finally:
                 self.mqtt = None
 

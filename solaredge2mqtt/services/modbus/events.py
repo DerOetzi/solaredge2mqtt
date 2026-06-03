@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from solaredge2mqtt.core.events.events import BaseEvent
+from solaredge2mqtt.core.status.events import ServiceOfflineEvent, ServiceOnlineEvent
+from solaredge2mqtt.services.modbus.models.base import SERVICE_NAME
 
 if TYPE_CHECKING:
     from solaredge2mqtt.services.modbus.models.unit import ModbusUnit
@@ -33,3 +35,11 @@ class ModbusWriteEvent(BaseEvent):
     @property
     def payload(self) -> SunSpecRawData:
         return self._payload
+
+
+class ModbusOnlineEvent(ServiceOnlineEvent):
+    SERVICE_NAME = SERVICE_NAME
+
+
+class ModbusOfflineEvent(ServiceOfflineEvent):
+    SERVICE_NAME = SERVICE_NAME

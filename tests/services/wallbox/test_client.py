@@ -113,16 +113,21 @@ class TestWallboxClientAsyncInit:
     async def test_close_sets_offline_and_closes_parent(
         self, wallbox_settings, mock_event_bus
     ):
+        from solaredge2mqtt.services.wallbox.events import WallboxOfflineEvent
+
         client = WallboxClient(wallbox_settings)
 
         with patch.object(
-            client.state, "set_offline", new_callable=AsyncMock
-        ) as mock_set_offline, patch.object(
             HTTPClientAsync, "close", new_callable=AsyncMock
         ) as mock_close:
             await client.close()
 
-        mock_set_offline.assert_awaited_once()
+        # Check that WallboxOfflineEvent was emitted
+        emit_calls = mock_event_bus.emit.call_args_list
+        assert any(
+            isinstance(call[0][0], WallboxOfflineEvent)
+            for call in emit_calls
+        )
         mock_close.assert_awaited_once()
 
     @pytest.mark.asyncio

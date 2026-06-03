@@ -9,10 +9,13 @@ from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
-from solaredge2mqtt.core.mqtt.state import ServiceStateController
 from solaredge2mqtt.core.timer.events import Interval10MinTriggerEvent
 from solaredge2mqtt.services.http_async import HTTPClientAsync
-from solaredge2mqtt.services.weather.events import WeatherUpdateEvent
+from solaredge2mqtt.services.weather.events import (
+    WeatherOfflineEvent,
+    WeatherOnlineEvent,
+    WeatherUpdateEvent,
+)
 from solaredge2mqtt.services.weather.models import OpenWeatherMapOneCall
 
 if TYPE_CHECKING:
@@ -28,10 +31,6 @@ class WeatherClient(HTTPClientAsync):
 
         self.location = settings.location
         self.settings = settings.weather
-        self.state = ServiceStateController(
-            "weather_api",
-            settings.weather.debounce_cycles,
-        )
 
         EventBus.register(self)
 
@@ -39,7 +38,7 @@ class WeatherClient(HTTPClientAsync):
     async def loop(self, event: Interval10MinTriggerEvent | None) -> None:
         try:
             weather = await self.get_weather()
-            await self.state.set_online()
+            await EventBus.emit(WeatherOnlineEvent(self.settings.debounce_cycles))
             await EventBus.emit(WeatherUpdateEvent(weather))
             await EventBus.emit(
                 MQTTPublishEvent(
@@ -49,7 +48,7 @@ class WeatherClient(HTTPClientAsync):
                 )
             )
         except (ConfigurationException, InvalidDataException):
-            await self.state.set_offline()
+            await EventBus.emit(WeatherOfflineEvent())
             raise
 
     async def get_weather(self) -> OpenWeatherMapOneCall:

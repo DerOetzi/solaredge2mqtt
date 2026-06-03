@@ -308,33 +308,6 @@ class TestMQTTClientHandleMessage:
 
 
 class TestMQTTClientPublish:
-    """Tests for MQTTClient publish methods."""
-
-    @pytest.mark.asyncio
-    async def test_publish_status_online(
-        self, mqtt_settings, event_bus, mock_aiomqtt_client
-    ):
-        """Test publishing online status."""
-        client = MQTTClient(mqtt_settings)
-        client.publish_to = AsyncMock()
-
-        await client.publish_status_online()
-
-        client.publish_to.assert_called_once_with("status", "online", True)
-
-    @pytest.mark.asyncio
-    async def test_publish_status_offline(
-        self, mqtt_settings, event_bus, mock_aiomqtt_client
-    ):
-        """Test publishing offline status."""
-        client = MQTTClient(mqtt_settings)
-        client.publish_to = AsyncMock()
-
-        await client.publish_status_offline()
-
-        client.publish_to.assert_called_once_with(
-            "status", "offline", True, suppress_connection_error=True)
-
     @pytest.mark.asyncio
     async def test_event_listener(self, mqtt_settings, event_bus, mock_aiomqtt_client):
         """Test event listener calls publish_to."""
@@ -685,3 +658,32 @@ class TestMQTTClientLoggingSink:
         await client.logging_sink(mock_message)
 
         client.publish_to.assert_called_once()
+
+    def test_log_filter_filters_core_mqtt_logs(
+            self,
+            mqtt_settings,
+            mock_aiomqtt_client
+    ):
+        """Log filter should exclude logs from MQTTClient."""
+        client = MQTTClient(mqtt_settings)
+
+        record = {"name": "solaredge2mqtt.core.mqtt"}
+        assert client.log_filter(record) is False
+
+    def test_log_filter_filters_core_mqtt_submodules_logs(
+            self,
+            mqtt_settings,
+            mock_aiomqtt_client
+    ):
+        """Log filter should exclude logs from MQTTClient."""
+        client = MQTTClient(mqtt_settings)
+
+        record = {"name": "solaredge2mqtt.core.mqtt.Client"}
+        assert client.log_filter(record) is False
+
+    def test_log_filter_allows_other_logs(self, mqtt_settings, mock_aiomqtt_client):
+        """Log filter should allow logs from other modules."""
+        client = MQTTClient(mqtt_settings)
+
+        record = {"name": "solaredge2mqtt.services.weather.WeatherClient"}
+        assert client.log_filter(record) is True

@@ -128,7 +128,6 @@ class MQTTClient(Client):
         if (
             record_name is not None
             and record_name.startswith("solaredge2mqtt.core.mqtt")
-            and record["level"].name in {"WARNING", "ERROR", "CRITICAL"}
         ):
             return False
 
@@ -172,12 +171,6 @@ class MQTTClient(Client):
         except (ValidationError, json.JSONDecodeError, TypeError) as ex:
             logger.warning(
                 f"Received invalid message on topic: {topic}, error: {ex}")
-
-    async def publish_status_online(self) -> None:
-        await self.publish_to("status", "online", True)
-
-    async def publish_status_offline(self) -> None:
-        await self.publish_to("status", "offline", True, suppress_connection_error=True)
 
     async def event_listener(self, event: MQTTPublishEvent) -> None:
         await self.publish_to(

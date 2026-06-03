@@ -259,18 +259,23 @@ class TestMonitoringSiteGetData:
     async def test_get_data_sets_offline_state_on_known_errors(
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
-        """get_data should set monitoring state offline on data errors."""
+        """get_data should emit monitoring offline event on data errors."""
+        from solaredge2mqtt.services.monitoring.events import MonitoringOfflineEvent
+        
         site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
         site.get_modules_energy = AsyncMock(
             side_effect=InvalidDataException("unable to read")
         )
-        site.state = MagicMock()
-        site.state.set_offline = AsyncMock()
 
         with pytest.raises(InvalidDataException):
             await site.get_data(Interval15MinTriggerEvent())
 
-        site.state.set_offline.assert_awaited_once()
+        # Check that MonitoringOfflineEvent was emitted
+        emit_calls = mock_event_bus.emit.call_args_list
+        assert any(
+            isinstance(call[0][0], MonitoringOfflineEvent)
+            for call in emit_calls
+        )
 
 
 class TestMonitoringSiteGetModulesPower:

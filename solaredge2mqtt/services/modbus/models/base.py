@@ -13,6 +13,8 @@ from solaredge2mqtt.services.modbus.sunspec.values import (
 )
 from solaredge2mqtt.services.models import Component
 
+SERVICE_NAME = "modbus"
+
 
 class ModbusUnitRole(EnumModel):
     LEADER = "leader"
@@ -58,7 +60,8 @@ class ModbusDeviceInfo(Solaredge2MQTTBaseModel):
         }
 
         if "c_sunspec_did" in data and data["c_sunspec_did"] in C_SUNSPEC_DID_MAP:
-            values["sunspec_type"] = C_SUNSPEC_DID_MAP[int(data["c_sunspec_did"])]
+            values["sunspec_type"] = C_SUNSPEC_DID_MAP[int(
+                data["c_sunspec_did"])]
         else:
             values["sunspec_type"] = "Unknown"
 
@@ -87,6 +90,7 @@ class ModbusDeviceInfo(Solaredge2MQTTBaseModel):
 
 class ModbusComponent(Component, MixinModbusSunSpecScaleValue, ABC):
     SOURCE = "modbus"
+    AVAILABILITY_SERVICE = SERVICE_NAME
 
     info: SkipJsonSchema[ModbusDeviceInfo]
 

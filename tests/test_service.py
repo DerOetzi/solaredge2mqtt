@@ -22,6 +22,9 @@ def _build_service() -> Service:
     service.powerflow = cast(Any, None)
     service.monitoring = None
     service.weather = None
+    service.status_controller = MagicMock()
+    service.status_controller.online = AsyncMock()
+    service.status_controller.offline = AsyncMock()
     return service
 
 
@@ -496,7 +499,6 @@ class TestServiceMainLoop:
         ):
             await service.main_loop()
 
-        mqtt_client.publish_status_online.assert_awaited_once()
         service.homeassistant.async_init.assert_awaited_once()
         service.powerflow.async_init.assert_awaited_once()
         service._start_mqtt_listener.assert_called_once()
@@ -763,9 +765,37 @@ class TestServiceShutdown:
             await service.finalize()
 
         service._stop_loops.assert_awaited_once()
-        mqtt.publish_status_offline.assert_awaited_once()
         cancel_tasks_mock.assert_awaited_once()
         assert service.mqtt is None
+
+    @pytest.mark.asyncio
+    async def test_finalize_handles_mqtt_error_on_offline(self):
+        """Finalize should handle MqttError when setting offline status."""
+        from aiomqtt import MqttError
+
+        service = _build_service()
+        service._stop_loops = AsyncMock()
+        service.status_controller.offline = AsyncMock(
+            side_effect=MqttError("connection lost")
+        )
+        service.mqtt = MagicMock()
+
+        with (
+            patch("solaredge2mqtt.service.logger") as mock_logger,
+            patch(
+                "solaredge2mqtt.service.EventBus.cancel_tasks", new=AsyncMock()
+            ) as cancel_tasks_mock,
+        ):
+            await service.finalize()
+
+        # Should log warning about failed offline status
+        mock_logger.warning.assert_called_once_with(
+            "Unable to publish offline status during cleanup"
+        )
+        # Should still set mqtt to None
+        assert service.mqtt is None
+        # Should still cancel event tasks
+        cancel_tasks_mock.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_finalize_ignores_mqtt_error_during_offline_publish(self):
