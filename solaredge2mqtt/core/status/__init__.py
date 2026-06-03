@@ -76,7 +76,7 @@ class ServiceStatusController:
         if current_status != is_online:
             pending_status = self._pending_status_changes.get(
                 service_name, None)
-            if pending_status != is_online:
+            if pending_status is None:
                 self._pending_status_changes[service_name] = is_online
                 self._debounce_counters[service_name] = 1
             else:
@@ -86,6 +86,8 @@ class ServiceStatusController:
                 await self._publish_service_status(service_name, is_online)
             else:
                 return
+
+        self._reset_debounce(service_name)
 
     async def _publish_service_status(self, service_name: str, is_online: bool):
         self._status[service_name] = is_online
