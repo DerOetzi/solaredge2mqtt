@@ -11,6 +11,10 @@ from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.core.timer.events import Interval15MinTriggerEvent
 from solaredge2mqtt.services.http_async import HTTPClientAsync
+from solaredge2mqtt.services.monitoring.events import (
+    MonitoringOfflineEvent,
+    MonitoringOnlineEvent,
+)
 from solaredge2mqtt.services.monitoring.models import (
     LogicalInfo,
     LogicalInverter,
@@ -40,16 +44,21 @@ class MonitoringSite(HTTPClientAsync):
 
     @EventBus.subscribe(Interval15MinTriggerEvent)
     async def get_data(self, event: Interval15MinTriggerEvent | None) -> None:
-        energies = await self.get_modules_energy()
-        powers = await self.get_modules_power()
+        try:
+            energies = await self.get_modules_energy()
+            powers = await self.get_modules_power()
 
-        modules = self.merge_modules(energies, powers)
+            modules = self.merge_modules(energies, powers)
 
-        energy_total = 0
-        count_modules = 0
+            energy_total = 0
+            count_modules = 0
 
-        await self.save_to_influxdb(modules)
-        await self.publish_mqtt(modules, energy_total, count_modules)
+            await self.save_to_influxdb(modules)
+            await self.publish_mqtt(modules, energy_total, count_modules)
+            await EventBus.emit(MonitoringOnlineEvent(self.settings.debounce_cycles))
+        except (ConfigurationException, InvalidDataException):
+            await EventBus.emit(MonitoringOfflineEvent())
+            raise
 
     async def get_modules_energy(self) -> dict[str, LogicalModule]:
         logical = await self._get_logical()
@@ -91,7 +100,8 @@ class MonitoringSite(HTTPClientAsync):
                 return result
 
         except (ClientResponseError, asyncio.TimeoutError) as error:
-            raise InvalidDataException("Unable to read logical layout") from error
+            raise InvalidDataException(
+                "Unable to read logical layout") from error
 
     def _parse_inverters(self, inverter_objs, reporters_data) -> list[LogicalInverter]:
         inverters = []
@@ -103,14 +113,16 @@ class MonitoringSite(HTTPClientAsync):
                     {
                         "info": info,
                         "energy": (
-                            reporters_data[info["identifier"]]["unscaledEnergy"]
+                            reporters_data[info["identifier"]
+                                           ]["unscaledEnergy"]
                             if info["identifier"] in reporters_data
                             else None
                         ),
                     }
                 )
 
-                self._parse_strings(inverter, inverter_obj["children"], reporters_data)
+                self._parse_strings(
+                    inverter, inverter_obj["children"], reporters_data)
 
                 inverters.append(inverter)
 
@@ -159,7 +171,8 @@ class MonitoringSite(HTTPClientAsync):
         modules = {}
 
         for date_str, reporters_data in playback["reportersData"].items():
-            date = datetime.strptime(date_str, "%a %b %d %H:%M:%S GMT %Y").astimezone()
+            date = datetime.strptime(
+                date_str, "%a %b %d %H:%M:%S GMT %Y").astimezone()
 
             for entries in reporters_data.values():
                 for entry in entries:
@@ -209,7 +222,8 @@ class MonitoringSite(HTTPClientAsync):
 
             return json.loads(response)
         except (ClientResponseError, asyncio.TimeoutError) as error:
-            raise InvalidDataException("Unable to read logical layout") from error
+            raise InvalidDataException(
+                "Unable to read logical layout") from error
 
     async def login(self) -> str:
         try:

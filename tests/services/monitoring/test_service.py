@@ -32,6 +32,7 @@ def mock_monitoring_settings():
     settings.password = MagicMock()
     settings.password.get_secret_value.return_value = "test_password"
     settings.retain = False
+    settings.debounce_cycles = 0
     return settings
 
 
@@ -253,6 +254,28 @@ class TestMonitoringSiteGetData:
         site.get_modules_power.assert_called_once()
         site.save_to_influxdb.assert_called_once()
         site.publish_mqtt.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_data_sets_offline_state_on_known_errors(
+        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+    ):
+        """get_data should emit monitoring offline event on data errors."""
+        from solaredge2mqtt.services.monitoring.events import MonitoringOfflineEvent
+        
+        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site.get_modules_energy = AsyncMock(
+            side_effect=InvalidDataException("unable to read")
+        )
+
+        with pytest.raises(InvalidDataException):
+            await site.get_data(Interval15MinTriggerEvent())
+
+        # Check that MonitoringOfflineEvent was emitted
+        emit_calls = mock_event_bus.emit.call_args_list
+        assert any(
+            isinstance(call[0][0], MonitoringOfflineEvent)
+            for call in emit_calls
+        )
 
 
 class TestMonitoringSiteGetModulesPower:

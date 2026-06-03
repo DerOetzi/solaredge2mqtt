@@ -22,6 +22,9 @@ def _build_service() -> Service:
     service.powerflow = cast(Any, None)
     service.monitoring = None
     service.weather = None
+    service.status_controller = MagicMock()
+    service.status_controller.online = AsyncMock()
+    service.status_controller.offline = AsyncMock()
     return service
 
 
@@ -37,7 +40,8 @@ def _build_settings(
     return SimpleNamespace(
         logging_level="INFO",
         interval=5,
-        influxdb=SimpleNamespace(is_configured=influx_configured),
+        influxdb=SimpleNamespace(
+            is_configured=influx_configured, debounce_cycles=0),
         prices=SimpleNamespace(),
         energy=SimpleNamespace(),
         monitoring=SimpleNamespace(is_configured=monitoring_configured),
@@ -46,7 +50,7 @@ def _build_settings(
         location=SimpleNamespace(),
         is_forecast_enabled=forecast_enabled,
         homeassistant=SimpleNamespace(enable=homeassistant_enabled),
-        mqtt=SimpleNamespace(),
+        mqtt=SimpleNamespace(logging_level=SimpleNamespace(level=40)),
     )
 
 
@@ -76,7 +80,8 @@ class TestRunWrapper:
             raise ConfigurationException("service", "invalid")
 
         with (
-            patch("solaredge2mqtt.service.asyncio.run", side_effect=fake_asyncio_run),
+            patch("solaredge2mqtt.service.asyncio.run",
+                  side_effect=fake_asyncio_run),
             patch("solaredge2mqtt.service.logger") as mock_logger,
         ):
             run("config")
@@ -91,7 +96,8 @@ class TestRunWrapper:
             raise asyncio.CancelledError
 
         with (
-            patch("solaredge2mqtt.service.asyncio.run", side_effect=fake_asyncio_run),
+            patch("solaredge2mqtt.service.asyncio.run",
+                  side_effect=fake_asyncio_run),
             patch("solaredge2mqtt.service.logger") as mock_logger,
         ):
             run("config")
@@ -106,7 +112,8 @@ class TestRunWrapper:
             raise KeyboardInterrupt
 
         with (
-            patch("solaredge2mqtt.service.asyncio.run", side_effect=fake_asyncio_run),
+            patch("solaredge2mqtt.service.asyncio.run",
+                  side_effect=fake_asyncio_run),
             patch("solaredge2mqtt.service.logger") as mock_logger,
         ):
             run("config")
@@ -144,7 +151,8 @@ class TestServiceInitialization:
         influx = MagicMock()
 
         with (
-            patch("solaredge2mqtt.service.service_settings", return_value=settings),
+            patch("solaredge2mqtt.service.service_settings",
+                  return_value=settings),
             patch("solaredge2mqtt.service.initialize_logging") as init_logging,
             patch("solaredge2mqtt.service.Timer") as timer_cls,
             patch(
@@ -165,7 +173,10 @@ class TestServiceInitialization:
         influx_cls.assert_called_once_with(settings.influxdb, settings.prices)
         energy_cls.assert_called_once_with(settings.energy, influx)
         powerflow_cls.assert_called_once_with(settings, influx)
-        monitoring_cls.assert_called_once_with(settings.monitoring, influx)
+        monitoring_cls.assert_called_once_with(
+            settings.monitoring,
+            influx,
+        )
         weather_cls.assert_called_once_with(settings)
         forecast_cls.assert_called_once_with(
             settings.forecast, settings.location, influx
@@ -184,7 +195,8 @@ class TestServiceInitialization:
         )
 
         with (
-            patch("solaredge2mqtt.service.service_settings", return_value=settings),
+            patch("solaredge2mqtt.service.service_settings",
+                  return_value=settings),
             patch("solaredge2mqtt.service.initialize_logging"),
             patch("solaredge2mqtt.service.Timer"),
             patch("solaredge2mqtt.service.PowerflowService"),
@@ -214,7 +226,8 @@ class TestServiceInitialization:
         )
 
         with (
-            patch("solaredge2mqtt.service.service_settings", return_value=settings),
+            patch("solaredge2mqtt.service.service_settings",
+                  return_value=settings),
             patch("solaredge2mqtt.service.initialize_logging"),
             patch("solaredge2mqtt.service.Timer"),
             patch("solaredge2mqtt.service.PowerflowService"),
@@ -357,7 +370,8 @@ class TestServiceLooping:
         service = _build_service()
         service.mqtt = MagicMock()
         service.mqtt.listen = AsyncMock(side_effect=asyncio.CancelledError)
-        service.mqtt.process_queue = AsyncMock(side_effect=asyncio.CancelledError)
+        service.mqtt.process_queue = AsyncMock(
+            side_effect=asyncio.CancelledError)
 
         service._start_mqtt_listener()
 
@@ -450,9 +464,11 @@ class TestServiceMainLoop:
     async def test_main_loop_initializes_services_and_exits_on_cancel(self):
         """Main loop should initialize dependencies and finalize cleanly."""
         service = _build_service()
-        service.settings = cast(Any, SimpleNamespace(mqtt=SimpleNamespace()))
-        service.influxdb = MagicMock()
-        service.influxdb.init = MagicMock()
+        service.settings = cast(
+            Any,
+            SimpleNamespace(mqtt=SimpleNamespace(
+                logging_level=SimpleNamespace(level=40))),
+        )
         service.homeassistant = MagicMock()
         service.homeassistant.async_init = AsyncMock()
         service.powerflow = MagicMock()
@@ -475,15 +491,14 @@ class TestServiceMainLoop:
             return None
 
         with (
-            patch("solaredge2mqtt.service.MQTTClient", return_value=mqtt_client),
+            patch("solaredge2mqtt.service.MQTTClient",
+                  return_value=mqtt_client),
             patch(
                 "solaredge2mqtt.service.asyncio.gather", side_effect=gather_side_effect
             ),
         ):
             await service.main_loop()
 
-        service.influxdb.init.assert_called_once()
-        mqtt_client.publish_status_online.assert_awaited_once()
         service.homeassistant.async_init.assert_awaited_once()
         service.powerflow.async_init.assert_awaited_once()
         service._start_mqtt_listener.assert_called_once()
@@ -491,10 +506,54 @@ class TestServiceMainLoop:
         service.finalize.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_main_loop_skips_influxdb_initialization_when_not_configured(self):
+        """Main loop should skip influxdb operations when not configured."""
+        service = _build_service()
+        service.settings = cast(
+            Any,
+            SimpleNamespace(mqtt=SimpleNamespace(
+                logging_level=SimpleNamespace(level=40))),
+        )
+        service.influxdb = None
+        service.homeassistant = None
+        service.powerflow = MagicMock()
+        service.powerflow.async_init = AsyncMock()
+        service.timer = MagicMock()
+        service.timer.loop = AsyncMock()
+        service.finalize = AsyncMock()
+        service._start_mqtt_listener = MagicMock()
+        service.schedule_loop = MagicMock()
+
+        mqtt_client = MagicMock()
+        mqtt_client.publish_status_online = AsyncMock()
+        mqtt_client.__aenter__ = AsyncMock(return_value=mqtt_client)
+        mqtt_client.__aexit__ = AsyncMock(return_value=None)
+
+        async def gather_side_effect(*_args, **_kwargs):
+            await asyncio.to_thread(lambda: None)
+            service.cancel_request.set()
+            return None
+
+        with (
+            patch("solaredge2mqtt.service.MQTTClient",
+                  return_value=mqtt_client),
+            patch(
+                "solaredge2mqtt.service.asyncio.gather", side_effect=gather_side_effect
+            ),
+        ):
+            await service.main_loop()
+
+        service.finalize.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_main_loop_logs_reconnect_on_mqtt_error(self):
         """Main loop should log reconnect and sleep when MQTT errors occur."""
         service = _build_service()
-        service.settings = cast(Any, SimpleNamespace(mqtt=SimpleNamespace()))
+        service.settings = cast(
+            Any,
+            SimpleNamespace(mqtt=SimpleNamespace(
+                logging_level=SimpleNamespace(level=40))),
+        )
         service.influxdb = None
         service.homeassistant = None
         service.powerflow = MagicMock()
@@ -511,7 +570,8 @@ class TestServiceMainLoop:
             service.cancel_request.set()
 
         with (
-            patch("solaredge2mqtt.service.MQTTClient", side_effect=mqtt_side_effect),
+            patch("solaredge2mqtt.service.MQTTClient",
+                  side_effect=mqtt_side_effect),
             patch("solaredge2mqtt.service.MqttError", Exception),
             patch(
                 "solaredge2mqtt.service.asyncio.sleep", side_effect=sleep_side_effect
@@ -529,7 +589,11 @@ class TestServiceMainLoop:
     async def test_main_loop_breaks_on_mqtt_error_when_cancelled(self):
         """Main loop should break immediately on MQTT error after cancellation."""
         service = _build_service()
-        service.settings = cast(Any, SimpleNamespace(mqtt=SimpleNamespace()))
+        service.settings = cast(
+            Any,
+            SimpleNamespace(mqtt=SimpleNamespace(
+                logging_level=SimpleNamespace(level=40))),
+        )
         service.influxdb = None
         service.homeassistant = None
         service.powerflow = MagicMock()
@@ -543,7 +607,8 @@ class TestServiceMainLoop:
             raise RuntimeError("stop now")
 
         with (
-            patch("solaredge2mqtt.service.MQTTClient", side_effect=mqtt_side_effect),
+            patch("solaredge2mqtt.service.MQTTClient",
+                  side_effect=mqtt_side_effect),
             patch("solaredge2mqtt.service.MqttError", Exception),
             patch("solaredge2mqtt.service.logger") as mock_logger,
         ):
@@ -556,7 +621,11 @@ class TestServiceMainLoop:
     async def test_main_loop_reraises_cancelled_error(self):
         """Main loop should re-raise cancellation errors after logging."""
         service = _build_service()
-        service.settings = cast(Any, SimpleNamespace(mqtt=SimpleNamespace()))
+        service.settings = cast(
+            Any,
+            SimpleNamespace(mqtt=SimpleNamespace(
+                logging_level=SimpleNamespace(level=40))),
+        )
         service.influxdb = None
         service.homeassistant = None
         service.powerflow = MagicMock()
@@ -573,7 +642,8 @@ class TestServiceMainLoop:
         mqtt_client.__aexit__ = AsyncMock(return_value=None)
 
         with (
-            patch("solaredge2mqtt.service.MQTTClient", return_value=mqtt_client),
+            patch("solaredge2mqtt.service.MQTTClient",
+                  return_value=mqtt_client),
             patch(
                 "solaredge2mqtt.service.asyncio.gather",
                 side_effect=asyncio.CancelledError,
@@ -585,6 +655,96 @@ class TestServiceMainLoop:
 
         service.finalize.assert_awaited_once()
         mock_logger.debug.assert_any_call("Loops cancelled")
+
+    @pytest.mark.asyncio
+    async def test_main_loop_initializes_influxdb_when_configured(self):
+        """Main loop should call influxdb init and set_online when configured."""
+        service = _build_service()
+        service.settings = cast(
+            Any,
+            SimpleNamespace(mqtt=SimpleNamespace(
+                logging_level=SimpleNamespace(level=40))),
+        )
+        service.homeassistant = None
+        service.powerflow = MagicMock()
+        service.powerflow.async_init = AsyncMock()
+        service.timer = MagicMock()
+        service.timer.loop = AsyncMock()
+        service.finalize = AsyncMock()
+
+        influxdb = MagicMock()
+        influxdb.init = MagicMock()
+        influxdb.set_online = AsyncMock()
+        service.influxdb = influxdb
+
+        service._start_mqtt_listener = MagicMock()
+        service.schedule_loop = MagicMock()
+
+        mqtt_client = MagicMock()
+        mqtt_client.publish_status_online = AsyncMock()
+        mqtt_client.__aenter__ = AsyncMock(return_value=mqtt_client)
+        mqtt_client.__aexit__ = AsyncMock(return_value=None)
+
+        async def gather_side_effect(*_args, **_kwargs):
+            await asyncio.to_thread(lambda: None)
+            service.cancel_request.set()
+            return None
+
+        with (
+            patch("solaredge2mqtt.service.MQTTClient",
+                  return_value=mqtt_client),
+            patch(
+                "solaredge2mqtt.service.asyncio.gather", side_effect=gather_side_effect
+            ),
+        ):
+            await service.main_loop()
+
+        influxdb.init.assert_called_once()
+        influxdb.set_online.assert_awaited_once()
+        service.powerflow.async_init.assert_awaited_once()
+        service.finalize.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_main_loop_skips_influxdb_when_not_configured(self):
+        """Main loop should skip influxdb calls when influxdb is None."""
+        service = _build_service()
+        service.settings = cast(
+            Any,
+            SimpleNamespace(mqtt=SimpleNamespace(
+                logging_level=SimpleNamespace(level=40))),
+        )
+        service.influxdb = None
+        service.homeassistant = None
+        service.powerflow = MagicMock()
+        service.powerflow.async_init = AsyncMock()
+        service.timer = MagicMock()
+        service.timer.loop = AsyncMock()
+        service.finalize = AsyncMock()
+
+        service._start_mqtt_listener = MagicMock()
+        service.schedule_loop = MagicMock()
+
+        mqtt_client = MagicMock()
+        mqtt_client.publish_status_online = AsyncMock()
+        mqtt_client.__aenter__ = AsyncMock(return_value=mqtt_client)
+        mqtt_client.__aexit__ = AsyncMock(return_value=None)
+
+        async def gather_side_effect(*_args, **_kwargs):
+            await asyncio.to_thread(lambda: None)
+            service.cancel_request.set()
+            return None
+
+        with (
+            patch("solaredge2mqtt.service.MQTTClient",
+                  return_value=mqtt_client),
+            patch(
+                "solaredge2mqtt.service.asyncio.gather", side_effect=gather_side_effect
+            ),
+        ):
+            await service.main_loop()
+
+        service.powerflow.async_init.assert_awaited_once()
+        service.finalize.assert_awaited_once()
 
 
 class TestServiceShutdown:
@@ -605,9 +765,37 @@ class TestServiceShutdown:
             await service.finalize()
 
         service._stop_loops.assert_awaited_once()
-        mqtt.publish_status_offline.assert_awaited_once()
         cancel_tasks_mock.assert_awaited_once()
         assert service.mqtt is None
+
+    @pytest.mark.asyncio
+    async def test_finalize_handles_mqtt_error_on_offline(self):
+        """Finalize should handle MqttError when setting offline status."""
+        from aiomqtt import MqttError
+
+        service = _build_service()
+        service._stop_loops = AsyncMock()
+        service.status_controller.offline = AsyncMock(
+            side_effect=MqttError("connection lost")
+        )
+        service.mqtt = MagicMock()
+
+        with (
+            patch("solaredge2mqtt.service.logger") as mock_logger,
+            patch(
+                "solaredge2mqtt.service.EventBus.cancel_tasks", new=AsyncMock()
+            ) as cancel_tasks_mock,
+        ):
+            await service.finalize()
+
+        # Should log warning about failed offline status
+        mock_logger.warning.assert_called_once_with(
+            "Unable to publish offline status during cleanup"
+        )
+        # Should still set mqtt to None
+        assert service.mqtt is None
+        # Should still cancel event tasks
+        cancel_tasks_mock.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_finalize_ignores_mqtt_error_during_offline_publish(self):

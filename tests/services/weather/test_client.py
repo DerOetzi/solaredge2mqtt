@@ -26,6 +26,7 @@ def mock_service_settings():
     settings.weather.api_key.get_secret_value.return_value = "test_api_key"
     settings.weather.language = "en"
     settings.weather.retain = False
+    settings.weather.debounce_cycles = 0
 
     return settings
 
@@ -174,6 +175,7 @@ class TestWeatherClientGetWeather:
         mock_settings = MagicMock()
         mock_settings.location = None
         mock_settings.weather = MagicMock()
+        mock_settings.weather.debounce_cycles = 0
 
         client = WeatherClient(mock_settings)
 
@@ -191,19 +193,46 @@ class TestWeatherClientLoop:
         self, mock_service_settings, mock_event_bus, mock_weather_response
     ):
         """Test loop publishes weather data."""
+        from solaredge2mqtt.services.weather.events import WeatherOnlineEvent
+
         client = WeatherClient(mock_service_settings)
         client._get = AsyncMock(return_value=mock_weather_response)
 
         await client.loop(Interval10MinTriggerEvent())
 
-        # Should emit WeatherUpdateEvent and MQTTPublishEvent
-        assert mock_event_bus.emit.call_count == 2
+        # Should emit service state, WeatherUpdateEvent and weather MQTT event
+        assert mock_event_bus.emit.call_count == 3
 
-        # Check first call is WeatherUpdateEvent
+        # Check first call is WeatherOnlineEvent
         first_call = mock_event_bus.emit.call_args_list[0]
-        assert isinstance(first_call[0][0], WeatherUpdateEvent)
+        assert isinstance(first_call[0][0], WeatherOnlineEvent)
 
-        # Check second call is MQTTPublishEvent
+        # Check second call is WeatherUpdateEvent
         second_call = mock_event_bus.emit.call_args_list[1]
-        assert isinstance(second_call[0][0], MQTTPublishEvent)
-        assert second_call[0][0].topic == "weather/current"
+        assert isinstance(second_call[0][0], WeatherUpdateEvent)
+
+        # Check third call is MQTTPublishEvent
+        third_call = mock_event_bus.emit.call_args_list[2]
+        assert isinstance(third_call[0][0], MQTTPublishEvent)
+        assert third_call[0][0].topic == "weather/current"
+
+    @pytest.mark.asyncio
+    async def test_loop_sets_offline_state_on_weather_error(
+        self, mock_service_settings, mock_event_bus
+    ):
+        """Loop should emit offline event on known errors."""
+        from solaredge2mqtt.services.weather.events import WeatherOfflineEvent
+
+        client = WeatherClient(mock_service_settings)
+        client.get_weather = AsyncMock(
+            side_effect=InvalidDataException("boom"))
+
+        with pytest.raises(InvalidDataException):
+            await client.loop(Interval10MinTriggerEvent())
+
+        # Check that WeatherOfflineEvent was emitted
+        emit_calls = mock_event_bus.emit.call_args_list
+        assert any(
+            isinstance(call[0][0], WeatherOfflineEvent)
+            for call in emit_calls
+        )

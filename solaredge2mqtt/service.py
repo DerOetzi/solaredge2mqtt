@@ -11,9 +11,13 @@ from solaredge2mqtt import __version__
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import ConfigurationException
 from solaredge2mqtt.core.influxdb import InfluxDBAsync
-from solaredge2mqtt.core.logging import initialize_logging, logger
+from solaredge2mqtt.core.logging import (
+    initialize_logging,
+    logger,
+)
 from solaredge2mqtt.core.mqtt import MQTTClient
 from solaredge2mqtt.core.settings import service_settings
+from solaredge2mqtt.core.status import ServiceStatusController
 from solaredge2mqtt.core.timer import Timer
 from solaredge2mqtt.services.energy import EnergyService
 from solaredge2mqtt.services.forecast import FORECAST_AVAILABLE, ForecastService
@@ -51,6 +55,8 @@ class Service:
 
         self.timer = Timer(self.settings.interval)
 
+        self.status_controller = ServiceStatusController()
+
         self.mqtt: MQTTClient | None = None
 
         self.cancel_request = asyncio.Event()
@@ -72,13 +78,17 @@ class Service:
         self.powerflow = PowerflowService(self.settings, self.influxdb)
 
         self.monitoring: MonitoringSite | None = (
-            MonitoringSite(self.settings.monitoring, self.influxdb)
+            MonitoringSite(
+                self.settings.monitoring,
+                self.influxdb,
+            )
             if self.settings.monitoring.is_configured
             else None
         )
 
         self.weather: WeatherClient | None = (
-            WeatherClient(self.settings) if self.settings.is_weather_enabled else None
+            WeatherClient(
+                self.settings) if self.settings.is_weather_enabled else None
         )
 
         self.forecast: ForecastService | None = None
@@ -93,7 +103,8 @@ class Service:
                 else None
             )
         elif self.settings.is_forecast_enabled:
-            logger.warning("Forecast service not available, please refer to README")
+            logger.warning(
+                "Forecast service not available, please refer to README")
 
         self.homeassistant: HomeAssistantDiscovery | None = (
             HomeAssistantDiscovery(self.settings)
@@ -146,7 +157,10 @@ class Service:
                 self.mqtt = MQTTClient(self.settings.mqtt)
 
                 async with self.mqtt:
-                    await self.mqtt.publish_status_online()
+                    await self.status_controller.online()
+
+                    if self.influxdb:
+                        await self.influxdb.set_online()
 
                     if self.homeassistant:
                         await self.homeassistant.async_init()
@@ -188,9 +202,10 @@ class Service:
 
         if self.mqtt is not None:
             try:
-                await self.mqtt.publish_status_offline()
+                await self.status_controller.offline()
             except MqttError:
-                logger.debug("Unable to publish offline status during cleanup")
+                logger.warning(
+                    "Unable to publish offline status during cleanup")
             finally:
                 self.mqtt = None
 
@@ -267,4 +282,5 @@ class Service:
                 timeout=5,
             )
         except asyncio.TimeoutError:
-            logger.warning("Timeout while closing tasks, proceeding with shutdown.")
+            logger.warning(
+                "Timeout while closing tasks, proceeding with shutdown.")

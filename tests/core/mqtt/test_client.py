@@ -1,6 +1,8 @@
 """Tests for core MQTTClient module with mocking."""
 
 import asyncio
+from datetime import datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
@@ -23,12 +25,14 @@ class SampleInputModel(BaseInputField):
     value: int
 
 
-class SampleInputEvent(MQTTReceivedEvent[SampleInputModel]): ...  # pragma: no cover
+class SampleInputEvent(MQTTReceivedEvent[SampleInputModel]):
+    ...  # pragma: no cover
 
 
 class SampleSubscribeEvent(
     MQTTSubscribeEvent[SampleInputEvent]
-): ...  # pragma: no cover
+):
+    ...  # pragma: no cover
 
 
 class SamplePayloadModel(BaseModel):
@@ -110,6 +114,52 @@ class TestMQTTClientInit:
         ) as mock_exit:
             await client.__aexit__(None, None, None)
 
+        assert client._is_connected is False
+        mock_exit.assert_called_once_with(None, None, None)
+
+    @pytest.mark.asyncio
+    async def test_context_manager_exit_removes_logging_handler_when_set(
+        self, mqtt_settings, event_bus, mock_aiomqtt_client
+    ):
+        """Test __aexit__ removes logging handler when one is registered."""
+        client = MQTTClient(mqtt_settings)
+        client._is_connected = True
+        client._logging_handler_id = 123
+
+        with (
+            patch("solaredge2mqtt.core.mqtt.logger.remove") as mock_remove,
+            patch(
+                "solaredge2mqtt.core.mqtt.Client.__aexit__",
+                new=AsyncMock(return_value=None),
+            ) as mock_exit,
+        ):
+            await client.__aexit__(None, None, None)
+
+        mock_remove.assert_called_once_with(123)
+        assert client._logging_handler_id is None
+        assert client._is_connected is False
+        mock_exit.assert_called_once_with(None, None, None)
+
+    @pytest.mark.asyncio
+    async def test_context_manager_exit_skips_logging_handler_remove_when_unset(
+        self, mqtt_settings, event_bus, mock_aiomqtt_client
+    ):
+        """Test __aexit__ does not remove logging handler when none is set."""
+        client = MQTTClient(mqtt_settings)
+        client._is_connected = True
+        client._logging_handler_id = None
+
+        with (
+            patch("solaredge2mqtt.core.mqtt.logger.remove") as mock_remove,
+            patch(
+                "solaredge2mqtt.core.mqtt.Client.__aexit__",
+                new=AsyncMock(return_value=None),
+            ) as mock_exit,
+        ):
+            await client.__aexit__(None, None, None)
+
+        mock_remove.assert_not_called()
+        assert client._logging_handler_id is None
         assert client._is_connected is False
         mock_exit.assert_called_once_with(None, None, None)
 
@@ -210,7 +260,8 @@ class TestMQTTClientHandleMessage:
 
         mock_message = MagicMock()
         mock_message.topic = MagicMock()
-        mock_message.topic.__str__ = MagicMock(return_value="homeassistant/status")
+        mock_message.topic.__str__ = MagicMock(
+            return_value="homeassistant/status")
         mock_message.payload = f'"{payload}"'.encode()
 
         await client._handle_message(mock_message)
@@ -257,32 +308,6 @@ class TestMQTTClientHandleMessage:
 
 
 class TestMQTTClientPublish:
-    """Tests for MQTTClient publish methods."""
-
-    @pytest.mark.asyncio
-    async def test_publish_status_online(
-        self, mqtt_settings, event_bus, mock_aiomqtt_client
-    ):
-        """Test publishing online status."""
-        client = MQTTClient(mqtt_settings)
-        client.publish_to = AsyncMock()
-
-        await client.publish_status_online()
-
-        client.publish_to.assert_called_once_with("status", "online", True)
-
-    @pytest.mark.asyncio
-    async def test_publish_status_offline(
-        self, mqtt_settings, event_bus, mock_aiomqtt_client
-    ):
-        """Test publishing offline status."""
-        client = MQTTClient(mqtt_settings)
-        client.publish_to = AsyncMock()
-
-        await client.publish_status_offline()
-
-        client.publish_to.assert_called_once_with("status", "offline", True)
-
     @pytest.mark.asyncio
     async def test_event_listener(self, mqtt_settings, event_bus, mock_aiomqtt_client):
         """Test event listener calls publish_to."""
@@ -306,6 +331,7 @@ class TestMQTTClientPublish:
             1,
             "custom",
             True,
+            False,
         )
 
     @pytest.mark.asyncio
@@ -372,6 +398,25 @@ class TestMQTTClientPublish:
         await client.publish_to("topic", "payload", True, topic_prefix="test")
 
         client.publish.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_publish_to_not_connected_with_suppressed_connection_error(
+        self, mqtt_settings, event_bus, mock_aiomqtt_client
+    ):
+        client = MQTTClient(mqtt_settings)
+        client._is_connected = False
+        client.publish = AsyncMock()
+
+        with patch("solaredge2mqtt.core.mqtt.logger.warning") as mock_warning:
+            await client.publish_to(
+                "topic",
+                "payload",
+                True,
+                suppress_connection_error=True,
+            )
+
+        client.publish.assert_not_called()
+        mock_warning.assert_not_called()
 
 
 class TestMQTTClientListen:
@@ -563,3 +608,82 @@ class TestMQTTClientHandleMessageErrors:
         await client._handle_message(mock_message)
 
         mock_event_bus.emit.assert_not_called()
+
+
+class TestMQTTClientLoggingSink:
+    """Tests for MQTTClient logging sink."""
+
+    @pytest.mark.asyncio
+    async def test_logging_sink_formats_and_publishes_message(
+        self, mqtt_settings, event_bus, mock_aiomqtt_client
+    ):
+        """Logging sink should format and publish log messages."""
+        client = MQTTClient(mqtt_settings)
+        client.publish_to = AsyncMock()
+
+        mock_message = MagicMock()
+        mock_message.record = {
+            "time": datetime.fromisoformat("2024-01-15T10:30:45.123456"),
+            "level": SimpleNamespace(name="INFO"),
+            "message": "Test log message",
+        }
+
+        await client.logging_sink(mock_message)
+
+        client.publish_to.assert_called_once_with(
+            "logging",
+            "2024-01-15T10:30:45.123456 | INFO | Test log message",
+            retain=False,
+            suppress_connection_error=True,
+        )
+
+    @pytest.mark.asyncio
+    async def test_logging_sink_catches_mqtt_error(
+        self, mqtt_settings, event_bus, mock_aiomqtt_client
+    ):
+        """Logging sink should silently catch MqttError exceptions."""
+        client = MQTTClient(mqtt_settings)
+
+        from aiomqtt import MqttError
+
+        client.publish_to = AsyncMock(side_effect=MqttError("Connection lost"))
+
+        mock_message = MagicMock()
+        mock_message.record = {
+            "time": datetime.fromisoformat("2024-01-15T10:30:45.123456"),
+            "level": SimpleNamespace(name="WARNING"),
+            "message": "Test warning",
+        }
+
+        await client.logging_sink(mock_message)
+
+        client.publish_to.assert_called_once()
+
+    def test_log_filter_filters_core_mqtt_logs(
+            self,
+            mqtt_settings,
+            mock_aiomqtt_client
+    ):
+        """Log filter should exclude logs from MQTTClient."""
+        client = MQTTClient(mqtt_settings)
+
+        record = {"name": "solaredge2mqtt.core.mqtt"}
+        assert client.log_filter(record) is False
+
+    def test_log_filter_filters_core_mqtt_submodules_logs(
+            self,
+            mqtt_settings,
+            mock_aiomqtt_client
+    ):
+        """Log filter should exclude logs from MQTTClient."""
+        client = MQTTClient(mqtt_settings)
+
+        record = {"name": "solaredge2mqtt.core.mqtt.Client"}
+        assert client.log_filter(record) is False
+
+    def test_log_filter_allows_other_logs(self, mqtt_settings, mock_aiomqtt_client):
+        """Log filter should allow logs from other modules."""
+        client = MQTTClient(mqtt_settings)
+
+        record = {"name": "solaredge2mqtt.services.weather.WeatherClient"}
+        assert client.log_filter(record) is True

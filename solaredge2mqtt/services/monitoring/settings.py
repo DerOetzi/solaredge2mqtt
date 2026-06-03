@@ -8,6 +8,7 @@ class MonitoringSettings(BaseModel):
     username: str | None = Field(default=None)
     password: SecretStr | None = Field(default=None)
     retain: bool = Field(default=False)
+    debounce_cycles: int = Field(default=2)
 
     @property
     def site_id_secret(self) -> str:

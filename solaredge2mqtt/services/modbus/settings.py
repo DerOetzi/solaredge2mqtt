@@ -90,6 +90,8 @@ class ModbusSettings(ModbusUnitSettings):
 
     retain: bool = Field(default=False)
 
+    debounce_cycles: int = Field(default=2)
+
     @model_validator(mode="before")
     @classmethod
     def model_fill_defaults(cls, values: dict) -> dict:

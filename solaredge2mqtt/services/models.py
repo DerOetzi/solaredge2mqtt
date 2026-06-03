@@ -7,6 +7,7 @@ from solaredge2mqtt.core.models import Solaredge2MQTTBaseModel
 class Component(Solaredge2MQTTBaseModel, ABC):
     COMPONENT: ClassVar[str] = "unknown"
     SOURCE: ClassVar[str | None] = None
+    AVAILABILITY_SERVICE: ClassVar[str | None] = None
 
     @property
     def influxdb_tags(self) -> dict[str, str]:

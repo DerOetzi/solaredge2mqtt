@@ -154,6 +154,22 @@ location:
 # Set to true if you have additional producers
 powerflow:
   external_production: false
+
+# Optional status debounce per service (consecutive checks required before state switch)
+modbus:
+  debounce_cycles: 2
+
+# wallbox:
+#   debounce_cycles: 2
+
+# monitoring:
+#   debounce_cycles: 2
+
+# weather:
+#   debounce_cycles: 2
+
+# influxdb:
+#   debounce_cycles: 2
 ```
 
 ### Basic Modbus configuration
@@ -232,6 +248,15 @@ mqtt:
 # secrets.yml
 mqtt_password: "your_actual_password"
 ```
+
+The service also publishes operational topics below the configured `topic_prefix`:
+
+- `status/<service>` for subservice connection states (`online`/`offline`) such as `modbus`, `wallbox`, `monitoring`, `influxdb`, and `weather_api`
+- `logging` for runtime log messages (MQTT warnings/errors are excluded from MQTT log forwarding)
+
+Use the `debounce_cycles` field within each service's configuration to reduce status flapping by requiring repeated
+online/offline observations before a state change is published.
+
 ### Retain Configuration
 
 By default, MQTT messages are not retained. You can configure the retain flag for each message type:

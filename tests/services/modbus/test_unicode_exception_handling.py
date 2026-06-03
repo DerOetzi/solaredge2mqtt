@@ -33,6 +33,7 @@ def mock_service_settings():
     mock_unit_settings.battery = [True, False]
 
     settings.modbus.units = {"leader": mock_unit_settings}
+    settings.modbus.debounce_cycles = 0
 
     return settings
 

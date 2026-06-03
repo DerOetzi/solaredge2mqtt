@@ -51,6 +51,7 @@ class HomeAssistantBaseModel(BaseModel):
 class HomeAssistantDevice(HomeAssistantBaseModel):
     name: str
     state_topic: str = Field(exclude=True)
+    availability_topic: str | None = Field(default=None, exclude=True)
     manufacturer: str | None = Field(default=None)
     model: str | None = Field(default=None)
     hw_version: str | None = Field(default=None)
@@ -289,6 +290,11 @@ class HomeAssistantEntity(HomeAssistantBaseModel):
     @property
     def state_topic(self) -> str:
         return self.device.state_topic
+
+    @computed_field
+    @property
+    def availability_topic(self) -> str | None:
+        return self.device.availability_topic
 
     @computed_field
     @property

@@ -14,7 +14,11 @@ from influxdb_client.domain.bucket_retention_rules import BucketRetentionRules
 from tzlocal import get_localzone_name
 
 from solaredge2mqtt.core.events import EventBus
-from solaredge2mqtt.core.influxdb.events import InfluxDBAggregatedEvent
+from solaredge2mqtt.core.influxdb.events import (
+    InfluxDBAggregatedEvent,
+    InfluxDBOfflineEvent,
+    InfluxDBOnlineEvent,
+)
 from solaredge2mqtt.core.influxdb.settings import InfluxDBSettings
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.timer.events import Interval10MinTriggerEvent
@@ -53,6 +57,9 @@ class InfluxDBAsync:
 
         self.initialize_buckets()
 
+    async def set_online(self) -> None:
+        await EventBus.emit(InfluxDBOnlineEvent(self.settings.debounce_cycles))
+
     def initialize_buckets(self) -> None:
         bucket = self.buckets_api.find_bucket_by_name(self.bucket_name)
         retention_rules = BucketRetentionRules(
@@ -80,14 +87,14 @@ class InfluxDBAsync:
 
     @EventBus.subscribe(Interval10MinTriggerEvent)
     async def loop(self, event: Interval10MinTriggerEvent) -> None:
-        now = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0)
+        now = datetime.now(tz=timezone.utc).replace(
+            minute=0, second=0, microsecond=0)
 
         logger.info("Aggregate powerflow and energy raw data")
-        aggregate_query = self._get_flux_query(
+        await self.query(
             "aggregate",
             {"PRICE_IN": self.prices.price_in, "PRICE_OUT": self.prices.price_out},
         )
-        await self.query_api.query(aggregate_query)
 
         logger.info("Apply retention on raw data")
         retention_time = now - timedelta(hours=self.settings.retention_raw)
@@ -134,15 +141,21 @@ class InfluxDBAsync:
         if self.client_async is None:
             raise RuntimeError("InfluxDB client not initialized")
 
-        await self.client_async.write_api().write(
-            bucket=self.bucket_name, record=points
-        )
+        try:
+            await self.client_async.write_api().write(
+                bucket=self.bucket_name, record=points
+            )
+            await EventBus.emit(InfluxDBOnlineEvent())
+        except Exception:
+            await EventBus.emit(InfluxDBOfflineEvent())
+            raise
 
     async def query_timeunit(
         self, period: HistoricPeriod, measurement: str
     ) -> list[dict[str, Any]] | None:
         results = await self.query(
-            period.query.query, {"UNIT": period.unit, "MEASUREMENT": measurement}
+            period.query.query, {"UNIT": period.unit,
+                                 "MEASUREMENT": measurement}
         )
 
         return results if len(results) > 0 else None
@@ -156,21 +169,31 @@ class InfluxDBAsync:
     async def query(
         self, query_name: str, additional_replacements: dict[str, Any] | None = None
     ) -> list[dict[str, Any]]:
-
-        tables = await self.query_api.query(
-            self._get_flux_query(query_name, additional_replacements)
-        )
-        return [record.values for table in tables for record in table.records]
+        try:
+            tables = await self.query_api.query(
+                self._get_flux_query(query_name, additional_replacements)
+            )
+            await EventBus.emit(InfluxDBOnlineEvent())
+            return [record.values for table in tables for record in table.records]
+        except Exception:
+            await EventBus.emit(InfluxDBOfflineEvent())
+            raise
 
     async def query_dataframe(
         self, query_name: str, additional_replacements: dict[str, Any] | None = None
     ) -> DataFrame:
-        return cast(
-            "DataFrame",
-            await self.query_api.query_data_frame(
-                self._get_flux_query(query_name, additional_replacements)
-            ),
-        )
+        try:
+            result = cast(
+                "DataFrame",
+                await self.query_api.query_data_frame(
+                    self._get_flux_query(query_name, additional_replacements)
+                ),
+            )
+            await EventBus.emit(InfluxDBOnlineEvent())
+            return result
+        except Exception:
+            await EventBus.emit(InfluxDBOfflineEvent())
+            raise
 
     def _get_flux_query(
         self, query_name: str, additional_replacements: dict[str, Any] | None = None
@@ -201,6 +224,7 @@ class InfluxDBAsync:
         return query
 
     async def close(self) -> None:
+        await EventBus.emit(InfluxDBOfflineEvent())
         if self.client_async:
             await self.client_async.close()
             self.client_async = None

@@ -21,6 +21,7 @@ from solaredge2mqtt.services.homeassistant.service import (
     HomeAssistantDiscovery,
 )
 from solaredge2mqtt.services.modbus.events import ModbusUnitsReadEvent
+from solaredge2mqtt.services.models import Component
 from solaredge2mqtt.services.powerflow.events import PowerflowGeneratedEvent
 from solaredge2mqtt.services.wallbox.events import WallboxReadEvent
 
@@ -86,7 +87,8 @@ class TestHomeAssistantDiscoveryEventSubscriptions:
 
         for method_name, expected_events in expected_subscriptions.items():
             method = getattr(HomeAssistantDiscovery, method_name)
-            subscribed_events = set(getattr(method, "_event_subscriptions", []))
+            subscribed_events = set(
+                getattr(method, "_event_subscriptions", []))
             assert subscribed_events == expected_events
 
 
@@ -148,7 +150,8 @@ class TestHomeAssistantDiscoveryPropertyParser:
             "icon": "mdi:lightning-bolt",
         }
 
-        result = HomeAssistantDiscovery.property_parser(prop, "Power", ["power"])
+        result = HomeAssistantDiscovery.property_parser(
+            prop, "Power", ["power"])
 
         assert result is not None
         assert result["name"] == "Power"
@@ -164,7 +167,8 @@ class TestHomeAssistantDiscoveryPropertyParser:
             "icon": "mdi:power",
         }
 
-        result = HomeAssistantDiscovery.property_parser(prop, "Enabled", ["enabled"])
+        result = HomeAssistantDiscovery.property_parser(
+            prop, "Enabled", ["enabled"])
 
         assert result is not None
         assert isinstance(result["ha_type"], HomeAssistantBinarySensorType)
@@ -177,7 +181,8 @@ class TestHomeAssistantDiscoveryPropertyParser:
             "icon": "mdi:gauge",
         }
 
-        result = HomeAssistantDiscovery.property_parser(prop, "Limit", ["limit"])
+        result = HomeAssistantDiscovery.property_parser(
+            prop, "Limit", ["limit"])
 
         assert result is not None
         assert isinstance(result["ha_type"], HomeAssistantNumberType)
@@ -387,7 +392,7 @@ class TestHomeAssistantDiscoveryStatus:
         discovery = HomeAssistantDiscovery(mock_service_settings)
 
         mock_input = MagicMock(spec=HomeAssistantStatusInput)
-        mock_input.status = None
+        mock_input.status = HomeAssistantStatus.OFFLINE
 
         event = HomeAssistantStatusEvent("homeassistant/status", mock_input)
 
@@ -425,6 +430,32 @@ class TestHomeAssistantDiscoveryPublishComponent:
 
         # Should emit publish events
         assert mock_event_bus.emit.call_count > 0
+
+    def test_availability_topic_with_component_with_service(
+        self, mock_service_settings
+    ):
+        """Test availability_topic for component with availability service."""
+        discovery = HomeAssistantDiscovery(mock_service_settings)
+
+        component = MagicMock(spec=Component)
+        component.AVAILABILITY_SERVICE = "test"
+
+        topic = discovery.availability_topic(component)
+
+        assert topic == "solaredge/status/test"
+
+    def test_availability_topic_with_component_without_service(
+        self, mock_service_settings
+    ):
+        """Test availability_topic for component without availability service."""
+        discovery = HomeAssistantDiscovery(mock_service_settings)
+
+        component = MagicMock(spec=Component)
+        component.AVAILABILITY_SERVICE = None
+
+        topic = discovery.availability_topic(component)
+
+        assert topic == "solaredge/status"
 
     @pytest.mark.asyncio
     async def test_publish_component_with_modbus_inverter(
@@ -552,7 +583,8 @@ class TestHomeAssistantPropertyParserAdditionalFields:
             "mode": "slider",
         }
 
-        result = HomeAssistantDiscovery.property_parser(prop, "Limit", ["limit"])
+        result = HomeAssistantDiscovery.property_parser(
+            prop, "Limit", ["limit"])
 
         assert result is not None
         assert isinstance(result["ha_type"], HomeAssistantNumberType)
@@ -578,7 +610,8 @@ class TestHomeAssistantPropertyParserAdditionalFields:
             "solaredge2mqtt.services.homeassistant.service.HomeAssistantType.from_string",
             return_value=FakeTyped(),
         ):
-            result = HomeAssistantDiscovery.property_parser(prop, "Custom", ["custom"])
+            result = HomeAssistantDiscovery.property_parser(
+                prop, "Custom", ["custom"])
 
         assert result is not None
         assert result["custom"] == "value"
