@@ -405,6 +405,17 @@ forecast:
 
 > **Note**: Forecast service is not available for `arm/v7` architectures due to dependency compatibility issues.
 
+**Tip**:
+
+Want to use SolarEdge2MQTT forecasts in the Home Assistant Energy Dashboard?
+
+Install the companion integration:
+
+SolarEdge2MQTT Forecast
+https://github.com/DerOetzi/solaredge2mqtt_forecast
+
+It consumes forecast data published by SolarEdge2MQTT via MQTT and makes it available as a solar forecast provider in Home Assistant.
+
 ## Running the service
 
 Each method provides different levels of control and isolation, suitable for various use cases from development to production deployment.
