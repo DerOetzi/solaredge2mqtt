@@ -55,8 +55,7 @@ class WallboxAPI(Component):
 
     power: int = Field(**HASensor.POWER_W.field("Power"))
     state: str = Field(title="State")
-    vehicle_plugged: bool = Field(
-        **HABinarySensor.PLUG.field("Vehicle plugged"))
+    vehicle_plugged: bool = Field(**HABinarySensor.PLUG.field("Vehicle plugged"))
     max_current: float = Field(**HASensor.CURRENT_A.field("Max current"))
 
     @classmethod

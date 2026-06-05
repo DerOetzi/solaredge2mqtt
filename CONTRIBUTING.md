@@ -45,7 +45,7 @@ To enable the hook locally, run:
 ./scripts/setup-git-hooks.sh
 ```
 
-The script configures Git to use `.githooks/` and installs the local Node dependency required for `npx pyright`.
+The script configures Git to use `.githooks/` and installs the local Node dependency required for `pyright`.
 
 ---
 

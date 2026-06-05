@@ -124,10 +124,7 @@ class TestWallboxClientAsyncInit:
 
         # Check that WallboxOfflineEvent was emitted
         emit_calls = mock_event_bus.emit.call_args_list
-        assert any(
-            isinstance(call[0][0], WallboxOfflineEvent)
-            for call in emit_calls
-        )
+        assert any(isinstance(call[0][0], WallboxOfflineEvent) for call in emit_calls)
         mock_close.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -368,6 +365,7 @@ class TestWallboxClientGetData:
             assert mock_event_bus.emit.call_count >= 1
             first_call_arg = mock_event_bus.emit.call_args_list[0][0][0]
             from solaredge2mqtt.services.wallbox.events import WallboxReadEvent
+
             assert isinstance(first_call_arg, WallboxReadEvent)
 
     @pytest.mark.asyncio

@@ -6,7 +6,11 @@ repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
 git config core.hooksPath .githooks
-npm install
+
+echo "Check ruff"
+ruff check
+
+echo "Check pyright"
+pyright
 
 echo "Git hooks configured to use .githooks"
-echo "Node dependencies installed"

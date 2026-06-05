@@ -25,14 +25,12 @@ class SampleInputModel(BaseInputField):
     value: int
 
 
-class SampleInputEvent(MQTTReceivedEvent[SampleInputModel]):
-    ...  # pragma: no cover
+class SampleInputEvent(MQTTReceivedEvent[SampleInputModel]): ...  # pragma: no cover
 
 
 class SampleSubscribeEvent(
     MQTTSubscribeEvent[SampleInputEvent]
-):
-    ...  # pragma: no cover
+): ...  # pragma: no cover
 
 
 class SamplePayloadModel(BaseModel):
@@ -260,8 +258,7 @@ class TestMQTTClientHandleMessage:
 
         mock_message = MagicMock()
         mock_message.topic = MagicMock()
-        mock_message.topic.__str__ = MagicMock(
-            return_value="homeassistant/status")
+        mock_message.topic.__str__ = MagicMock(return_value="homeassistant/status")
         mock_message.payload = f'"{payload}"'.encode()
 
         await client._handle_message(mock_message)
@@ -660,9 +657,7 @@ class TestMQTTClientLoggingSink:
         client.publish_to.assert_called_once()
 
     def test_log_filter_filters_core_mqtt_logs(
-            self,
-            mqtt_settings,
-            mock_aiomqtt_client
+        self, mqtt_settings, mock_aiomqtt_client
     ):
         """Log filter should exclude logs from MQTTClient."""
         client = MQTTClient(mqtt_settings)
@@ -671,9 +666,7 @@ class TestMQTTClientLoggingSink:
         assert client.log_filter(record) is False
 
     def test_log_filter_filters_core_mqtt_submodules_logs(
-            self,
-            mqtt_settings,
-            mock_aiomqtt_client
+        self, mqtt_settings, mock_aiomqtt_client
     ):
         """Log filter should exclude logs from MQTTClient."""
         client = MQTTClient(mqtt_settings)

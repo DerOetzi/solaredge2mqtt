@@ -2,8 +2,7 @@ from solaredge2mqtt.core.events.events import BaseEvent
 from solaredge2mqtt.core.status.events import ServiceOfflineEvent, ServiceOnlineEvent
 
 
-class InfluxDBAggregatedEvent(BaseEvent):
-    ...  # pragma: no cover
+class InfluxDBAggregatedEvent(BaseEvent): ...  # pragma: no cover
 
 
 class InfluxDBOnlineEvent(ServiceOnlineEvent):

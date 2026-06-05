@@ -18,11 +18,6 @@ if [[ -z "$python_cmd" ]] || ! "$python_cmd" -m ruff --version >/dev/null 2>&1; 
     exit 1
 fi
 
-if ! command -v npx >/dev/null 2>&1; then
-    echo "npx is required for this hook. Install Node.js first." >&2
-    exit 1
-fi
-
 mapfile -d '' staged_python_files < <(
     git diff --cached --name-only --diff-filter=ACMR -z -- '*.py'
 )
@@ -30,14 +25,17 @@ mapfile -d '' staged_python_files < <(
 if ((${#staged_python_files[@]} > 0)); then
     echo "Running ruff check --fix on staged Python files..."
     "$python_cmd" -m ruff check --fix "${staged_python_files[@]}"
+    echo "Running ruff format on staged Python files..."
+    "$python_cmd" -m ruff format "${staged_python_files[@]}"
+    echo "Adding modified files back to staging area..."
     git add -- "${staged_python_files[@]}"
 else
     echo "No staged Python files to lint with ruff."
 fi
 
 if ((${#staged_python_files[@]} > 0)); then
-    echo "Running npx pyright on staged Python files..."
-    npx pyright "${staged_python_files[@]}"
+    echo "Running pyright on staged Python files..."
+    "$python_cmd" -m pyright "${staged_python_files[@]}"
 else
     echo "No staged Python files to type check with pyright."
 fi

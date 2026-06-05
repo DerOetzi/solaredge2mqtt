@@ -40,5 +40,3 @@ class TestLoggingInit:
         pymodbus_logger.setLevel.assert_called_once()
         assert pymodbus_logger.propagate is False
         pymodbus_logger.handlers.clear.assert_called_once()
-
-

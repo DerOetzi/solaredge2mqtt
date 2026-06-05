@@ -177,11 +177,7 @@ class TestInfluxDBAsyncInitialize:
 
     @pytest.mark.asyncio
     async def test_set_online_sets_online_state(
-            self,
-            influxdb_settings,
-            price_settings,
-            mock_event_bus,
-            mock_influxdb_client
+        self, influxdb_settings, price_settings, mock_event_bus, mock_influxdb_client
     ):
         """Test set_online method emits event."""
         from solaredge2mqtt.core.influxdb.events import InfluxDBOnlineEvent
@@ -192,10 +188,7 @@ class TestInfluxDBAsyncInitialize:
 
         # Check that InfluxDBOnlineEvent was emitted
         emit_calls = mock_event_bus.emit.call_args_list
-        assert any(
-            isinstance(call[0][0], InfluxDBOnlineEvent)
-            for call in emit_calls
-        )
+        assert any(isinstance(call[0][0], InfluxDBOnlineEvent) for call in emit_calls)
 
 
 class TestInfluxDBAsyncWrite:
@@ -235,8 +228,7 @@ class TestInfluxDBAsyncWrite:
         influxdb = InfluxDBAsync(influxdb_settings, price_settings)
         influxdb.client_async = mock_async
 
-        mock_points: list[Point] = [
-            MagicMock(spec=Point), MagicMock(spec=Point)]
+        mock_points: list[Point] = [MagicMock(spec=Point), MagicMock(spec=Point)]
         await influxdb.write_points(mock_points)
 
         mock_write_api.write.assert_called_once_with(
@@ -375,8 +367,7 @@ class TestInfluxDBAsyncQuery:
         _, mock_async = mock_influxdb_client
 
         mock_query_api = MagicMock()
-        mock_query_api.query_data_frame = AsyncMock(
-            side_effect=RuntimeError("Boom"))
+        mock_query_api.query_data_frame = AsyncMock(side_effect=RuntimeError("Boom"))
         mock_async.query_api = MagicMock(return_value=mock_query_api)
 
         influxdb = InfluxDBAsync(influxdb_settings, price_settings)
@@ -507,8 +498,7 @@ class TestInfluxDBAsyncLoop:
 
         # Should have emitted aggregated event (plus state change events)
         mock_event_bus.emit.assert_called()
-        emitted_types = [type(c[0][0])
-                         for c in mock_event_bus.emit.call_args_list]
+        emitted_types = [type(c[0][0]) for c in mock_event_bus.emit.call_args_list]
         assert InfluxDBAggregatedEvent in emitted_types
 
 

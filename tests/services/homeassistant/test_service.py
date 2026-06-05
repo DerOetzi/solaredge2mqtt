@@ -87,8 +87,7 @@ class TestHomeAssistantDiscoveryEventSubscriptions:
 
         for method_name, expected_events in expected_subscriptions.items():
             method = getattr(HomeAssistantDiscovery, method_name)
-            subscribed_events = set(
-                getattr(method, "_event_subscriptions", []))
+            subscribed_events = set(getattr(method, "_event_subscriptions", []))
             assert subscribed_events == expected_events
 
 
@@ -150,8 +149,7 @@ class TestHomeAssistantDiscoveryPropertyParser:
             "icon": "mdi:lightning-bolt",
         }
 
-        result = HomeAssistantDiscovery.property_parser(
-            prop, "Power", ["power"])
+        result = HomeAssistantDiscovery.property_parser(prop, "Power", ["power"])
 
         assert result is not None
         assert result["name"] == "Power"
@@ -167,8 +165,7 @@ class TestHomeAssistantDiscoveryPropertyParser:
             "icon": "mdi:power",
         }
 
-        result = HomeAssistantDiscovery.property_parser(
-            prop, "Enabled", ["enabled"])
+        result = HomeAssistantDiscovery.property_parser(prop, "Enabled", ["enabled"])
 
         assert result is not None
         assert isinstance(result["ha_type"], HomeAssistantBinarySensorType)
@@ -181,8 +178,7 @@ class TestHomeAssistantDiscoveryPropertyParser:
             "icon": "mdi:gauge",
         }
 
-        result = HomeAssistantDiscovery.property_parser(
-            prop, "Limit", ["limit"])
+        result = HomeAssistantDiscovery.property_parser(prop, "Limit", ["limit"])
 
         assert result is not None
         assert isinstance(result["ha_type"], HomeAssistantNumberType)
@@ -583,8 +579,7 @@ class TestHomeAssistantPropertyParserAdditionalFields:
             "mode": "slider",
         }
 
-        result = HomeAssistantDiscovery.property_parser(
-            prop, "Limit", ["limit"])
+        result = HomeAssistantDiscovery.property_parser(prop, "Limit", ["limit"])
 
         assert result is not None
         assert isinstance(result["ha_type"], HomeAssistantNumberType)
@@ -610,8 +605,7 @@ class TestHomeAssistantPropertyParserAdditionalFields:
             "solaredge2mqtt.services.homeassistant.service.HomeAssistantType.from_string",
             return_value=FakeTyped(),
         ):
-            result = HomeAssistantDiscovery.property_parser(
-                prop, "Custom", ["custom"])
+            result = HomeAssistantDiscovery.property_parser(prop, "Custom", ["custom"])
 
         assert result is not None
         assert result["custom"] == "value"

@@ -261,7 +261,7 @@ class TestMonitoringSiteGetData:
     ):
         """get_data should emit monitoring offline event on data errors."""
         from solaredge2mqtt.services.monitoring.events import MonitoringOfflineEvent
-        
+
         site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
         site.get_modules_energy = AsyncMock(
             side_effect=InvalidDataException("unable to read")
@@ -273,8 +273,7 @@ class TestMonitoringSiteGetData:
         # Check that MonitoringOfflineEvent was emitted
         emit_calls = mock_event_bus.emit.call_args_list
         assert any(
-            isinstance(call[0][0], MonitoringOfflineEvent)
-            for call in emit_calls
+            isinstance(call[0][0], MonitoringOfflineEvent) for call in emit_calls
         )
 
 

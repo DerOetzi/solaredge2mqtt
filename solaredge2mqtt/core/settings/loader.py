@@ -69,7 +69,8 @@ class ConfigurationLoader:
             )
 
         if path.exists(secrets_file):
-            SecretLoader.secrets = ConfigurationLoader._load_yaml_file(secrets_file)
+            SecretLoader.secrets = ConfigurationLoader._load_yaml_file(
+                secrets_file)
             logger.info(f"Loaded secrets from {secrets_file}")
 
         config_data = ConfigurationLoader._load_yaml_file(
@@ -78,7 +79,8 @@ class ConfigurationLoader:
         logger.info(f"Loaded configuration from {config_file}")
 
         if override_data:
-            config_data = ConfigurationLoader._deep_merge(config_data, override_data)
+            config_data = ConfigurationLoader._deep_merge(
+                config_data, override_data)
 
         return ServiceSettings(**config_data)
 
@@ -206,7 +208,8 @@ class ConfigurationLoader:
                 and isinstance(result[key], dict)
                 and isinstance(value, dict)
             ):
-                result[key] = ConfigurationLoader._deep_merge(result[key], value)
+                result[key] = ConfigurationLoader._deep_merge(
+                    result[key], value)
             else:
                 result[key] = value
         return result

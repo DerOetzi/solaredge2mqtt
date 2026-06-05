@@ -144,7 +144,6 @@ docker compose up -d
 - Maximum line length: 88 characters.
 - Fix or prevent any line-too-long issues (E501) by keeping lines at or below 88 characters.
 - Use type hints for function signatures.
-- Ensure SonarQube code quality standards are met.
 
 ## Examples
 
