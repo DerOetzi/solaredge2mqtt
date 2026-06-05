@@ -40,8 +40,7 @@ def _build_settings(
     return SimpleNamespace(
         logging_level="INFO",
         interval=5,
-        influxdb=SimpleNamespace(
-            is_configured=influx_configured, debounce_cycles=0),
+        influxdb=SimpleNamespace(is_configured=influx_configured, debounce_cycles=0),
         prices=SimpleNamespace(),
         energy=SimpleNamespace(),
         monitoring=SimpleNamespace(is_configured=monitoring_configured),
@@ -80,8 +79,7 @@ class TestRunWrapper:
             raise ConfigurationException("service", "invalid")
 
         with (
-            patch("solaredge2mqtt.service.asyncio.run",
-                  side_effect=fake_asyncio_run),
+            patch("solaredge2mqtt.service.asyncio.run", side_effect=fake_asyncio_run),
             patch("solaredge2mqtt.service.logger") as mock_logger,
         ):
             run("config")
@@ -96,8 +94,7 @@ class TestRunWrapper:
             raise asyncio.CancelledError
 
         with (
-            patch("solaredge2mqtt.service.asyncio.run",
-                  side_effect=fake_asyncio_run),
+            patch("solaredge2mqtt.service.asyncio.run", side_effect=fake_asyncio_run),
             patch("solaredge2mqtt.service.logger") as mock_logger,
         ):
             run("config")
@@ -112,8 +109,7 @@ class TestRunWrapper:
             raise KeyboardInterrupt
 
         with (
-            patch("solaredge2mqtt.service.asyncio.run",
-                  side_effect=fake_asyncio_run),
+            patch("solaredge2mqtt.service.asyncio.run", side_effect=fake_asyncio_run),
             patch("solaredge2mqtt.service.logger") as mock_logger,
         ):
             run("config")
@@ -151,8 +147,7 @@ class TestServiceInitialization:
         influx = MagicMock()
 
         with (
-            patch("solaredge2mqtt.service.service_settings",
-                  return_value=settings),
+            patch("solaredge2mqtt.service.service_settings", return_value=settings),
             patch("solaredge2mqtt.service.initialize_logging") as init_logging,
             patch("solaredge2mqtt.service.Timer") as timer_cls,
             patch(
@@ -195,8 +190,7 @@ class TestServiceInitialization:
         )
 
         with (
-            patch("solaredge2mqtt.service.service_settings",
-                  return_value=settings),
+            patch("solaredge2mqtt.service.service_settings", return_value=settings),
             patch("solaredge2mqtt.service.initialize_logging"),
             patch("solaredge2mqtt.service.Timer"),
             patch("solaredge2mqtt.service.PowerflowService"),
@@ -226,8 +220,7 @@ class TestServiceInitialization:
         )
 
         with (
-            patch("solaredge2mqtt.service.service_settings",
-                  return_value=settings),
+            patch("solaredge2mqtt.service.service_settings", return_value=settings),
             patch("solaredge2mqtt.service.initialize_logging"),
             patch("solaredge2mqtt.service.Timer"),
             patch("solaredge2mqtt.service.PowerflowService"),
@@ -370,8 +363,7 @@ class TestServiceLooping:
         service = _build_service()
         service.mqtt = MagicMock()
         service.mqtt.listen = AsyncMock(side_effect=asyncio.CancelledError)
-        service.mqtt.process_queue = AsyncMock(
-            side_effect=asyncio.CancelledError)
+        service.mqtt.process_queue = AsyncMock(side_effect=asyncio.CancelledError)
 
         service._start_mqtt_listener()
 
@@ -466,8 +458,9 @@ class TestServiceMainLoop:
         service = _build_service()
         service.settings = cast(
             Any,
-            SimpleNamespace(mqtt=SimpleNamespace(
-                logging_level=SimpleNamespace(level=40))),
+            SimpleNamespace(
+                mqtt=SimpleNamespace(logging_level=SimpleNamespace(level=40))
+            ),
         )
         service.homeassistant = MagicMock()
         service.homeassistant.async_init = AsyncMock()
@@ -491,8 +484,7 @@ class TestServiceMainLoop:
             return None
 
         with (
-            patch("solaredge2mqtt.service.MQTTClient",
-                  return_value=mqtt_client),
+            patch("solaredge2mqtt.service.MQTTClient", return_value=mqtt_client),
             patch(
                 "solaredge2mqtt.service.asyncio.gather", side_effect=gather_side_effect
             ),
@@ -511,8 +503,9 @@ class TestServiceMainLoop:
         service = _build_service()
         service.settings = cast(
             Any,
-            SimpleNamespace(mqtt=SimpleNamespace(
-                logging_level=SimpleNamespace(level=40))),
+            SimpleNamespace(
+                mqtt=SimpleNamespace(logging_level=SimpleNamespace(level=40))
+            ),
         )
         service.influxdb = None
         service.homeassistant = None
@@ -535,8 +528,7 @@ class TestServiceMainLoop:
             return None
 
         with (
-            patch("solaredge2mqtt.service.MQTTClient",
-                  return_value=mqtt_client),
+            patch("solaredge2mqtt.service.MQTTClient", return_value=mqtt_client),
             patch(
                 "solaredge2mqtt.service.asyncio.gather", side_effect=gather_side_effect
             ),
@@ -551,8 +543,9 @@ class TestServiceMainLoop:
         service = _build_service()
         service.settings = cast(
             Any,
-            SimpleNamespace(mqtt=SimpleNamespace(
-                logging_level=SimpleNamespace(level=40))),
+            SimpleNamespace(
+                mqtt=SimpleNamespace(logging_level=SimpleNamespace(level=40))
+            ),
         )
         service.influxdb = None
         service.homeassistant = None
@@ -570,8 +563,7 @@ class TestServiceMainLoop:
             service.cancel_request.set()
 
         with (
-            patch("solaredge2mqtt.service.MQTTClient",
-                  side_effect=mqtt_side_effect),
+            patch("solaredge2mqtt.service.MQTTClient", side_effect=mqtt_side_effect),
             patch("solaredge2mqtt.service.MqttError", Exception),
             patch(
                 "solaredge2mqtt.service.asyncio.sleep", side_effect=sleep_side_effect
@@ -591,8 +583,9 @@ class TestServiceMainLoop:
         service = _build_service()
         service.settings = cast(
             Any,
-            SimpleNamespace(mqtt=SimpleNamespace(
-                logging_level=SimpleNamespace(level=40))),
+            SimpleNamespace(
+                mqtt=SimpleNamespace(logging_level=SimpleNamespace(level=40))
+            ),
         )
         service.influxdb = None
         service.homeassistant = None
@@ -607,8 +600,7 @@ class TestServiceMainLoop:
             raise RuntimeError("stop now")
 
         with (
-            patch("solaredge2mqtt.service.MQTTClient",
-                  side_effect=mqtt_side_effect),
+            patch("solaredge2mqtt.service.MQTTClient", side_effect=mqtt_side_effect),
             patch("solaredge2mqtt.service.MqttError", Exception),
             patch("solaredge2mqtt.service.logger") as mock_logger,
         ):
@@ -623,8 +615,9 @@ class TestServiceMainLoop:
         service = _build_service()
         service.settings = cast(
             Any,
-            SimpleNamespace(mqtt=SimpleNamespace(
-                logging_level=SimpleNamespace(level=40))),
+            SimpleNamespace(
+                mqtt=SimpleNamespace(logging_level=SimpleNamespace(level=40))
+            ),
         )
         service.influxdb = None
         service.homeassistant = None
@@ -642,8 +635,7 @@ class TestServiceMainLoop:
         mqtt_client.__aexit__ = AsyncMock(return_value=None)
 
         with (
-            patch("solaredge2mqtt.service.MQTTClient",
-                  return_value=mqtt_client),
+            patch("solaredge2mqtt.service.MQTTClient", return_value=mqtt_client),
             patch(
                 "solaredge2mqtt.service.asyncio.gather",
                 side_effect=asyncio.CancelledError,
@@ -662,8 +654,9 @@ class TestServiceMainLoop:
         service = _build_service()
         service.settings = cast(
             Any,
-            SimpleNamespace(mqtt=SimpleNamespace(
-                logging_level=SimpleNamespace(level=40))),
+            SimpleNamespace(
+                mqtt=SimpleNamespace(logging_level=SimpleNamespace(level=40))
+            ),
         )
         service.homeassistant = None
         service.powerflow = MagicMock()
@@ -691,8 +684,7 @@ class TestServiceMainLoop:
             return None
 
         with (
-            patch("solaredge2mqtt.service.MQTTClient",
-                  return_value=mqtt_client),
+            patch("solaredge2mqtt.service.MQTTClient", return_value=mqtt_client),
             patch(
                 "solaredge2mqtt.service.asyncio.gather", side_effect=gather_side_effect
             ),
@@ -710,8 +702,9 @@ class TestServiceMainLoop:
         service = _build_service()
         service.settings = cast(
             Any,
-            SimpleNamespace(mqtt=SimpleNamespace(
-                logging_level=SimpleNamespace(level=40))),
+            SimpleNamespace(
+                mqtt=SimpleNamespace(logging_level=SimpleNamespace(level=40))
+            ),
         )
         service.influxdb = None
         service.homeassistant = None
@@ -735,8 +728,7 @@ class TestServiceMainLoop:
             return None
 
         with (
-            patch("solaredge2mqtt.service.MQTTClient",
-                  return_value=mqtt_client),
+            patch("solaredge2mqtt.service.MQTTClient", return_value=mqtt_client),
             patch(
                 "solaredge2mqtt.service.asyncio.gather", side_effect=gather_side_effect
             ),

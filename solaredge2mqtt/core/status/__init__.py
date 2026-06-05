@@ -18,12 +18,7 @@ class ServiceStatusController:
 
     async def online(self):
         await EventBus.emit(
-            MQTTPublishEvent(
-                "status",
-                "online",
-                True,
-                suppress_connection_error=True
-            )
+            MQTTPublishEvent("status", "online", True, suppress_connection_error=True)
         )
 
         for service_name, is_online in self._status.items():
@@ -31,12 +26,7 @@ class ServiceStatusController:
 
     async def offline(self):
         await EventBus.emit(
-            MQTTPublishEvent(
-                "status",
-                "offline",
-                True,
-                suppress_connection_error=True
-            )
+            MQTTPublishEvent("status", "offline", True, suppress_connection_error=True)
         )
 
         for service_name in self._status.keys():
@@ -53,7 +43,8 @@ class ServiceStatusController:
 
         if service_name not in self._configurations:
             logger.warning(
-                f"Received status update for unconfigured service: {service_name}")
+                f"Received status update for unconfigured service: {service_name}"
+            )
             return
 
         await self._update_service_status(service_name, True)
@@ -74,8 +65,7 @@ class ServiceStatusController:
             return
 
         if current_status != is_online:
-            pending_status = self._pending_status_changes.get(
-                service_name, None)
+            pending_status = self._pending_status_changes.get(service_name, None)
             if pending_status is None:
                 self._pending_status_changes[service_name] = is_online
                 self._debounce_counters[service_name] = 1
@@ -97,7 +87,7 @@ class ServiceStatusController:
                 f"status/{service_name}",
                 "online" if is_online else "offline",
                 False,
-                suppress_connection_error=True
+                suppress_connection_error=True,
             )
         )
 

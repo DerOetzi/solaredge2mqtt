@@ -19,7 +19,5 @@ def _disable_pymodbus_stdout_logging() -> None:
 
 def initialize_logging(logging_level: LoggingLevelEnum) -> None:
     _disable_pymodbus_stdout_logging()
-    handlers: list[HandlerConfig] = [
-        {"sink": sys.stdout, "level": logging_level.level}
-    ]
+    handlers: list[HandlerConfig] = [{"sink": sys.stdout, "level": logging_level.level}]
     logger.configure(handlers=handlers)

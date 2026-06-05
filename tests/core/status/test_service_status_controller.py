@@ -1,4 +1,5 @@
 """Tests for ServiceStatusController."""
+
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -207,7 +208,6 @@ class TestServiceStatusControllerHandleOnline:
             )
 
 
-
 class TestServiceStatusControllerHandleOffline:
     """Tests for the handle_offline() method."""
 
@@ -351,8 +351,7 @@ class TestServiceStatusControllerDebouncing:
             # Counter and pending changes should be reset
             assert controller._status["test_service"] is True
             # Pending status should be cleared since current status matches
-            assert controller._pending_status_changes.get(
-                "test_service") is None
+            assert controller._pending_status_changes.get("test_service") is None
 
 
 class TestServiceStatusControllerPublishServiceStatus:
@@ -404,8 +403,7 @@ class TestServiceStatusControllerPublishServiceStatus:
 
             # Debounce should be reset
             assert controller._debounce_counters["test_service"] == 0
-            assert controller._pending_status_changes.get(
-                "test_service") is None
+            assert controller._pending_status_changes.get("test_service") is None
 
 
 class TestServiceStatusControllerIntegration:

@@ -162,7 +162,7 @@ class TestSunSpecRegister:
         assert exception.address == 40123
         assert exception.raw_values == invalid_registers
         assert isinstance(exception.original_error, UnicodeDecodeError)
-        
+
         assert mock_logger.error.call_count == 1
         assert mock_logger.debug.call_count == 1
 

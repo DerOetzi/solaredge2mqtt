@@ -492,8 +492,7 @@ class TestModbusGetData:
 
             # Should emit ModbusUnitsReadEvent (plus MQTTPublishEvent from state)
             assert mock_event_bus.emit.call_count >= 1
-            emitted_types = [type(c[0][0])
-                             for c in mock_event_bus.emit.call_args_list]
+            emitted_types = [type(c[0][0]) for c in mock_event_bus.emit.call_args_list]
             assert ModbusUnitsReadEvent in emitted_types
 
     @pytest.mark.asyncio
@@ -612,8 +611,7 @@ class TestModbusWriteToModbus:
         mock_register.name = "test_register"
         mock_register.encode_request.return_value = [1, 2, 3]
 
-        mock_modbus_client.write_registers.side_effect = ModbusException(
-            "Write error")
+        mock_modbus_client.write_registers.side_effect = ModbusException("Write error")
 
         # Should not raise, just log error
         await modbus._write_to_modbus(mock_register, 100)

@@ -224,15 +224,11 @@ class TestWeatherClientLoop:
         from solaredge2mqtt.services.weather.events import WeatherOfflineEvent
 
         client = WeatherClient(mock_service_settings)
-        client.get_weather = AsyncMock(
-            side_effect=InvalidDataException("boom"))
+        client.get_weather = AsyncMock(side_effect=InvalidDataException("boom"))
 
         with pytest.raises(InvalidDataException):
             await client.loop(Interval10MinTriggerEvent())
 
         # Check that WeatherOfflineEvent was emitted
         emit_calls = mock_event_bus.emit.call_args_list
-        assert any(
-            isinstance(call[0][0], WeatherOfflineEvent)
-            for call in emit_calls
-        )
+        assert any(isinstance(call[0][0], WeatherOfflineEvent) for call in emit_calls)

@@ -25,6 +25,9 @@ mapfile -d '' staged_python_files < <(
 if ((${#staged_python_files[@]} > 0)); then
     echo "Running ruff check --fix on staged Python files..."
     "$python_cmd" -m ruff check --fix "${staged_python_files[@]}"
+    echo "Running ruff format on staged Python files..."
+    "$python_cmd" -m ruff format "${staged_python_files[@]}"
+    echo "Adding modified files back to staging area..."
     git add -- "${staged_python_files[@]}"
 else
     echo "No staged Python files to lint with ruff."
