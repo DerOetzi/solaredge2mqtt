@@ -1360,6 +1360,8 @@ class TestPowerflowFromModbus:
                 "instantaneous_power": 4998,
                 "soe": 50.0,
                 "soh": 100.0,
+                "maximum_energy": 9200,
+                "available_energy": 6800,
             },
         )
 
@@ -1464,6 +1466,8 @@ class TestPowerflowFromModbus:
                 "instantaneous_power": 2000,
                 "soe": 50.0,
                 "soh": 100.0,
+                "maximum_energy": 9200,
+                "available_energy": 4600,
             },
         )
 
@@ -1568,6 +1572,8 @@ class TestPowerflowFromModbus:
                 "instantaneous_power": -1000,
                 "soe": 50.0,
                 "soh": 100.0,
+                "maximum_energy": 9200,
+                "available_energy": 4600,
             },
         )
 
@@ -1754,6 +1760,8 @@ class TestPowerflowFromModbus:
                 "instantaneous_power": 3000,
                 "soe": 50.0,
                 "soh": 100.0,
+                "maximum_energy": 9200,
+                "available_energy": 4600,
             },
         )
 
