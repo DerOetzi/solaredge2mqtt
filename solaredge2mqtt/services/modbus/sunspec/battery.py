@@ -66,8 +66,8 @@ class SunSpecBatteryRegister(SunSpecRegister):
         SunSpecValueType.UINT64,
     )
 
-    MAXIMUM_ENERGY = "maximum_energy", 57726, SunSpecValueType.FLOAT32
-    AVAILABLE_ENERGY = "available_energy", 57728, SunSpecValueType.FLOAT32
+    MAXIMUM_ENERGY = "maximum_energy", 57726, SunSpecValueType.FLOAT32, True
+    AVAILABLE_ENERGY = "available_energy", 57728, SunSpecValueType.FLOAT32, True
 
     SOH = "soh", 57730, SunSpecValueType.FLOAT32, True
     SOE = "soe", 57732, SunSpecValueType.FLOAT32, True
