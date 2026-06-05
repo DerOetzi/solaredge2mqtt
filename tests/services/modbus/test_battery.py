@@ -37,6 +37,8 @@ def make_battery_data(
     power: float = 264.0,
     soe: float = 75.5,
     soh: float = 98.2,
+    maximum_energy: int = 9200,
+    available_energy: float = 6900.0,
 ) -> dict:
     """Create battery data for testing."""
     return {
@@ -46,6 +48,8 @@ def make_battery_data(
         "instantaneous_power": power,
         "soe": soe,
         "soh": soh,
+        "maximum_energy": maximum_energy,
+        "available_energy": available_energy,
     }
 
 
@@ -81,6 +85,8 @@ class TestModbusBattery:
             power=264.999,
             soe=75.555,
             soh=98.224,
+            maximum_energy=9200,
+            available_energy=6900.0,
         )
 
         battery = ModbusBattery.from_sunspec(info, data)

@@ -120,6 +120,8 @@ class TestModbusUnit:
             power=480.0,
             state_of_charge=80.0,
             state_of_health=100.0,
+            maximum_energy=9200,
+            available_energy=6900.0,
         )
 
         unit = ModbusUnit(info=None, inverter=inverter, batteries={"battery1": battery})
@@ -152,6 +154,8 @@ class TestModbusUnit:
             power=480.0,
             state_of_charge=80.0,
             state_of_health=100.0,
+            maximum_energy=9200,
+            available_energy=6800,
         )
 
         unit = ModbusUnit(
