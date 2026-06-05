@@ -214,7 +214,13 @@ class HomeAssistantSensorType(HomeAssistantEntityBaseType):
     BATTERY = "battery", "battery", "measurement", "%"
     CURRENT_A = "current_a", "current", "measurement", "A"
     ENERGY_KWH = "energy_kwh", "energy", "total_increasing", "kWh"
-    ENERGY_WH = "energy_wh", "energy", "total_increasing", "Wh"
+    ENERGY_WH = (
+        "energy_wh",
+        "energy",
+        "total_increasing",
+        "Wh",
+    )
+    ENERGY_MEASUREMENT_WH = "energy_measurement_wh", "energy", "measurement", "Wh"
     FREQUENCY_HZ = "frequency_hz", "frequency", "measurement", "Hz"
     MONETARY = "monetary", "monetary", "total", None
     MONETARY_BALANCE = "monetary_balance", "monetary", None, None
