@@ -56,12 +56,6 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Set up Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
-        with:
-          node-version: "24"
-          cache: "npm"
-
       - name: Cache Python packages
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
         with:
@@ -83,9 +77,6 @@ jobs:
       - name: Install package with dev dependencies
         run: pip install -e ".[dev,forecast]"
 
-      - name: Install Node dependencies
-        run: npm ci --ignore-scripts
-
       - name: Get changed Python files
         id: changed-py-files
         run: |
@@ -106,28 +97,13 @@ jobs:
         run: |
           FILES="${{ steps.changed-py-files.outputs.files }}"
           if [ -z "$FILES" ]; then
-            npx pyright
+            pyright
           else
-            npx pyright $FILES
+            pyright $FILES
           fi
 
       - name: Run tests with coverage
         run: python -m pytest --cov=solaredge2mqtt --cov-report=xml:coverage.xml --tb=short
-
-      - name: SonarCloud Scan skipped (external fork PR)
-        if: >-
-          ${{ github.event_name == 'pull_request' &&
-              github.event.pull_request.head.repo.full_name != github.repository }}
-        run: |
-          echo "::notice::SonarCloud Scan skipped: pull request originates from an external fork. SONAR_TOKEN is not available for fork PRs (GitHub security policy). Sonar analysis will run after the PR is merged to main or on internal branches."
-
-      - name: SonarCloud Scan
-        if: >-
-          ${{ github.event_name != 'pull_request' ||
-              github.event.pull_request.head.repo.full_name == github.repository }}
-        uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       - name: Build package
         run: python -m build

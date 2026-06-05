@@ -50,6 +50,7 @@ dev = [
     "setuptools-scm[toml]>=8",
     "ruff",
     "tomli",
+    "pyright==1.1.410",
     "pytest==9.0.3",
     "pytest-asyncio==1.4.0",
     "pytest-cov==7.1.0",

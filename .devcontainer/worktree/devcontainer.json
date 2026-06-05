@@ -6,16 +6,10 @@
 		"ghcr.io/devcontainers/features/python:1": {
 			"version": "3.13"
 		},
-		"ghcr.io/devcontainers/features/node:2": {
-			"version": "24"
-		},
-		"ghcr.io/devcontainers/features/java:1": {
-			"version": "25"
-		},
 		"ghcr.io/devcontainers/features/github-cli:1": {},
 		"ghcr.io/hspaans/devcontainer-features/pyupgrade:2.0.0": {},
 		"ghcr.io/devcontainers-extra/features/pylint:2": {}
-	}, 
+	},
 	"mounts": [
 		"source=${localWorkspaceFolder}/../.repo,target=/workspaces/.repo,type=bind,consistency=cached",
 		"source=${localWorkspaceFolder}/../config,target=/workspaces/config,type=bind,consistency=cached"
@@ -24,7 +18,6 @@
 	"customizations": {
 		"vscode": {
 			"extensions": [
-				"SonarSource.sonarlint-vscode",
 				"charliermarsh.ruff",
 				"ms-python.python",
 				"ms-python.vscode-pylance",
