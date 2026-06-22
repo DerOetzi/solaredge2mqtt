@@ -79,16 +79,17 @@ class MQTTClient(Client):
         EventBus.subscribe(MQTTSubscribeEvent, self._subscribe_topic)
 
     async def _subscribe_topic(self, event: MQTTSubscribeEvent[Any]) -> None:
-        if event.topic not in self._subscribed_topics:
-            logger.info(f"Subscribing to topic: {event.topic}")
-            self._subscribed_topics[event.topic] = event.event()
-            await self.subscribe(event.topic)
+        topic = f"{event.topic_prefix or self.topic_prefix}/{event.topic}"
+        if topic not in self._subscribed_topics:
+            logger.info(f"Subscribing to topic: {topic}")
+            self._subscribed_topics[topic] = event.event()
+            await self.subscribe(topic)
 
     async def listen(self) -> None:
         if self._subscribed_topics:
             async for message in self.messages:
                 topic = str(message.topic)
-                if topic not in self._subscribed_topics:
+                if self._resolve_subscription(topic) is None:
                     logger.warning(f"Received message on unsubscribed topic: {topic}")
                     continue
                 if len(message.payload) > MAX_MQTT_PAYLOAD_SIZE:
@@ -137,7 +138,7 @@ class MQTTClient(Client):
     async def _handle_message(self, message: Message) -> None:
         topic = str(message.topic)
         try:
-            event = self._subscribed_topics.get(topic)
+            event = self._resolve_subscription(topic)
             if not event:
                 logger.warning(f"Received message for unexpected topic: {topic}")
                 return
@@ -160,6 +161,35 @@ class MQTTClient(Client):
             await EventBus.emit(event(topic, parsed_input))
         except (ValidationError, json.JSONDecodeError, TypeError) as ex:
             logger.warning(f"Received invalid message on topic: {topic}, error: {ex}")
+
+    def _resolve_subscription(self, topic: str) -> type[MQTTReceivedEvent[Any]] | None:
+        event = self._subscribed_topics.get(topic)
+        if event is not None:
+            return event
+
+        for pattern, subscribed_event in self._subscribed_topics.items():
+            if ("+" in pattern or "#" in pattern) and self._topic_matches(
+                pattern, topic
+            ):
+                return subscribed_event
+
+        return None
+
+    @staticmethod
+    def _topic_matches(pattern: str, topic: str) -> bool:
+        """Match a concrete topic against an MQTT subscription pattern (+/#)."""
+        pattern_parts = pattern.split("/")
+        topic_parts = topic.split("/")
+
+        for index, part in enumerate(pattern_parts):
+            if part == "#":
+                return True
+            if index >= len(topic_parts):
+                return False
+            if part != "+" and part != topic_parts[index]:
+                return False
+
+        return len(pattern_parts) == len(topic_parts)
 
     async def event_listener(self, event: MQTTPublishEvent) -> None:
         await self.publish_to(

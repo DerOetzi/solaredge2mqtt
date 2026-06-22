@@ -39,16 +39,17 @@ class HomeAssistantDiscovery:
         self._send_entities: dict[str, HomeAssistantEntity] = {}
         logger.info("Home Assistant discovery enabled")
 
-        self._status_topic = f"{self.settings.homeassistant.topic_prefix}/status"
-
         self._seen_energy_periods: set[str] = set()
 
         EventBus.register(self)
 
     async def async_init(self) -> None:
+        # Home Assistant publishes its status on its own topic prefix, so we
+        # override the default MQTT prefix for this subscription.
         await EventBus.emit(
             HomeAssistantSubscribeEvent(
-                self._status_topic,
+                "status",
+                topic_prefix=self.settings.homeassistant.topic_prefix,
             )
         )
 

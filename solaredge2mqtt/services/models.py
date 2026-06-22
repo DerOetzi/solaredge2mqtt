@@ -39,4 +39,6 @@ class Component(Solaredge2MQTTBaseModel, ABC):
 
 TComponent = TypeVar("TComponent", bound=Component)
 
-HTTPResponse: TypeAlias = dict | list | str | float | int | bool | None
+HTTPRequestPayload: TypeAlias = dict[str, str | int | float | bool | None]
+
+HTTPResponsePayload: TypeAlias = dict | list | str | float | int | bool | None

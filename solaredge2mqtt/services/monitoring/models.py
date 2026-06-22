@@ -5,7 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field, computed_field
 
 from solaredge2mqtt.core.exceptions import InvalidDataException
-from solaredge2mqtt.services.models import HTTPResponse
+from solaredge2mqtt.services.models import HTTPResponsePayload
 
 
 class LogicalInfo(BaseModel):
@@ -15,7 +15,7 @@ class LogicalInfo(BaseModel):
     type: str
 
     @staticmethod
-    def map(data: HTTPResponse) -> dict[str, str]:
+    def map(data: HTTPResponsePayload) -> dict[str, str]:
         if not isinstance(data, dict):
             raise InvalidDataException("Logical info data is not valid")
 

@@ -26,6 +26,8 @@ from solaredge2mqtt.services.monitoring.settings import MonitoringSettings
 LOGIN_URL = "https://monitoring.solaredge.com/solaredge-apigw/api/login"
 LOGICAL_URL = "https://monitoring.solaredge.com/solaredge-apigw/api/sites/{site_id}/layout/logical"
 POWER_PUBLIC_URL = "https://monitoring.solaredge.com/solaredge-web/p/playbackData"
+DEVICES_URL = "https://monitoring.solaredge.com/services/api/homeautomation/v1.0/sites/{site_id}/devices"
+CHARGING_CONTROL_URL = "https://monitoring.solaredge.com/services/m/api/homeautomation/v1.0/{site_id}/devices/{device_id}/activationState"
 CONTENT_TYPE_FORM_URLENCODED = "application/x-www-form-urlencoded"
 
 
@@ -39,8 +41,67 @@ class MonitoringSite(HTTPClientAsync):
         self.settings = settings
 
         self.influxdb: InfluxDBAsync | None = influxdb
+        self._remember_me_cookie: str | None = None
 
         EventBus.register(self)
+
+    async def async_init(self) -> None:
+        await self._discover_wallbox_device()
+
+    async def _discover_wallbox_device(self) -> None:
+        try:
+            headers = await self._add_login_headers()
+
+            async with asyncio.timeout(10):
+                result = await self._get(
+                    DEVICES_URL.format(site_id=self.settings.site_id_secret),
+                    headers=headers,
+                )
+
+            logger.debug("Wallbox devices response: {result}", result=result)
+            device_ids = self._extract_device_ids(result)
+
+            if not device_ids:
+                logger.info(
+                    "No controllable wallbox device found in monitoring account"
+                )
+                return
+
+            if len(device_ids) > 1:
+                logger.warning(
+                    "Multiple wallbox devices found: {device_ids}. Using the first; "
+                    "set wallbox_device_id or address a device via "
+                    "'api/wallbox/<device_id>/control' to choose explicitly.",
+                    device_ids=device_ids,
+                )
+        except (
+            ClientResponseError,
+            asyncio.TimeoutError,
+            ConfigurationException,
+            InvalidDataException,
+        ) as error:
+            logger.warning("Unable to discover wallbox device: {error}", error=error)
+
+    @staticmethod
+    def _extract_device_ids(result: object) -> list[str]:
+        if isinstance(result, dict):
+            devices = result.get("devices", result.get("reporters", []))
+        elif isinstance(result, list):
+            devices = result
+        else:
+            devices = []
+
+        device_ids: list[str] = []
+        for device in devices:
+            if not isinstance(device, dict):
+                continue
+            for key in ("id", "guid", "reporterId", "serialNumber", "serial"):
+                value = device.get(key)
+                if value is not None:
+                    device_ids.append(str(value))
+                    break
+
+        return device_ids
 
     @EventBus.subscribe(Interval15MinTriggerEvent)
     async def get_data(self, event: Interval15MinTriggerEvent | None) -> None:
@@ -81,15 +142,16 @@ class MonitoringSite(HTTPClientAsync):
 
     async def _get_logical(self) -> dict:
         try:
-            token = await self.login()
+            headers = await self._add_login_headers(
+                {
+                    "Content-Type": CONTENT_TYPE_FORM_URLENCODED,
+                }
+            )
 
             async with asyncio.timeout(10):
                 result = await self._get(
                     LOGICAL_URL.format(site_id=self.settings.site_id_secret),
-                    headers={
-                        "Content-Type": CONTENT_TYPE_FORM_URLENCODED,
-                        "X-CSRF-TOKEN": token,
-                    },
+                    headers=headers,
                 )
 
                 if not isinstance(result, dict):
@@ -184,7 +246,11 @@ class MonitoringSite(HTTPClientAsync):
 
     async def _get_playback(self) -> dict:
         try:
-            token = await self.login()
+            headers = await self._add_login_headers(
+                {
+                    "Content-Type": CONTENT_TYPE_FORM_URLENCODED,
+                }
+            )
 
             async with asyncio.timeout(10):
                 playback_data = await self._post(
@@ -192,12 +258,9 @@ class MonitoringSite(HTTPClientAsync):
                     data={
                         "fieldId": self.settings.site_id_secret,
                         "timeUnit": str(4),
-                        "CSRF": token,
+                        "CSRF": headers.get("X-CSRF-TOKEN", ""),
                     },
-                    headers={
-                        "Content-Type": CONTENT_TYPE_FORM_URLENCODED,
-                        "X-CSRF-TOKEN": token,
-                    },
+                    headers=headers,
                     expect_json=False,
                 )
 
@@ -220,38 +283,47 @@ class MonitoringSite(HTTPClientAsync):
         except (ClientResponseError, asyncio.TimeoutError) as error:
             raise InvalidDataException("Unable to read logical layout") from error
 
-    async def login(self) -> str:
-        try:
-            token = self.get_cookie("CSRF-TOKEN")
+    async def _execute_charge_control(self, device_id: int, level: int) -> None:
+        if not self.settings.is_configured:
+            logger.warning(
+                "Cannot control wallbox charging: monitoring account not configured"
+            )
+            return
 
-            if token is not None:
-                return token
+        try:
+            headers = await self._add_login_headers()
 
             async with asyncio.timeout(10):
-                await self._post(
-                    LOGIN_URL,
-                    headers={"Content-Type": CONTENT_TYPE_FORM_URLENCODED},
-                    data={
-                        "j_username": self.settings.username_value,
-                        "j_password": self.settings.password_secret,
+                result = await self._put(
+                    CHARGING_CONTROL_URL.format(
+                        site_id=self.settings.site_id_secret,
+                        device_id=device_id,
+                    ),
+                    json={
+                        "mode": "MANUAL",
+                        "level": level,
+                        "duration": None,
                     },
-                    expect_json=False,
+                    headers=headers,
                 )
 
-            token = self.get_cookie("CSRF-TOKEN")
-
-            if token is None:
-                raise ConfigurationException(
-                    "Monitoring",
-                    "Login to monitoring account failed, CSRF token not found",
+            if isinstance(result, dict) and result.get("status") == "PASSED":
+                logger.info(
+                    "Wallbox charge level set to {level}% (device {device_id})",
+                    level=level,
+                    device_id=device_id,
                 )
-
-            logger.info("Login to monitoring site successful")
-            return token
-        except (ClientResponseError, asyncio.TimeoutError) as error:
-            raise ConfigurationException(
-                "Monitoring", "Unable to login to monitoring account"
-            ) from error
+            else:
+                logger.warning(
+                    "Wallbox charge control was not accepted: {result}", result=result
+                )
+        except (
+            ClientResponseError,
+            asyncio.TimeoutError,
+            ConfigurationException,
+            InvalidDataException,
+        ) as error:
+            logger.warning("Unable to control wallbox charging: {error}", error=error)
 
     @staticmethod
     def merge_modules(
@@ -311,3 +383,45 @@ class MonitoringSite(HTTPClientAsync):
                 self.settings.retain,
             )
         )
+
+    async def _add_login_headers(self, headers: dict[str, str] = {}) -> dict[str, str]:
+        token, remember_me_cookie = await self.login()
+
+        headers["X-CSRF-TOKEN"] = token
+        headers["Cookie"] = f"SPRING_SECURITY_REMEMBER_ME_COOKIE={remember_me_cookie}"
+        return headers
+
+    async def login(self) -> tuple[str, str]:
+        try:
+            token = self.get_cookie("CSRF-TOKEN")
+            remember_me_cookie = self.get_cookie("SPRING_SECURITY_REMEMBER_ME_COOKIE")
+
+            if token and remember_me_cookie:
+                return token, remember_me_cookie
+
+            async with asyncio.timeout(10):
+                await self._post(
+                    LOGIN_URL,
+                    headers={"Content-Type": CONTENT_TYPE_FORM_URLENCODED},
+                    data={
+                        "j_username": self.settings.username_value,
+                        "j_password": self.settings.password_secret,
+                    },
+                    expect_json=False,
+                )
+
+            token = self.get_cookie("CSRF-TOKEN")
+            remember_me_cookie = self.get_cookie("SPRING_SECURITY_REMEMBER_ME_COOKIE")
+
+            if not (token and remember_me_cookie):
+                raise ConfigurationException(
+                    "Monitoring",
+                    "Login to monitoring account failed, CSRF token not found",
+                )
+
+            logger.info("Login to monitoring site successful")
+            return token, remember_me_cookie
+        except (ClientResponseError, asyncio.TimeoutError) as error:
+            raise ConfigurationException(
+                "Monitoring", "Unable to login to monitoring account"
+            ) from error

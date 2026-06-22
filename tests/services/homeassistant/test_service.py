@@ -60,7 +60,6 @@ class TestHomeAssistantDiscoveryInit:
 
         assert discovery.settings is mock_service_settings
         mock_event_bus.register.assert_called_once_with(discovery)
-        assert discovery._status_topic == "homeassistant/status"
 
     def test_subscribes_to_events(self, mock_service_settings, mock_event_bus):
         """Test HomeAssistantDiscovery subscribes to events."""
@@ -107,7 +106,10 @@ class TestHomeAssistantDiscoveryAsyncInit:
         call_args = mock_event_bus.emit.call_args
         event = call_args[0][0]
         assert isinstance(event, MQTTSubscribeEvent)
-        assert event.topic == "homeassistant/status"
+        # The MQTT client now centrally prepends the prefix; the status topic
+        # is published on Home Assistant's own prefix, passed as an override.
+        assert event.topic == "status"
+        assert event.topic_prefix == "homeassistant"
 
 
 class TestHomeAssistantDiscoveryStateTopic:

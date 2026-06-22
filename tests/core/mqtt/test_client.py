@@ -176,10 +176,24 @@ class TestMQTTClientSubscribeTopic:
         event = SampleSubscribeEvent("test/topic")
         await client._subscribe_topic(event)
 
-        assert "test/topic" in client._subscribed_topics
-        print(client._subscribed_topics)
-        assert client._subscribed_topics["test/topic"] == SampleInputEvent
-        client.subscribe.assert_called_once_with("test/topic")
+        # The MQTT client centrally prepends the configured topic prefix.
+        assert "test/test/topic" in client._subscribed_topics
+        assert client._subscribed_topics["test/test/topic"] == SampleInputEvent
+        client.subscribe.assert_called_once_with("test/test/topic")
+
+    @pytest.mark.asyncio
+    async def test_subscribe_topic_prefix_override(
+        self, mqtt_settings, event_bus, mock_aiomqtt_client
+    ):
+        """Test a subscription can override the default topic prefix."""
+        client = MQTTClient(mqtt_settings)
+        client.subscribe = AsyncMock()
+
+        event = SampleSubscribeEvent("status", topic_prefix="homeassistant")
+        await client._subscribe_topic(event)
+
+        assert "homeassistant/status" in client._subscribed_topics
+        client.subscribe.assert_called_once_with("homeassistant/status")
 
     @pytest.mark.asyncio
     async def test_subscribe_topic_existing_topic(
@@ -188,7 +202,7 @@ class TestMQTTClientSubscribeTopic:
         """Test subscribing to an already subscribed topic does nothing."""
         client = MQTTClient(mqtt_settings)
         client.subscribe = AsyncMock()
-        client._subscribed_topics["test/topic"] = SampleInputEvent
+        client._subscribed_topics["test/test/topic"] = SampleInputEvent
 
         event = SampleSubscribeEvent("test/topic")
         await client._subscribe_topic(event)
@@ -680,3 +694,58 @@ class TestMQTTClientLoggingSink:
 
         record = {"name": "solaredge2mqtt.services.weather.WeatherClient"}
         assert client.log_filter(record) is True
+
+
+class TestMQTTClientTopicMatching:
+    """Tests for MQTT wildcard topic matching."""
+
+    def test_exact_match(self):
+        assert MQTTClient._topic_matches("a/b/c", "a/b/c") is True
+
+    def test_single_level_wildcard(self):
+        assert MQTTClient._topic_matches("a/+/c", "a/value/c") is True
+
+    def test_single_level_wildcard_no_match_extra_level(self):
+        assert MQTTClient._topic_matches("a/+/c", "a/x/y/c") is False
+
+    def test_single_level_wildcard_requires_level(self):
+        assert MQTTClient._topic_matches("a/+/c", "a/c") is False
+
+    def test_multi_level_wildcard(self):
+        assert MQTTClient._topic_matches("a/#", "a/b/c/d") is True
+
+    def test_no_match_different_segment(self):
+        assert MQTTClient._topic_matches("a/b/c", "a/x/c") is False
+
+    def test_length_mismatch(self):
+        assert MQTTClient._topic_matches("a/b", "a/b/c") is False
+
+    def test_resolve_subscription_exact(self, mqtt_settings, mock_aiomqtt_client):
+        client = MQTTClient(mqtt_settings)
+        client._subscribed_topics["test/api/wallbox/control/charge_level"] = (
+            SampleInputEvent
+        )
+
+        resolved = client._resolve_subscription("test/api/wallbox/control/charge_level")
+
+        assert resolved is SampleInputEvent
+
+    def test_resolve_subscription_wildcard(self, mqtt_settings, mock_aiomqtt_client):
+        client = MQTTClient(mqtt_settings)
+        client._subscribed_topics["test/api/wallbox/+/control/charge_level"] = (
+            SampleInputEvent
+        )
+
+        resolved = client._resolve_subscription(
+            "test/api/wallbox/SE12345/control/charge_level"
+        )
+
+        assert resolved is SampleInputEvent
+
+    def test_resolve_subscription_no_match(self, mqtt_settings, mock_aiomqtt_client):
+        client = MQTTClient(mqtt_settings)
+        client._subscribed_topics["test/api/wallbox/control/charge_level"] = (
+            SampleInputEvent
+        )
+
+        assert client._resolve_subscription("test/other/topic") is None

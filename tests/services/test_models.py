@@ -2,7 +2,7 @@
 
 import pytest
 
-from solaredge2mqtt.services.models import Component, HTTPResponse, TComponent
+from solaredge2mqtt.services.models import Component, HTTPResponsePayload, TComponent
 
 
 class ConcreteComponent(Component):
@@ -118,14 +118,14 @@ class TestHTTPResponse:
 
     def test_http_response_dict(self):
         """Test HTTPResponse with dict."""
-        response: HTTPResponse = {"key": "value"}
+        response: HTTPResponsePayload = {"key": "value"}
 
         assert isinstance(response, dict)
         assert response["key"] == "value"
 
     def test_http_response_string(self):
         """Test HTTPResponse with string."""
-        response: HTTPResponse = "response_string"
+        response: HTTPResponsePayload = "response_string"
 
         assert isinstance(response, str)
         assert response == "response_string"
