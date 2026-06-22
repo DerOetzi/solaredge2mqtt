@@ -9,13 +9,20 @@ from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataEx
 from solaredge2mqtt.core.influxdb import InfluxDBAsync, Point
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
-from solaredge2mqtt.core.timer.events import Interval15MinTriggerEvent
+from solaredge2mqtt.core.timer.events import (
+    Interval15MinTriggerEvent,
+    IntervalBaseTriggerEvent,
+)
 from solaredge2mqtt.services.http_async import HTTPClientAsync
 from solaredge2mqtt.services.monitoring.events import (
+    EVChargerChargeLevelEvent,
+    EVChargerChargeLevelSubscribeEvent,
+    EVChargerReadEvent,
     MonitoringOfflineEvent,
     MonitoringOnlineEvent,
 )
 from solaredge2mqtt.services.monitoring.models import (
+    EVCharger,
     LogicalInfo,
     LogicalInverter,
     LogicalModule,
@@ -43,12 +50,14 @@ class MonitoringSite(HTTPClientAsync):
         self.influxdb: InfluxDBAsync | None = influxdb
         self._remember_me_cookie: str | None = None
 
+        self.found_evchargers: bool = False
+
         EventBus.register(self)
 
     async def async_init(self) -> None:
-        await self._discover_wallbox_device()
+        await self._discover_evchargers()
 
-    async def _discover_wallbox_device(self) -> None:
+    async def _discover_evchargers(self) -> None:
         try:
             headers = await self._add_login_headers()
 
@@ -58,21 +67,18 @@ class MonitoringSite(HTTPClientAsync):
                     headers=headers,
                 )
 
-            logger.debug("Wallbox devices response: {result}", result=result)
-            device_ids = self._extract_device_ids(result)
-
-            if not device_ids:
-                logger.info(
-                    "No controllable wallbox device found in monitoring account"
-                )
+            charger_devices = self._extract_evchargers(result)
+            if not charger_devices:
+                logger.info("No controllable EV charger found in monitoring account")
                 return
 
-            if len(device_ids) > 1:
-                logger.warning(
-                    "Multiple wallbox devices found: {device_ids}. Using the first; "
-                    "set wallbox_device_id or address a device via "
-                    "'api/wallbox/<device_id>/control' to choose explicitly.",
-                    device_ids=device_ids,
+            self.found_evchargers = True
+
+            for device in charger_devices:
+                charger = EVCharger.from_device(device)
+
+                await EventBus.emit(
+                    EVChargerChargeLevelSubscribeEvent(charger.mqtt_chargelevel_topic())
                 )
         except (
             ClientResponseError,
@@ -80,28 +86,77 @@ class MonitoringSite(HTTPClientAsync):
             ConfigurationException,
             InvalidDataException,
         ) as error:
-            logger.warning("Unable to discover wallbox device: {error}", error=error)
+            logger.warning("Unable to discover EV chargers: {error}", error=error)
+
+    @EventBus.subscribe(IntervalBaseTriggerEvent)
+    async def refresh_evchargers(self, event: IntervalBaseTriggerEvent) -> None:
+        if not self.found_evchargers:
+            return
+
+        try:
+            headers = await self._add_login_headers()
+
+            async with asyncio.timeout(10):
+                result = await self._get(
+                    DEVICES_URL.format(site_id=self.settings.site_id_secret),
+                    headers=headers,
+                )
+
+            for device in self._extract_evchargers(result):
+                evcharger = EVCharger.from_device(device)
+                await EventBus.emit(EVChargerReadEvent(evcharger))
+                await EventBus.emit(
+                    MQTTPublishEvent(
+                        evcharger.mqtt_topic(), evcharger, self.settings.retain
+                    )
+                )
+        except (
+            ClientResponseError,
+            asyncio.TimeoutError,
+            ConfigurationException,
+            InvalidDataException,
+        ) as error:
+            logger.warning("Unable to refresh EV charger status: {error}", error=error)
 
     @staticmethod
-    def _extract_device_ids(result: object) -> list[str]:
-        if isinstance(result, dict):
-            devices = result.get("devices", result.get("reporters", []))
-        elif isinstance(result, list):
-            devices = result
-        else:
-            devices = []
+    def _extract_evchargers(result: object) -> list[dict[str, object]]:
+        if not isinstance(result, dict):
+            return []
 
-        device_ids: list[str] = []
-        for device in devices:
-            if not isinstance(device, dict):
-                continue
-            for key in ("id", "guid", "reporterId", "serialNumber", "serial"):
-                value = device.get(key)
-                if value is not None:
-                    device_ids.append(str(value))
-                    break
+        devices_by_type = result.get("devicesByType")
+        if not isinstance(devices_by_type, dict):
+            return []
 
-        return device_ids
+        chargers = devices_by_type.get("EV_CHARGER", [])
+        if not isinstance(chargers, list):
+            return []
+
+        return [
+            charger
+            for charger in chargers
+            if isinstance(charger, dict) and charger.get("reporterId") is not None
+        ]
+
+    @EventBus.subscribe(EVChargerChargeLevelEvent)
+    async def handle_charge_command(self, event: EVChargerChargeLevelEvent) -> None:
+        topic_parts = event.topic.split("/")
+        try:
+            idx = topic_parts.index("evcharger")
+            reporter_id = int(topic_parts[idx + 1])
+        except (ValueError, IndexError):
+            logger.warning(
+                "Cannot extract device id from EV charger command topic: {topic}",
+                topic=event.topic,
+            )
+            return
+
+        level = event.input.level
+        logger.info(
+            "Requesting EV charger charge level {level}% for device {reporter_id}",
+            level=level,
+            reporter_id=reporter_id,
+        )
+        await self._execute_charge_control(reporter_id, level)
 
     @EventBus.subscribe(Interval15MinTriggerEvent)
     async def get_data(self, event: Interval15MinTriggerEvent | None) -> None:
@@ -309,13 +364,13 @@ class MonitoringSite(HTTPClientAsync):
 
             if isinstance(result, dict) and result.get("status") == "PASSED":
                 logger.info(
-                    "Wallbox charge level set to {level}% (device {device_id})",
+                    "EV charger level set to {level}% (device {device_id})",
                     level=level,
                     device_id=device_id,
                 )
             else:
                 logger.warning(
-                    "Wallbox charge control was not accepted: {result}", result=result
+                    "EV charger level control was not accepted: {result}", result=result
                 )
         except (
             ClientResponseError,
@@ -323,7 +378,9 @@ class MonitoringSite(HTTPClientAsync):
             ConfigurationException,
             InvalidDataException,
         ) as error:
-            logger.warning("Unable to control wallbox charging: {error}", error=error)
+            logger.warning(
+                "Unable to control EV charger charging: {error}", error=error
+            )
 
     @staticmethod
     def merge_modules(

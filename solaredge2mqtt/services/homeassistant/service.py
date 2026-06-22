@@ -25,6 +25,7 @@ from solaredge2mqtt.services.homeassistant.models import (
 from solaredge2mqtt.services.modbus.events import ModbusUnitsReadEvent
 from solaredge2mqtt.services.modbus.models.inverter import ModbusInverter
 from solaredge2mqtt.services.models import Component
+from solaredge2mqtt.services.monitoring.events import EVChargerReadEvent
 from solaredge2mqtt.services.powerflow.events import PowerflowGeneratedEvent
 from solaredge2mqtt.services.wallbox.events import WallboxReadEvent
 
@@ -39,7 +40,7 @@ class HomeAssistantDiscovery:
         self._send_entities: dict[str, HomeAssistantEntity] = {}
         logger.info("Home Assistant discovery enabled")
 
-        self._seen_energy_periods: set[str] = set()
+        self._seen_component_topics: set[str] = set()
 
         EventBus.register(self)
 
@@ -58,18 +59,20 @@ class HomeAssistantDiscovery:
             ForecastEvent,
             EnergyReadEvent,
             WallboxReadEvent,
+            EVChargerReadEvent,
         ]
     )
     async def component_discovery(
-        self, event: ForecastEvent | EnergyReadEvent | WallboxReadEvent
+        self,
+        event: ForecastEvent | EnergyReadEvent | WallboxReadEvent | EVChargerReadEvent,
     ) -> None:
         publish = True
-        if isinstance(event, EnergyReadEvent):
-            period = event.component.info.period
-            publish = period.auto_discovery and (
-                event.component.mqtt_topic() not in self._seen_energy_periods
-            )
-            self._seen_energy_periods.add(event.component.mqtt_topic())
+        if isinstance(event, (EnergyReadEvent, EVChargerReadEvent)):
+            topic = event.component.mqtt_topic()
+            publish = topic not in self._seen_component_topics
+            if publish and isinstance(event, EnergyReadEvent):
+                publish = publish and event.component.info.period.auto_discovery
+            self._seen_component_topics.add(topic)
         else:
             EventBus.unsubscribe(event, self.component_discovery)
 
