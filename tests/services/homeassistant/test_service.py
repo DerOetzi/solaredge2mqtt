@@ -22,6 +22,7 @@ from solaredge2mqtt.services.homeassistant.service import (
 )
 from solaredge2mqtt.services.modbus.events import ModbusUnitsReadEvent
 from solaredge2mqtt.services.models import Component
+from solaredge2mqtt.services.monitoring.events import EVChargerReadEvent
 from solaredge2mqtt.services.powerflow.events import PowerflowGeneratedEvent
 from solaredge2mqtt.services.wallbox.events import WallboxReadEvent
 
@@ -78,6 +79,7 @@ class TestHomeAssistantDiscoveryEventSubscriptions:
                 ForecastEvent,
                 EnergyReadEvent,
                 WallboxReadEvent,
+                EVChargerReadEvent,
             },
             "units_discovery": {ModbusUnitsReadEvent},
             "powerflow_discovery": {PowerflowGeneratedEvent},
@@ -252,7 +254,7 @@ class TestHomeAssistantDiscoveryComponentDiscovery:
         mock_component.info.period.auto_discovery = True
 
         # Mark as already seen
-        discovery._seen_energy_periods.add("energy/today")
+        discovery._seen_component_topics.add("energy/today")
 
         event = EnergyReadEvent(mock_component)
 

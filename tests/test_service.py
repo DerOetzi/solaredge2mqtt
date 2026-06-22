@@ -738,6 +738,52 @@ class TestServiceMainLoop:
         service.powerflow.async_init.assert_awaited_once()
         service.finalize.assert_awaited_once()
 
+    @pytest.mark.asyncio
+    async def test_main_loop_initializes_monitoring_when_configured(self):
+        """Main loop should call monitoring.async_init when monitoring is configured."""
+        service = _build_service()
+        service.settings = cast(
+            Any,
+            SimpleNamespace(
+                mqtt=SimpleNamespace(logging_level=SimpleNamespace(level=40))
+            ),
+        )
+        service.influxdb = None
+        service.homeassistant = None
+        service.powerflow = MagicMock()
+        service.powerflow.async_init = AsyncMock()
+        service.timer = MagicMock()
+        service.timer.loop = AsyncMock()
+        service.finalize = AsyncMock()
+
+        monitoring = MagicMock()
+        monitoring.async_init = AsyncMock()
+        service.monitoring = monitoring
+
+        service._start_mqtt_listener = MagicMock()
+        service.schedule_loop = MagicMock()
+
+        mqtt_client = MagicMock()
+        mqtt_client.publish_status_online = AsyncMock()
+        mqtt_client.__aenter__ = AsyncMock(return_value=mqtt_client)
+        mqtt_client.__aexit__ = AsyncMock(return_value=None)
+
+        async def gather_side_effect(*_args, **_kwargs):
+            await asyncio.to_thread(lambda: None)
+            service.cancel_request.set()
+            return None
+
+        with (
+            patch("solaredge2mqtt.service.MQTTClient", return_value=mqtt_client),
+            patch(
+                "solaredge2mqtt.service.asyncio.gather", side_effect=gather_side_effect
+            ),
+        ):
+            await service.main_loop()
+
+        monitoring.async_init.assert_awaited_once()
+        service.finalize.assert_awaited_once()
+
 
 class TestServiceShutdown:
     """Tests for finalization and close behavior."""
