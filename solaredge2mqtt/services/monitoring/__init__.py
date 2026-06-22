@@ -110,6 +110,8 @@ class MonitoringSite(HTTPClientAsync):
                         evcharger.mqtt_topic(), evcharger, self.settings.retain
                     )
                 )
+
+            await EventBus.emit(MonitoringOnlineEvent(self.settings.debounce_cycles))
         except (
             ClientResponseError,
             asyncio.TimeoutError,
@@ -117,6 +119,7 @@ class MonitoringSite(HTTPClientAsync):
             InvalidDataException,
         ) as error:
             logger.warning("Unable to refresh EV charger status: {error}", error=error)
+            await EventBus.emit(MonitoringOfflineEvent())
 
     @staticmethod
     def _extract_evchargers(result: object) -> list[dict[str, object]]:
@@ -157,6 +160,10 @@ class MonitoringSite(HTTPClientAsync):
             reporter_id=reporter_id,
         )
         await self._execute_charge_control(reporter_id, level)
+
+    async def close(self) -> None:
+        await EventBus.emit(MonitoringOfflineEvent())
+        await super().close()
 
     @EventBus.subscribe(Interval15MinTriggerEvent)
     async def get_data(self, event: Interval15MinTriggerEvent | None) -> None:
