@@ -25,6 +25,7 @@ SolarEdge2MQTT provides a comprehensive feature set for power monitoring, home a
 - 💸 **Price-based savings calculation** for consumption and export
 - 🔌 **SolarEdge Wallbox monitoring** via REST API
 - 🌐 **Module-level monitoring** by retrieving data directly from the SolarEdge monitoring site (no API key needed)
+- 🚗 **EV charger monitoring and control** via SolarEdge monitoring account — status, session energy, and remote charge level control
 - 🐳 **Docker and Docker Compose support** for easy deployment
 - 🧪 **Console mode** for development and testing
 
@@ -302,6 +303,49 @@ Remember to add the site_id and password to `secrets.yml`:
 monitoring_site_id: "12345678"
 monitoring_password: "your_monitoring_password"
 ```
+
+#### EV Charger monitoring and control
+
+If EV chargers are registered in your SolarEdge monitoring account, they are automatically discovered on startup — no additional configuration is needed beyond the standard monitoring credentials above.
+
+Status is polled on every base interval and published to MQTT under:
+
+```
+monitoring/evcharger/{reporter_id}
+```
+
+The payload includes:
+
+| Field | Description |
+|---|---|
+| `charge_level` | Current charge level (0–100 %) |
+| `charger_status` | Status string (e.g. `CHARGING`, `IDLE`) |
+| `connected` | Whether a vehicle is plugged in (`true`/`false`) |
+| `session_energy` | Energy delivered in the current session (Wh) |
+| `rated_power` | Rated charging power (W) |
+
+**Charge level control**
+
+To set the charge level remotely, publish to:
+
+```
+monitoring/evcharger/{reporter_id}/charge_level
+```
+
+with a JSON payload:
+
+```json
+{"level": 100}
+```
+
+`level` must be an integer 0 for off or 100 for on. Other values are not possible at the moment. The service translates this into a MANUAL mode command sent to the SolarEdge monitoring API.
+
+When Home Assistant auto discovery is enabled, the following entities are created automatically per charger:
+
+- A **number** entity for charge level control
+- A **sensor** for charger status
+- A **binary sensor** for vehicle connection (plug)
+- **Sensors** for session energy and rated power
 
 ### Wallbox
 
