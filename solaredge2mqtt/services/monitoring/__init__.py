@@ -484,7 +484,7 @@ class MonitoringSite(HTTPClientAsync):
             if not (token and remember_me_cookie):
                 raise ConfigurationException(
                     "Monitoring",
-                    "Login to monitoring account failed, CSRF token not found",
+                    "Login to monitoring account failed, CSRF token or remember-me cookie not found",
                 )
 
             logger.info("Login to monitoring site successful")
