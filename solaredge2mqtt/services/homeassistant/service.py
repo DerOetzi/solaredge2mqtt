@@ -45,8 +45,6 @@ class HomeAssistantDiscovery:
         EventBus.register(self)
 
     async def async_init(self) -> None:
-        # Home Assistant publishes its status on its own topic prefix, so we
-        # override the default MQTT prefix for this subscription.
         await EventBus.emit(
             HomeAssistantSubscribeEvent(
                 "status",
