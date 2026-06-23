@@ -48,7 +48,6 @@ class MonitoringSite(HTTPClientAsync):
         self.settings = settings
 
         self.influxdb: InfluxDBAsync | None = influxdb
-        self._remember_me_cookie: str | None = None
 
         self.found_evchargers: bool = False
 
