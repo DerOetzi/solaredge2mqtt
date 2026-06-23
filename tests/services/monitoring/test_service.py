@@ -821,12 +821,12 @@ class TestMonitoringSiteRefreshEVChargers:
     async def test_refresh_skips_when_no_chargers_found(
         self, mock_monitoring_settings, mock_event_bus
     ):
-        from solaredge2mqtt.core.timer.events import IntervalBaseTriggerEvent
+        from solaredge2mqtt.core.timer.events import Interval5MinTriggerEvent
 
         site = MonitoringSite(mock_monitoring_settings, None)
         site._add_login_headers = AsyncMock()
 
-        await site.refresh_evchargers(IntervalBaseTriggerEvent())
+        await site.refresh_evchargers(Interval5MinTriggerEvent())
 
         site._add_login_headers.assert_not_called()
 
@@ -835,7 +835,7 @@ class TestMonitoringSiteRefreshEVChargers:
         self, mock_monitoring_settings, mock_event_bus
     ):
         from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
-        from solaredge2mqtt.core.timer.events import IntervalBaseTriggerEvent
+        from solaredge2mqtt.core.timer.events import Interval5MinTriggerEvent
         from solaredge2mqtt.services.monitoring.events import (
             EVChargerReadEvent,
             MonitoringOnlineEvent,
@@ -846,7 +846,7 @@ class TestMonitoringSiteRefreshEVChargers:
         site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
         site._get = AsyncMock(return_value=SAMPLE_DEVICES_RESPONSE)
 
-        await site.refresh_evchargers(IntervalBaseTriggerEvent())
+        await site.refresh_evchargers(Interval5MinTriggerEvent())
 
         emit_calls = mock_event_bus.emit.call_args_list
         types_emitted = [type(call[0][0]) for call in emit_calls]
@@ -858,7 +858,7 @@ class TestMonitoringSiteRefreshEVChargers:
     async def test_refresh_on_error_emits_offline_event(
         self, mock_monitoring_settings, mock_event_bus
     ):
-        from solaredge2mqtt.core.timer.events import IntervalBaseTriggerEvent
+        from solaredge2mqtt.core.timer.events import Interval5MinTriggerEvent
         from solaredge2mqtt.services.monitoring.events import MonitoringOfflineEvent
 
         site = MonitoringSite(mock_monitoring_settings, None)
@@ -867,7 +867,7 @@ class TestMonitoringSiteRefreshEVChargers:
             side_effect=ConfigurationException("monitoring", "login fail")
         )
 
-        await site.refresh_evchargers(IntervalBaseTriggerEvent())
+        await site.refresh_evchargers(Interval5MinTriggerEvent())
 
         emit_calls = mock_event_bus.emit.call_args_list
         assert any(
@@ -880,7 +880,7 @@ class TestMonitoringSiteRefreshEVChargers:
     ):
         from aiohttp import ClientResponseError, RequestInfo
 
-        from solaredge2mqtt.core.timer.events import IntervalBaseTriggerEvent
+        from solaredge2mqtt.core.timer.events import Interval5MinTriggerEvent
         from solaredge2mqtt.services.monitoring.events import MonitoringOfflineEvent
 
         site = MonitoringSite(mock_monitoring_settings, None)
@@ -895,7 +895,7 @@ class TestMonitoringSiteRefreshEVChargers:
             )
         )
 
-        await site.refresh_evchargers(IntervalBaseTriggerEvent())
+        await site.refresh_evchargers(Interval5MinTriggerEvent())
 
         emit_calls = mock_event_bus.emit.call_args_list
         assert any(
