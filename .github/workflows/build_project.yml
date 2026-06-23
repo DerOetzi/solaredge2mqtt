@@ -31,10 +31,11 @@ jobs:
         id: var
         with:
           script: |
-            core.setOutput('ref_name', '${{ github.ref_name }}'.toLowerCase().replaceAll(/[/.]/g, '-').trim('-'));
+            const refName = '${{ github.ref_name || github.event.release.tag_name }}';
+            core.setOutput('ref_name', refName.toLowerCase().replaceAll(/[/.]/g, '-').trim('-'));
             core.setOutput('image_name', '${{ github.repository }}'.toLowerCase());
             core.setOutput('ghcr_image', '${{ env.REGISTRY_GITHUB }}/${{ github.repository }}'.toLowerCase());
-            const version = '${{ github.ref_name }}'.replace(/^v/, '');
+            const version = refName.replace(/^v/, '');
             core.setOutput('version', version);
 
   build-check:
@@ -127,7 +128,7 @@ jobs:
         with:
           repo_token: ${{ github.token }}
           file: dist/*
-          tag: ${{ github.ref }}
+          tag: ${{ github.event.release.tag_name }}
           overwrite: true
           file_glob: true
 
