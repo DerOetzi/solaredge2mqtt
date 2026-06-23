@@ -447,12 +447,17 @@ class MonitoringSite(HTTPClientAsync):
             )
         )
 
-    async def _add_login_headers(self, headers: dict[str, str] = {}) -> dict[str, str]:
+    async def _add_login_headers(
+        self, headers: dict[str, str] | None = None
+    ) -> dict[str, str]:
         token, remember_me_cookie = await self.login()
 
-        headers["X-CSRF-TOKEN"] = token
-        headers["Cookie"] = f"SPRING_SECURITY_REMEMBER_ME_COOKIE={remember_me_cookie}"
-        return headers
+        merged_headers = dict(headers) if headers else {}
+        merged_headers["X-CSRF-TOKEN"] = token
+        merged_headers["Cookie"] = (
+            f"SPRING_SECURITY_REMEMBER_ME_COOKIE={remember_me_cookie}"
+        )
+        return merged_headers
 
     async def login(self) -> tuple[str, str]:
         try:
