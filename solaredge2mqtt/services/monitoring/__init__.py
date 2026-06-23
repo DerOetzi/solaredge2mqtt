@@ -347,7 +347,7 @@ class MonitoringSite(HTTPClientAsync):
     async def _execute_charge_control(self, device_id: int, level: int) -> None:
         if not self.settings.is_configured:
             logger.warning(
-                "Cannot control wallbox charging: monitoring account not configured"
+                "Cannot control EV charger charging: monitoring account not configured"
             )
             return
 
