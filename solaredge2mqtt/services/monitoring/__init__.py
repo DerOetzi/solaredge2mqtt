@@ -10,8 +10,8 @@ from solaredge2mqtt.core.influxdb import InfluxDBAsync, Point
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.core.timer.events import (
+    Interval5MinTriggerEvent,
     Interval15MinTriggerEvent,
-    IntervalBaseTriggerEvent,
 )
 from solaredge2mqtt.services.http_async import HTTPClientAsync
 from solaredge2mqtt.services.monitoring.events import (
@@ -87,8 +87,8 @@ class MonitoringSite(HTTPClientAsync):
         ) as error:
             logger.warning("Unable to discover EV chargers: {error}", error=error)
 
-    @EventBus.subscribe(IntervalBaseTriggerEvent)
-    async def refresh_evchargers(self, event: IntervalBaseTriggerEvent) -> None:
+    @EventBus.subscribe(Interval5MinTriggerEvent)
+    async def refresh_evchargers(self, event: Interval5MinTriggerEvent) -> None:
         if not self.found_evchargers:
             return
 
