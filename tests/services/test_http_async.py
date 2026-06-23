@@ -379,3 +379,89 @@ class TestHTTPClientAsync:
         assert result == "target_value"
 
         await client.close()
+
+
+class TestHTTPClientAsyncPut:
+    """Tests for HTTPClientAsync _put method."""
+
+    @pytest.mark.asyncio
+    async def test_put_success_json(self):
+        """Test _put returns JSON data on success."""
+        client = HTTPClientAsync("TestService")
+
+        mock_response = AsyncMock()
+        mock_response.status = 200
+        mock_response.json = AsyncMock(return_value={"status": "PASSED"})
+        mock_response.__aenter__.return_value = mock_response
+        mock_response.__aexit__.return_value = None
+        mock_response.raise_for_status = MagicMock()
+
+        mock_session = MagicMock()
+        mock_session.put = MagicMock(return_value=mock_response)
+
+        with patch.object(client, "init"):
+            client.session = mock_session
+            result = await client._put(
+                "https://test.com",
+                json={"level": 100},
+            )
+
+        assert result == {"status": "PASSED"}
+        mock_session.put.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_put_connection_error_returns_none(self):
+        """Test _put returns None on connection error."""
+        client = HTTPClientAsync("TestService")
+
+        mock_session = MagicMock()
+        mock_session.put = MagicMock(
+            side_effect=aiohttp.ClientConnectionError("Connection failed")
+        )
+
+        with patch.object(client, "init"):
+            client.session = mock_session
+            result = await client._put("https://test.com", json={"level": 0})
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_put_raises_when_session_stays_none(self):
+        """Test _put raises when init does not initialize a session."""
+        client = HTTPClientAsync("TestService")
+
+        with patch.object(client, "init", return_value=None):
+            with pytest.raises(RuntimeError, match="HTTP session not initialized"):
+                await client._put("https://test.com", json={"level": 50})
+
+    @pytest.mark.asyncio
+    async def test_put_with_401_calls_login(self):
+        """Test _put retries through login callback on 401 response."""
+        client = HTTPClientAsync("TestService")
+
+        unauthorized = AsyncMock()
+        unauthorized.status = 401
+        unauthorized.__aenter__.return_value = unauthorized
+        unauthorized.__aexit__.return_value = None
+
+        authorized = AsyncMock()
+        authorized.status = 200
+        authorized.json = AsyncMock(return_value={"status": "PASSED"})
+        authorized.__aenter__.return_value = authorized
+        authorized.__aexit__.return_value = None
+        authorized.raise_for_status = MagicMock()
+
+        mock_session = MagicMock()
+        mock_session.put = MagicMock(side_effect=[unauthorized, authorized])
+
+        login = AsyncMock()
+
+        with patch.object(client, "init"):
+            client.session = mock_session
+            result = await client._put(
+                "https://test.com", json={"level": 100}, login=login
+            )
+
+        login.assert_awaited_once()
+        assert result == {"status": "PASSED"}
+        assert mock_session.put.call_count == 2

@@ -75,29 +75,33 @@ class TestMonitoringSiteLogin:
     async def test_login_success(
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
-        """Test successful login."""
+        """Test successful login returns (csrf_token, remember_me_cookie) tuple."""
         site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
         site._post = AsyncMock(return_value="success")
-        site.get_cookie = MagicMock(side_effect=[None, "csrf-token"])
+        site.get_cookie = MagicMock(
+            side_effect=[None, None, "csrf-token", "remember-me-val"]
+        )
 
-        token = await site.login()
+        token, remember_me = await site.login()
 
         site._post.assert_called()
         assert token == "csrf-token"
+        assert remember_me == "remember-me-val"
 
     @pytest.mark.asyncio
     async def test_login_returns_existing_token_without_post(
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
-        """Test login returns existing CSRF token without HTTP request."""
+        """Test login returns existing tokens as tuple without HTTP request."""
         site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
         site._post = AsyncMock()
         site.get_cookie = MagicMock(return_value="existing-csrf-token")
 
-        token = await site.login()
+        token, remember_me = await site.login()
 
         site._post.assert_not_called()
         assert token == "existing-csrf-token"
+        assert remember_me == "existing-csrf-token"
 
     @pytest.mark.asyncio
     async def test_login_missing_csrf_token_after_post(
@@ -106,7 +110,7 @@ class TestMonitoringSiteLogin:
         """Test login raises when CSRF token is missing after POST."""
         site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
         site._post = AsyncMock(return_value="success")
-        site.get_cookie = MagicMock(side_effect=[None, None])
+        site.get_cookie = MagicMock(side_effect=[None, None, None, None])
 
         with pytest.raises(ConfigurationException):
             await site.login()
@@ -286,7 +290,7 @@ class TestMonitoringSiteGetModulesPower:
     ):
         """Test get_modules_power raises InvalidDataException on HTTP error."""
         site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
-        site.login = AsyncMock(return_value="csrf-token")
+        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "csrf-token"})
 
         mock_request_info = MagicMock(spec=RequestInfo)
         mock_request_info.real_url = "https://test.com"
@@ -306,7 +310,7 @@ class TestMonitoringSiteGetModulesPower:
     ):
         """Test get_modules_power raises InvalidDataException on non-string response."""
         site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
-        site.login = AsyncMock(return_value="csrf-token")
+        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "csrf-token"})
         site._post = AsyncMock(return_value={"unexpected": "dict"})
 
         with pytest.raises(InvalidDataException):
@@ -318,7 +322,7 @@ class TestMonitoringSiteGetModulesPower:
     ):
         """Test get_modules_power raises InvalidDataException on timeout."""
         site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
-        site.login = AsyncMock(return_value="csrf-token")
+        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "csrf-token"})
         site._post = AsyncMock(side_effect=asyncio.TimeoutError())
 
         with pytest.raises(InvalidDataException):
@@ -332,16 +336,14 @@ class TestMonitoringSiteGetLogical:
     async def test_get_logical_needs_login(
         self, mock_monitoring_settings, mock_event_bus, mock_influxdb
     ):
-        """Test _get_logical logs in if no CSRF token."""
+        """Test _get_logical calls login via _add_login_headers."""
         site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
-        site.cookie_exists = MagicMock(return_value=False)
-        site.login = AsyncMock()
-        site.get_cookie = MagicMock(return_value="test_token")
+        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "test_token"})
         site._get = AsyncMock(return_value={"result": "data"})
 
         result = await site._get_logical()
 
-        site.login.assert_called_once()
+        site._add_login_headers.assert_called_once()
         assert result == {"result": "data"}
 
     @pytest.mark.asyncio
@@ -372,7 +374,7 @@ class TestMonitoringSiteGetLogical:
     ):
         """Test _get_logical raises on non-dict response payload."""
         site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
-        site.login = AsyncMock(return_value="test_token")
+        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "test_token"})
         site._get = AsyncMock(return_value=["unexpected", "list"])
 
         with pytest.raises(InvalidDataException) as exc_info:
@@ -412,7 +414,7 @@ class TestMonitoringSiteGetPlayback:
     ):
         """Test _get_playback parses playback JS-like payload into dict."""
         site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
-        site.login = AsyncMock(return_value="test_token")
+        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "test_token"})
         site._post = AsyncMock(return_value="{'reportersData': {}}")
 
         with patch("solaredge2mqtt.services.monitoring.json.loads") as loads_mock:
@@ -710,3 +712,419 @@ class TestMonitoringSiteExtraBranches:
 
         # One module publish + one total publish
         assert mock_event_bus.emit.call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# Shared EV charger test data
+# ---------------------------------------------------------------------------
+
+SAMPLE_EV_CHARGER_DEVICE = {
+    "manufacturer": "Keba AG",
+    "model": "P30",
+    "swVersion": "1.2.3",
+    "serialNumber": "SN123456",
+    "name": "EV Charger",
+    "reporterId": 12345,
+    "chargerStatus": "READY",
+    "connectionStatus": "CONNECTED",
+    "sessionActive": True,
+    "sessionEnergy": 5000,
+    "ratedPower": 11000.0,
+    "actionOperationDetails": [{"actionOp": "OFF"}],
+}
+
+SAMPLE_DEVICES_RESPONSE = {"devicesByType": {"EV_CHARGER": [SAMPLE_EV_CHARGER_DEVICE]}}
+
+
+class TestMonitoringSiteAsyncInit:
+    """Tests for MonitoringSite.async_init."""
+
+    @pytest.mark.asyncio
+    async def test_async_init_calls_discover_evchargers(
+        self, mock_monitoring_settings, mock_event_bus
+    ):
+        site = MonitoringSite(mock_monitoring_settings, None)
+        site._discover_evchargers = AsyncMock()
+
+        await site.async_init()
+
+        site._discover_evchargers.assert_called_once()
+
+
+class TestMonitoringSiteDiscoverEVChargers:
+    """Tests for MonitoringSite._discover_evchargers."""
+
+    @pytest.mark.asyncio
+    async def test_discover_finds_chargers_and_subscribes(
+        self, mock_monitoring_settings, mock_event_bus
+    ):
+        from solaredge2mqtt.services.monitoring.events import (
+            EVChargerChargeLevelSubscribeEvent,
+        )
+
+        site = MonitoringSite(mock_monitoring_settings, None)
+        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+        site._get = AsyncMock(return_value=SAMPLE_DEVICES_RESPONSE)
+
+        await site._discover_evchargers()
+
+        assert site.found_evchargers is True
+        emit_calls = mock_event_bus.emit.call_args_list
+        assert any(
+            isinstance(call[0][0], EVChargerChargeLevelSubscribeEvent)
+            for call in emit_calls
+        )
+
+    @pytest.mark.asyncio
+    async def test_discover_no_chargers_does_not_set_flag(
+        self, mock_monitoring_settings, mock_event_bus
+    ):
+        site = MonitoringSite(mock_monitoring_settings, None)
+        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+        site._get = AsyncMock(return_value={"devicesByType": {"EV_CHARGER": []}})
+
+        await site._discover_evchargers()
+
+        assert site.found_evchargers is False
+        mock_event_bus.emit.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_discover_exception_logs_warning_no_raise(
+        self, mock_monitoring_settings, mock_event_bus
+    ):
+        site = MonitoringSite(mock_monitoring_settings, None)
+        site._add_login_headers = AsyncMock(
+            side_effect=ConfigurationException("monitoring", "no login")
+        )
+
+        await site._discover_evchargers()
+
+        assert site.found_evchargers is False
+
+    @pytest.mark.asyncio
+    async def test_discover_timeout_logs_warning_no_raise(
+        self, mock_monitoring_settings, mock_event_bus
+    ):
+        site = MonitoringSite(mock_monitoring_settings, None)
+        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+        site._get = AsyncMock(side_effect=asyncio.TimeoutError())
+
+        await site._discover_evchargers()
+
+        assert site.found_evchargers is False
+
+
+class TestMonitoringSiteRefreshEVChargers:
+    """Tests for MonitoringSite.refresh_evchargers."""
+
+    @pytest.mark.asyncio
+    async def test_refresh_skips_when_no_chargers_found(
+        self, mock_monitoring_settings, mock_event_bus
+    ):
+        from solaredge2mqtt.core.timer.events import Interval5MinTriggerEvent
+
+        site = MonitoringSite(mock_monitoring_settings, None)
+        site._add_login_headers = AsyncMock()
+
+        await site.refresh_evchargers(Interval5MinTriggerEvent())
+
+        site._add_login_headers.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_refresh_emits_read_publish_and_online_events(
+        self, mock_monitoring_settings, mock_event_bus
+    ):
+        from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
+        from solaredge2mqtt.core.timer.events import Interval5MinTriggerEvent
+        from solaredge2mqtt.services.monitoring.events import (
+            EVChargerReadEvent,
+            MonitoringOnlineEvent,
+        )
+
+        site = MonitoringSite(mock_monitoring_settings, None)
+        site.found_evchargers = True
+        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+        site._get = AsyncMock(return_value=SAMPLE_DEVICES_RESPONSE)
+
+        await site.refresh_evchargers(Interval5MinTriggerEvent())
+
+        emit_calls = mock_event_bus.emit.call_args_list
+        types_emitted = [type(call[0][0]) for call in emit_calls]
+        assert EVChargerReadEvent in types_emitted
+        assert MQTTPublishEvent in types_emitted
+        assert MonitoringOnlineEvent in types_emitted
+
+    @pytest.mark.asyncio
+    async def test_refresh_on_error_emits_offline_event(
+        self, mock_monitoring_settings, mock_event_bus
+    ):
+        from solaredge2mqtt.core.timer.events import Interval5MinTriggerEvent
+        from solaredge2mqtt.services.monitoring.events import MonitoringOfflineEvent
+
+        site = MonitoringSite(mock_monitoring_settings, None)
+        site.found_evchargers = True
+        site._add_login_headers = AsyncMock(
+            side_effect=ConfigurationException("monitoring", "login fail")
+        )
+
+        await site.refresh_evchargers(Interval5MinTriggerEvent())
+
+        emit_calls = mock_event_bus.emit.call_args_list
+        assert any(
+            isinstance(call[0][0], MonitoringOfflineEvent) for call in emit_calls
+        )
+
+    @pytest.mark.asyncio
+    async def test_refresh_on_timeout_emits_offline_event(
+        self, mock_monitoring_settings, mock_event_bus
+    ):
+        from aiohttp import ClientResponseError, RequestInfo
+
+        from solaredge2mqtt.core.timer.events import Interval5MinTriggerEvent
+        from solaredge2mqtt.services.monitoring.events import MonitoringOfflineEvent
+
+        site = MonitoringSite(mock_monitoring_settings, None)
+        site.found_evchargers = True
+        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+
+        mock_request_info = MagicMock(spec=RequestInfo)
+        mock_request_info.real_url = "https://test.com"
+        site._get = AsyncMock(
+            side_effect=ClientResponseError(
+                request_info=mock_request_info, history=(), status=503
+            )
+        )
+
+        await site.refresh_evchargers(Interval5MinTriggerEvent())
+
+        emit_calls = mock_event_bus.emit.call_args_list
+        assert any(
+            isinstance(call[0][0], MonitoringOfflineEvent) for call in emit_calls
+        )
+
+
+class TestMonitoringSiteExtractEVChargers:
+    """Tests for MonitoringSite._extract_evchargers static method."""
+
+    def test_non_dict_result_returns_empty(self):
+        assert MonitoringSite._extract_evchargers([]) == []
+
+    def test_missing_devices_by_type_returns_empty(self):
+        assert MonitoringSite._extract_evchargers({}) == []
+
+    def test_devices_by_type_not_dict_returns_empty(self):
+        assert MonitoringSite._extract_evchargers({"devicesByType": "bad"}) == []
+
+    def test_chargers_not_list_returns_empty(self):
+        result = MonitoringSite._extract_evchargers(
+            {"devicesByType": {"EV_CHARGER": "bad"}}
+        )
+        assert result == []
+
+    def test_charger_without_reporter_id_filtered_out(self):
+        result = MonitoringSite._extract_evchargers(
+            {"devicesByType": {"EV_CHARGER": [{"no_id": True}]}}
+        )
+        assert result == []
+
+    def test_non_dict_charger_entry_filtered_out(self):
+        result = MonitoringSite._extract_evchargers(
+            {"devicesByType": {"EV_CHARGER": ["not_a_dict"]}}
+        )
+        assert result == []
+
+    def test_valid_charger_returned(self):
+        device = {"reporterId": 12345, "name": "Charger"}
+        result = MonitoringSite._extract_evchargers(
+            {"devicesByType": {"EV_CHARGER": [device]}}
+        )
+        assert result == [device]
+
+    def test_mixed_valid_and_invalid_chargers(self):
+        valid = {"reporterId": 12345}
+        invalid_no_id = {"name": "No ID"}
+        invalid_not_dict = "string"
+        result = MonitoringSite._extract_evchargers(
+            {"devicesByType": {"EV_CHARGER": [valid, invalid_no_id, invalid_not_dict]}}
+        )
+        assert result == [valid]
+
+
+class TestMonitoringSiteHandleChargeCommand:
+    """Tests for MonitoringSite.handle_charge_command."""
+
+    @pytest.mark.asyncio
+    async def test_valid_topic_calls_execute_charge_control(
+        self, mock_monitoring_settings, mock_event_bus
+    ):
+        from solaredge2mqtt.services.monitoring.events import EVChargerChargeLevelEvent
+        from solaredge2mqtt.services.monitoring.inputs import EVChargerChargeLevelInput
+
+        site = MonitoringSite(mock_monitoring_settings, None)
+        site._execute_charge_control = AsyncMock()
+
+        event = EVChargerChargeLevelEvent(
+            topic="monitoring/evcharger/12345/charge_level",
+            input=EVChargerChargeLevelInput(level=75),
+        )
+        await site.handle_charge_command(event)
+
+        site._execute_charge_control.assert_called_once_with(12345, 75)
+
+    @pytest.mark.asyncio
+    async def test_topic_without_evcharger_segment_logs_warning(
+        self, mock_monitoring_settings, mock_event_bus
+    ):
+        from solaredge2mqtt.services.monitoring.events import EVChargerChargeLevelEvent
+        from solaredge2mqtt.services.monitoring.inputs import EVChargerChargeLevelInput
+
+        site = MonitoringSite(mock_monitoring_settings, None)
+        site._execute_charge_control = AsyncMock()
+
+        event = EVChargerChargeLevelEvent(
+            topic="monitoring/other/12345/charge_level",
+            input=EVChargerChargeLevelInput(level=50),
+        )
+        await site.handle_charge_command(event)
+
+        site._execute_charge_control.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_topic_with_evcharger_at_end_logs_warning(
+        self, mock_monitoring_settings, mock_event_bus
+    ):
+        from solaredge2mqtt.services.monitoring.events import EVChargerChargeLevelEvent
+        from solaredge2mqtt.services.monitoring.inputs import EVChargerChargeLevelInput
+
+        site = MonitoringSite(mock_monitoring_settings, None)
+        site._execute_charge_control = AsyncMock()
+
+        event = EVChargerChargeLevelEvent(
+            topic="monitoring/evcharger",
+            input=EVChargerChargeLevelInput(level=50),
+        )
+        await site.handle_charge_command(event)
+
+        site._execute_charge_control.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_topic_with_non_numeric_reporter_id_logs_warning(
+        self, mock_monitoring_settings, mock_event_bus
+    ):
+        from solaredge2mqtt.services.monitoring.events import EVChargerChargeLevelEvent
+        from solaredge2mqtt.services.monitoring.inputs import EVChargerChargeLevelInput
+
+        site = MonitoringSite(mock_monitoring_settings, None)
+        site._execute_charge_control = AsyncMock()
+
+        event = EVChargerChargeLevelEvent(
+            topic="monitoring/evcharger/notanumber/charge_level",
+            input=EVChargerChargeLevelInput(level=50),
+        )
+        await site.handle_charge_command(event)
+
+        site._execute_charge_control.assert_not_called()
+
+
+class TestMonitoringSiteClose:
+    """Tests for MonitoringSite.close."""
+
+    @pytest.mark.asyncio
+    async def test_close_emits_offline_event(
+        self, mock_monitoring_settings, mock_event_bus
+    ):
+        from solaredge2mqtt.services.monitoring.events import MonitoringOfflineEvent
+
+        site = MonitoringSite(mock_monitoring_settings, None)
+        await site.close()
+
+        emit_calls = mock_event_bus.emit.call_args_list
+        assert any(
+            isinstance(call[0][0], MonitoringOfflineEvent) for call in emit_calls
+        )
+
+
+class TestMonitoringSiteExecuteChargeControl:
+    """Tests for MonitoringSite._execute_charge_control."""
+
+    @pytest.mark.asyncio
+    async def test_not_configured_returns_without_put(
+        self, mock_monitoring_settings, mock_event_bus
+    ):
+        mock_monitoring_settings.is_configured = False
+        site = MonitoringSite(mock_monitoring_settings, None)
+        site._put = AsyncMock()
+
+        await site._execute_charge_control(12345, 50)
+
+        site._put.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_passed_result_logs_success(
+        self, mock_monitoring_settings, mock_event_bus
+    ):
+        mock_monitoring_settings.is_configured = True
+        site = MonitoringSite(mock_monitoring_settings, None)
+        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+        site._put = AsyncMock(return_value={"status": "PASSED"})
+
+        await site._execute_charge_control(12345, 50)
+
+        site._put.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_non_passed_result_logs_warning(
+        self, mock_monitoring_settings, mock_event_bus
+    ):
+        mock_monitoring_settings.is_configured = True
+        site = MonitoringSite(mock_monitoring_settings, None)
+        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+        site._put = AsyncMock(return_value={"status": "FAILED"})
+
+        await site._execute_charge_control(12345, 50)
+
+        site._put.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_non_dict_result_logs_warning(
+        self, mock_monitoring_settings, mock_event_bus
+    ):
+        mock_monitoring_settings.is_configured = True
+        site = MonitoringSite(mock_monitoring_settings, None)
+        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+        site._put = AsyncMock(return_value=None)
+
+        await site._execute_charge_control(12345, 50)
+
+        site._put.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_client_error_logs_warning_no_raise(
+        self, mock_monitoring_settings, mock_event_bus
+    ):
+        from aiohttp import ClientResponseError, RequestInfo
+
+        mock_monitoring_settings.is_configured = True
+        site = MonitoringSite(mock_monitoring_settings, None)
+        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+
+        mock_request_info = MagicMock(spec=RequestInfo)
+        mock_request_info.real_url = "https://test.com"
+        site._put = AsyncMock(
+            side_effect=ClientResponseError(
+                request_info=mock_request_info, history=(), status=500
+            )
+        )
+
+        await site._execute_charge_control(12345, 50)
+
+    @pytest.mark.asyncio
+    async def test_timeout_logs_warning_no_raise(
+        self, mock_monitoring_settings, mock_event_bus
+    ):
+        mock_monitoring_settings.is_configured = True
+        site = MonitoringSite(mock_monitoring_settings, None)
+        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+        site._put = AsyncMock(side_effect=asyncio.TimeoutError())
+
+        await site._execute_charge_control(12345, 50)

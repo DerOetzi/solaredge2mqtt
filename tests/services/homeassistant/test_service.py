@@ -22,6 +22,7 @@ from solaredge2mqtt.services.homeassistant.service import (
 )
 from solaredge2mqtt.services.modbus.events import ModbusUnitsReadEvent
 from solaredge2mqtt.services.models import Component
+from solaredge2mqtt.services.monitoring.events import EVChargerReadEvent
 from solaredge2mqtt.services.powerflow.events import PowerflowGeneratedEvent
 from solaredge2mqtt.services.wallbox.events import WallboxReadEvent
 
@@ -60,7 +61,6 @@ class TestHomeAssistantDiscoveryInit:
 
         assert discovery.settings is mock_service_settings
         mock_event_bus.register.assert_called_once_with(discovery)
-        assert discovery._status_topic == "homeassistant/status"
 
     def test_subscribes_to_events(self, mock_service_settings, mock_event_bus):
         """Test HomeAssistantDiscovery subscribes to events."""
@@ -79,6 +79,7 @@ class TestHomeAssistantDiscoveryEventSubscriptions:
                 ForecastEvent,
                 EnergyReadEvent,
                 WallboxReadEvent,
+                EVChargerReadEvent,
             },
             "units_discovery": {ModbusUnitsReadEvent},
             "powerflow_discovery": {PowerflowGeneratedEvent},
@@ -107,7 +108,10 @@ class TestHomeAssistantDiscoveryAsyncInit:
         call_args = mock_event_bus.emit.call_args
         event = call_args[0][0]
         assert isinstance(event, MQTTSubscribeEvent)
-        assert event.topic == "homeassistant/status"
+        # The MQTT client now centrally prepends the prefix; the status topic
+        # is published on Home Assistant's own prefix, passed as an override.
+        assert event.topic == "status"
+        assert event.topic_prefix == "homeassistant"
 
 
 class TestHomeAssistantDiscoveryStateTopic:
@@ -250,7 +254,7 @@ class TestHomeAssistantDiscoveryComponentDiscovery:
         mock_component.info.period.auto_discovery = True
 
         # Mark as already seen
-        discovery._seen_energy_periods.add("energy/today")
+        discovery._seen_component_topics.add("energy/today")
 
         event = EnergyReadEvent(mock_component)
 

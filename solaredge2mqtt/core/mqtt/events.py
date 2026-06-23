@@ -115,12 +115,17 @@ class MQTTSubscribeEvent(Generic[TMQTTReceivedEvent], BaseEvent):
             "for MQTTSubscribeEvent[TMQTTReceivedEvent]"
         )
 
-    def __init__(self, topic: str):
+    def __init__(self, topic: str, topic_prefix: str | None = None):
         self._topic: str = topic
+        self._topic_prefix: str | None = topic_prefix
 
     @property
     def topic(self) -> str:
         return self._topic
+
+    @property
+    def topic_prefix(self) -> str | None:
+        return self._topic_prefix
 
     @classmethod
     def event(cls) -> type[TMQTTReceivedEvent]:

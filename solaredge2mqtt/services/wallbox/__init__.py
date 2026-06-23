@@ -122,7 +122,7 @@ class WallboxClient(HTTPClientAsync):
 
     async def login(self):
         try:
-            logger.info("Logging in to Wallbox charger...")
+            logger.info("Logging in to Wallbox...")
             self.authorization = None
             async with asyncio.timeout(5):
                 response = await self._post(
@@ -139,10 +139,10 @@ class WallboxClient(HTTPClientAsync):
 
             self.authorization = AuthorizationTokens.model_validate(response)
 
-            logger.info("Logged in to EV charger")
+            logger.info("Logged in to Wallbox")
         except (ClientResponseError, asyncio.TimeoutError) as error:
             raise ConfigurationException(
-                "wallbox", "Unable to login to EV charger"
+                "wallbox", "Unable to login to Wallbox"
             ) from error
 
     async def _refresh_token(self):

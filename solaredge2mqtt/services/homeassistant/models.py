@@ -167,6 +167,7 @@ class HomeAssistantBinarySensorType(HomeAssistantEntityBaseType):
 
 class HomeAssistantNumberType(HomeAssistantEntityBaseType):
     ACTIVE_POWER_LIMIT = "active_power_limit", None, "%", 0, 100, 1, "slider"
+    EV_CHARGE_LEVEL = "charge_level", None, "%", 0, 100, 100, "slider"
 
     def __init__(
         self,

@@ -165,6 +165,9 @@ class Service:
 
                     await self.powerflow.async_init()
 
+                    if self.monitoring:
+                        await self.monitoring.async_init()
+
                     self._start_mqtt_listener()
                     self.schedule_loop(1, self.timer.loop)
 
