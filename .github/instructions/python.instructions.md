@@ -22,7 +22,7 @@ applyTo: '**/*.py'
 - Always prioritize readability and clarity.
 - Source code must be self-explanatory; do not use inline or block comments in source files.
 - Handle edge cases and write clear exception handling.
-- Use always the most specific exceptions; avoid `Exception` or `BaseException` when possible.
+- Always use the most specific exceptions; avoid `Exception` or `BaseException` when possible.
 - Make usage of libraries obvious from explicit naming and clear APIs.
 - Use consistent naming conventions and follow language-specific best practices.
 - Write concise, efficient, and idiomatic code.
