@@ -191,13 +191,47 @@ skipping upstream configuration"
 
 convert_git_to_relative() {
     local WORKTREE_PATH=$1
+    local WORKTREE_NAME
+    WORKTREE_NAME=$(basename "$WORKTREE_PATH")
     local GIT_FILE="$WORKTREE_PATH/.git"
-    
+
     [ ! -f "$GIT_FILE" ] && return 0
-    
-    info "Converting .git to relative path..."
-    echo "gitdir: ../.repo/worktrees/$(basename "$WORKTREE_PATH")" > "$GIT_FILE"
-    success "Converted .git to relative path"
+
+    # ── 1. Fix Worktree → Bare Repo (.git file) ──────────────────────────────
+    local EXPECTED_GITDIR="../.repo/worktrees/$WORKTREE_NAME"
+    local CURRENT_GITDIR
+    CURRENT_GITDIR=$(sed 's/gitdir: //' "$GIT_FILE")
+
+    if [ "$CURRENT_GITDIR" != "$EXPECTED_GITDIR" ]; then
+        info "Converting .git to relative path..."
+        echo "gitdir: $EXPECTED_GITDIR" > "$GIT_FILE"
+        success "Converted .git → $EXPECTED_GITDIR"
+    else
+        info ".git already uses relative path"
+    fi
+
+    # ── 2. Fix Bare Repo → Worktree (gitdir back-reference) ──────────────────
+    # Relative path from .repo/worktrees/<name>/gitdir to <name>/.git
+    # Both on host and in devcontainer the structure is flat:
+    #   <root>/.repo/worktrees/<name>/gitdir  →  ../../../<name>/.git
+    local BACK_REF_FILE="$REPO_DIR/worktrees/$WORKTREE_NAME/gitdir"
+    local EXPECTED_BACK_REF="../../../$WORKTREE_NAME/.git"
+
+    if [ ! -f "$BACK_REF_FILE" ]; then
+        warning "Back-reference not found: $BACK_REF_FILE"
+        return 0
+    fi
+
+    local CURRENT_BACK_REF
+    CURRENT_BACK_REF=$(cat "$BACK_REF_FILE")
+
+    if [ "$CURRENT_BACK_REF" != "$EXPECTED_BACK_REF" ]; then
+        info "Converting back-reference to relative path..."
+        echo "$EXPECTED_BACK_REF" > "$BACK_REF_FILE"
+        success "Converted back-reference → $EXPECTED_BACK_REF"
+    else
+        info "Back-reference already uses relative path"
+    fi
 }
 
 sanitize_branch_name() {
