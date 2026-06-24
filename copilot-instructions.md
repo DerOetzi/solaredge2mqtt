@@ -5,5 +5,5 @@ are in [AGENTS.md](AGENTS.md). Read it before generating code or making suggesti
 
 ## Copilot-Specific Notes
 
-- Use the `copilot-agents.yml` to select the appropriate agent for a task.
-- The `python.instructions.md` applies Python conventions automatically to `*.py` files.
+- Use the `agents/copilot-agents.yml` file to select the appropriate agent for a task.
+- The `.github/instructions/python.instructions.md` applies Python conventions automatically to `*.py` files.
