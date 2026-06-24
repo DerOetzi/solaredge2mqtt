@@ -5,8 +5,9 @@ applyTo: '**/*.py'
 
 # Python Coding Conventions
 
-> These conventions are the canonical source for Python coding rules. [AGENTS.md](../../AGENTS.md)
-> references this file and adds project-specific constraints (Python version, language, diagrams).
+> This file is an additional copy for reference; the Copilot-applied canonical instructions live at
+> [`.github/instructions/python.instructions.md`](../.github/instructions/python.instructions.md).
+> Project-specific constraints are documented in [AGENTS.md](../AGENTS.md).
 
 ## Python Instructions
 
