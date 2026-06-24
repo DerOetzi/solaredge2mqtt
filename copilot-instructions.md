@@ -1,7 +1,7 @@
 # Copilot Instructions for SolarEdge2MQTT
 
 The full project context, code conventions, security guidelines, and agent role definitions
-are in [AGENTS.md](../AGENTS.md). Read it before generating code or making suggestions.
+are in [AGENTS.md](AGENTS.md). Read it before generating code or making suggestions.
 
 ## Copilot-Specific Notes
 
