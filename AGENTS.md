@@ -1,8 +1,8 @@
 # SolarEdge2MQTT — Agent & AI Instructions
 
 This file is the single source of truth for AI coding assistants (Claude Code, GitHub Copilot,
-Cursor, etc.). Tool-specific configurations in `.github/` reference this file and add only
-tool-specific syntax on top.
+Cursor, etc.). Tool-specific configuration files (for example under `.github/`) should reference
+this file and add only tool-specific syntax on top.
 
 ## Project Overview
 
