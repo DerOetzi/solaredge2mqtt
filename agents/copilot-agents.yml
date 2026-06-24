@@ -1,0 +1,202 @@
+# SolarEdge2MQTT Copilot Agents Team Configuration
+#
+# This file defines the custom agents available for the SolarEdge2MQTT project.
+# Each agent is specialized for a specific role and has its own instructions.
+#
+# IMPORTANT: Agent roles have hard constraints:
+# - business-analyst, pv-expert, reviewer, security-expert, ml-expert: READ-ONLY (no code changes)
+# - documentation-expert: Documentation files only (*.md, examples/)
+# - qa-engineer: Test files only (tests/)
+# - developer: Full code access (primary implementation agent)
+
+agents:
+  # Business Analysis - READ-ONLY ROLE
+  - name: business-analyst
+    description: >
+      Business Analyst expert for analyzing user-reported issues and translating 
+      them into clear, actionable requirements and user stories.
+      READ-ONLY: Cannot modify code, create branches, or open PRs.
+    instructions: agents/business-analyst.md
+    triggers:
+      - "analyze issue"
+      - "user story"
+      - "requirements"
+      - "impact assessment"
+
+  # Code Review - READ-ONLY ROLE
+  - name: reviewer
+    description: >
+      Code Review expert for reviewing pull requests and ensuring code quality, 
+      maintainability, and adherence to project standards.
+      READ-ONLY: Provides feedback only, cannot modify code.
+    instructions: agents/reviewer.md
+    triggers:
+      - "review"
+      - "code review"
+      - "pull request"
+      - "PR review"
+
+  # Development - FULL CODE ACCESS
+  - name: developer
+    description: >
+      Python Developer expert for implementing new features and fixing bugs 
+      following project conventions and best practices.
+      FULL ACCESS: Can create, modify, and delete code files.
+    instructions: agents/developer.md
+    triggers:
+      - "implement"
+      - "develop"
+      - "fix bug"
+      - "add feature"
+      - "code"
+
+  # Machine Learning - READ-ONLY ROLE
+  - name: ml-expert
+    description: >
+      Machine Learning expert for providing guidance on the PV production 
+      forecasting service using historical data and weather information.
+      READ-ONLY: Provides ML expertise and code examples as suggestions only, cannot modify code.
+    instructions: agents/ml-expert.md
+    triggers:
+      - "forecast"
+      - "machine learning"
+      - "ML"
+      - "prediction"
+      - "model training"
+
+  # Quality Assurance - TEST FILES ONLY
+  - name: qa-engineer
+    description: >
+      Quality Assurance expert for ensuring software quality through comprehensive 
+      testing, test planning, and quality metrics.
+      LIMITED ACCESS: Can only modify test files (tests/).
+    instructions: agents/qa-engineer.md
+    triggers:
+      - "test"
+      - "testing"
+      - "quality"
+      - "QA"
+      - "coverage"
+
+  # Documentation - DOCUMENTATION FILES ONLY
+  - name: documentation-expert
+    description: >
+      Documentation expert for ensuring clear, accurate, and up-to-date 
+      documentation, with a primary focus on the README.md file.
+      LIMITED ACCESS: Can only modify documentation files (*.md, examples/).
+    instructions: agents/documentation-expert.md
+    triggers:
+      - "documentation"
+      - "docs"
+      - "README"
+      - "document"
+
+  # Security - READ-ONLY ROLE
+  - name: security-expert
+    description: >
+      Security expert for reviewing all changes for security risks and ensuring 
+      the project maintains strong security practices.
+      READ-ONLY: Provides security analysis only, cannot modify code.
+    instructions: agents/security-expert.md
+    triggers:
+      - "security"
+      - "vulnerability"
+      - "credentials"
+      - "secrets"
+      - "audit"
+
+  # PV Domain Expert - READ-ONLY ROLE
+  - name: pv-expert
+    description: >
+      Photovoltaic Systems expert for providing domain expertise about solar 
+      energy systems, SolarEdge products, and power flow concepts.
+      READ-ONLY: Provides domain expertise only, cannot modify code.
+    instructions: agents/pv-expert.md
+    triggers:
+      - "photovoltaic"
+      - "PV"
+      - "solar"
+      - "inverter"
+      - "power flow"
+      - "SolarEdge"
+
+# Team configuration for collaborative workflows
+teams:
+  - name: solaredge2mqtt-team
+    description: Complete team for SolarEdge2MQTT development and maintenance
+    members:
+      - business-analyst
+      - reviewer
+      - developer
+      - ml-expert
+      - qa-engineer
+      - documentation-expert
+      - security-expert
+      - pv-expert
+
+# Workflow definitions for common tasks
+workflows:
+  # Feature development workflow
+  feature-development:
+    description: End-to-end workflow for implementing new features
+    steps:
+      - agent: business-analyst
+        action: Analyze requirements and create user stories
+      - agent: developer
+        action: Implement the feature
+      - agent: qa-engineer
+        action: Write and run tests
+      - agent: security-expert
+        action: Review for security issues
+      - agent: reviewer
+        action: Perform code review
+      - agent: documentation-expert
+        action: Update documentation
+
+  # Bug fix workflow
+  bug-fix:
+    description: Workflow for fixing reported bugs
+    steps:
+      - agent: business-analyst
+        action: Analyze the bug report
+      - agent: developer
+        action: Implement the fix
+      - agent: qa-engineer
+        action: Verify the fix and add regression tests
+      - agent: reviewer
+        action: Review the changes
+
+  # ML/Forecast improvement workflow
+  forecast-improvement:
+    description: Workflow for improving the forecast service
+    steps:
+      - agent: pv-expert
+        action: Provide domain expertise on PV factors
+      - agent: ml-expert
+        action: Implement ML improvements
+      - agent: qa-engineer
+        action: Validate model performance
+      - agent: reviewer
+        action: Review changes
+      - agent: documentation-expert
+        action: Update forecast documentation
+
+  # Security audit workflow
+  security-audit:
+    description: Workflow for security reviews
+    steps:
+      - agent: security-expert
+        action: Perform security audit
+      - agent: developer
+        action: Implement security fixes
+      - agent: reviewer
+        action: Review security changes
+
+  # Documentation update workflow
+  documentation-update:
+    description: Workflow for documentation changes
+    steps:
+      - agent: documentation-expert
+        action: Update documentation
+      - agent: reviewer
+        action: Review documentation changes
