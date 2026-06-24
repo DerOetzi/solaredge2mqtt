@@ -1,10 +1,5 @@
 {
   "features": {
-    "ghcr.io/devcontainers-extra/features/pylint:2": {
-      "version": "2.0.18",
-      "resolved": "ghcr.io/devcontainers-extra/features/pylint@sha256:c5aa6c40c6f98d86b8faa06900755243d31fb5bb173fd24ba2b07c2139b361c4",
-      "integrity": "sha256:c5aa6c40c6f98d86b8faa06900755243d31fb5bb173fd24ba2b07c2139b361c4"
-    },
     "ghcr.io/devcontainers/features/github-cli:1": {
       "version": "1.1.0",
       "resolved": "ghcr.io/devcontainers/features/github-cli@sha256:d22f50b70ed75339b4eed1ba9ecde3a1791f90e88d37936517e3bace0bbad671",
@@ -14,11 +9,6 @@
       "version": "1.8.0",
       "resolved": "ghcr.io/devcontainers/features/python@sha256:fbcad6955caeecc5ad3f7886baf652e25cba5225a6c4c2287c536de2e5607511",
       "integrity": "sha256:fbcad6955caeecc5ad3f7886baf652e25cba5225a6c4c2287c536de2e5607511"
-    },
-    "ghcr.io/hspaans/devcontainer-features/pyupgrade:2.0.0": {
-      "version": "2.0.0",
-      "resolved": "ghcr.io/hspaans/devcontainer-features/pyupgrade@sha256:326fed1dbe3253369321f5ca27e300171870ed357b90ec6144156042446acac6",
-      "integrity": "sha256:326fed1dbe3253369321f5ca27e300171870ed357b90ec6144156042446acac6"
     }
   }
 }

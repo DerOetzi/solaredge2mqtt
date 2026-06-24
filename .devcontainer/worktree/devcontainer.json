@@ -6,9 +6,7 @@
 		"ghcr.io/devcontainers/features/python:1": {
 			"version": "3.13"
 		},
-		"ghcr.io/devcontainers/features/github-cli:1": {},
-		"ghcr.io/hspaans/devcontainer-features/pyupgrade:2.0.0": {},
-		"ghcr.io/devcontainers-extra/features/pylint:2": {}
+		"ghcr.io/devcontainers/features/github-cli:1": {}
 	},
 	"mounts": [
 		"source=${localWorkspaceFolder}/../.repo,target=/workspaces/.repo,type=bind,consistency=cached",
@@ -23,7 +21,7 @@
 				"ms-python.vscode-pylance",
 				"ms-azuretools.vscode-containers",
 				"ms-azuretools.vscode-docker",
-				"jebbs.plantuml",
+				"bierner.markdown-mermaid",
 				"mhutchie.git-graph"
 			],
 			"settings": {
@@ -33,9 +31,7 @@
 					"source.organizeImports.ruff": "explicit"
 				},
 				"ruff.organizeImports": true,
-				"ruff.fixOnSave": true,
-				"plantuml.render": "PlantUMLServer",
-				"plantuml.server": "https://kroki.io/plantuml"
+				"ruff.fixOnSave": true
 			}
 		}
 	},
