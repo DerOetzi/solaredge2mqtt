@@ -5,6 +5,9 @@ from solaredge2mqtt.core.status.events import (
     ServiceOfflineEvent,
     ServiceOnlineEvent,
 )
+from solaredge2mqtt.core.timer.events import (
+    BetweenIntervalTriggerEvent,
+)
 
 
 class ServiceStatusController:
@@ -78,6 +81,12 @@ class ServiceStatusController:
                 return
 
         self._reset_debounce(service_name)
+
+    @EventBus.subscribe(BetweenIntervalTriggerEvent)
+    async def handle_intermediate_trigger(self, event: BetweenIntervalTriggerEvent):
+        logger.info("Resend status")
+        for service_name, is_online in self._status.items():
+            await self._publish_service_status(service_name, is_online)
 
     async def _publish_service_status(self, service_name: str, is_online: bool):
         self._status[service_name] = is_online

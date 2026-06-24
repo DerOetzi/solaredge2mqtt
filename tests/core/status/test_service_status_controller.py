@@ -11,6 +11,7 @@ from solaredge2mqtt.core.status.events import (
     ServiceOfflineEvent,
     ServiceOnlineEvent,
 )
+from solaredge2mqtt.core.timer.events import BetweenIntervalTriggerEvent
 
 
 class TestServiceStatusControllerInit:
@@ -483,3 +484,33 @@ class TestServiceStatusControllerIntegration:
             # Both should now be offline
             assert controller._status["service1"] is False
             assert controller._status["service2"] is False
+
+
+class TestServiceStatusControllerHandleIntermediateTrigger:
+    """Tests for ServiceStatusController.handle_intermediate_trigger."""
+
+    @pytest.mark.asyncio
+    async def test_handle_intermediate_trigger_publishes_all_service_statuses(self):
+        """
+        Test that BetweenIntervalTriggerEvent republishes
+        all known service statuses.
+        """
+        controller = ServiceStatusController()
+        controller._status = {"modbus": True, "mqtt": False}
+
+        with patch.object(EventBus, "emit", new_callable=AsyncMock) as mock_emit:
+            await controller.handle_intermediate_trigger(BetweenIntervalTriggerEvent())
+
+            emitted_topics = [call.args[0].topic for call in mock_emit.call_args_list]
+            assert "status/modbus" in emitted_topics
+            assert "status/mqtt" in emitted_topics
+
+    @pytest.mark.asyncio
+    async def test_handle_intermediate_trigger_empty_status_emits_nothing(self):
+        """Test that handle_intermediate_trigger with no services emits nothing."""
+        controller = ServiceStatusController()
+
+        with patch.object(EventBus, "emit", new_callable=AsyncMock) as mock_emit:
+            await controller.handle_intermediate_trigger(BetweenIntervalTriggerEvent())
+
+            mock_emit.assert_not_called()

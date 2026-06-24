@@ -4,6 +4,9 @@ from solaredge2mqtt.core.events.events import BaseEvent
 class IntervalBaseTriggerEvent(BaseEvent): ...  # pragma: no cover
 
 
+class BetweenIntervalTriggerEvent(BaseEvent): ...  # pragma: no cover
+
+
 class Interval1MinTriggerEvent(BaseEvent): ...  # pragma: no cover
 
 
