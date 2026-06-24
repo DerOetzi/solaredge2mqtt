@@ -6,6 +6,7 @@ import pytest
 
 from solaredge2mqtt.core.timer import Timer
 from solaredge2mqtt.core.timer.events import (
+    BetweenIntervalTriggerEvent,
     Interval1MinTriggerEvent,
     Interval5MinTriggerEvent,
     Interval10MinTriggerEvent,
@@ -175,3 +176,40 @@ class TestTimer:
                 await timer.loop()
 
                 assert mock_event_bus.emit.called
+
+
+class TestTimerBetweenIntervalTrigger:
+    """Tests for Timer.on_between_interval_trigger handler."""
+
+    @pytest.mark.asyncio
+    async def test_between_interval_trigger_emits_all_long_intervals(
+        self, mock_event_bus
+    ):
+        """
+        Test that BetweenIntervalTriggerEvent causes
+        all long intervals to be emitted.
+        """
+        timer = Timer(5)
+        event = BetweenIntervalTriggerEvent()
+
+        await timer.on_between_interval_trigger(event)
+
+        emitted_types = [
+            type(call.args[0]) for call in mock_event_bus.emit.call_args_list
+        ]
+        assert Interval1MinTriggerEvent in emitted_types
+        assert Interval5MinTriggerEvent in emitted_types
+        assert Interval10MinTriggerEvent in emitted_types
+        assert Interval15MinTriggerEvent in emitted_types
+
+    @pytest.mark.asyncio
+    async def test_between_interval_trigger_emits_exactly_four_events(
+        self, mock_event_bus
+    ):
+        """Test that exactly the four long-interval events are emitted."""
+        timer = Timer(5)
+        event = BetweenIntervalTriggerEvent()
+
+        await timer.on_between_interval_trigger(event)
+
+        assert mock_event_bus.emit.call_count == 4

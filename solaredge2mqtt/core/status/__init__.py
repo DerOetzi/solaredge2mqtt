@@ -2,6 +2,7 @@ from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.core.status.events import (
+    ResendStatusEvent,
     ServiceOfflineEvent,
     ServiceOnlineEvent,
 )
@@ -79,9 +80,18 @@ class ServiceStatusController:
 
         self._reset_debounce(service_name)
 
+    @EventBus.subscribe(ResendStatusEvent)
+    async def handle_intermediate_trigger(self, event: ResendStatusEvent):
+        logger.info("Resend status")
+        for service_name, is_online in self._status.items():
+            await self._emit(service_name, is_online)
+
     async def _publish_service_status(self, service_name: str, is_online: bool):
         self._status[service_name] = is_online
         self._reset_debounce(service_name)
+        await self._emit(service_name, is_online)
+
+    async def _emit(self, service_name, is_online):
         await EventBus.emit(
             MQTTPublishEvent(
                 f"status/{service_name}",

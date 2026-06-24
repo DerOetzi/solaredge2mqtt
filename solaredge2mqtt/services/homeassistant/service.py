@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import (
     MQTTPublishEvent,
+)
+from solaredge2mqtt.core.status.events import ResendStatusEvent
+from solaredge2mqtt.core.timer.events import (
+    BetweenIntervalTriggerEvent,
 )
 from solaredge2mqtt.services.energy.events import EnergyReadEvent
 from solaredge2mqtt.services.forecast.events import ForecastEvent
@@ -186,6 +191,9 @@ class HomeAssistantDiscovery:
 
     @EventBus.subscribe(HomeAssistantStatusEvent)
     async def homeassistant_status(self, event: HomeAssistantStatusEvent) -> None:
+        expected_topic = f"{self.settings.homeassistant.topic_prefix}/status"
+        if event.topic != expected_topic:
+            return
         if event.input.status == HomeAssistantStatus.ONLINE:
             logger.info("Home Assistant status changed to online resend discovery")
             for topic, entity in self._send_entities.items():
@@ -198,6 +206,15 @@ class HomeAssistantDiscovery:
                         exclude_none=True,
                     )
                 )
+
+            resend_delay_seconds = 10
+            await asyncio.sleep(resend_delay_seconds)
+
+            logger.info("Resending long interval triggered data to Home Assistant")
+            await EventBus.emit(BetweenIntervalTriggerEvent())
+
+            await asyncio.sleep(resend_delay_seconds)
+            await EventBus.emit(ResendStatusEvent())
 
     @staticmethod
     def property_parser(prop, name: str, path: list[str]) -> dict | None:

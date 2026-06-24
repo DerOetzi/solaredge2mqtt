@@ -2,6 +2,7 @@ from datetime import datetime
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.timer.events import (
+    BetweenIntervalTriggerEvent,
     Interval1MinTriggerEvent,
     Interval5MinTriggerEvent,
     Interval10MinTriggerEvent,
@@ -39,3 +40,12 @@ class Timer:
 
         if timestamp % 900 == 0:
             await EventBus.emit(Interval15MinTriggerEvent())
+
+    @EventBus.subscribe(BetweenIntervalTriggerEvent)
+    async def on_between_interval_trigger(
+        self, event: BetweenIntervalTriggerEvent
+    ) -> None:
+        await EventBus.emit(Interval1MinTriggerEvent())
+        await EventBus.emit(Interval5MinTriggerEvent())
+        await EventBus.emit(Interval10MinTriggerEvent())
+        await EventBus.emit(Interval15MinTriggerEvent())
