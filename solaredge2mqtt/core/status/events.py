@@ -3,6 +3,9 @@ from typing import ClassVar
 from solaredge2mqtt.core.events.events import BaseEvent
 
 
+class ResendStatusEvent(BaseEvent): ...  # pragma: no cover
+
+
 class ServiceOnlineEvent(BaseEvent):
     SERVICE_NAME: ClassVar[str]
 

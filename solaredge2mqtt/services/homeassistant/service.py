@@ -8,6 +8,7 @@ from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import (
     MQTTPublishEvent,
 )
+from solaredge2mqtt.core.status.events import ResendStatusEvent
 from solaredge2mqtt.core.timer.events import (
     BetweenIntervalTriggerEvent,
 )
@@ -211,6 +212,9 @@ class HomeAssistantDiscovery:
 
             logger.info("Resending long interval triggered data to Home Assistant")
             await EventBus.emit(BetweenIntervalTriggerEvent())
+
+            await asyncio.sleep(resend_delay_seconds)
+            await EventBus.emit(ResendStatusEvent())
 
     @staticmethod
     def property_parser(prop, name: str, path: list[str]) -> dict | None:

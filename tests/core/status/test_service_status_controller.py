@@ -8,10 +8,10 @@ from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.core.status import ServiceStatusController
 from solaredge2mqtt.core.status.events import (
+    ResendStatusEvent,
     ServiceOfflineEvent,
     ServiceOnlineEvent,
 )
-from solaredge2mqtt.core.timer.events import BetweenIntervalTriggerEvent
 
 
 class TestServiceStatusControllerInit:
@@ -499,7 +499,7 @@ class TestServiceStatusControllerHandleIntermediateTrigger:
         controller._status = {"modbus": True, "mqtt": False}
 
         with patch.object(EventBus, "emit", new_callable=AsyncMock) as mock_emit:
-            await controller.handle_intermediate_trigger(BetweenIntervalTriggerEvent())
+            await controller.handle_intermediate_trigger(ResendStatusEvent())
 
             emitted_topics = [call.args[0].topic for call in mock_emit.call_args_list]
             assert "status/modbus" in emitted_topics
@@ -511,6 +511,6 @@ class TestServiceStatusControllerHandleIntermediateTrigger:
         controller = ServiceStatusController()
 
         with patch.object(EventBus, "emit", new_callable=AsyncMock) as mock_emit:
-            await controller.handle_intermediate_trigger(BetweenIntervalTriggerEvent())
+            await controller.handle_intermediate_trigger(ResendStatusEvent())
 
             mock_emit.assert_not_called()
