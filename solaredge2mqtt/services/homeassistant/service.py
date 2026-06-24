@@ -206,7 +206,8 @@ class HomeAssistantDiscovery:
                     )
                 )
 
-            await asyncio.sleep(10)
+            resend_delay_seconds = 10
+            await asyncio.sleep(resend_delay_seconds)
 
             logger.info("Resending long interval triggered data to Home Assistant")
             await EventBus.emit(BetweenIntervalTriggerEvent())

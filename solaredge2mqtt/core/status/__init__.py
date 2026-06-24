@@ -86,11 +86,14 @@ class ServiceStatusController:
     async def handle_intermediate_trigger(self, event: BetweenIntervalTriggerEvent):
         logger.info("Resend status")
         for service_name, is_online in self._status.items():
-            await self._publish_service_status(service_name, is_online)
+            await self._emit(service_name, is_online)
 
     async def _publish_service_status(self, service_name: str, is_online: bool):
         self._status[service_name] = is_online
         self._reset_debounce(service_name)
+        await self._emit(service_name, is_online)
+
+    async def _emit(self, service_name, is_online):
         await EventBus.emit(
             MQTTPublishEvent(
                 f"status/{service_name}",
