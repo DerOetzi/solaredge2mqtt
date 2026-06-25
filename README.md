@@ -204,13 +204,15 @@ SolarEdge inverters support a cascading setup, where one inverter acts as the le
 - For the leader inverter, use the basic Modbus settings described above.
 - For each follower inverter, add them to the configuration as shown below.
 
+#### Cascaded inverters (shared Modbus connection)
+
+When followers are wired in a RS485 cascade behind the leader, they share the leader's TCP connection. Only set `unit` (the Modbus device address on the bus) and optionally meter/battery flags:
+
 ```yaml
 modbus:
-  # Leader configuration
   host: 192.168.1.100
   port: 1502
   
-  # Follower inverters
   follower:
     - unit: 2
       meter: [false, false, false]
@@ -220,6 +222,38 @@ modbus:
       battery: [true, false]
 ```
 
+#### Physically separate inverters (individual TCP connections)
+
+When each inverter has its own network connection (e.g. each has its own IP address), specify `host` and optionally `port` per follower. Each follower with its own `host` opens a dedicated TCP connection; those without fall back to the leader's connection:
+
+```yaml
+modbus:
+  # Leader
+  host: 192.168.1.100
+  port: 1502
+
+  follower:
+    # Follower on the same host (cascaded, shares leader connection)
+    - unit: 2
+      meter: [false, false, false]
+      battery: [false, false]
+
+    # Follower with its own IP and default port (1502 inherited from leader)
+    - unit: 1
+      host: 192.168.1.101
+      meter: [true, false, false]
+      battery: [true, false]
+
+    # Follower with its own IP and a custom port
+    - unit: 1
+      host: 192.168.1.102
+      port: 502
+      meter: [false, false, false]
+      battery: [true, true]
+```
+
+When a follower omits `port`, the leader's port is used. When a follower omits `host`, the leader's host and connection are reused.
+
 You can configure up to 11 inverters in total: one leader and up to 10 followers. Each configured inverter will report:
 
 - individual power flow data
@@ -227,7 +261,7 @@ You can configure up to 11 inverters in total: one leader and up to 10 followers
 - cumulative energy and power flow data
 - cumulative production forecasts (if forecasting is enabled)
 
-This setup allows for comprehensive multi-inverter support in systems with cascaded SolarEdge installations.
+This setup allows for comprehensive multi-inverter support in systems with cascaded or physically separate SolarEdge installations.
 
 ### MQTT configuration
 
