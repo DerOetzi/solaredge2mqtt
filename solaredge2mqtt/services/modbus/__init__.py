@@ -391,7 +391,13 @@ class Modbus:
         effective_client = client if client is not None else self._clients[unit_key]
         data: dict[str, Any] = {}
 
-        for register_or_bundle in registers_or_bundles:
+        bundles = (
+            registers_or_bundles.request_bundles()
+            if isinstance(registers_or_bundles, type)
+            else registers_or_bundles
+        )
+
+        for register_or_bundle in bundles:
             address_start = register_or_bundle.address + offset
 
             if address_start in self._block_unreadable:
@@ -536,9 +542,13 @@ class Modbus:
         value: SunSpecRawData,
         unit_key: str = "leader",
     ) -> None:
-        unit_settings = self.settings.units[unit_key]
-        client = self._clients[unit_key]
-
+        try:
+            unit_settings = self.settings.units[unit_key]
+            client = self._clients[unit_key]
+        except KeyError as error:
+            raise InvalidDataException(
+                f"Unknown modbus unit_key: {unit_key}"
+            ) from error
         logger.info(
             f"Writing {value} to register {register.address} ({register.name})"
             f" on unit {unit_key}"

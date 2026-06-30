@@ -137,11 +137,19 @@ class ModbusSettings(ModbusUnitSettings):
     def unit_host(self, unit_key: str) -> str:
         if unit_key == "leader":
             return self.host
-        idx = int(unit_key.removeprefix("follower"))
-        return self.follower[idx].host or self.host
+
+        unit = self.units.get(unit_key)
+        if unit is None or not isinstance(unit, ModbusFollowerSettings):
+            raise ValueError(f"Unknown modbus unit_key: {unit_key}")
+
+        return unit.host or self.host
 
     def unit_port(self, unit_key: str) -> int:
         if unit_key == "leader":
             return self.port
-        idx = int(unit_key.removeprefix("follower"))
-        return self.follower[idx].port or self.port
+
+        unit = self.units.get(unit_key)
+        if unit is None or not isinstance(unit, ModbusFollowerSettings):
+            raise ValueError(f"Unknown modbus unit_key: {unit_key}")
+
+        return unit.port or self.port
