@@ -228,7 +228,7 @@ class TestDetectMetersExceptionHandling:
 
             # Mock read_device_info to raise exception for meter0
             async def mock_read_device_info(  # noqa: S7503
-                register_class, uk, identifier, us, offset
+                register_class, uk, identifier, us, offset=0
             ):
                 if identifier == "meter0":
                     raise InvalidRegisterDataException(
@@ -272,7 +272,7 @@ class TestDetectMetersExceptionHandling:
             call_count = 0
 
             async def mock_read_device_info(  # noqa: S7503
-                register_class, uk, identifier, us, offset
+                register_class, uk, identifier, us, offset=0
             ):
                 nonlocal call_count
                 call_count += 1

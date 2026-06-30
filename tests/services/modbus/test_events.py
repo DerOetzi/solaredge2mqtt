@@ -61,3 +61,19 @@ class TestModbusWriteEvent:
         event = ModbusWriteEvent(register, True)
 
         assert event.payload is True
+
+    def test_event_unit_key_defaults_to_leader(self):
+        """Test unit_key defaults to leader when not specified."""
+        register = SunSpecPowerControlRegister.ACTIVE_POWER_LIMIT
+
+        event = ModbusWriteEvent(register, 100)
+
+        assert event.unit_key == "leader"
+
+    def test_event_unit_key_custom(self):
+        """Test unit_key can be set to a follower."""
+        register = SunSpecPowerControlRegister.ACTIVE_POWER_LIMIT
+
+        event = ModbusWriteEvent(register, 100, unit_key="follower0")
+
+        assert event.unit_key == "follower0"

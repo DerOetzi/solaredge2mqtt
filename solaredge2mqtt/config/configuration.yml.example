@@ -40,11 +40,23 @@ modbus:
   # Advanced power controls (enabled, disabled, or disable)
   advanced_power_controls: disabled
   
-  # Follower inverters (for cascading setups)
+  # Follower inverters
+  # Cascaded (shared RS485 bus — all units use the leader's TCP connection):
   # follower:
-  #   - unit: 2
+  #   - unit: 2                          # Modbus device address on the bus
   #     meter: [false, false, false]
   #     battery: [false, false]
+  #   - unit: 3
+  #     meter: [true, false, false]
+  #     battery: [true, false]
+  #
+  # Physically separate inverters (each with its own IP/port):
+  # follower:
+  #   - unit: 1
+  #     host: 192.168.1.101              # Own IP; omit to share the leader's connection
+  #     # port: 1502                     # Own port; omit to inherit the leader's port
+  #     meter: [true, false, false]
+  #     battery: [true, false]
 
 # MQTT configuration (required)
 mqtt:

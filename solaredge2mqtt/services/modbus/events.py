@@ -24,9 +24,15 @@ class ModbusUnitsReadEvent(BaseEvent):
 class ModbusWriteEvent(BaseEvent):
     AWAIT = True
 
-    def __init__(self, register: SunSpecRegister, payload: SunSpecRawData):
+    def __init__(
+        self,
+        register: SunSpecRegister,
+        payload: SunSpecRawData,
+        unit_key: str = "leader",
+    ):
         self._register = register
         self._payload = payload
+        self._unit_key = unit_key
 
     @property
     def register(self) -> SunSpecRegister:
@@ -35,6 +41,10 @@ class ModbusWriteEvent(BaseEvent):
     @property
     def payload(self) -> SunSpecRawData:
         return self._payload
+
+    @property
+    def unit_key(self) -> str:
+        return self._unit_key
 
 
 class ModbusOnlineEvent(ServiceOnlineEvent):
