@@ -53,7 +53,9 @@ class TestForecasterHyperparameterTuning:
 
         y_vector = cast(Series, data["energy"])
         x_data = data.drop(columns=["energy"])
-        pipeline = forecaster._prepare_model_pipeline(x_data.columns.to_list())
+        pipeline = forecaster._prepare_model_pipeline(
+            x_data.columns.to_list(), n_repeats=2
+        )
 
         # This will do actual hyperparameter tuning (slow but tests the method)
         result = forecaster._hyperparametertuning(x_data, y_vector, pipeline)

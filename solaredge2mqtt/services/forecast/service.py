@@ -328,7 +328,9 @@ class Forecaster:
 
         logger.info(f"Training execution time: {execution_time:.2f} seconds")
 
-    def _prepare_model_pipeline(self, x_vector_columns: list[str]) -> Pipeline:
+    def _prepare_model_pipeline(
+        self, x_vector_columns: list[str], n_repeats: int = 10
+    ) -> Pipeline:
         base_estimator = HistGradientBoostingRegressor(
             random_state=42,
             categorical_features="from_dtype",
@@ -340,7 +342,7 @@ class Forecaster:
                 ("preprocessor", self._prepare_preprocessor(x_vector_columns)),
                 (
                     "feature_selector",
-                    PFISelector(estimator=clone(base_estimator)),
+                    PFISelector(estimator=clone(base_estimator), n_repeats=n_repeats),
                 ),
                 ("model", clone(base_estimator)),
             ],
@@ -471,10 +473,11 @@ class PFISelector(BaseEstimator, TransformerMixin):
 
         threshold_value = percentile(self.feature_importances_, 75)
 
-        important_indices = cast(
-            list[bool],
-            (self.feature_importances_ > threshold_value).tolist(),
-        )
+        selected = self.feature_importances_ > threshold_value
+        if not selected.any():
+            selected = self.feature_importances_ >= threshold_value
+
+        important_indices = cast(list[bool], selected.tolist())
         self.important_indices_ = important_indices
         self.important_features_ = [
             col

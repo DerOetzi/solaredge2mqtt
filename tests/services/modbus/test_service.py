@@ -772,6 +772,23 @@ class TestModbusWriteToModbus:
 
         await modbus._write_to_modbus(mock_register, 100)
 
+    @pytest.mark.asyncio
+    async def test_write_to_modbus_unknown_unit_key(
+        self, mock_service_settings, mock_event_bus, mock_modbus_client
+    ):
+        """Test _write_to_modbus raises InvalidDataException for unknown unit_key."""
+        modbus = Modbus(mock_service_settings)
+        modbus._clients = {"leader": mock_modbus_client}
+
+        mock_register = MagicMock()
+        mock_register.address = 40000
+        mock_register.name = "test_register"
+
+        with pytest.raises(InvalidDataException, match="Unknown modbus unit_key"):
+            await modbus._write_to_modbus(mock_register, 100, unit_key="unknown")
+
+        mock_modbus_client.write_registers.assert_not_called()
+
 
 class TestModbusHandleWriteEvent:
     """Tests for Modbus _handle_write_event."""

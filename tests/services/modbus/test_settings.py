@@ -1,5 +1,7 @@
 """Tests for modbus settings module."""
 
+import pytest
+
 from solaredge2mqtt.services.modbus.models.base import ModbusUnitRole
 from solaredge2mqtt.services.modbus.settings import (
     AdvancedControlsSettings,
@@ -275,6 +277,13 @@ class TestModbusSettings:
 
         assert settings.unit_host("follower0") == "192.168.1.11"  # noqa: S1313
 
+    def test_unit_host_raises_for_unknown_unit_key(self):
+        """unit_host raises ValueError for an unknown unit_key."""
+        settings = ModbusSettings(host="192.168.1.10")  # noqa: S1313
+
+        with pytest.raises(ValueError, match="Unknown modbus unit_key"):
+            settings.unit_host("follower0")
+
     def test_unit_port_returns_leader_port_for_leader(self):
         """unit_port returns the leader's port for unit_key 'leader'."""
         settings = ModbusSettings(host="192.168.1.10", port=502)  # noqa: S1313
@@ -298,3 +307,10 @@ class TestModbusSettings:
         )
 
         assert settings.unit_port("follower0") == 502
+
+    def test_unit_port_raises_for_unknown_unit_key(self):
+        """unit_port raises ValueError for an unknown unit_key."""
+        settings = ModbusSettings(host="192.168.1.10", port=502)  # noqa: S1313
+
+        with pytest.raises(ValueError, match="Unknown modbus unit_key"):
+            settings.unit_port("follower0")
