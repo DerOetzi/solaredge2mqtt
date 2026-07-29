@@ -31,6 +31,8 @@ class ForecastSettings(BaseModel):
     cachingdir: str | None = Field(default_factory=_get_default_cache_dir)
     cache_size_limit_mb: int = Field(default=512, ge=1)
     retain: bool = Field(default=False)
+    battery_target_soc: float = Field(default=98.0, ge=0, le=100)
+    battery_charge_efficiency: float = Field(default=0.92, gt=0, le=1)
 
     @property
     def is_configured(self) -> bool:

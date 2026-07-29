@@ -232,6 +232,7 @@ class HomeAssistantSensorType(HomeAssistantEntityBaseType):
     REACTIVE_POWER = "reactive_power", "reactive_power", "measurement", "var"
     STATUS = "status", None, None, None
     TEMP_C = "temp_c", "temperature", "measurement", "°C"
+    TIMESTAMP = "timestamp", "timestamp", None, None
     VOLTAGE_V = "voltage_v", "voltage", "measurement", "V"
 
     def __init__(

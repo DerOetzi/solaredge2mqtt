@@ -171,3 +171,56 @@ class TestForecast:
         """Test _current_hour returns a valid hour value."""
         hour = Forecast._current_hour()  # noqa: SLF001
         assert 0 <= hour <= 23
+
+    @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
+    def test_battery_charge_optimal_start_time_none_without_battery(self, mock_now):
+        """Test optimal start time is None when no battery energy is needed."""
+        mock_now.return_value = datetime(2024, 6, 15, 10, 0, tzinfo=timezone.utc)
+        data = self.make_forecast_data()
+        forecast = Forecast(**data, battery_charge_needed_wh=None)
+
+        assert forecast.battery_charge_optimal_start_time is None
+
+    @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
+    def test_battery_charge_optimal_start_time_none_when_already_charged(
+        self, mock_now
+    ):
+        """Test optimal start time is None when no energy is needed (0 Wh)."""
+        mock_now.return_value = datetime(2024, 6, 15, 10, 0, tzinfo=timezone.utc)
+        data = self.make_forecast_data()
+        forecast = Forecast(**data, battery_charge_needed_wh=0)
+
+        assert forecast.battery_charge_optimal_start_time is None
+
+    @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
+    def test_battery_charge_optimal_start_time_picks_strongest_slot(self, mock_now):
+        """Test optimal start time picks the earliest of the strongest slots."""
+        mock_now.return_value = datetime(2024, 6, 15, 10, 0, tzinfo=timezone.utc)
+        data = self.make_forecast_data()
+        # The peak slot (1000 Wh) is at 12:00 today, which alone covers the need.
+        forecast = Forecast(**data, battery_charge_needed_wh=1000)
+
+        assert forecast.battery_charge_optimal_start_time == datetime(
+            2024, 6, 15, 12, 0, tzinfo=timezone.utc
+        )
+
+    @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
+    def test_battery_charge_optimal_start_time_skips_passed_slots(self, mock_now):
+        """Test optimal start time ignores slots that are already in the past."""
+        # Today's 12:00 peak (1000 Wh) has already passed at 13:00.
+        mock_now.return_value = datetime(2024, 6, 15, 13, 0, tzinfo=timezone.utc)
+        data = self.make_forecast_data()
+        forecast = Forecast(**data, battery_charge_needed_wh=1000)
+
+        assert forecast.battery_charge_optimal_start_time == datetime(
+            2024, 6, 16, 12, 0, tzinfo=timezone.utc
+        )
+
+    @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
+    def test_battery_charge_optimal_start_time_none_when_unreachable(self, mock_now):
+        """Test optimal start time is None if forecast can't cover the need."""
+        mock_now.return_value = datetime(2024, 6, 15, 10, 0, tzinfo=timezone.utc)
+        data = self.make_forecast_data()
+        forecast = Forecast(**data, battery_charge_needed_wh=10_000_000)
+
+        assert forecast.battery_charge_optimal_start_time is None
