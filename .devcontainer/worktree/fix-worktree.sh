@@ -1,9 +1,14 @@
 #!/bin/bash
 
 # Fix git worktree paths for devcontainer usage
-# Converts absolute paths to relative paths in both directions:
-#   1. Worktree/.git      → ../.repo/worktrees/<name>
-#   2. .repo/worktrees/<name>/gitdir → ../../../<name>/.git
+#   1. Worktree/.git                 → ../.repo/worktrees/<name>  (relative;
+#      git resolves this relative to the .git file's own directory, so it
+#      works unchanged on host and in the container)
+#   2. .repo/worktrees/<name>/gitdir → <container-absolute>/<name>/.git
+#      (git reads this literally, NOT relative to its own directory, so it
+#      must always be an absolute path valid in the environment currently
+#      running git - a relative value here makes git report the worktree
+#      as prunable)
 
 set -e
 
@@ -36,20 +41,12 @@ fi
 
 # ── 3. Fix gitdir back-reference (Bare Repo → Worktree) ──────────────────────
 #
-# Relative path is calculated from:
-#   .repo/worktrees/<name>/gitdir
-# to:
-#   <name>/.git
-#
-# Both on host and in devcontainer the directory structure is:
-#   <root>/
-#     .repo/worktrees/<name>/gitdir   (3 levels deep)
-#     <name>/.git
-#
-# So the relative path is always: ../../../<name>/.git
+# git reads this file literally rather than relative to its own directory,
+# so it must hold the real absolute path of this worktree's .git file in
+# the environment currently running git - here, the container.
 
 BACK_REF_FILE="../.repo/worktrees/$WORKTREE_NAME/gitdir"
-EXPECTED_BACK_REF="../../../$WORKTREE_NAME/.git"
+EXPECTED_BACK_REF="$(pwd)/.git"
 
 if [ ! -f "$BACK_REF_FILE" ]; then
     echo "⚠️  Back-reference file not found: $BACK_REF_FILE"
@@ -59,7 +56,7 @@ else
     echo "   Current back-ref: $CURRENT_BACK_REF"
 
     if [ "$CURRENT_BACK_REF" != "$EXPECTED_BACK_REF" ]; then
-        echo "📝 Fixing back-reference (absolute → relative)..."
+        echo "📝 Fixing back-reference (absolute host path → absolute container path)..."
         echo "$EXPECTED_BACK_REF" > "$BACK_REF_FILE"
         echo "✅ Back-reference updated: $BACK_REF_FILE → $EXPECTED_BACK_REF"
     else

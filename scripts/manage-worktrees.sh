@@ -104,6 +104,7 @@ check_repo_exists() {
     info "Check repo exists"
     [ -z "$PROJECT_ROOT" ] && error "Project root not set"
     [ ! -d "$REPO_DIR" ] && error ".repo directory not found at $REPO_DIR\n\nRun: $SCRIPT_NAME setup <directory>"
+    repair_worktree_backreferences
     return 0
 }
 
@@ -210,28 +211,34 @@ convert_git_to_relative() {
         info ".git already uses relative path"
     fi
 
-    # ── 2. Fix Bare Repo → Worktree (gitdir back-reference) ──────────────────
-    # Relative path from .repo/worktrees/<name>/gitdir to <name>/.git
-    # Both on host and in devcontainer the structure is flat:
-    #   <root>/.repo/worktrees/<name>/gitdir  →  ../../../<name>/.git
-    local BACK_REF_FILE="$REPO_DIR/worktrees/$WORKTREE_NAME/gitdir"
-    local EXPECTED_BACK_REF="../../../$WORKTREE_NAME/.git"
+    repair_worktree_backreferences
+}
 
-    if [ ! -f "$BACK_REF_FILE" ]; then
-        warning "Back-reference not found: $BACK_REF_FILE"
-        return 0
-    fi
+# git resolves worktrees/<name>/gitdir literally, not relative to its
+# own directory (unlike the forward .git pointer above), so it can
+# never hold a relative path — a relative value makes git report the
+# worktree as prunable. It must always hold the real absolute path
+# for whichever environment (host or container) is currently running
+# git, so self-heal it to the host path on every host-side command.
+# The devcontainer's postStartCommand (.devcontainer/worktree/fix-worktree.sh)
+# does the equivalent repair for the container's absolute path.
+repair_worktree_backreferences() {
+    [ -d "$REPO_DIR/worktrees" ] || return 0
 
-    local CURRENT_BACK_REF
-    CURRENT_BACK_REF=$(cat "$BACK_REF_FILE")
+    local WT_DIR NAME GITDIR_FILE EXPECTED CURRENT
+    for WT_DIR in "$REPO_DIR"/worktrees/*/; do
+        [ -d "$WT_DIR" ] || continue
+        NAME=$(basename "$WT_DIR")
+        GITDIR_FILE="$WT_DIR/gitdir"
+        [ -f "$GITDIR_FILE" ] || continue
 
-    if [ "$CURRENT_BACK_REF" != "$EXPECTED_BACK_REF" ]; then
-        info "Converting back-reference to relative path..."
-        echo "$EXPECTED_BACK_REF" > "$BACK_REF_FILE"
-        success "Converted back-reference → $EXPECTED_BACK_REF"
-    else
-        info "Back-reference already uses relative path"
-    fi
+        EXPECTED="$PROJECT_ROOT/$NAME/.git"
+        CURRENT=$(cat "$GITDIR_FILE")
+
+        if [ "$CURRENT" != "$EXPECTED" ]; then
+            echo "$EXPECTED" > "$GITDIR_FILE"
+        fi
+    done
 }
 
 sanitize_branch_name() {
