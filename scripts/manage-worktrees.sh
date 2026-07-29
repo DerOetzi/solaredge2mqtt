@@ -38,15 +38,15 @@ error() {
 }
 
 success() {
-    echo -e "${GREEN}✅ $1${NC}"
+    echo -e "${GREEN}✅ $1${NC}" >&2
 }
 
 info() {
-    echo -e "${BLUE}ℹ️  $1${NC}"
+    echo -e "${BLUE}ℹ️  $1${NC}" >&2
 }
 
 warning() {
-    echo -e "${YELLOW}⚠️  $1${NC}"
+    echo -e "${YELLOW}⚠️  $1${NC}" >&2
 }
 
 # ============================================================================
@@ -310,8 +310,6 @@ create_worktree() {
     
     convert_git_to_relative "$WORKTREE_PATH"
     success "Worktree created at: $WORKTREE_PATH"
-    
-    echo "$WORKTREE_PATH"
 }
 
 # ============================================================================
@@ -547,11 +545,12 @@ cmd_add() {
     local WORKTREE_NAME=$2
     
     [ -z "$BRANCH_NAME" ] && error "Branch name required"
-    
+
     detect_project_root
     check_repo_exists
     configure_bare_repository
-    
+
+    WORKTREE_NAME="${WORKTREE_NAME%/}"
     [ -z "$WORKTREE_NAME" ] && WORKTREE_NAME=$(sanitize_branch_name "$BRANCH_NAME")
     
     local WORKTREE_PATH="$PROJECT_ROOT/$WORKTREE_NAME"
@@ -560,8 +559,8 @@ cmd_add() {
     echo "🚀 Creating worktree: $BRANCH_NAME → $WORKTREE_NAME"
     echo ""
     
-    WORKTREE_PATH=$(create_worktree "$BRANCH_NAME" "$WORKTREE_NAME" "")
-    
+    create_worktree "$BRANCH_NAME" "$WORKTREE_NAME" ""
+
     echo ""
     info "Next: code $WORKTREE_PATH"
 }
@@ -594,16 +593,17 @@ cmd_add_pr() {
     
     echo ""
     # Set upstream to origin/pr/$PR_NUMBER for git pull support
-    WORKTREE_PATH=$(create_worktree "$BRANCH_NAME" "$WORKTREE_NAME" \
-        "origin/pr/$PR_NUMBER")
-    
+    create_worktree "$BRANCH_NAME" "$WORKTREE_NAME" \
+        "origin/pr/$PR_NUMBER"
+
     echo ""
     info "Next: code $WORKTREE_PATH"
 }
 
 cmd_remove() {
     local WORKTREE_NAME=$1
-    
+    WORKTREE_NAME="${WORKTREE_NAME%/}"
+
     [ -z "$WORKTREE_NAME" ] && error "Worktree name required"
     
     detect_project_root
