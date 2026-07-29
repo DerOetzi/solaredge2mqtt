@@ -16,11 +16,12 @@ class SunSpecBatteryInfoRegister(SunSpecRegister):
 
 
 class SunSpecBatteryRegister(SunSpecRegister):
-    RATED_ENERGY = "rated_energy", 57666, SunSpecValueType.FLOAT32
+    RATED_ENERGY = "rated_energy", 57666, SunSpecValueType.FLOAT32, True
     MAXIMUM_CHARGE_CONTINUOUS_POWER = (
         "maximum_charge_continuous_power",
         57668,
         SunSpecValueType.FLOAT32,
+        True,
     )
     MAXIMUM_DISCHARGE_CONTINUOUS_POWER = (
         "maximum_discharge_continuous_power",
