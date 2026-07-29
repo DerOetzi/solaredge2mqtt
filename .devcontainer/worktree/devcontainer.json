@@ -3,10 +3,7 @@
 	"name": "SolarEdge2MQTT Dev Container with Git Worktree Support",
 	"image": "mcr.microsoft.com/devcontainers/python:3.13-trixie",
 	"features": {
-		"ghcr.io/devcontainers/features/python:1": {
-			"version": "3.13"
-		},
-		"ghcr.io/devcontainers/features/github-cli:1": {}
+		"ghcr.io/devcontainers/features/node:2": {}
 	},
 	"mounts": [
 		"source=${localWorkspaceFolder}/../.repo,target=/workspaces/.repo,type=bind,consistency=cached",
