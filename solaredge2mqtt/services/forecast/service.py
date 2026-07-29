@@ -33,6 +33,7 @@ from solaredge2mqtt.services.forecast.encoders import (
 from solaredge2mqtt.services.forecast.events import ForecastEvent
 from solaredge2mqtt.services.forecast.models import Forecast, ForecasterType
 from solaredge2mqtt.services.forecast.settings import ForecastSettings
+from solaredge2mqtt.services.modbus.events import ModbusUnitsReadEvent
 from solaredge2mqtt.services.weather.events import WeatherUpdateEvent
 from solaredge2mqtt.services.weather.models import OpenWeatherMapForecastData
 
@@ -62,7 +63,43 @@ class ForecastService:
         self.last_weather_forecast: list[OpenWeatherMapForecastData] | None = None
         self.last_hour_forecast: dict[int, OpenWeatherMapForecastData] | None = None
 
+        self.last_battery_capacity_wh: float | None = None
+        self.last_battery_available_energy_wh: float | None = None
+
         EventBus.register(self)
+
+    @EventBus.subscribe(ModbusUnitsReadEvent)
+    async def battery_update(self, event: ModbusUnitsReadEvent) -> None:
+        capacity_wh = 0.0
+        available_energy_wh = 0.0
+        battery_found = False
+
+        for unit in event.units.values():
+            for battery in unit.batteries.values():
+                capacity_wh += battery.rated_energy
+                available_energy_wh += battery.available_energy
+                battery_found = True
+
+        if battery_found:
+            self.last_battery_capacity_wh = capacity_wh
+            self.last_battery_available_energy_wh = available_energy_wh
+        else:
+            self.last_battery_capacity_wh = None
+            self.last_battery_available_energy_wh = None
+
+    def _battery_charge_needed_wh(self) -> float | None:
+        if not self.last_battery_capacity_wh:
+            return None
+
+        target_energy_wh = (
+            self.last_battery_capacity_wh * self.settings.battery_target_soc / 100
+        )
+        deficit_wh = target_energy_wh - (self.last_battery_available_energy_wh or 0)
+
+        if deficit_wh <= 0:
+            return 0.0
+
+        return deficit_wh / self.settings.battery_charge_efficiency
 
     @EventBus.subscribe(WeatherUpdateEvent)
     async def weather_update(self, event: WeatherUpdateEvent) -> None:
@@ -224,7 +261,11 @@ class ForecastService:
                 power_hours[row_time] = int(round(row_power))
                 energy_hours[row_time] = int(round(row_energy * 1000))
 
-            forecast = Forecast(power_period=power_hours, energy_period=energy_hours)
+            forecast = Forecast(
+                power_period=power_hours,
+                energy_period=energy_hours,
+                battery_charge_needed_wh=self._battery_charge_needed_wh(),
+            )
             logger.debug(forecast)
 
             await EventBus.emit(

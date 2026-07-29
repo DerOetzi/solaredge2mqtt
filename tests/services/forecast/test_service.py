@@ -119,6 +119,91 @@ class TestForecastServiceInit:
         mock_event_bus.register.assert_called_once_with(service)
 
 
+class TestForecastServiceBattery:
+    """Tests for ForecastService battery tracking and charge need calculation."""
+
+    def make_service(self, **settings_kwargs) -> ForecastService:
+        settings = ForecastSettings(enable=True, **settings_kwargs)
+        location = MockLocationSettings()
+        influxdb = MagicMock()
+        return ForecastService(settings, location, influxdb)
+
+    def make_battery(self, rated_energy: float, available_energy: float) -> MagicMock:
+        battery = MagicMock()
+        battery.rated_energy = rated_energy
+        battery.available_energy = available_energy
+        return battery
+
+    @pytest.mark.asyncio
+    async def test_battery_update_sums_capacity_and_available_energy(self):
+        """battery_update should sum capacity/available energy across units."""
+        from solaredge2mqtt.services.modbus.events import ModbusUnitsReadEvent
+
+        service = self.make_service()
+
+        unit_leader = MagicMock()
+        unit_leader.batteries = {
+            "battery0": self.make_battery(rated_energy=9200, available_energy=4000)
+        }
+        unit_follower = MagicMock()
+        unit_follower.batteries = {
+            "battery0": self.make_battery(rated_energy=4600, available_energy=1000)
+        }
+
+        event = ModbusUnitsReadEvent(
+            {"leader": unit_leader, "follower1": unit_follower}
+        )
+        await service.battery_update(event)
+
+        assert service.last_battery_capacity_wh == 13800
+        assert service.last_battery_available_energy_wh == 5000
+
+    @pytest.mark.asyncio
+    async def test_battery_update_resets_when_no_battery_present(self):
+        """battery_update should reset stored values when no battery is found."""
+        from solaredge2mqtt.services.modbus.events import ModbusUnitsReadEvent
+
+        service = self.make_service()
+        service.last_battery_capacity_wh = 9200
+        service.last_battery_available_energy_wh = 4000
+
+        unit = MagicMock()
+        unit.batteries = {}
+
+        event = ModbusUnitsReadEvent({"leader": unit})
+        await service.battery_update(event)
+
+        assert service.last_battery_capacity_wh is None
+        assert service.last_battery_available_energy_wh is None
+
+    def test_battery_charge_needed_wh_none_without_battery(self):
+        """_battery_charge_needed_wh should be None without known battery capacity."""
+        service = self.make_service()
+
+        assert service._battery_charge_needed_wh() is None  # noqa: SLF001
+
+    def test_battery_charge_needed_wh_computes_deficit(self):
+        """_battery_charge_needed_wh applies target SOC and charge efficiency."""
+        service = self.make_service(
+            battery_target_soc=98.0, battery_charge_efficiency=0.92
+        )
+        service.last_battery_capacity_wh = 9200
+        service.last_battery_available_energy_wh = 4600
+
+        target_energy_wh = 9200 * 98.0 / 100
+        expected = (target_energy_wh - 4600) / 0.92
+
+        assert service._battery_charge_needed_wh() == pytest.approx(expected)  # noqa: SLF001
+
+    def test_battery_charge_needed_wh_zero_when_target_already_met(self):
+        """_battery_charge_needed_wh returns 0 if battery is already at/above target."""
+        service = self.make_service(battery_target_soc=50.0)
+        service.last_battery_capacity_wh = 9200
+        service.last_battery_available_energy_wh = 9000
+
+        assert service._battery_charge_needed_wh() == 0.0  # noqa: SLF001
+
+
 class TestForecastServiceWeatherUpdate:
     """Tests for ForecastService weather_update method."""
 
@@ -451,6 +536,37 @@ class TestForecastServicePublishForecast:
 
         # Should emit 2 events (MQTTPublishEvent and ForecastEvent)
         assert mock_event_bus.emit.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_publish_forecast_includes_battery_charge_needed_wh(
+        self, mock_event_bus
+    ):
+        """Test publish_forecast forwards the computed battery charge need."""
+        settings = ForecastSettings(
+            enable=True, battery_target_soc=98.0, battery_charge_efficiency=0.92
+        )
+        location = MockLocationSettings()
+        influxdb = AsyncMock()
+
+        forecast_data = DataFrame(
+            {
+                "_time": [datetime(2024, 6, 15, 12, 0, tzinfo=timezone.utc)],
+                "power": [1000],
+                "energy": [1.0],
+            }
+        )
+        forecast_data["_time"] = forecast_data["_time"].dt.tz_convert(LOCAL_TZ)
+        influxdb.query_dataframe = AsyncMock(return_value=forecast_data)
+
+        service = ForecastService(settings, location, influxdb)
+        service.last_battery_capacity_wh = 9200
+        service.last_battery_available_energy_wh = 4600
+
+        await service.publish_forecast()
+
+        mqtt_event = mock_event_bus.emit.call_args_list[0].args[0]
+        expected = (9200 * 98.0 / 100 - 4600) / 0.92
+        assert mqtt_event.payload.battery_charge_needed_wh == pytest.approx(expected)
 
     @pytest.mark.asyncio
     async def test_publish_forecast_raises_on_invalid_time(self):

@@ -30,6 +30,10 @@ class ModbusBattery(ModbusComponent):
     available_energy: float = Field(
         **HASensor.ENERGY_MEASUREMENT_WH.field("available_energy")
     )
+    rated_energy: float = Field(**HASensor.ENERGY_MEASUREMENT_WH.field("rated_energy"))
+    maximum_charge_power: float = Field(
+        **HASensor.POWER_W.field("maximum_charge_power")
+    )
 
     @classmethod
     def extract_sunspec_payload(cls, payload: SunSpecPayload) -> dict[str, Any]:
@@ -42,6 +46,10 @@ class ModbusBattery(ModbusComponent):
             "state_of_health": round(float(payload["soh"]), 2),
             "maximum_energy": round(float(payload["maximum_energy"])),
             "available_energy": round(float(payload["available_energy"]), 2),
+            "rated_energy": round(float(payload["rated_energy"])),
+            "maximum_charge_power": round(
+                float(payload["maximum_charge_continuous_power"])
+            ),
         }
 
         if values["status"] in BATTERY_STATUS_MAP:

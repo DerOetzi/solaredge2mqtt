@@ -1362,6 +1362,8 @@ class TestPowerflowFromModbus:
                 "soh": 100.0,
                 "maximum_energy": 9200,
                 "available_energy": 6800,
+                "rated_energy": 9200,
+                "maximum_charge_continuous_power": 5000,
             },
         )
 
@@ -1468,6 +1470,8 @@ class TestPowerflowFromModbus:
                 "soh": 100.0,
                 "maximum_energy": 9200,
                 "available_energy": 4600,
+                "rated_energy": 9200,
+                "maximum_charge_continuous_power": 5000,
             },
         )
 
@@ -1574,6 +1578,8 @@ class TestPowerflowFromModbus:
                 "soh": 100.0,
                 "maximum_energy": 9200,
                 "available_energy": 4600,
+                "rated_energy": 9200,
+                "maximum_charge_continuous_power": 5000,
             },
         )
 
@@ -1762,6 +1768,8 @@ class TestPowerflowFromModbus:
                 "soh": 100.0,
                 "maximum_energy": 9200,
                 "available_energy": 4600,
+                "rated_energy": 9200,
+                "maximum_charge_continuous_power": 5000,
             },
         )
 
