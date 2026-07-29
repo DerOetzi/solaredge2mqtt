@@ -481,7 +481,11 @@ forecast:
   hyperparametertuning: false        # Enable hyperparameter tuning (CPU intensive)
   cachingdir: ~/.cache/se2mqtt_forecast  # Cache directory for pipeline results
   retain: false
+  battery_target_soc: 98.0           # Target state of charge in % used for the optimal charge start time
+  battery_charge_efficiency: 0.92    # Charge efficiency used for the optimal charge start time
 ```
+
+If a battery is detected via Modbus, the forecast also publishes `battery_charge_optimal_start_time`: the earliest time today/tomorrow at which charging the battery from its strongest remaining forecasted production slots (sorted by output, accumulated until `battery_target_soc` is covered) should start.
 
 **Prerequisites**:
 - Minimum 60 hours of training data must be collected before forecasting begins

@@ -39,6 +39,8 @@ def make_battery_data(
     soh: float = 98.2,
     maximum_energy: int = 9200,
     available_energy: float = 6900.0,
+    rated_energy: float = 9200.0,
+    maximum_charge_power: float = 5000.0,
 ) -> dict:
     """Create battery data for testing."""
     return {
@@ -50,6 +52,8 @@ def make_battery_data(
         "soh": soh,
         "maximum_energy": maximum_energy,
         "available_energy": available_energy,
+        "rated_energy": rated_energy,
+        "maximum_charge_continuous_power": maximum_charge_power,
     }
 
 
