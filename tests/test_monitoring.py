@@ -95,6 +95,7 @@ class TestMonitoringMain:
                 "solaredge2mqtt.core.settings.service_settings",
                 return_value=mock_settings,
             ),
+            patch("solaredge2mqtt.core.logging.initialize_logging"),
             patch.object(sys, "argv", ["monitoring.py"]),
         ):
             runpy.run_path(str(WORKSPACE_ROOT / "monitoring.py"), run_name="__main__")
