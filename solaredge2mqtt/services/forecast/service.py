@@ -64,37 +64,41 @@ class ForecastService:
         self.last_hour_forecast: dict[int, OpenWeatherMapForecastData] | None = None
 
         self.last_battery_capacity_wh: float | None = None
-        self.last_battery_available_energy_wh: float | None = None
+        self.last_battery_stored_energy_wh: float | None = None
 
         EventBus.register(self)
 
     @EventBus.subscribe(ModbusUnitsReadEvent)
     async def battery_update(self, event: ModbusUnitsReadEvent) -> None:
+        # available_energy is a (health/temperature-)derated capacity ceiling,
+        # not the currently stored charge, so the stored energy is derived
+        # from state_of_charge (SOE %) times the rated (nameplate) capacity,
+        # same as the "Kapazität × (Ziel-SOC - aktuell-SOC)" formula.
         capacity_wh = 0.0
-        available_energy_wh = 0.0
+        stored_energy_wh = 0.0
         battery_found = False
 
         for unit in event.units.values():
             for battery in unit.batteries.values():
                 capacity_wh += battery.rated_energy
-                available_energy_wh += battery.available_energy
+                stored_energy_wh += battery.rated_energy * battery.state_of_charge / 100
                 battery_found = True
 
         if battery_found:
             self.last_battery_capacity_wh = capacity_wh
-            self.last_battery_available_energy_wh = available_energy_wh
+            self.last_battery_stored_energy_wh = stored_energy_wh
         else:
             self.last_battery_capacity_wh = None
-            self.last_battery_available_energy_wh = None
+            self.last_battery_stored_energy_wh = None
 
-    def _battery_charge_needed_wh(self) -> float | None:
+    def battery_charge_needed_wh(self) -> float | None:
         if not self.last_battery_capacity_wh:
             return None
 
         target_energy_wh = (
             self.last_battery_capacity_wh * self.settings.battery_target_soc / 100
         )
-        deficit_wh = target_energy_wh - (self.last_battery_available_energy_wh or 0)
+        deficit_wh = target_energy_wh - (self.last_battery_stored_energy_wh or 0)
 
         if deficit_wh <= 0:
             return 0.0
@@ -180,6 +184,14 @@ class ForecastService:
 
     @EventBus.subscribe(Interval10MinTriggerEvent)
     async def forecast_loop(self, event: Interval10MinTriggerEvent) -> None:
+        predictions = await self.predict()
+
+        for typed, predicted_data in predictions.items():
+            await self._write_periods_to_influxdb(predicted_data, typed)
+
+        await self.publish_forecast()
+
+    async def predict(self) -> dict[ForecasterType, DataFrame]:
         if (
             not self.forecasters[ForecasterType.ENERGY].is_trained
             or not self.forecasters[ForecasterType.POWER].is_trained
@@ -191,6 +203,18 @@ class ForecastService:
                 "Missing weather forecast for production forecast"
             )
 
+        data = self._prepare_estimation_data(self.last_weather_forecast)
+
+        predictions = {}
+        for typed, forecaster in self.forecasters.items():
+            predictions[typed] = await forecaster.predict(data)
+
+        return predictions
+
+    @staticmethod
+    def _prepare_estimation_data(
+        weather_forecast_list: list[OpenWeatherMapForecastData],
+    ) -> DataFrame:
         estimation_data_list = [
             {
                 "time": datetime(
@@ -204,17 +228,13 @@ class ForecastService:
                 ).astimezone(),
                 **weather_forecast.model_dump_estimation_data(),
             }
-            for weather_forecast in self.last_weather_forecast
+            for weather_forecast in weather_forecast_list
         ]
 
         data = DataFrame(estimation_data_list)
         data["time"] = to_datetime(data["time"], utc=True).dt.tz_convert(LOCAL_TZ)
 
-        for typed, forecaster in self.forecasters.items():
-            predicted_data = await forecaster.predict(data)
-            await self._write_periods_to_influxdb(predicted_data, typed)
-
-        await self.publish_forecast()
+        return data
 
     async def _write_periods_to_influxdb(
         self, periods: DataFrame, typed: ForecasterType
@@ -264,7 +284,7 @@ class ForecastService:
             forecast = Forecast(
                 power_period=power_hours,
                 energy_period=energy_hours,
-                battery_charge_needed_wh=self._battery_charge_needed_wh(),
+                battery_charge_needed_wh=self.battery_charge_needed_wh(),
             )
             logger.debug(forecast)
 
