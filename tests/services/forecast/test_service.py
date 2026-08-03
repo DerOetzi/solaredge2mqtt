@@ -128,26 +128,28 @@ class TestForecastServiceBattery:
         influxdb = MagicMock()
         return ForecastService(settings, location, influxdb)
 
-    def make_battery(self, rated_energy: float, available_energy: float) -> MagicMock:
+    def make_battery(self, rated_energy: float, state_of_charge: float) -> MagicMock:
         battery = MagicMock()
         battery.rated_energy = rated_energy
-        battery.available_energy = available_energy
+        battery.state_of_charge = state_of_charge
         return battery
 
     @pytest.mark.asyncio
-    async def test_battery_update_sums_capacity_and_available_energy(self):
-        """battery_update should sum capacity/available energy across units."""
+    async def test_battery_update_sums_capacity_and_stored_energy(self):
+        """battery_update should sum capacity/stored energy across units."""
         from solaredge2mqtt.services.modbus.events import ModbusUnitsReadEvent
 
         service = self.make_service()
 
         unit_leader = MagicMock()
         unit_leader.batteries = {
-            "battery0": self.make_battery(rated_energy=9200, available_energy=4000)
+            # 9200 Wh capacity at 50% SOC -> 4600 Wh stored
+            "battery0": self.make_battery(rated_energy=9200, state_of_charge=50.0)
         }
         unit_follower = MagicMock()
         unit_follower.batteries = {
-            "battery0": self.make_battery(rated_energy=4600, available_energy=1000)
+            # 4600 Wh capacity at 25% SOC -> 1150 Wh stored
+            "battery0": self.make_battery(rated_energy=4600, state_of_charge=25.0)
         }
 
         event = ModbusUnitsReadEvent(
@@ -156,7 +158,7 @@ class TestForecastServiceBattery:
         await service.battery_update(event)
 
         assert service.last_battery_capacity_wh == 13800
-        assert service.last_battery_available_energy_wh == 5000
+        assert service.last_battery_stored_energy_wh == pytest.approx(5750)
 
     @pytest.mark.asyncio
     async def test_battery_update_resets_when_no_battery_present(self):
@@ -165,7 +167,7 @@ class TestForecastServiceBattery:
 
         service = self.make_service()
         service.last_battery_capacity_wh = 9200
-        service.last_battery_available_energy_wh = 4000
+        service.last_battery_stored_energy_wh = 4000
 
         unit = MagicMock()
         unit.batteries = {}
@@ -174,34 +176,34 @@ class TestForecastServiceBattery:
         await service.battery_update(event)
 
         assert service.last_battery_capacity_wh is None
-        assert service.last_battery_available_energy_wh is None
+        assert service.last_battery_stored_energy_wh is None
 
     def test_battery_charge_needed_wh_none_without_battery(self):
-        """_battery_charge_needed_wh should be None without known battery capacity."""
+        """battery_charge_needed_wh should be None without known battery capacity."""
         service = self.make_service()
 
-        assert service._battery_charge_needed_wh() is None  # noqa: SLF001
+        assert service.battery_charge_needed_wh() is None
 
     def test_battery_charge_needed_wh_computes_deficit(self):
-        """_battery_charge_needed_wh applies target SOC and charge efficiency."""
+        """battery_charge_needed_wh applies target SOC and charge efficiency."""
         service = self.make_service(
             battery_target_soc=98.0, battery_charge_efficiency=0.92
         )
         service.last_battery_capacity_wh = 9200
-        service.last_battery_available_energy_wh = 4600
+        service.last_battery_stored_energy_wh = 4600
 
         target_energy_wh = 9200 * 98.0 / 100
         expected = (target_energy_wh - 4600) / 0.92
 
-        assert service._battery_charge_needed_wh() == pytest.approx(expected)  # noqa: SLF001
+        assert service.battery_charge_needed_wh() == pytest.approx(expected)
 
     def test_battery_charge_needed_wh_zero_when_target_already_met(self):
-        """_battery_charge_needed_wh returns 0 if battery is already at/above target."""
+        """battery_charge_needed_wh returns 0 if battery is already at/above target."""
         service = self.make_service(battery_target_soc=50.0)
         service.last_battery_capacity_wh = 9200
-        service.last_battery_available_energy_wh = 9000
+        service.last_battery_stored_energy_wh = 9000
 
-        assert service._battery_charge_needed_wh() == 0.0  # noqa: SLF001
+        assert service.battery_charge_needed_wh() == 0.0
 
 
 class TestForecastServiceWeatherUpdate:
@@ -560,7 +562,7 @@ class TestForecastServicePublishForecast:
 
         service = ForecastService(settings, location, influxdb)
         service.last_battery_capacity_wh = 9200
-        service.last_battery_available_energy_wh = 4600
+        service.last_battery_stored_energy_wh = 4600
 
         await service.publish_forecast()
 
