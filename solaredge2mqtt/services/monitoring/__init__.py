@@ -450,8 +450,6 @@ class MonitoringSite(HTTPClientAsync):
         if not isinstance(power_values, list) or len(power_values) < 2:
             return {}
 
-        # Header layout: [version, payloadStart, (opaqueId, offset)*N, values*N*slots].
-        # offset for optimizer i is always i*slots (verified against optimizerSerials).
         payload_start = int(power_values[1])
         payload_end = payload_start + len(serials) * slots
         if payload_start < 0 or payload_end > len(power_values):

@@ -172,7 +172,6 @@ class TestMonitoringSiteMergeModules:
 
     def test_merge_modules(self):
         """Test merge_modules combines energy and power data."""
-        # Create mock module
         mock_module: LogicalModule = cast(LogicalModule, MagicMock(spec=LogicalModule))
         mock_module.power = None
 
@@ -207,7 +206,6 @@ class TestMonitoringSiteSaveToInfluxDB:
         """Test save_to_influxdb writes points."""
         site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
 
-        # Create mock module with power data
         mock_info = MagicMock()
         mock_info.serialnumber = "SN123"
         mock_info.name = "Module 1"
@@ -228,7 +226,6 @@ class TestMonitoringSiteSaveToInfluxDB:
         """Test save_to_influxdb does nothing when influxdb is None."""
         site = MonitoringSite(mock_monitoring_settings, None)
 
-        # Should not raise
         await site.save_to_influxdb({})
 
 
@@ -242,7 +239,6 @@ class TestMonitoringSitePublishMQTT:
         """Test publish_mqtt emits events."""
         site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
 
-        # Create mock module
         mock_info = MagicMock()
         mock_info.serialnumber = "SN123"
 
@@ -252,7 +248,6 @@ class TestMonitoringSitePublishMQTT:
 
         await site.publish_mqtt({"SN123": mock_module}, 0, 0)
 
-        # Should emit events for module and total
         assert mock_event_bus.emit.call_count == 2
 
 
@@ -266,7 +261,6 @@ class TestMonitoringSiteGetData:
         """Test get_data orchestrates data retrieval."""
         site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
 
-        # Mock the sub-methods
         site.get_modules_energy = AsyncMock(return_value={})
         site.get_modules_power = AsyncMock(return_value={})
         site.save_to_influxdb = AsyncMock()
@@ -294,7 +288,6 @@ class TestMonitoringSiteGetData:
         with pytest.raises(InvalidDataException):
             await site.get_data(Interval15MinTriggerEvent())
 
-        # Check that MonitoringOfflineEvent was emitted
         emit_calls = mock_event_bus.emit.call_args_list
         assert any(
             isinstance(call[0][0], MonitoringOfflineEvent) for call in emit_calls
@@ -650,7 +643,6 @@ class TestMonitoringSiteParseInverters:
 
         result = site._parse_inverters(site_structure, {})
 
-        # Should skip unknown types
         assert len(result) == 0
 
     def test_parse_inverters_no_inverter_folder(
@@ -1107,8 +1099,6 @@ class TestMonitoringSiteDecodeOptimizersCompact:
             {
                 "timeSlotsCount": 24,
                 "optimizerSerials": ["PAN1", "PAN2"],
-                # header claims payloadStart=4, but only 2 values follow instead
-                # of 2 optimizers * 24 slots = 48.
                 "compressPowerData": [2.0, 4.0, 0, 0, 100.5, 95.3],
             },
             today,
@@ -1163,13 +1153,8 @@ class TestMonitoringSiteExtraBranches:
 
         await site.publish_mqtt({"SN123": module}, 0, 0)
 
-        # One module publish + one total publish
         assert mock_event_bus.emit.call_count == 2
 
-
-# ---------------------------------------------------------------------------
-# Shared EV charger test data
-# ---------------------------------------------------------------------------
 
 SAMPLE_EV_CHARGER_DEVICE = {
     "manufacturer": "Keba AG",
