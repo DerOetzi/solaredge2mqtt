@@ -42,11 +42,18 @@ class LogicalInfo(BaseModel):
         if not isinstance(properties, dict) or "identifier" not in properties:
             raise InvalidDataException("Logical info data is not valid")
 
-        node_type = data["type"]
+        node_type = data.get("type")
+        if not isinstance(node_type, str):
+            raise InvalidDataException("Logical info data is not valid")
+
+        raw_name = data.get("name")
+        if not isinstance(raw_name, str):
+            raise InvalidDataException("Logical info data is not valid")
+
         display_order = data.get("displayOrder")
         prefix = LogicalInfo.DISPLAY_ORDER_PREFIXES.get(node_type)
 
-        name = f"{prefix} {display_order}" if display_order and prefix else data["name"]
+        name = f"{prefix} {display_order}" if display_order and prefix else raw_name
 
         return {
             "identifier": str(properties["identifier"]),

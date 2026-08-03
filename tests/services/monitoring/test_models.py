@@ -287,6 +287,16 @@ class TestLogicalInfo:
         with pytest.raises(InvalidDataException):
             LogicalInfo.map({"name": "Test", "type": "INVERTER"})
 
+    def test_logical_info_map_missing_type_raises(self):
+        """Test LogicalInfo.map raises when type is missing."""
+        with pytest.raises(InvalidDataException):
+            LogicalInfo.map({"name": "Test", "properties": {"identifier": "1"}})
+
+    def test_logical_info_map_missing_name_raises(self):
+        """Test LogicalInfo.map raises when name is missing."""
+        with pytest.raises(InvalidDataException):
+            LogicalInfo.map({"type": "INVERTER", "properties": {"identifier": "1"}})
+
 
 class TestLogicalInverter:
     """Tests for LogicalInverter class."""
