@@ -220,10 +220,11 @@ class TestLogicalInfo:
     def test_logical_info_map_method(self):
         """Test LogicalInfo.map static method."""
         data = {
-            "id": 789,
-            "serialNumber": "SN789",
+            "serial": "SN789",
             "name": "Inverter 1",
+            "displayOrder": "1",
             "type": "INVERTER",
+            "properties": {"identifier": "789"},
         }
 
         result = LogicalInfo.map(data)
@@ -233,24 +234,58 @@ class TestLogicalInfo:
         assert result["name"] == "Inverter 1"
         assert result["type"] == "INVERTER"
 
-    def test_logical_info_map_method_string_id(self):
-        """Test LogicalInfo.map converts numeric id to string."""
+    def test_logical_info_map_method_numeric_identifier(self):
+        """Test LogicalInfo.map converts numeric identifier to string."""
         data = {
-            "id": 12345,
-            "serialNumber": "SN001",
+            "serial": "SN001",
             "name": "Test",
-            "type": "MODULE",
+            "displayOrder": "1.2.1",
+            "type": "OPTIMIZER",
+            "properties": {"identifier": 12345},
         }
 
         result = LogicalInfo.map(data)
 
         assert isinstance(result["identifier"], str)
         assert result["identifier"] == "12345"
+        assert result["name"] == "Module 1.2.1"
+
+    def test_logical_info_map_method_no_serial(self):
+        """Test LogicalInfo.map handles nodes with no top-level serial (e.g. STRING)."""
+        data = {
+            "name": "String 1.2",
+            "displayOrder": "1.2",
+            "type": "STRING",
+            "properties": {"identifier": "7B0756CB_32"},
+        }
+
+        result = LogicalInfo.map(data)
+
+        assert result["identifier"] == "7B0756CB_32"
+        assert result["serialnumber"] is None
+        assert result["name"] == "String 1.2"
+
+    def test_logical_info_map_method_falls_back_to_name_without_display_order(self):
+        """Test LogicalInfo.map falls back to name when displayOrder is missing."""
+        data = {
+            "name": "Inverter 1",
+            "type": "INVERTER",
+            "properties": {"identifier": "789"},
+        }
+
+        result = LogicalInfo.map(data)
+
+        assert result["name"] == "Inverter 1"
 
     def test_logical_info_map_invalid_input_raises(self):
         """Test LogicalInfo.map raises on non-dict data."""
         with pytest.raises(InvalidDataException):
             LogicalInfo.map("invalid")
+
+    def test_logical_info_map_missing_properties_raises(self):
+        """Test LogicalInfo.map raises when properties/identifier is missing."""
+        with pytest.raises(InvalidDataException):
+            LogicalInfo.map({"name": "Test", "type": "INVERTER"})
 
 
 class TestLogicalInverter:
