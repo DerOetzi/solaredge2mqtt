@@ -430,16 +430,18 @@ class MonitoringSite(HTTPClientAsync):
     def _decode_optimizers_compact(
         data: dict, day: date
     ) -> dict[str, dict[datetime, float]]:
-        serials = data.get("optimizerSerials", [])
-        slots = data.get("timeSlotsCount", 0)
-        power_values = data.get("compressPowerData", [])
-
-        if not serials or not slots or len(power_values) < 2:
+        if not isinstance(serials, list) or not serials:
             return {}
 
-        # Header layout: [version, payloadStart, (opaqueId, offset)*N, values*N*slots].
-        # offset for optimizer i is always i*slots (verified against optimizerSerials).
+        if not isinstance(slots, int) or slots <= 0 or slots > 24:
+            return {}
+
+        if not isinstance(power_values, list) or len(power_values) < 2:
+            return {}
+
         payload_start = int(power_values[1])
+        if payload_start < 0 or payload_start + len(serials) * slots > len(power_values):
+            return {}
 
         modules: dict[str, dict[datetime, float]] = {}
 
@@ -447,8 +449,10 @@ class MonitoringSite(HTTPClientAsync):
             start = payload_start + index * slots
             values = power_values[start : start + slots]
 
-            modules[serial] = {
-                datetime.combine(day, time(hour=hour)).astimezone(): float(value)
+            modules[str(serial)] = {
+                datetime.combine(day, time(hour=hour, tzinfo=timezone.utc)).astimezone(): float(
+                    value
+                )
                 for hour, value in enumerate(values)
             }
 
