@@ -27,11 +27,6 @@ class LogicalInfo(BaseModel):
     name: str
     type: str
 
-    # SolarEdge's monitoring UI historically named nodes "Inverter 1",
-    # "String 1.2", "Module 1.2.1". The pre-break API sent that formatted
-    # name directly; the current API only sends the bare displayOrder
-    # ("1", "1.2", "1.2.1"), so the prefix has to be reconstructed to keep
-    # names consistent with what is already stored in InfluxDB.
     DISPLAY_ORDER_PREFIXES: ClassVar[dict[str, str]] = {
         "INVERTER": "Inverter",
         "STRING": "String",
