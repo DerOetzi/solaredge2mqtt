@@ -305,16 +305,23 @@ class MonitoringSite(HTTPClientAsync):
             if not serial:
                 continue
 
-            strings_energy = {
-                string_data["stringRelativeOrder"]: string_data["energy"]["value"]
-                for string_data in inverter_data.get("strings", [])
-                if string_data.get("energy") and "stringRelativeOrder" in string_data
-            }
-            optimizers_energy = {
-                optimizer_data["serial"]: optimizer_data["energy"]["value"]
-                for optimizer_data in inverter_data.get("optimizers", [])
-                if optimizer_data.get("energy") and optimizer_data.get("serial")
-            }
+            strings_energy: dict[int, float] = {}
+            for string_data in inverter_data.get("strings", []):
+                if not isinstance(string_data, dict):
+                    continue
+                order = string_data.get("stringRelativeOrder")
+                energy = (string_data.get("energy") or {}).get("value")
+                if isinstance(order, int) and energy is not None:
+                    strings_energy[order] = float(energy)
+
+            optimizers_energy: dict[str, float] = {}
+            for optimizer_data in inverter_data.get("optimizers", []):
+                if not isinstance(optimizer_data, dict):
+                    continue
+                serial = optimizer_data.get("serial")
+                energy = (optimizer_data.get("energy") or {}).get("value")
+                if serial and energy is not None:
+                    optimizers_energy[str(serial)] = float(energy)
 
             inverter_energy = inverter_data.get("energy")
 
