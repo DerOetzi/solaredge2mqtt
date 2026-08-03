@@ -457,6 +457,66 @@ class TestMonitoringSiteIndexEnergyByInverter:
         assert result["INV1"]["strings"] == {}
         assert result["INV1"]["optimizers"] == {}
 
+    def test_skips_non_dict_string_entry(self):
+        result = MonitoringSite._index_energy_by_inverter(
+            {"inverters": [{"serial": "INV1", "strings": ["not-a-dict"]}]}
+        )
+        assert result["INV1"]["strings"] == {}
+
+    def test_skips_string_entry_with_non_int_order(self):
+        result = MonitoringSite._index_energy_by_inverter(
+            {
+                "inverters": [
+                    {
+                        "serial": "INV1",
+                        "strings": [
+                            {
+                                "stringRelativeOrder": "not-an-int",
+                                "energy": {"value": 1.0},
+                            }
+                        ],
+                    }
+                ]
+            }
+        )
+        assert result["INV1"]["strings"] == {}
+
+    def test_skips_non_dict_optimizer_entry(self):
+        result = MonitoringSite._index_energy_by_inverter(
+            {"inverters": [{"serial": "INV1", "optimizers": ["not-a-dict"]}]}
+        )
+        assert result["INV1"]["optimizers"] == {}
+
+    def test_skips_optimizer_entry_without_serial(self):
+        result = MonitoringSite._index_energy_by_inverter(
+            {
+                "inverters": [
+                    {
+                        "serial": "INV1",
+                        "optimizers": [{"energy": {"value": 1.0}}],
+                    }
+                ]
+            }
+        )
+        assert result["INV1"]["optimizers"] == {}
+
+    def test_correctly_keys_by_inverter_serial_not_optimizer_serial(self):
+        """Regression: inverter serial must not be shadowed by optimizer serial."""
+        result = MonitoringSite._index_energy_by_inverter(
+            {
+                "inverters": [
+                    {
+                        "serial": "INV1",
+                        "energy": {"value": 1000.0},
+                        "optimizers": [{"serial": "PAN1", "energy": {"value": 100.0}}],
+                    }
+                ]
+            }
+        )
+        assert "INV1" in result
+        assert result["INV1"]["energy"] == pytest.approx(1000.0)
+        assert result["INV1"]["optimizers"]["PAN1"] == pytest.approx(100.0)
+
 
 class TestMonitoringSiteLoadStructure:
     """Tests for MonitoringSite._load_structure."""
@@ -482,6 +542,18 @@ class TestMonitoringSiteLoadStructure:
         site._get_logical = AsyncMock(
             side_effect=InvalidDataException("unable to read")
         )
+
+        await site._load_structure()
+
+        assert site._cached_structure is None
+
+    @pytest.mark.asyncio
+    async def test_missing_site_structure_key_logs_warning_no_raise(
+        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+    ):
+        """Test _load_structure treats a missing/non-dict siteStructure as an error."""
+        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site._get_logical = AsyncMock(return_value={"unexpected": "shape"})
 
         await site._load_structure()
 
@@ -1011,6 +1083,33 @@ class TestMonitoringSiteDecodeOptimizersCompact:
                 "timeSlotsCount": 0,
                 "optimizerSerials": ["PAN1"],
                 "compressPowerData": [2.0, 4.0, 0, 0],
+            },
+            today,
+        )
+        assert result == {}
+
+    def test_power_values_too_short_returns_empty(self):
+        today = datetime.now().astimezone().date()
+        result = MonitoringSite._decode_optimizers_compact(
+            {
+                "timeSlotsCount": 2,
+                "optimizerSerials": ["PAN1"],
+                "compressPowerData": [2.0],
+            },
+            today,
+        )
+        assert result == {}
+
+    def test_truncated_payload_returns_empty(self):
+        """payloadStart + N*slots exceeding the array length means corrupt data."""
+        today = datetime.now().astimezone().date()
+        result = MonitoringSite._decode_optimizers_compact(
+            {
+                "timeSlotsCount": 24,
+                "optimizerSerials": ["PAN1", "PAN2"],
+                # header claims payloadStart=4, but only 2 values follow instead
+                # of 2 optimizers * 24 slots = 48.
+                "compressPowerData": [2.0, 4.0, 0, 0, 100.5, 95.3],
             },
             today,
         )

@@ -318,10 +318,10 @@ class MonitoringSite(HTTPClientAsync):
             for optimizer_data in inverter_data.get("optimizers", []):
                 if not isinstance(optimizer_data, dict):
                     continue
-                serial = optimizer_data.get("serial")
+                optimizer_serial = optimizer_data.get("serial")
                 energy = (optimizer_data.get("energy") or {}).get("value")
-                if serial and energy is not None:
-                    optimizers_energy[str(serial)] = float(energy)
+                if optimizer_serial and energy is not None:
+                    optimizers_energy[str(optimizer_serial)] = float(energy)
 
             inverter_energy = inverter_data.get("energy")
 
@@ -437,6 +437,10 @@ class MonitoringSite(HTTPClientAsync):
     def _decode_optimizers_compact(
         data: dict, day: date
     ) -> dict[str, dict[datetime, float]]:
+        serials = data.get("optimizerSerials", [])
+        slots = data.get("timeSlotsCount", 0)
+        power_values = data.get("compressPowerData", [])
+
         if not isinstance(serials, list) or not serials:
             return {}
 
@@ -446,8 +450,11 @@ class MonitoringSite(HTTPClientAsync):
         if not isinstance(power_values, list) or len(power_values) < 2:
             return {}
 
+        # Header layout: [version, payloadStart, (opaqueId, offset)*N, values*N*slots].
+        # offset for optimizer i is always i*slots (verified against optimizerSerials).
         payload_start = int(power_values[1])
-        if payload_start < 0 or payload_start + len(serials) * slots > len(power_values):
+        payload_end = payload_start + len(serials) * slots
+        if payload_start < 0 or payload_end > len(power_values):
             return {}
 
         modules: dict[str, dict[datetime, float]] = {}
@@ -457,9 +464,7 @@ class MonitoringSite(HTTPClientAsync):
             values = power_values[start : start + slots]
 
             modules[str(serial)] = {
-                datetime.combine(day, time(hour=hour, tzinfo=timezone.utc)).astimezone(): float(
-                    value
-                )
+                datetime.combine(day, time(hour=hour)).astimezone(): float(value)
                 for hour, value in enumerate(values)
             }
 
