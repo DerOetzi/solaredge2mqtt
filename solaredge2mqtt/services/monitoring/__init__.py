@@ -192,7 +192,12 @@ class MonitoringSite(HTTPClientAsync):
     async def _load_structure(self) -> None:
         try:
             logical = await self._get_logical()
-            self._cached_structure = logical["siteStructure"]
+            site_structure = logical.get("siteStructure")
+            if not isinstance(site_structure, dict):
+                raise InvalidDataException(
+                    "Unexpected response format when reading logical layout"
+                )
+            self._cached_structure = site_structure
             logger.info("Loaded monitoring site structure")
         except (
             ClientResponseError,
