@@ -44,6 +44,7 @@ Issues = "https://github.com/DerOetzi/solaredge2mqtt/issues"
 [project.scripts]
 solaredge2mqtt = "solaredge2mqtt.__main__:main"
 solaredge2mqtt-migrate = "migrate_config:main"
+solaredge2mqtt-monitoring = "monitoring:main"
 
 [project.optional-dependencies]
 dev = [
@@ -77,7 +78,7 @@ include = ["solaredge2mqtt*"]
 exclude = ["tests*"]
 
 [tool.setuptools]
-py-modules = ["migrate_config"]
+py-modules = ["migrate_config", "monitoring"]
 
 [tool.setuptools_scm]
 version_scheme = "post-release"

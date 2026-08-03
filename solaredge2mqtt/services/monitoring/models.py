@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, ClassVar
 
 from pydantic import BaseModel, Field, computed_field, field_serializer
 from pydantic.json_schema import SkipJsonSchema
@@ -27,16 +27,39 @@ class LogicalInfo(BaseModel):
     name: str
     type: str
 
+    DISPLAY_ORDER_PREFIXES: ClassVar[dict[str, str]] = {
+        "INVERTER": "Inverter",
+        "STRING": "String",
+        "OPTIMIZER": "Module",
+    }
+
     @staticmethod
-    def map(data: HTTPResponsePayload) -> dict[str, str]:
+    def map(data: HTTPResponsePayload) -> dict[str, str | None]:
         if not isinstance(data, dict):
             raise InvalidDataException("Logical info data is not valid")
 
+        properties = data.get("properties")
+        if not isinstance(properties, dict) or "identifier" not in properties:
+            raise InvalidDataException("Logical info data is not valid")
+
+        node_type = data.get("type")
+        if not isinstance(node_type, str):
+            raise InvalidDataException("Logical info data is not valid")
+
+        raw_name = data.get("name")
+        if not isinstance(raw_name, str):
+            raise InvalidDataException("Logical info data is not valid")
+
+        display_order = data.get("displayOrder")
+        prefix = LogicalInfo.DISPLAY_ORDER_PREFIXES.get(node_type)
+
+        name = f"{prefix} {display_order}" if display_order and prefix else raw_name
+
         return {
-            "identifier": str(data["id"]),
-            "serialnumber": data["serialNumber"],
-            "name": data["name"],
-            "type": data["type"],
+            "identifier": str(properties["identifier"]),
+            "serialnumber": data.get("serial"),
+            "name": name,
+            "type": node_type,
         }
 
 
