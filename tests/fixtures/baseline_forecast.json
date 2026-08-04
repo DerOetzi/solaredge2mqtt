@@ -1,0 +1,53 @@
+{
+  "dataset_rows": 9580,
+  "training_rows": 8860,
+  "holdout_rows": 720,
+  "holdout_first_timestamp": "2026-07-04T20:00:00+00:00",
+  "holdout_last_timestamp": "2026-08-03T20:00:00+00:00",
+  "location": {
+    "latitude": 49.46,
+    "longitude": 11.29,
+    "timezone": "Europe/Berlin"
+  },
+  "hyperparameter_tuning": false,
+  "metrics": {
+    "energy": {
+      "mae": 620.879625,
+      "rmse": 1013.7259033936393,
+      "r2": 0.8858962989641499,
+      "unit": "Wh",
+      "selected_features": [
+        "num__clouds",
+        "num__dew_point",
+        "num__humidity",
+        "num__pressure",
+        "num__uvi",
+        "sun__time_elevation",
+        "sun__time_delta_sunset",
+        "cat__weather_id"
+      ]
+    },
+    "power": {
+      "mae": 624.9305555555555,
+      "rmse": 1017.5421394495442,
+      "r2": 0.8853850216370871,
+      "unit": "W",
+      "selected_features": [
+        "cyc__wind_deg_sin",
+        "num__clouds",
+        "num__humidity",
+        "num__pressure",
+        "num__uvi",
+        "sun__time_elevation",
+        "sun__time_delta_sunset",
+        "cat__weather_id"
+      ]
+    }
+  },
+  "versions": {
+    "python": "3.12.3",
+    "scikit-learn": "1.9.0",
+    "numpy": "2.4.6",
+    "pandas": "3.0.3"
+  }
+}
