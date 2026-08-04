@@ -1,0 +1,35 @@
+{
+  "exported_at": "2026-08-03T21:14:23.731644+00:00",
+  "source_measurement": "forecast_training",
+  "weather_provider": "openweathermap",
+  "requested_days": 400,
+  "rows": 9580,
+  "first_timestamp": "2025-06-29T22:00:00+00:00",
+  "last_timestamp": "2026-08-03T20:00:00+00:00",
+  "columns": [
+    "_time",
+    "clouds",
+    "dew_point",
+    "energy",
+    "feels_like",
+    "humidity",
+    "pop",
+    "power",
+    "pressure",
+    "rain",
+    "snow",
+    "temp",
+    "uvi",
+    "visibility",
+    "weather_id",
+    "weather_main",
+    "wind_deg",
+    "wind_gust",
+    "wind_speed"
+  ],
+  "location": {
+    "latitude": 49.46,
+    "longitude": 11.29,
+    "timezone": "Europe/Berlin"
+  }
+}
