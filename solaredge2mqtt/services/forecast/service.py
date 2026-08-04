@@ -1,21 +1,14 @@
 from __future__ import annotations
 
-import time
-from asyncio import Event, to_thread
+from asyncio import to_thread
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
-from joblib import Memory
-from numpy import percentile
-from numpy.typing import NDArray
-from pandas import DataFrame, Series, to_datetime
-from sklearn import clone
-from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.compose import ColumnTransformer
-from sklearn.ensemble import HistGradientBoostingRegressor
-from sklearn.inspection import permutation_importance
-from sklearn.model_selection import GridSearchCV, TimeSeriesSplit, train_test_split
-from sklearn.pipeline import Pipeline
+from pandas import DataFrame, to_datetime
+from pvlearn.config import ForecasterConfig
+from pvlearn.exceptions import PVLearnError
+from pvlearn.forecaster import Forecaster, ForecasterType
+from pvlearn.location import Location
 from tzlocal import get_localzone
 
 from solaredge2mqtt.core.events import EventBus
@@ -24,14 +17,8 @@ from solaredge2mqtt.core.influxdb import InfluxDBAsync, Point
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.core.timer.events import Interval10MinTriggerEvent
-from solaredge2mqtt.services.forecast.encoders import (
-    CategoricalEncoder,
-    CyclicalEncoder,
-    SunEncoder,
-    TimeEncoder,
-)
 from solaredge2mqtt.services.forecast.events import ForecastEvent
-from solaredge2mqtt.services.forecast.models import Forecast, ForecasterType
+from solaredge2mqtt.services.forecast.models import Forecast
 from solaredge2mqtt.services.forecast.settings import ForecastSettings
 from solaredge2mqtt.services.modbus.events import ModbusUnitsReadEvent
 from solaredge2mqtt.services.weather.events import WeatherUpdateEvent
@@ -56,8 +43,19 @@ class ForecastService:
 
         self.influxdb = influxdb
 
+        forecaster_location = Location(
+            latitude=location.latitude_value,
+            longitude=location.longitude_value,
+            timezone=str(LOCAL_TZ),
+        )
+        forecaster_config = ForecasterConfig(
+            hyperparametertuning=settings.hyperparametertuning,
+            cachingdir=settings.cachingdir,
+            cache_size_limit_mb=settings.cache_size_limit_mb,
+        )
         self.forecasters: dict[ForecasterType, Forecaster] = {
-            typed: Forecaster(typed, location, settings) for typed in ForecasterType
+            typed: Forecaster(typed, forecaster_location, forecaster_config)
+            for typed in ForecasterType
         }
 
         self.last_weather_forecast: list[OpenWeatherMapForecastData] | None = None
@@ -176,7 +174,10 @@ class ForecastService:
 
     def training(self, data: DataFrame) -> None:
         for forecaster in self.forecasters.values():
-            forecaster.train(data)
+            try:
+                forecaster.train(data)
+            except PVLearnError as error:
+                raise InvalidDataException(str(error)) from error
 
     @EventBus.subscribe(Interval10MinTriggerEvent)
     async def forecast_loop(self, event: Interval10MinTriggerEvent) -> None:
@@ -203,7 +204,10 @@ class ForecastService:
 
         predictions = {}
         for typed, forecaster in self.forecasters.items():
-            predictions[typed] = await forecaster.predict(data)
+            try:
+                predictions[typed] = await forecaster.predict(data)
+            except PVLearnError as error:
+                raise InvalidDataException(str(error)) from error
 
         return predictions
 
@@ -292,263 +296,3 @@ class ForecastService:
                 )
             )
             await EventBus.emit(ForecastEvent(forecast))
-
-
-class Forecaster:
-    NUMERIC_FEATURES: list[str] = [
-        "clouds",
-        "dew_point",
-        "feels_like",
-        "humidity",
-        "pop",
-        "pressure",
-        "rain",
-        "temp",
-        "uvi",
-        "visibility",
-        "wind_speed",
-        "wind_gust",
-    ]
-    CATEGORICAL_FEATURES: list[str] = ["weather_id", "weather_main"]
-    CYCLICAL_FEATURES: dict[str, int] = {
-        "wind_deg": 360,
-    }
-    TARGET_FEATURES: dict[str, str] = {
-        ForecasterType.ENERGY.target_column: "energy",
-        ForecasterType.POWER.target_column: "power",
-    }
-
-    def __init__(
-        self,
-        typed: ForecasterType,
-        location: LocationSettings,
-        settings: ForecastSettings,
-    ) -> None:
-        self.typed: ForecasterType = typed
-        self.location = location
-        self.enable_hyperparameter_tuning = settings.hyperparametertuning
-        self.model_pipeline: Pipeline | None = None
-        self.training_completed: Event = Event()
-        self.cache_size_limit_bytes = settings.cache_size_limit_mb * 1024 * 1024
-
-        self.memory: Memory | None = (
-            Memory(settings.cachingdir, verbose=0)
-            if settings.is_caching_enabled
-            else None
-        )
-
-    def train(self, data: DataFrame) -> None:
-        data_count = len(data)
-        logger.info(
-            f"Training model {self.typed} with {data_count} hours of data points"
-        )
-
-        if data_count < 60:
-            raise InvalidDataException(
-                "Forecast needs at least 60 hours of data at least to start training",
-            )
-
-        self.training_completed.clear()
-        start_time = time.time()
-        y_vector = cast(Series, data[self.typed.target_column])
-
-        pipeline = self._prepare_model_pipeline(data.columns.to_list())
-
-        if self.enable_hyperparameter_tuning:
-            self.model_pipeline = self._hyperparametertuning(data, y_vector, pipeline)
-        else:
-            self.model_pipeline = pipeline
-
-        self.model_pipeline.fit(data, y_vector)
-        self._cleanup_cache()
-
-        execution_time = time.time() - start_time
-        self.training_completed.set()
-
-        transformed_features = self.model_pipeline.named_steps[
-            "preprocessor"
-        ].get_feature_names_out()
-        logger.debug(
-            "Transformed features ({count}): {features} ",
-            count=len(transformed_features),
-            features=", ".join(transformed_features),
-        )
-
-        selected_features = self.model_pipeline.named_steps[
-            "feature_selector"
-        ].important_features_
-        logger.info(
-            "Selected features ({count}): {features} ",
-            count=len(selected_features),
-            features=", ".join(selected_features),
-        )
-
-        logger.info(f"Training execution time: {execution_time:.2f} seconds")
-
-    def _prepare_model_pipeline(
-        self, x_vector_columns: list[str], n_repeats: int = 10
-    ) -> Pipeline:
-        base_estimator = HistGradientBoostingRegressor(
-            random_state=42,
-            categorical_features="from_dtype",
-            learning_rate=0.1,
-        )
-
-        return Pipeline(
-            steps=[
-                ("preprocessor", self._prepare_preprocessor(x_vector_columns)),
-                (
-                    "feature_selector",
-                    PFISelector(estimator=clone(base_estimator), n_repeats=n_repeats),
-                ),
-                ("model", clone(base_estimator)),
-            ],
-            memory=self.memory,
-        )
-
-    def _prepare_preprocessor(self, x_vector_columns: list[str]) -> ColumnTransformer:
-        ct = ColumnTransformer(
-            transformers=[
-                (
-                    "cyc",
-                    CyclicalEncoder(**self.CYCLICAL_FEATURES),
-                    self._extract_used_columns(
-                        self.CYCLICAL_FEATURES, x_vector_columns
-                    ),
-                ),
-                (
-                    "num",
-                    "passthrough",
-                    self._extract_used_columns(self.NUMERIC_FEATURES, x_vector_columns),
-                ),
-                (
-                    "time",
-                    TimeEncoder(),
-                    ["time"],
-                ),
-                ("sun", SunEncoder(self.location), ["time"]),
-                (
-                    "cat",
-                    CategoricalEncoder(),
-                    self._extract_used_columns(
-                        self.CATEGORICAL_FEATURES, x_vector_columns
-                    ),
-                ),
-            ],
-            remainder="drop",
-        )
-        ct.set_output(transform="pandas")
-        return ct
-
-    def _hyperparametertuning(
-        self,
-        data: DataFrame,
-        y_vector: Series,
-        pipeline: Pipeline,
-    ) -> Pipeline:
-        param_grid = {
-            "model__max_iter": [100, 200, 300],
-            "model__max_depth": [None, 5, 10],
-            "model__learning_rate": [0.01, 0.1],
-        }
-
-        grid_search = GridSearchCV(
-            estimator=pipeline,
-            param_grid=param_grid,
-            cv=TimeSeriesSplit(n_splits=2),
-            scoring="neg_mean_squared_error",
-        )
-        grid_search.fit(data, y_vector)
-
-        logger.info(
-            "Training with best parameters: {params}", params=grid_search.best_params_
-        )
-        logger.info("Training with best score: {score}", score=grid_search.best_score_)
-
-        return cast(Pipeline, clone(grid_search.best_estimator_))
-
-    def _cleanup_cache(self) -> None:
-        if self.memory is None:
-            return
-
-        self.memory.reduce_size(bytes_limit=self.cache_size_limit_bytes)
-
-    @staticmethod
-    def _extract_used_columns(
-        typed_features: list[str] | dict[str, int], x_vector_columns: list[str]
-    ) -> list[str]:
-        return [col for col in typed_features if col in x_vector_columns]
-
-    @property
-    def is_trained(self) -> bool:
-        return self.model_pipeline is not None
-
-    async def predict(self, new_data: DataFrame) -> DataFrame:
-        if self.model_pipeline is None:
-            raise InvalidDataException("The model has not been trained yet.")
-
-        data_for_prediction = new_data.copy()
-
-        await self.training_completed.wait()
-
-        predictions = self.model_pipeline.predict(data_for_prediction)
-        if isinstance(predictions, tuple):
-            predictions = predictions[0]
-        data_for_prediction[self.typed.target_column] = predictions
-        data_for_prediction[self.typed.target_column] = data_for_prediction[
-            self.typed.target_column
-        ].apply(self.typed.prepare_value)
-
-        return data_for_prediction
-
-
-class PFISelector(BaseEstimator, TransformerMixin):
-    def __init__(self, estimator, n_repeats=10):
-        self.estimator = estimator
-        self.n_repeats = n_repeats
-        self.important_features_: list[str] | None = None
-        self.important_indices_: list[bool] | None = None
-
-    def fit(self, x_vector: DataFrame, y_vector=None) -> PFISelector:
-        x_train, x_test, y_train, y_test = train_test_split(
-            x_vector, y_vector, test_size=0.1, random_state=42
-        )
-        self.estimator_ = self.estimator.fit(x_train, y_train)
-        results = permutation_importance(
-            self.estimator_,
-            x_test,
-            y_test,
-            n_repeats=self.n_repeats,
-            random_state=42,
-            n_jobs=-1,
-        )
-
-        self.feature_importances_ = cast(
-            NDArray,
-            results["importances_mean"],
-        )
-
-        threshold_value = percentile(self.feature_importances_, 75)
-
-        selected = self.feature_importances_ > threshold_value
-        if not selected.any():
-            selected = self.feature_importances_ >= threshold_value
-
-        important_indices = cast(list[bool], selected.tolist())
-        self.important_indices_ = important_indices
-        self.important_features_ = [
-            col
-            for col, keep in zip(x_vector.columns.to_list(), important_indices)
-            if keep
-        ]
-        return self
-
-    def transform(self, x_vector: DataFrame) -> DataFrame:
-        if self.important_features_ is None:
-            raise RuntimeError("PFISelector has not been fitted yet.")
-        return cast(DataFrame, x_vector.loc[:, self.important_features_])
-
-    def get_support(self, *_) -> list[bool]:
-        if self.important_indices_ is None:
-            raise RuntimeError("PFISelector has not been fitted yet.")
-        return self.important_indices_
