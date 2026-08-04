@@ -521,7 +521,7 @@ Each method provides different levels of control and isolation, suitable for var
 
 For development and testing environments:
 
-1. **Preparation**: Ensure Python >=3.11, <=3.13 is installed.
+1. **Preparation**: Ensure Python >=3.12, <=3.13 is installed.
 
 2. **Installation**: 
    ```bash
