@@ -3,39 +3,20 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from pvlearn.forecaster import ForecasterType
+from pvlearn.result import ForecastResult
 from pydantic import computed_field
 from pydantic.json_schema import SkipJsonSchema
 
-from solaredge2mqtt.core.models import EnumModel
 from solaredge2mqtt.services.homeassistant.models import (
     HomeAssistantSensorType as HASensor,
 )
 from solaredge2mqtt.services.models import Component
 
-
-class ForecasterType(EnumModel):
-    ENERGY = "energy"
-    POWER = "power"
-
-    def __init__(self, target_column: str) -> None:
-        self._target_column: str = target_column
-
-    @property
-    def target_column(self) -> str:
-        return self._target_column
-
-    def prepare_value(self, value: float | int) -> float | int:
-        if value <= 0:
-            prepared = 0
-        elif self.target_column == "energy":
-            prepared = round(value / 1000, 3)
-        else:
-            prepared = int(round(value))
-
-        return prepared
+__all__ = ["Forecast", "ForecasterType"]
 
 
-class Forecast(Component):
+class Forecast(Component, ForecastResult):
     COMPONENT = "forecast"
 
     power_period: SkipJsonSchema[dict[datetime, int]]
@@ -45,30 +26,27 @@ class Forecast(Component):
     @computed_field(**HASensor.ENERGY_WH.field("Energy production today"))
     @property
     def energy_today(self) -> int:
-        return sum(self._energy_today)
+        return super().energy_today
 
     @computed_field(**HASensor.ENERGY_WH.field("Energy production remaining today"))
     @property
     def energy_today_remaining(self) -> int:
-        return sum(self._energy_today[self._current_hour() :])
+        return super().energy_today_remaining
 
     @computed_field(**HASensor.ENERGY_WH.field("Energy production current hour"))
+    @property
     def energy_current_hour(self) -> int:
-        return self._energy_today[self._current_hour()]
+        return super().energy_current_hour
 
     @computed_field(**HASensor.ENERGY_WH.field("Energy production next hour"))
+    @property
     def energy_next_hour(self) -> int:
-        if self._current_hour() == 23:
-            energy_next_hour = self._energy_tomorrow[0]
-        else:
-            energy_next_hour = self._energy_today[self._current_hour() + 1]
-
-        return energy_next_hour
+        return super().energy_next_hour
 
     @computed_field(**HASensor.ENERGY_WH.field("Energy production tomorrow"))
     @property
     def energy_tomorrow(self) -> int:
-        return sum(self._energy_tomorrow)
+        return super().energy_tomorrow
 
     @computed_field(**HASensor.TIMESTAMP.field("Battery charge optimal start time"))
     @property
@@ -100,18 +78,6 @@ class Forecast(Component):
             return None
 
         return min(selected_times)
-
-    @property
-    def _energy_today(self) -> list[int]:
-        return [*self.energy_period.values()][:24]
-
-    @property
-    def _energy_tomorrow(self) -> list[int]:
-        return [*self.energy_period.values()][24:]
-
-    @staticmethod
-    def _current_hour() -> int:
-        return datetime.now().hour
 
     @staticmethod
     def _now() -> datetime:

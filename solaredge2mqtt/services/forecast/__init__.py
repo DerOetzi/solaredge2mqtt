@@ -3,7 +3,7 @@ from __future__ import annotations
 import importlib.util
 from typing import TYPE_CHECKING
 
-_FORECAST_DEPS = ("numpy", "pandas", "scipy", "sklearn")
+_FORECAST_DEPS = ("pvlearn",)
 
 
 def _deps_available() -> bool:
