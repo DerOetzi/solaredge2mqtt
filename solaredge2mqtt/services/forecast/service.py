@@ -70,10 +70,6 @@ class ForecastService:
 
     @EventBus.subscribe(ModbusUnitsReadEvent)
     async def battery_update(self, event: ModbusUnitsReadEvent) -> None:
-        # available_energy is a (health/temperature-)derated capacity ceiling,
-        # not the currently stored charge, so the stored energy is derived
-        # from state_of_charge (SOE %) times the rated (nameplate) capacity,
-        # same as the "Kapazität × (Ziel-SOC - aktuell-SOC)" formula.
         capacity_wh = 0.0
         stored_energy_wh = 0.0
         battery_found = False
