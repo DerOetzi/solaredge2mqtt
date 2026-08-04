@@ -141,7 +141,6 @@ jobs:
       contents: read
     strategy:
       matrix:
-        # 3.11 dropped: pvlearn (the forecast extra's ML core) requires >=3.12.
         python-version:
           - "3.12"
     steps:

@@ -1,16 +1,9 @@
-"""Phase 1a's solaredge2mqtt-side acceptance proof.
+"""Verifies ForecastService's wiring into pvlearn against the frozen baseline.
 
-pvlearn's own regression test already proves the extracted Forecaster
-reproduces the frozen Phase 0 baseline's predictive quality. This test proves
-the wiring on top of it: that ForecastService correctly translates
-LocationSettings/ForecastSettings into pvlearn's Location/ForecasterConfig,
-and that Forecast inheriting from pvlearn.ForecastResult doesn't change what
-gets predicted.
-
-Tolerance, not exact equality, for the same reason as on the pvlearn side:
-HistGradientBoostingRegressor's split search is sensitive to
-CPU-microarchitecture floating point rounding, so bit-identical predictions
-only hold on the machine that trained them.
+Retrains through LocationSettings/ForecastSettings -> pvlearn.Location/
+ForecasterConfig and checks the resulting predictions' MAE/R² against
+tests/fixtures/baseline_forecast.json within tolerance. See
+docs/decisions/0001-pvlearn-extraction-wiring.md for why.
 """
 
 import json
