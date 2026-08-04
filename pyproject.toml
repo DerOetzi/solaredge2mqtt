@@ -3,7 +3,7 @@ name = "solaredge2mqtt"
 dynamic = ["version"]
 description = "Read data from SolarEdge Inverter and publish it to MQTT"
 readme = { file = "README.md", content-type = "text/markdown" }
-requires-python = ">=3.11,<4"
+requires-python = ">=3.12,<4"
 license = "MIT"
 authors = [
     { name = "Johannes Ott", email = "info@johannes-ott.net" }
@@ -14,7 +14,6 @@ classifiers = [
     "Topic :: Home Automation",
     "Natural Language :: English",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
 ]
@@ -22,8 +21,6 @@ dependencies = [
     "aiocsv==1.4.1",
     "aiohttp==3.14.3",
     "aiomqtt==2.5.1",
-    "astral==3.2",
-    "ephem==4.2.1",
     "influxdb-client==1.50.0",
     "jsonref==1.1.0",
     "loguru==0.7.3",
@@ -57,12 +54,10 @@ dev = [
     "pytest-asyncio==1.4.0",
     "pytest-cov==7.1.0",
     "pytest-xdist==3.8.0",
+    "pyarrow==25.0.0",
 ]
 forecast = [
-    "numpy==2.4.6",
-    "pandas==3.0.3",
-    "scikit-learn==1.9.0",
-    "scipy==1.17.1"
+    "pvlearn==0.1.0",
 ]
 
 [build-system]

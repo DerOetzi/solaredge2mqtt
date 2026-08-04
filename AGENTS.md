@@ -7,7 +7,7 @@ tool-specific syntax on top.
 ## Project Overview
 
 - **Purpose:** Integrates SolarEdge inverters with MQTT for home automation, logging, and forecasting.
-- **Language:** Python (>=3.11, <=3.13)
+- **Language:** Python (>=3.12, <=3.13)
 - **Package Manager:** pip with `pyproject.toml`
 
 ### Directory Structure
@@ -78,7 +78,7 @@ and applied automatically to `*.py` files.
 
 Project-specific constraints:
 
-- Use Python >=3.11, <=3.13 syntax and language features.
+- Use Python >=3.12, <=3.13 syntax and language features.
 - All code comments and documentation must be in **English**.
 - For diagrams use Mermaid.
 

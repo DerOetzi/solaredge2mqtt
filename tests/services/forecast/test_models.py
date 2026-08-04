@@ -3,45 +3,7 @@
 from datetime import datetime, timezone
 from unittest.mock import patch
 
-import pytest
-
-from solaredge2mqtt.services.forecast.models import Forecast, ForecasterType
-
-
-class TestForecasterType:
-    """Tests for ForecasterType enum."""
-
-    def test_forecaster_type_energy(self):
-        """Test ENERGY forecaster type."""
-        assert str(ForecasterType.ENERGY) == "energy"
-        assert ForecasterType.ENERGY.target_column == "energy"
-
-    def test_forecaster_type_power(self):
-        """Test POWER forecaster type."""
-        assert str(ForecasterType.POWER) == "power"
-        assert ForecasterType.POWER.target_column == "power"
-
-    def test_prepare_value_negative(self):
-        """Test prepare_value returns 0 for negative values."""
-        assert ForecasterType.ENERGY.prepare_value(-100) == 0
-        assert ForecasterType.POWER.prepare_value(-100) == 0
-
-    def test_prepare_value_zero(self):
-        """Test prepare_value returns 0 for zero."""
-        assert ForecasterType.ENERGY.prepare_value(0) == 0
-        assert ForecasterType.POWER.prepare_value(0) == 0
-
-    def test_prepare_value_energy_converts_to_kwh(self):
-        """Test prepare_value for energy converts to kWh and rounds."""
-        # 5000 Wh = 5.0 kWh
-        assert ForecasterType.ENERGY.prepare_value(5000) == pytest.approx(5.0)
-        # 5123 Wh = 5.123 kWh
-        assert ForecasterType.ENERGY.prepare_value(5123) == pytest.approx(5.123)
-
-    def test_prepare_value_power_rounds_to_int(self):
-        """Test prepare_value for power rounds to integer."""
-        assert ForecasterType.POWER.prepare_value(1000.4) == pytest.approx(1000)
-        assert ForecasterType.POWER.prepare_value(1000.6) == pytest.approx(1001)
+from solaredge2mqtt.services.forecast.models import Forecast
 
 
 class TestForecast:
