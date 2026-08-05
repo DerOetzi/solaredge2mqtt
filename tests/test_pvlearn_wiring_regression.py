@@ -16,6 +16,7 @@ import pytest
 from sklearn.metrics import mean_absolute_error, r2_score
 
 from solaredge2mqtt.core.settings.models import LocationSettings
+from solaredge2mqtt.services.forecast.schema import to_canonical_frame
 from solaredge2mqtt.services.forecast.service import ForecastService
 from solaredge2mqtt.services.forecast.settings import ForecastSettings
 
@@ -23,7 +24,6 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 RELATIVE_MAE_TOLERANCE = 0.10
 ABSOLUTE_R2_TOLERANCE = 0.05
-WH_PER_KWH = 1000
 
 pytestmark = pytest.mark.slow
 
@@ -49,7 +49,7 @@ def wired_metrics(
     reference_dataset: pd.DataFrame,
     reference_metadata: dict,
     baseline_metadata: dict,
-) -> dict[str, dict[str, float]]:
+) -> dict[str, float]:
     location_data = reference_metadata["location"]
     timezone = ZoneInfo(location_data["timezone"])
 
@@ -70,39 +70,38 @@ def wired_metrics(
         service = ForecastService(settings, location, influxdb=MagicMock())
         service.training(train_data)
 
-        metrics: dict[str, dict[str, float]] = {}
-        for typed, forecaster in service.forecasters.items():
-            assert forecaster.model_pipeline is not None
-            predicted = forecaster.model_pipeline.predict(holdout_data)
-            published = pd.Series(predicted).apply(typed.prepare_value)
+        forecaster = service.forecaster
+        assert forecaster.model_pipeline is not None
 
-            scale = WH_PER_KWH if typed.target_column == "energy" else 1
-            actual = holdout_data[typed.target_column].to_numpy()
-            comparable = published.to_numpy() * scale
+        predicted = forecaster.model_pipeline.predict(to_canonical_frame(holdout_data))
+        published = pd.Series(predicted).apply(forecaster.prepare_value)
 
-            metrics[typed.target_column] = {
-                "mae": float(mean_absolute_error(actual, comparable)),
-                "r2": float(r2_score(actual, comparable)),
-            }
+    # Both sides are Wh: the stored `energy` field has always been, and pvlearn
+    # publishes Wh since 0.2.0 instead of dividing by 1000 on the way out.
+    actual = holdout_data["energy"].to_numpy()
+    comparable = published.to_numpy()
 
-    return metrics
+    return {
+        "mae": float(mean_absolute_error(actual, comparable)),
+        "r2": float(r2_score(actual, comparable)),
+    }
 
 
 class TestPvlearnWiringReproducesBaseline:
-    @pytest.mark.parametrize("target", ["energy", "power"])
     def test_mae_matches_baseline_within_tolerance(
-        self, target: str, wired_metrics: dict, baseline_metadata: dict
+        self, wired_metrics: dict, baseline_metadata: dict
     ):
-        wired_mae = wired_metrics[target]["mae"]
-        baseline_mae = baseline_metadata["metrics"][target]["mae"]
+        baseline_mae = baseline_metadata["metrics"]["energy"]["mae"]
 
-        assert wired_mae == pytest.approx(baseline_mae, rel=RELATIVE_MAE_TOLERANCE)
+        assert wired_metrics["mae"] == pytest.approx(
+            baseline_mae, rel=RELATIVE_MAE_TOLERANCE
+        )
 
-    @pytest.mark.parametrize("target", ["energy", "power"])
     def test_r2_matches_baseline_within_tolerance(
-        self, target: str, wired_metrics: dict, baseline_metadata: dict
+        self, wired_metrics: dict, baseline_metadata: dict
     ):
-        wired_r2 = wired_metrics[target]["r2"]
-        baseline_r2 = baseline_metadata["metrics"][target]["r2"]
+        baseline_r2 = baseline_metadata["metrics"]["energy"]["r2"]
 
-        assert wired_r2 == pytest.approx(baseline_r2, abs=ABSOLUTE_R2_TOLERANCE)
+        assert wired_metrics["r2"] == pytest.approx(
+            baseline_r2, abs=ABSOLUTE_R2_TOLERANCE
+        )

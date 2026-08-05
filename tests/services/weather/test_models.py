@@ -186,6 +186,23 @@ class TestOpenWeatherMapBaseData:
         # weather should be excluded (replaced with weather_id, weather_main)
         assert "weather" not in estimation_data
 
+    def test_base_data_model_dump_canonical(self):
+        """model_dump_canonical renames onto pvlearn's schema and drops the rest."""
+        data = make_base_data()
+        base = OpenWeatherMapBaseData(**data)
+
+        canonical = base.model_dump_canonical()
+
+        assert canonical["cloud_cover"] == 10
+        assert canonical["temperature"] == pytest.approx(25.5)
+        assert canonical["relative_humidity"] == 65
+        assert canonical["wind_direction"] == 180
+        # 800 is OpenWeatherMap's clear sky, WMO code 0.
+        assert canonical["condition_code"] == 0
+        # No provider field survives under its own name.
+        assert "clouds" not in canonical
+        assert "weather_main" not in canonical
+
     def test_base_data_with_rain(self):
         """Test base data with rain."""
         data = make_base_data()

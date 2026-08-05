@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from pandas import DataFrame, to_datetime
 from pvlearn.config import ForecasterConfig
 from pvlearn.exceptions import PVLearnError
-from pvlearn.forecaster import Forecaster, ForecasterType
+from pvlearn.forecaster import Forecaster
 from pvlearn.location import Location
 from tzlocal import get_localzone
 
@@ -19,6 +19,7 @@ from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.core.timer.events import Interval10MinTriggerEvent
 from solaredge2mqtt.services.forecast.events import ForecastEvent
 from solaredge2mqtt.services.forecast.models import Forecast
+from solaredge2mqtt.services.forecast.schema import to_canonical_frame
 from solaredge2mqtt.services.forecast.settings import ForecastSettings
 from solaredge2mqtt.services.modbus.events import ModbusUnitsReadEvent
 from solaredge2mqtt.services.weather.events import WeatherUpdateEvent
@@ -29,6 +30,16 @@ if TYPE_CHECKING:
 
 
 LOCAL_TZ = get_localzone()
+
+#: Resolution of the weather forecast, the training data and the prediction.
+INTERVAL_MINUTES = 60
+
+WEATHER_PROVIDER = "openweathermap"
+
+ENERGY_FIELD = "energy"
+POWER_FIELD = "power"
+
+WH_PER_KWH = 1000
 
 
 class ForecastService:
@@ -49,14 +60,13 @@ class ForecastService:
             timezone=str(LOCAL_TZ),
         )
         forecaster_config = ForecasterConfig(
+            interval_minutes=INTERVAL_MINUTES,
+            weather_provider=WEATHER_PROVIDER,
             hyperparametertuning=settings.hyperparametertuning,
             cachingdir=settings.cachingdir,
             cache_size_limit_mb=settings.cache_size_limit_mb,
         )
-        self.forecasters: dict[ForecasterType, Forecaster] = {
-            typed: Forecaster(typed, forecaster_location, forecaster_config)
-            for typed in ForecasterType
-        }
+        self.forecaster = Forecaster(forecaster_location, forecaster_config)
 
         self.last_weather_forecast: list[OpenWeatherMapForecastData] | None = None
         self.last_hour_forecast: dict[int, OpenWeatherMapForecastData] | None = None
@@ -147,12 +157,10 @@ class ForecastService:
                 + " Did the service write power information to InfluxDB?"
             )
 
-        trainings_data[ForecasterType.POWER.target_column] = round(
-            production_data[ForecasterType.POWER.target_column]
-        )
-        trainings_data[ForecasterType.ENERGY.target_column] = round(
-            production_data[ForecasterType.ENERGY.target_column], 2
-        )
+        # Recorded but no longer a training target: the model predicts energy
+        # per interval only.
+        trainings_data[POWER_FIELD] = round(production_data[POWER_FIELD])
+        trainings_data[ENERGY_FIELD] = round(production_data[ENERGY_FIELD], 2)
         return trainings_data
 
     async def write_new_training_data_to_influxdb(self, trainings_data):
@@ -173,26 +181,19 @@ class ForecastService:
         await to_thread(self.training, data)
 
     def training(self, data: DataFrame) -> None:
-        for forecaster in self.forecasters.values():
-            try:
-                forecaster.train(data)
-            except PVLearnError as error:
-                raise InvalidDataException(str(error)) from error
+        try:
+            self.forecaster.train(to_canonical_frame(data))
+        except PVLearnError as error:
+            raise InvalidDataException(str(error)) from error
 
     @EventBus.subscribe(Interval10MinTriggerEvent)
     async def forecast_loop(self, event: Interval10MinTriggerEvent) -> None:
         predictions = await self.predict()
-
-        for typed, predicted_data in predictions.items():
-            await self._write_periods_to_influxdb(predicted_data, typed)
-
+        await self._write_periods_to_influxdb(predictions)
         await self.publish_forecast()
 
-    async def predict(self) -> dict[ForecasterType, DataFrame]:
-        if (
-            not self.forecasters[ForecasterType.ENERGY].is_trained
-            or not self.forecasters[ForecasterType.POWER].is_trained
-        ):
+    async def predict(self) -> DataFrame:
+        if not self.forecaster.is_trained:
             await self.train()
 
         if self.last_weather_forecast is None:
@@ -202,14 +203,10 @@ class ForecastService:
 
         data = self._prepare_estimation_data(self.last_weather_forecast)
 
-        predictions = {}
-        for typed, forecaster in self.forecasters.items():
-            try:
-                predictions[typed] = await forecaster.predict(data)
-            except PVLearnError as error:
-                raise InvalidDataException(str(error)) from error
-
-        return predictions
+        try:
+            return await self.forecaster.predict(data)
+        except PVLearnError as error:
+            raise InvalidDataException(str(error)) from error
 
     @staticmethod
     def _prepare_estimation_data(
@@ -226,7 +223,7 @@ class ForecastService:
                     second=0,
                     microsecond=0,
                 ).astimezone(),
-                **weather_forecast.model_dump_estimation_data(),
+                **weather_forecast.model_dump_canonical(),
             }
             for weather_forecast in weather_forecast_list
         ]
@@ -236,19 +233,24 @@ class ForecastService:
 
         return data
 
-    async def _write_periods_to_influxdb(
-        self, periods: DataFrame, typed: ForecasterType
-    ) -> None:
+    async def _write_periods_to_influxdb(self, periods: DataFrame) -> None:
         points = []
         for _, period in periods.iterrows():
-            point = Point("forecast")
-            point.field(typed.target_column, period[typed.target_column])
+            energy_wh = period[ENERGY_FIELD]
             period_time = period["time"]
             if not isinstance(period_time, datetime):
                 raise InvalidDataException("Forecast period time must be datetime")
+            if not isinstance(energy_wh, (int, float)):
+                raise InvalidDataException("Forecast energy value must be numeric")
 
-            utc_time = period_time.astimezone(timezone.utc)
-            point.time(utc_time)
+            point = Point("forecast")
+            # pvlearn publishes Wh, this measurement stores kWh.
+            point.field(ENERGY_FIELD, energy_wh / WH_PER_KWH)
+            # Deprecated, mirrors the energy: at 60 minutes the mean power in W
+            # equals the energy in Wh.
+            point.field(POWER_FIELD, float(energy_wh))
+
+            point.time(period_time.astimezone(timezone.utc))
             points.append(point)
 
         logger.info("Write forecast data to influxdb")
@@ -258,32 +260,25 @@ class ForecastService:
         forecast_data = await self.influxdb.query_dataframe("forecast")
         if not forecast_data.empty:
             forecast_data["time"] = forecast_data["_time"].dt.tz_convert(LOCAL_TZ)
-            power_hours: dict[datetime, int] = {}
             energy_hours: dict[datetime, int] = {}
             for _, row in forecast_data.iterrows():
                 row_time = row["time"]
-                row_power = row["power"]
-                row_energy = row["energy"]
+                row_energy = row[ENERGY_FIELD]
 
                 if not isinstance(row_time, datetime):
                     raise InvalidDataException(
                         "Forecast row time must be datetime",
-                    )
-                if not isinstance(row_power, (int, float)):
-                    raise InvalidDataException(
-                        "Forecast power value must be numeric",
                     )
                 if not isinstance(row_energy, (int, float)):
                     raise InvalidDataException(
                         "Forecast energy value must be numeric",
                     )
 
-                power_hours[row_time] = int(round(row_power))
-                energy_hours[row_time] = int(round(row_energy * 1000))
+                energy_hours[row_time] = int(round(row_energy * WH_PER_KWH))
 
-            forecast = Forecast(
-                power_period=power_hours,
-                energy_period=energy_hours,
+            forecast = Forecast.from_energy_period(
+                energy_hours,
+                timezone=str(LOCAL_TZ),
                 battery_charge_needed_wh=self.battery_charge_needed_wh(),
             )
             logger.debug(forecast)

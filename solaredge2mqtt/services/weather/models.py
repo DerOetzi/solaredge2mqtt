@@ -6,6 +6,7 @@ from typing import TypeAlias
 from pydantic import Field, field_serializer, model_serializer
 
 from solaredge2mqtt.core.models import Solaredge2MQTTBaseModel
+from solaredge2mqtt.services.weather.canonical import to_canonical
 
 WeatherData: TypeAlias = dict[
     str,
@@ -84,10 +85,18 @@ class OpenWeatherMapBaseData(Solaredge2MQTTBaseModel):
         return weather[0]
 
     def model_dump_estimation_data(self) -> WeatherData:
+        """The snapshot under OpenWeatherMap's own field names, for persistence."""
         model_dict = self.model_dump(exclude={"weather", "dt"}, exclude_none=True)
         model_dict["weather_id"] = self.weather[0].id
         model_dict["weather_main"] = self.weather[0].main
         return model_dict
+
+    def model_dump_canonical(self) -> WeatherData:
+        """The snapshot in pvlearn's canonical schema, for the model.
+
+        Fields without a canonical counterpart are dropped.
+        """
+        return to_canonical(self.model_dump_estimation_data())
 
 
 class OpenWeatherMapCurrentData(OpenWeatherMapBaseData):
