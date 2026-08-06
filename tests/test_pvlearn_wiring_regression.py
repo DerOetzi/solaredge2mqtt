@@ -16,9 +16,9 @@ import pytest
 from sklearn.metrics import mean_absolute_error, r2_score
 
 from solaredge2mqtt.core.settings.models import LocationSettings
-from solaredge2mqtt.services.forecast.schema import to_canonical_frame
 from solaredge2mqtt.services.forecast.service import ForecastService
 from solaredge2mqtt.services.forecast.settings import ForecastSettings
+from solaredge2mqtt.services.weather.models import OpenWeatherMapBaseData
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -73,7 +73,9 @@ def wired_metrics(
         forecaster = service.forecaster
         assert forecaster.model_pipeline is not None
 
-        predicted = forecaster.model_pipeline.predict(to_canonical_frame(holdout_data))
+        predicted = forecaster.model_pipeline.predict(
+            OpenWeatherMapBaseData.to_canonical_frame(holdout_data)
+        )
         published = pd.Series(predicted).apply(forecaster.prepare_value)
 
     # Both sides are Wh: the stored `energy` field has always been, and pvlearn

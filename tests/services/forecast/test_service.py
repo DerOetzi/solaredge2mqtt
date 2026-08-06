@@ -720,7 +720,9 @@ class TestForecastServiceWritePeriodsToInfluxDB:
         fields = point.to_line_protocol()
         assert f"{ENERGY_FIELD}=1.5" in fields
         # Deprecated shim: mean power in W equals energy in Wh at 60 minutes.
-        assert f"{POWER_FIELD}=1500" in fields
+        # The trailing `i` matters: the field is an integer in existing
+        # databases, and InfluxDB rejects a float written onto it.
+        assert f"{POWER_FIELD}=1500i" in fields
 
     @pytest.mark.asyncio
     async def test_write_periods_to_influxdb_raises_on_invalid_time(self):
@@ -858,3 +860,124 @@ class TestForecastServiceAddLastHourPvProduction:
         assert result[POWER_FIELD] == round(1234.5)
         # Energy is rounded to 2 decimal places
         assert result[ENERGY_FIELD] == pytest.approx(1.57)
+
+
+class TestForecastServicePredictElapsedToday:
+    """Tests for ForecastService.predict_elapsed_today method."""
+
+    NOW = dt_class(2026, 8, 6, 11, 24, tzinfo=timezone.utc).astimezone(LOCAL_TZ)
+    DAY_START = NOW.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    @staticmethod
+    def _service(influxdb) -> tuple[ForecastService, MagicMock]:
+        service = ForecastService(
+            ForecastSettings(enable=True), MockLocationSettings(), influxdb
+        )
+        forecaster = MagicMock()
+        forecaster.is_trained = True
+        service.forecaster = forecaster
+        return service, forecaster
+
+    @staticmethod
+    def _training_frame(hours: list[datetime]) -> DataFrame:
+        data = DataFrame(
+            {
+                "_time": hours,
+                ENERGY_FIELD: [1000.0 + index for index in range(len(hours))],
+                "clouds": [50.0] * len(hours),
+                "weather_id": [800.0] * len(hours),
+            }
+        )
+        data["_time"] = data["_time"].dt.tz_convert("UTC")
+        return data
+
+    def _frozen_clock(self):
+        clock = patch("solaredge2mqtt.services.forecast.service.datetime")
+        mocked = clock.start()
+        mocked.now.return_value = self.NOW
+        return clock
+
+    @pytest.mark.asyncio
+    async def test_predicts_todays_hours_before_the_current_one(self):
+        """The weather forecast starts now, so the elapsed hours come from history."""
+        hours = [
+            self.DAY_START - timedelta(hours=1),
+            self.DAY_START,
+            self.DAY_START + timedelta(hours=10),
+            self.NOW.replace(minute=0, second=0, microsecond=0),
+        ]
+
+        influxdb = AsyncMock()
+        influxdb.query_dataframe = AsyncMock(return_value=self._training_frame(hours))
+
+        service, forecaster = self._service(influxdb)
+        forecaster.predict = AsyncMock(return_value=DataFrame())
+
+        clock = self._frozen_clock()
+        try:
+            await service.predict_elapsed_today()
+        finally:
+            clock.stop()
+
+        influxdb.query_dataframe.assert_called_once_with("training_data")
+        predicted_with = forecaster.predict.call_args[0][0]
+        assert list(predicted_with["time"]) == hours[1:3]
+
+    @pytest.mark.asyncio
+    async def test_trains_when_the_forecaster_is_untrained(self):
+        influxdb = AsyncMock()
+        influxdb.query_dataframe = AsyncMock(return_value=DataFrame())
+
+        service, forecaster = self._service(influxdb)
+        forecaster.is_trained = False
+
+        with patch.object(service, "train", new=AsyncMock()) as train:
+            await service.predict_elapsed_today()
+
+        train.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_frame_without_history(self):
+        influxdb = AsyncMock()
+        influxdb.query_dataframe = AsyncMock(return_value=DataFrame())
+
+        service, _ = self._service(influxdb)
+
+        assert (await service.predict_elapsed_today()).empty
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_frame_when_no_hour_has_elapsed_today(self):
+        """Right after midnight there is nothing of today to reconstruct."""
+        influxdb = AsyncMock()
+        influxdb.query_dataframe = AsyncMock(
+            return_value=self._training_frame([self.DAY_START - timedelta(hours=2)])
+        )
+
+        service, forecaster = self._service(influxdb)
+
+        clock = self._frozen_clock()
+        try:
+            assert (await service.predict_elapsed_today()).empty
+        finally:
+            clock.stop()
+
+        forecaster.predict.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_wraps_pvlearn_errors(self):
+        from pvlearn.exceptions import ModelNotTrainedError
+
+        influxdb = AsyncMock()
+        influxdb.query_dataframe = AsyncMock(
+            return_value=self._training_frame([self.DAY_START])
+        )
+
+        service, forecaster = self._service(influxdb)
+        forecaster.predict = AsyncMock(side_effect=ModelNotTrainedError("no model"))
+
+        clock = self._frozen_clock()
+        try:
+            with pytest.raises(InvalidDataException):
+                await service.predict_elapsed_today()
+        finally:
+            clock.stop()

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from asyncio import to_thread
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from pandas import DataFrame, to_datetime
 from pvlearn.config import ForecasterConfig
@@ -19,11 +19,13 @@ from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.core.timer.events import Interval10MinTriggerEvent
 from solaredge2mqtt.services.forecast.events import ForecastEvent
 from solaredge2mqtt.services.forecast.models import Forecast
-from solaredge2mqtt.services.forecast.schema import to_canonical_frame
 from solaredge2mqtt.services.forecast.settings import ForecastSettings
 from solaredge2mqtt.services.modbus.events import ModbusUnitsReadEvent
 from solaredge2mqtt.services.weather.events import WeatherUpdateEvent
-from solaredge2mqtt.services.weather.models import OpenWeatherMapForecastData
+from solaredge2mqtt.services.weather.models import (
+    OpenWeatherMapBaseData,
+    OpenWeatherMapForecastData,
+)
 
 if TYPE_CHECKING:
     from solaredge2mqtt.core.settings.models import LocationSettings
@@ -182,7 +184,7 @@ class ForecastService:
 
     def training(self, data: DataFrame) -> None:
         try:
-            self.forecaster.train(to_canonical_frame(data))
+            self.forecaster.train(OpenWeatherMapBaseData.to_canonical_frame(data))
         except PVLearnError as error:
             raise InvalidDataException(str(error)) from error
 
@@ -205,6 +207,53 @@ class ForecastService:
 
         try:
             return await self.forecaster.predict(data)
+        except PVLearnError as error:
+            raise InvalidDataException(str(error)) from error
+
+    async def predict_elapsed_today(self) -> DataFrame:
+        """Predict the hours of today that are already over.
+
+        The weather forecast starts at the current hour, so the elapsed hours
+        are reconstructed from the snapshots stored in `forecast_training`.
+        Returns an empty frame when today has no stored hours yet.
+        """
+        if not self.forecaster.is_trained:
+            await self.train()
+
+        data = await self.influxdb.query_dataframe("training_data")
+        if data.empty:
+            return DataFrame()
+
+        data["time"] = data["_time"].dt.tz_convert(LOCAL_TZ)
+
+        hour_start = (
+            datetime.now().astimezone().replace(minute=0, second=0, microsecond=0)
+        )
+        day_start = hour_start.replace(hour=0)
+
+        elapsed = cast(
+            DataFrame, data[(data["time"] >= day_start) & (data["time"] < hour_start)]
+        )
+        if elapsed.empty:
+            logger.warning(
+                "No stored weather between {day_start} and {hour_start}, "
+                "the elapsed hours of today stay out of the forecast "
+                "(latest stored hour: {latest})",
+                day_start=day_start,
+                hour_start=hour_start,
+                latest=data["time"].max(),
+            )
+            return DataFrame()
+
+        logger.info(
+            "Reconstructing {count} elapsed hours of today from stored weather",
+            count=len(elapsed),
+        )
+
+        try:
+            return await self.forecaster.predict(
+                OpenWeatherMapBaseData.to_canonical_frame(elapsed)
+            )
         except PVLearnError as error:
             raise InvalidDataException(str(error)) from error
 
@@ -247,8 +296,9 @@ class ForecastService:
             # pvlearn publishes Wh, this measurement stores kWh.
             point.field(ENERGY_FIELD, energy_wh / WH_PER_KWH)
             # Deprecated, mirrors the energy: at 60 minutes the mean power in W
-            # equals the energy in Wh.
-            point.field(POWER_FIELD, float(energy_wh))
+            # equals the energy in Wh. Written as an integer, the type the
+            # field has carried since the power model wrote it.
+            point.field(POWER_FIELD, int(round(energy_wh)))
 
             point.time(period_time.astimezone(timezone.utc))
             points.append(point)

@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
 from solaredge2mqtt.core.influxdb import InfluxDBAsync
@@ -13,6 +14,24 @@ from solaredge2mqtt.services.forecast.models import Forecast
 from solaredge2mqtt.services.forecast.service import LOCAL_TZ
 from solaredge2mqtt.services.weather import WeatherClient
 from solaredge2mqtt.services.weather.events import WeatherUpdateEvent
+
+if TYPE_CHECKING:
+    from pandas import DataFrame
+
+
+def _energy_period(predictions: "DataFrame") -> dict[datetime, int]:
+    energy_period: dict[datetime, int] = {}
+
+    for _, row in predictions.iterrows():
+        row_time, row_energy = row["time"], row["energy"]
+        if not isinstance(row_time, datetime) or not isinstance(
+            row_energy, (int, float)
+        ):
+            raise InvalidDataException("Predicted energy row is not valid")
+
+        energy_period[row_time] = int(round(row_energy))
+
+    return energy_period
 
 
 async def _run(
@@ -53,17 +72,14 @@ async def _run(
         await forecast.train()
 
         logger.info("Running prediction")
+        elapsed_today = await forecast.predict_elapsed_today()
         predictions = await forecast.predict()
 
-        energy_period = {}
-        for _, row in predictions.iterrows():
-            row_time, row_energy = row["time"], row["energy"]
-            if not isinstance(row_time, datetime) or not isinstance(
-                row_energy, (int, float)
-            ):
-                raise InvalidDataException("Predicted energy row is not valid")
-
-            energy_period[row_time] = int(round(row_energy))
+        energy_period = dict(
+            sorted(
+                (_energy_period(elapsed_today) | _energy_period(predictions)).items()
+            )
+        )
 
         for period_time, energy in energy_period.items():
             logger.info(

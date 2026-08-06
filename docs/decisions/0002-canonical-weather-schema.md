@@ -5,15 +5,15 @@
 
 ## Decision 1: InfluxDB keeps the provider's field names, the translation happens on read
 
-**Decision:** Weather snapshots are still written to `forecast_training` under OpenWeatherMap's own field names (`clouds`, `temp`, `weather_id`, …). `services/forecast/schema.py::to_canonical_frame` renames them onto the canonical schema when the training data comes back out of InfluxDB, and `OpenWeatherMapBaseData.model_dump_canonical()` does the same for the live prediction input.
+**Decision:** Weather snapshots are still written to `forecast_training` under OpenWeatherMap's own field names (`clouds`, `temp`, `weather_id`, …). `OpenWeatherMapBaseData.to_canonical_frame()` renames them onto the canonical schema when the training data comes back out of InfluxDB, and `OpenWeatherMapBaseData.model_dump_canonical()` does the same for the live prediction input.
 
 **Context:** The alternative — writing canonical names — would have made the stored history unreadable to the new code. Training needs a minimum of 60 hours of consistent data, so every subscriber would have lost their forecast for at least that long after the update, and the year of history that exists would have been dead weight.
 
-**Consequence:** A schema change on pvlearn's side is a change to one mapping table, never a migration of the measurement. The price is that the stored data is only meaningful together with the mapping, so a second provider gets its own module next to `weather/canonical.py` rather than a shared one.
+**Consequence:** A schema change on pvlearn's side is a change to one mapping table, never a migration of the measurement. The price is that the stored data is only meaningful together with the mapping, so a second provider carries its own mapping on its own model rather than sharing one.
 
 ## Decision 2: `condition_code` is a WMO 4677 code, and the mapping is lossy on purpose
 
-**Decision:** `OPENWEATHERMAP_CONDITION_TO_WMO` translates OpenWeatherMap's condition ids into WMO 4677 weather codes — the code space Open-Meteo and the DWD report in. Unknown ids become 3 (overcast), a missing id stays missing.
+**Decision:** `OpenWeatherMapBaseData.CONDITION_TO_WMO` translates OpenWeatherMap's condition ids into WMO 4677 weather codes — the code space Open-Meteo and the DWD report in. Unknown ids become 3 (overcast), a missing id stays missing.
 
 **Context:** The canonical schema needs one code space, otherwise a model trained here means nothing anywhere else. WMO is the one the other candidate providers already use, and OpenWeatherMap is the odd one out. The two do not line up: WMO knows four cloudiness steps against OpenWeatherMap's five, and distinguishes hail thunderstorms where OpenWeatherMap does not.
 
@@ -25,7 +25,7 @@
 
 **Context:** Changing the unit of an existing field in place is silent: no query fails, every existing Grafana dashboard just shows numbers a thousand times larger, and any window spanning the update mixes both scales with nothing to tell them apart.
 
-**Consequence:** The conversion lives at the two InfluxDB boundaries (`WH_PER_KWH` on write, and back on read in `publish_forecast`). `power` is measured data in `forecast_training` and stays recorded there too — dropping a field from the history cannot be undone, and it costs nothing to keep.
+**Consequence:** The conversion lives at the two InfluxDB boundaries (`WH_PER_KWH` on write, and back on read in `publish_forecast`). `power` is measured data in `forecast_training` and stays recorded there too — dropping a field from the history cannot be undone, and it costs nothing to keep. It is written as an integer, the type the power model gave it: InfluxDB refuses a float onto an integer field and drops the whole batch with `field type conflict`.
 
 ## Decision 4: `power_period` stays in the MQTT payload as a derived shim
 
