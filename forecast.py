@@ -3,15 +3,35 @@
 import argparse
 import asyncio
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
 from solaredge2mqtt.core.influxdb import InfluxDBAsync
 from solaredge2mqtt.core.logging import initialize_logging, logger
 from solaredge2mqtt.core.settings import service_settings
 from solaredge2mqtt.services.forecast import FORECAST_AVAILABLE, ForecastService
-from solaredge2mqtt.services.forecast.models import Forecast, ForecasterType
+from solaredge2mqtt.services.forecast.models import Forecast
+from solaredge2mqtt.services.forecast.service import LOCAL_TZ
 from solaredge2mqtt.services.weather import WeatherClient
 from solaredge2mqtt.services.weather.events import WeatherUpdateEvent
+
+if TYPE_CHECKING:
+    from pandas import DataFrame
+
+
+def _energy_period(predictions: "DataFrame") -> dict[datetime, int]:
+    energy_period: dict[datetime, int] = {}
+
+    for _, row in predictions.iterrows():
+        row_time, row_energy = row["time"], row["energy"]
+        if not isinstance(row_time, datetime) or not isinstance(
+            row_energy, (int, float)
+        ):
+            raise InvalidDataException("Predicted energy row is not valid")
+
+        energy_period[row_time] = int(round(row_energy))
+
+    return energy_period
 
 
 async def _run(
@@ -52,34 +72,20 @@ async def _run(
         await forecast.train()
 
         logger.info("Running prediction")
+        elapsed_today = await forecast.predict_elapsed_today()
         predictions = await forecast.predict()
 
-        power_period = {}
-        for _, row in predictions[ForecasterType.POWER].iterrows():
-            row_time, row_power = row["time"], row["power"]
-            if not isinstance(row_time, datetime) or not isinstance(
-                row_power, (int, float)
-            ):
-                raise InvalidDataException("Predicted power row is not valid")
+        energy_period = dict(
+            sorted(
+                (_energy_period(elapsed_today) | _energy_period(predictions)).items()
+            )
+        )
 
-            power_period[row_time] = int(round(row_power))
-
-        energy_period = {}
-        for _, row in predictions[ForecasterType.ENERGY].iterrows():
-            row_time, row_energy = row["time"], row["energy"]
-            if not isinstance(row_time, datetime) or not isinstance(
-                row_energy, (int, float)
-            ):
-                raise InvalidDataException("Predicted energy row is not valid")
-
-            energy_period[row_time] = int(round(row_energy * 1000))
-
-        for period_time in power_period:
+        for period_time, energy in energy_period.items():
             logger.info(
-                "{time}: power={power} W, energy={energy} Wh",
+                "{time}: energy={energy} Wh",
                 time=period_time,
-                power=power_period[period_time],
-                energy=energy_period[period_time],
+                energy=energy,
             )
 
         battery_charge_needed_wh = None
@@ -90,9 +96,9 @@ async def _run(
             )
             battery_charge_needed_wh = forecast.battery_charge_needed_wh()
 
-        result = Forecast(
-            power_period=power_period,
-            energy_period=energy_period,
+        result = Forecast.from_energy_period(
+            energy_period,
+            timezone=str(LOCAL_TZ),
             battery_charge_needed_wh=battery_charge_needed_wh,
         )
 
