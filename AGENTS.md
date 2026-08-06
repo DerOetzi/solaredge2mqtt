@@ -21,6 +21,7 @@ solaredge2mqtt/
 └── service.py      # Main service orchestration logic
 tests/              # Unit and integration tests mirroring solaredge2mqtt/ structure
 examples/           # Docker Compose, Grafana, and other example configs
+docs/decisions/     # Architecture decision records, numbered and append-only
 ```
 
 ### Architecture & Data Flow
@@ -103,6 +104,7 @@ Project-specific constraints:
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
+
 class MyServiceSettings(BaseSettings):
     enable: bool = Field(default=False, description="Enable the service")
     host: str = Field(default="localhost", description="Service host")
@@ -114,6 +116,7 @@ class MyServiceSettings(BaseSettings):
 ```python
 from dataclasses import dataclass
 from solaredge2mqtt.core.events import BaseEvent
+
 
 @dataclass
 class MyServiceEvent(BaseEvent):
@@ -133,9 +136,10 @@ class MyServiceEvent(BaseEvent):
 ```python
 from unittest.mock import AsyncMock, patch
 
+
 @pytest.fixture
 def mock_mqtt():
-    with patch('solaredge2mqtt.core.mqtt.MQTTClient') as mock:
+    with patch("solaredge2mqtt.core.mqtt.MQTTClient") as mock:
         mock.publish = AsyncMock()
         yield mock
 ```
