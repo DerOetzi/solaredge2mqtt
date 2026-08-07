@@ -236,7 +236,14 @@ class TestServiceStatusControllerHandleOffline:
 
     @pytest.mark.asyncio
     async def test_handle_offline_unconfigured_service(self):
-        """Test handle_offline for an unconfigured service."""
+        """
+        Test handle_offline for a service never configured via handle_online.
+
+        Offline must be reported immediately even before the service's first
+        online event configured its debounce_cycles: an outage before startup
+        ever succeeded (e.g. modbus device detection retrying) must still be
+        visible over MQTT instead of being silently dropped.
+        """
         controller = ServiceStatusController()
 
         class TestEvent(ServiceOfflineEvent):
@@ -247,11 +254,72 @@ class TestServiceStatusControllerHandleOffline:
         with patch.object(EventBus, "emit", new_callable=AsyncMock) as mock_emit:
             await controller.handle_offline(event)
 
-            # Should not emit any events
-            assert len(mock_emit.call_args_list) == 0
+            assert controller._status["unknown_service"] is False
+            assert any(
+                isinstance(call[0][0], MQTTPublishEvent)
+                and call[0][0].topic == "status/unknown_service"
+                and call[0][0].payload == "offline"
+                for call in mock_emit.call_args_list
+            )
 
 
-class TestServiceStatusControllerDebouncing:
+class TestServiceStatusControllerOfflineBeforeOnline:
+    """
+    Regression tests for offline events preceding any successful online event.
+
+    Mirrors the modbus startup-retry scenario: detection keeps failing
+    (offline events) before it ever succeeds for the first time.
+    """
+
+    @pytest.mark.asyncio
+    async def test_repeated_offline_before_first_online_stays_offline(self):
+        """Repeated offline events before any online keep publishing offline."""
+        controller = ServiceStatusController()
+
+        class OfflineEvent(ServiceOfflineEvent):
+            SERVICE_NAME = "modbus"
+
+        with patch.object(EventBus, "emit", new_callable=AsyncMock) as mock_emit:
+            await controller.handle_offline(OfflineEvent())
+            await controller.handle_offline(OfflineEvent())
+            await controller.handle_offline(OfflineEvent())
+
+            assert controller._status["modbus"] is False
+            assert mock_emit.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_online_after_offline_still_respects_debounce(self):
+        """
+        The first online after a prior offline must still debounce normally.
+
+        Before the fix, an offline event before the first online never
+        touched `_status`, so the eventual online event saw
+        `current_status is None` and bypassed debouncing entirely.
+        """
+        controller = ServiceStatusController()
+
+        class OfflineEvent(ServiceOfflineEvent):
+            SERVICE_NAME = "modbus"
+
+        class OnlineEvent(ServiceOnlineEvent):
+            SERVICE_NAME = "modbus"
+
+        with patch.object(EventBus, "emit", new_callable=AsyncMock) as mock_emit:
+            await controller.handle_offline(OfflineEvent())
+            assert controller._status["modbus"] is False
+
+            mock_emit.reset_mock()
+
+            await controller.handle_online(OnlineEvent(debounce_cycles=2))
+            # First online signal after a known offline status must debounce,
+            # not flip immediately.
+            assert controller._status["modbus"] is False
+            assert controller._pending_status_changes["modbus"] is True
+            mock_emit.assert_not_called()
+
+            await controller.handle_online(OnlineEvent())
+            assert controller._status["modbus"] is True
+
     """Tests for debouncing logic."""
 
     @pytest.mark.asyncio
