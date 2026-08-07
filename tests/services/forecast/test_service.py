@@ -235,7 +235,20 @@ class TestForecastServiceWeatherUpdate:
         service = ForecastService(settings, location, influxdb)
         service.write_new_training_data = AsyncMock()
 
-        hourly_data = [MockOpenWeatherMapForecastData(hour=11)]
+        # hour=11 must be the resulting *local* hour (see .hour property doing
+        # dt.astimezone()), so build dt from the local wall-clock time and
+        # convert to UTC for the mock constructor, instead of assuming
+        # UTC hour == local hour like a naive `hour=11` would.
+        local_dt = datetime(2024, 6, 15, 11, tzinfo=LOCAL_TZ)
+        utc_dt = local_dt.astimezone(timezone.utc)
+        hourly_data = [
+            MockOpenWeatherMapForecastData(
+                hour=utc_dt.hour,
+                year=utc_dt.year,
+                month=utc_dt.month,
+                day=utc_dt.day,
+            )
+        ]
         weather_data = MockWeatherData(hourly=hourly_data)
         event = MagicMock(spec=WeatherUpdateEvent)
         event.weather = weather_data
