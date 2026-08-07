@@ -20,6 +20,8 @@ from solaredge2mqtt.core.logging import logger
 
 _EVENT_SUBSCRIPTIONS_ATTR = "_event_subscriptions"
 
+LISTENER_ERROR_LOG_REPEAT = 60
+
 
 class Listener(Protocol[TEventContra]):
     def __call__(self, event: TEventContra) -> Awaitable[None]: ...  # pragma: no cover
@@ -38,6 +40,7 @@ class EventBus:
     _subscribed_events: ClassVar[dict[str, type[BaseEvent]]] = {}
     _tasks: ClassVar[set[asyncio.Task]] = set()
     _critical_error: ClassVar[BaseException | None] = None
+    _listener_error_streaks: ClassVar[dict[int, int]] = {}
 
     @overload
     @classmethod
@@ -204,8 +207,45 @@ class EventBus:
     async def _notify_listener(cls, listener: AnyListener, event: BaseEvent) -> None:
         try:
             await listener(event)
+            cls._log_listener_recovered(listener)
         except InvalidDataException as error:
-            logger.warning("{message}, skipping this loop", message=error.message)
+            cls._log_listener_error(listener, error)
+
+    @classmethod
+    def _log_listener_error(
+        cls, listener: AnyListener, error: InvalidDataException
+    ) -> None:
+        key = id(listener)
+        streak = cls._listener_error_streaks.get(key, 0) + 1
+        cls._listener_error_streaks[key] = streak
+
+        name = getattr(listener, "__qualname__", repr(listener))
+        if streak == 1 or streak % LISTENER_ERROR_LOG_REPEAT == 0:
+            logger.warning(
+                "{message}, skipping this loop ({name}, {streak} consecutive failures)",
+                message=error.message,
+                name=name,
+                streak=streak,
+            )
+        else:
+            logger.debug(
+                "{message}, skipping this loop ({name}, {streak} consecutive failures)",
+                message=error.message,
+                name=name,
+                streak=streak,
+            )
+
+    @classmethod
+    def _log_listener_recovered(cls, listener: AnyListener) -> None:
+        key = id(listener)
+        streak = cls._listener_error_streaks.pop(key, 0)
+        if streak > 1:
+            name = getattr(listener, "__qualname__", repr(listener))
+            logger.info(
+                "{name} recovered after {streak} consecutive failures",
+                name=name,
+                streak=streak,
+            )
 
     @classmethod
     def _handle_task_done(cls, task: asyncio.Task) -> None:
