@@ -195,7 +195,13 @@ modbus:
   
   # Check grid status (requires extra hardware)
   check_grid_status: false
+
+  # Startup device detection retry (retries indefinitely, never gives up)
+  startup_retry_delay: 30       # Initial delay between retries in seconds (default: 30)
+  startup_retry_max_delay: 300  # Delay doubles after each retry, capped here (default: 300)
 ```
+
+If the inverter is unreachable during startup device detection (e.g. a brief Modbus outage), the service retries with exponential backoff instead of crashing — the delay starts at `startup_retry_delay` and doubles on each attempt up to `startup_retry_max_delay`.
 
 ### Leader/follower setup
 

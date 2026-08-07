@@ -1,5 +1,6 @@
 """Tests for Modbus service with mocking."""
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -8,6 +9,7 @@ from pymodbus.exceptions import ModbusException
 from solaredge2mqtt.core.exceptions import InvalidDataException
 from solaredge2mqtt.services.modbus import Modbus
 from solaredge2mqtt.services.modbus.events import ModbusUnitsReadEvent, ModbusWriteEvent
+from solaredge2mqtt.services.modbus.exceptions import InvalidRegisterDataException
 from solaredge2mqtt.services.modbus.sunspec.inverter import (
     SunSpecInverterInfoRegister,
 )
@@ -25,6 +27,8 @@ def mock_service_settings():
     settings.modbus.has_followers = False
     settings.modbus.check_grid_status = True
     settings.modbus.advanced_power_controls_enabled = False
+    settings.modbus.startup_retry_delay = 30
+    settings.modbus.startup_retry_max_delay = 300
 
     # Create unit settings
     mock_unit_settings = MagicMock()
@@ -229,6 +233,108 @@ class TestModbusAsyncInit:
         assert modbus._device_info["leader"]["inverter"] is mock_info
 
 
+class TestModbusDetectDevicesRetry:
+    """Tests for the startup device-detection retry loop."""
+
+    @pytest.mark.asyncio
+    async def test_recovers_after_transient_failure(
+        self, mock_service_settings, mock_event_bus, mock_modbus_client
+    ):
+        """A transient failure should be retried and eventually succeed."""
+        mock_service_settings.modbus.startup_retry_delay = 0
+        mock_service_settings.modbus.startup_retry_max_delay = 300
+
+        modbus = Modbus(mock_service_settings)
+        modbus._block_unreadable = {40004}
+        modbus.detect_devices = AsyncMock(
+            side_effect=[
+                InvalidRegisterDataException("c_manufacturer", None, [], None),
+                None,
+            ]
+        )
+
+        with patch(
+            "solaredge2mqtt.services.modbus.asyncio.sleep", new_callable=AsyncMock
+        ):
+            await modbus._detect_devices_with_retry()
+
+        assert modbus.detect_devices.call_count == 2
+        assert modbus._block_unreadable == set()
+        assert mock_event_bus.emit.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_never_gives_up_on_sustained_failure(
+        self, mock_service_settings, mock_event_bus, mock_modbus_client
+    ):
+        """A sustained failure keeps retrying instead of raising."""
+        mock_service_settings.modbus.startup_retry_delay = 0
+        mock_service_settings.modbus.startup_retry_max_delay = 300
+
+        modbus = Modbus(mock_service_settings)
+        modbus.detect_devices = AsyncMock(
+            side_effect=[
+                InvalidRegisterDataException("c_manufacturer", None, [], None),
+                InvalidRegisterDataException("c_manufacturer", None, [], None),
+                InvalidRegisterDataException("c_manufacturer", None, [], None),
+                None,
+            ]
+        )
+
+        with patch(
+            "solaredge2mqtt.services.modbus.asyncio.sleep", new_callable=AsyncMock
+        ):
+            await modbus._detect_devices_with_retry()
+
+        assert modbus.detect_devices.call_count == 4
+        assert mock_event_bus.emit.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_retry_delay_backs_off_up_to_cap(
+        self, mock_service_settings, mock_event_bus, mock_modbus_client
+    ):
+        """The retry delay doubles each attempt but never exceeds the cap."""
+        mock_service_settings.modbus.startup_retry_delay = 30
+        mock_service_settings.modbus.startup_retry_max_delay = 90
+
+        modbus = Modbus(mock_service_settings)
+        modbus.detect_devices = AsyncMock(
+            side_effect=[
+                InvalidRegisterDataException("c_manufacturer", None, [], None),
+                InvalidRegisterDataException("c_manufacturer", None, [], None),
+                InvalidRegisterDataException("c_manufacturer", None, [], None),
+                None,
+            ]
+        )
+
+        with patch(
+            "solaredge2mqtt.services.modbus.asyncio.sleep", new_callable=AsyncMock
+        ) as sleep_mock:
+            await modbus._detect_devices_with_retry()
+
+        assert [call.args[0] for call in sleep_mock.call_args_list] == [30, 60, 90]
+
+    @pytest.mark.asyncio
+    async def test_retry_stops_on_cancellation(
+        self, mock_service_settings, mock_event_bus, mock_modbus_client
+    ):
+        """A cancelled sleep (e.g. service shutdown) propagates, not swallowed."""
+        mock_service_settings.modbus.startup_retry_delay = 30
+        mock_service_settings.modbus.startup_retry_max_delay = 300
+
+        modbus = Modbus(mock_service_settings)
+        modbus.detect_devices = AsyncMock(
+            side_effect=InvalidRegisterDataException("c_manufacturer", None, [], None)
+        )
+
+        with patch(
+            "solaredge2mqtt.services.modbus.asyncio.sleep",
+            new_callable=AsyncMock,
+            side_effect=asyncio.CancelledError(),
+        ):
+            with pytest.raises(asyncio.CancelledError):
+                await modbus._detect_devices_with_retry()
+
+
 class TestModbusAsyncInitFollowerWithOwnIp:
     """Tests for async_init with followers that have their own IP."""
 
@@ -244,6 +350,8 @@ class TestModbusAsyncInitFollowerWithOwnIp:
         settings.modbus.timeout = 1
         settings.modbus.debounce_cycles = 0
         settings.modbus.has_followers = True
+        settings.modbus.startup_retry_delay = 30
+        settings.modbus.startup_retry_max_delay = 300
 
         leader_unit = MagicMock()
         leader_unit.unit = 1

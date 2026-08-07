@@ -66,6 +66,18 @@ class TestInvalidRegisterDataException:
         assert exc_info.value.raw_values == [0xFFFF, 0x0000]
         assert isinstance(exc_info.value.original_error, UnicodeDecodeError)
 
+    def test_invalid_register_data_exception_message_without_address(self):
+        """Test message falls back to 'not read' when address is unknown."""
+        exc = InvalidRegisterDataException(
+            register_id="c_manufacturer",
+            address=None,
+            raw_values=[],
+            original_error=KeyError("c_manufacturer"),
+        )
+
+        assert "not read" in str(exc)
+        assert "at address" not in str(exc)
+
     def test_invalid_register_data_exception_preserves_cause(self):
         """Test InvalidRegisterDataException preserves exception chain."""
         original_err = UnicodeDecodeError("utf-8", b"\xc2", 0, 1, "test")
