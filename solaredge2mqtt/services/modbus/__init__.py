@@ -61,6 +61,8 @@ LOGGING_DEVICE_INFO = (
     "{unit_key}{device} ({info.manufacturer} {info.model} {info.serialnumber})"
 )
 
+UNREADABLE_REGISTER_LOG_REPEAT = 60
+
 
 class Modbus:
     def __init__(self, settings: ServiceSettings):
@@ -75,6 +77,7 @@ class Modbus:
         logger.debug(f"Modbus settings: {self.settings}")
 
         self._block_unreadable: set[int] = set()
+        self._unreadable_streaks: dict[int, int] = {}
 
         self._initialized = False
         self._device_info: dict[str, dict[str, ModbusDeviceInfo]] = {}
@@ -419,11 +422,12 @@ class Modbus:
                 )
 
                 if result.isError():
-                    logger.error(f"Unreadable register {address_start}")
+                    self._log_unreadable_register(address_start)
                     logger.debug(f"Modbus read error: {result}")
                     self._block_register(address_start)
                 else:
                     data = register_or_bundle.decode_response(result.registers, data)
+                    self._log_register_recovered(address_start)
 
                 if not self._initialized:
                     logger.trace(
@@ -435,10 +439,36 @@ class Modbus:
 
             except ModbusException as error:
                 logger.debug(f"Modbus read exception: {error}")
-                logger.error(f"Unreadable register {address_start}")
+                self._log_unreadable_register(address_start)
                 self._block_register(address_start)
 
         return data
+
+    def _log_unreadable_register(self, address: int) -> None:
+        streak = self._unreadable_streaks.get(address, 0) + 1
+        self._unreadable_streaks[address] = streak
+
+        if streak == 1 or streak % UNREADABLE_REGISTER_LOG_REPEAT == 0:
+            logger.error(
+                "Unreadable register {address} ({streak} consecutive failed reads)",
+                address=address,
+                streak=streak,
+            )
+        else:
+            logger.debug(
+                "Unreadable register {address} (still failing, {streak})",
+                address=address,
+                streak=streak,
+            )
+
+    def _log_register_recovered(self, address: int) -> None:
+        streak = self._unreadable_streaks.pop(address, 0)
+        if streak > 1:
+            logger.info(
+                "Register {address} readable again after {streak} failed reads",
+                address=address,
+                streak=streak,
+            )
 
     def _block_register(self, register: int) -> None:
         if not self._initialized:
