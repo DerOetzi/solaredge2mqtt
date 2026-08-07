@@ -117,7 +117,7 @@ class Modbus:
                 else:
                     self._clients[unit_key] = leader_client
 
-            await self.detect_devices()
+            await self._detect_devices_with_retry()
 
             await asyncio.sleep(self.settings.timeout + 5)
 
@@ -138,6 +138,35 @@ class Modbus:
         except (InvalidDataException, InvalidRegisterDataException, RuntimeError):
             await EventBus.emit(ModbusOfflineEvent())
             raise
+
+    async def _detect_devices_with_retry(self) -> None:
+        max_attempts = self.settings.startup_retries + 1
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                await self.detect_devices()
+                return
+            except InvalidRegisterDataException as error:
+                if attempt >= max_attempts:
+                    logger.error(
+                        "Device detection failed after {attempts} attempt(s), "
+                        "giving up: {error}",
+                        attempts=attempt,
+                        error=error,
+                    )
+                    raise
+
+                logger.warning(
+                    "Device detection failed ({error}), retrying in "
+                    "{delay}s ({attempt}/{max_retries})",
+                    error=error,
+                    delay=self.settings.startup_retry_delay,
+                    attempt=attempt,
+                    max_retries=self.settings.startup_retries,
+                )
+                self._block_unreadable.clear()
+                await EventBus.emit(ModbusOfflineEvent())
+                await asyncio.sleep(self.settings.startup_retry_delay)
 
     async def detect_devices(self) -> None:
         for unit_key, unit_settings in self.settings.units.items():

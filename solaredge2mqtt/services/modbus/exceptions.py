@@ -9,7 +9,7 @@ class InvalidRegisterDataException(Exception):
     def __init__(
         self,
         register_id: str,
-        address: int,
+        address: int | None,
         raw_values: list[int],
         original_error: Exception | None,
     ) -> None:
@@ -18,8 +18,8 @@ class InvalidRegisterDataException(Exception):
         self.raw_values = raw_values
         self.original_error = original_error
 
+        location = f"at address {address}" if address is not None else "not read"
         message = (
-            f"Invalid data in register '{register_id}' at address "
-            f"{address}: {original_error}"
+            f"Invalid data in register '{register_id}' {location}: {original_error}"
         )
         super().__init__(message)

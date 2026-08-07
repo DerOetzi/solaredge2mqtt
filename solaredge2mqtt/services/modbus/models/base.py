@@ -6,6 +6,7 @@ from typing import Any, Self
 from pydantic.json_schema import SkipJsonSchema
 
 from solaredge2mqtt.core.models import EnumModel, Solaredge2MQTTBaseModel
+from solaredge2mqtt.services.modbus.exceptions import InvalidRegisterDataException
 from solaredge2mqtt.services.modbus.models.values import MixinModbusSunSpecScaleValue
 from solaredge2mqtt.services.modbus.sunspec.values import (
     C_SUNSPEC_DID_MAP,
@@ -52,12 +53,20 @@ class ModbusDeviceInfo(Solaredge2MQTTBaseModel):
 
     @staticmethod
     def _extract_from_sunspec_payload(data: SunSpecPayload) -> dict[str, Any]:
-        values: dict[str, Any] = {
-            "manufacturer": data["c_manufacturer"],
-            "model": data["c_model"],
-            "version": data["c_version"],
-            "serialnumber": data["c_serialnumber"],
-        }
+        try:
+            values: dict[str, Any] = {
+                "manufacturer": data["c_manufacturer"],
+                "model": data["c_model"],
+                "version": data["c_version"],
+                "serialnumber": data["c_serialnumber"],
+            }
+        except KeyError as error:
+            raise InvalidRegisterDataException(
+                register_id=error.args[0],
+                address=None,
+                raw_values=[],
+                original_error=error,
+            ) from error
 
         if "c_sunspec_did" in data and data["c_sunspec_did"] in C_SUNSPEC_DID_MAP:
             values["sunspec_type"] = C_SUNSPEC_DID_MAP[int(data["c_sunspec_did"])]

@@ -5,6 +5,7 @@ import types
 
 import pytest
 
+from solaredge2mqtt.services.modbus.exceptions import InvalidRegisterDataException
 from solaredge2mqtt.services.modbus.models.base import (
     ModbusComponent,
     ModbusDeviceInfo,
@@ -249,6 +250,21 @@ class TestModbusDeviceInfo:
         ha_info = info.homeassistant_device_info("Inverter")
 
         assert ha_info["unit_key"] == "leader"
+
+    def test_device_info_missing_field_raises_typed_exception(self):
+        """Missing mandatory SunSpec field raises InvalidRegisterDataException."""
+        data: SunSpecPayload = {
+            "c_model": "SE10K",
+            "c_version": "1.0.0",
+            "c_serialnumber": "INV12345",
+        }
+
+        with pytest.raises(InvalidRegisterDataException) as exc_info:
+            ModbusDeviceInfo.from_sunspec(data)
+
+        assert exc_info.value.register_id == "c_manufacturer"
+        assert exc_info.value.address is None
+        assert isinstance(exc_info.value.original_error, KeyError)
 
     def test_device_info_all_sunspec_did_types(self):
         """Test all known sunspec DID types."""

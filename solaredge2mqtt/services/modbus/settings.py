@@ -97,6 +97,9 @@ class ModbusSettings(ModbusUnitSettings):
 
     debounce_cycles: int = Field(default=2)
 
+    startup_retries: int = Field(default=5)
+    startup_retry_delay: int = Field(default=30)
+
     @model_validator(mode="before")
     @classmethod
     def model_fill_defaults(cls, values: dict) -> dict:
