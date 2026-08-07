@@ -39,7 +39,11 @@ modbus:
   
   # Advanced power controls (enabled, disabled, or disable)
   advanced_power_controls: disabled
-  
+
+  # Startup device detection retry (retries indefinitely on failure)
+  # startup_retry_delay: 30      # Initial delay between retries in seconds
+  # startup_retry_max_delay: 300 # Delay is doubled after each retry, capped here
+
   # Follower inverters
   # Cascaded (shared RS485 bus — all units use the leader's TCP connection):
   # follower:
