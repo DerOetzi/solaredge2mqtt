@@ -14,20 +14,24 @@ class LoggerSpy:
     def __init__(self):
         self.infos = []
         self.traces = []
+        self.debugs = []
         self.warnings = []
         self.errors = []
 
-    def info(self, message, **kwargs):
-        self.infos.append((message, kwargs))
+    def info(self, __message, **kwargs):
+        self.infos.append((__message, kwargs))
 
-    def trace(self, message, **kwargs):
-        self.traces.append((message, kwargs))
+    def trace(self, __message, **kwargs):
+        self.traces.append((__message, kwargs))
 
-    def warning(self, message, **kwargs):
-        self.warnings.append((message, kwargs))
+    def debug(self, __message, **kwargs):
+        self.debugs.append((__message, kwargs))
 
-    def error(self, message, **kwargs):
-        self.errors.append((message, kwargs))
+    def warning(self, __message, **kwargs):
+        self.warnings.append((__message, kwargs))
+
+    def error(self, __message, **kwargs):
+        self.errors.append((__message, kwargs))
 
 
 class TestEvent(BaseEvent):
@@ -297,6 +301,76 @@ class TestEventBus:
         event_bus.subscribe(AwaitingTestEvent, failing_listener)
         event = AwaitingTestEvent()
         await event_bus.emit(event)  # Should not raise
+
+    @pytest.mark.asyncio
+    async def test_repeated_invalid_data_exception_debounces_to_debug(
+        self, event_bus, monkeypatch
+    ):
+        """Repeated failures from the same listener are debounced to DEBUG."""
+        logger_spy = LoggerSpy()
+        monkeypatch.setattr("solaredge2mqtt.core.events.logger", logger_spy)
+
+        async def failing_listener(evt):
+            del evt
+            raise InvalidDataException("Test invalid data")
+
+        event_bus.subscribe(AwaitingTestEvent, failing_listener)
+        event = AwaitingTestEvent()
+
+        await event_bus.emit(event)
+        await event_bus.emit(event)
+        await event_bus.emit(event)
+
+        assert len(logger_spy.warnings) == 1
+        assert len(logger_spy.debugs) == 2
+
+    @pytest.mark.asyncio
+    async def test_invalid_data_exception_reescalates_after_repeat_threshold(
+        self, event_bus, monkeypatch
+    ):
+        """A sustained failure re-escalates to WARNING every repeat threshold."""
+        logger_spy = LoggerSpy()
+        monkeypatch.setattr("solaredge2mqtt.core.events.logger", logger_spy)
+
+        async def failing_listener(evt):
+            del evt
+            raise InvalidDataException("Test invalid data")
+
+        event_bus.subscribe(AwaitingTestEvent, failing_listener)
+        event_bus._listener_error_streaks[id(failing_listener)] = 59
+        event = AwaitingTestEvent()
+
+        await event_bus.emit(event)
+
+        assert event_bus._listener_error_streaks[id(failing_listener)] == 60
+        assert len(logger_spy.warnings) == 1
+
+    @pytest.mark.asyncio
+    async def test_invalid_data_exception_recovery_logs_once_and_resets_streak(
+        self, event_bus, monkeypatch
+    ):
+        """Recovery after failures clears the streak and logs a single INFO."""
+        logger_spy = LoggerSpy()
+        monkeypatch.setattr("solaredge2mqtt.core.events.logger", logger_spy)
+
+        calls = {"count": 0}
+
+        async def flaky_listener(evt):
+            del evt
+            calls["count"] += 1
+            if calls["count"] < 3:
+                raise InvalidDataException("Test invalid data")
+
+        event_bus.subscribe(AwaitingTestEvent, flaky_listener)
+        event = AwaitingTestEvent()
+
+        await event_bus.emit(event)
+        await event_bus.emit(event)
+        await event_bus.emit(event)
+
+        assert id(flaky_listener) not in event_bus._listener_error_streaks
+        recovered_logs = [call for call in logger_spy.infos if "recovered" in call[0]]
+        assert len(recovered_logs) == 1
 
     @pytest.mark.asyncio
     async def test_emit_raises_stored_critical_error(self):

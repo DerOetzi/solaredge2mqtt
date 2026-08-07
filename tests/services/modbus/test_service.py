@@ -662,6 +662,111 @@ class TestModbusReadFromModbus:
         mock_modbus_client.read_holding_registers.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_read_from_modbus_repeated_error_logs_debug_not_error(
+        self, mock_service_settings, mock_event_bus, mock_modbus_client
+    ):
+        """Repeated failures for the same register are debounced to DEBUG."""
+        modbus = Modbus(mock_service_settings)
+        modbus._clients = {"leader": mock_modbus_client}
+        modbus._initialized = True
+
+        mock_bundle = MagicMock()
+        mock_bundle.address = 40071
+        mock_bundle.length = 10
+
+        mock_result = MagicMock()
+        mock_result.isError.return_value = True
+        mock_modbus_client.read_holding_registers.return_value = mock_result
+
+        with (
+            patch("solaredge2mqtt.services.modbus.logger.error") as error_mock,
+            patch("solaredge2mqtt.services.modbus.logger.debug") as debug_mock,
+        ):
+            await modbus._read_from_modbus([mock_bundle], "leader", 1)
+            await modbus._read_from_modbus([mock_bundle], "leader", 1)
+            await modbus._read_from_modbus([mock_bundle], "leader", 1)
+
+        assert modbus._unreadable_streaks[40071] == 3
+        assert error_mock.call_count == 1
+        assert debug_mock.call_count >= 2
+
+    @pytest.mark.asyncio
+    async def test_read_from_modbus_reescalates_after_repeat_threshold(
+        self, mock_service_settings, mock_event_bus, mock_modbus_client
+    ):
+        """A sustained failure re-escalates to ERROR every repeat threshold."""
+        modbus = Modbus(mock_service_settings)
+        modbus._clients = {"leader": mock_modbus_client}
+        modbus._initialized = True
+        modbus._unreadable_streaks[40071] = 59
+
+        mock_bundle = MagicMock()
+        mock_bundle.address = 40071
+        mock_bundle.length = 10
+
+        mock_result = MagicMock()
+        mock_result.isError.return_value = True
+        mock_modbus_client.read_holding_registers.return_value = mock_result
+
+        with patch("solaredge2mqtt.services.modbus.logger.error") as error_mock:
+            await modbus._read_from_modbus([mock_bundle], "leader", 1)
+
+        assert modbus._unreadable_streaks[40071] == 60
+        error_mock.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_read_from_modbus_recovery_logs_once_and_resets_streak(
+        self, mock_service_settings, mock_event_bus, mock_modbus_client
+    ):
+        """A successful read after failures clears the streak and logs once."""
+        modbus = Modbus(mock_service_settings)
+        modbus._clients = {"leader": mock_modbus_client}
+        modbus._initialized = True
+        modbus._unreadable_streaks[40071] = 5
+
+        mock_bundle = MagicMock()
+        mock_bundle.address = 40071
+        mock_bundle.length = 10
+        mock_bundle.decode_response.return_value = {"status": 4}
+
+        mock_result = MagicMock()
+        mock_result.isError.return_value = False
+        mock_result.registers = [1, 2, 3]
+        mock_modbus_client.read_holding_registers.return_value = mock_result
+
+        with patch("solaredge2mqtt.services.modbus.logger.info") as info_mock:
+            await modbus._read_from_modbus([mock_bundle], "leader", 1)
+
+        assert 40071 not in modbus._unreadable_streaks
+        info_mock.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_read_from_modbus_single_failure_recovery_is_silent(
+        self, mock_service_settings, mock_event_bus, mock_modbus_client
+    ):
+        """A single isolated failure followed by success doesn't log a recovery."""
+        modbus = Modbus(mock_service_settings)
+        modbus._clients = {"leader": mock_modbus_client}
+        modbus._initialized = True
+        modbus._unreadable_streaks[40071] = 1
+
+        mock_bundle = MagicMock()
+        mock_bundle.address = 40071
+        mock_bundle.length = 10
+        mock_bundle.decode_response.return_value = {"status": 4}
+
+        mock_result = MagicMock()
+        mock_result.isError.return_value = False
+        mock_result.registers = [1, 2, 3]
+        mock_modbus_client.read_holding_registers.return_value = mock_result
+
+        with patch("solaredge2mqtt.services.modbus.logger.info") as info_mock:
+            await modbus._read_from_modbus([mock_bundle], "leader", 1)
+
+        assert 40071 not in modbus._unreadable_streaks
+        info_mock.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_read_from_modbus_uses_explicit_client_override(
         self, mock_service_settings, mock_event_bus, mock_modbus_client
     ):

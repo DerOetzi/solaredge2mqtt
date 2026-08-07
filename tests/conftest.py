@@ -43,11 +43,13 @@ def reset_event_bus_state():
     EventBus._subscribed_events = {}
     EventBus._tasks = set()
     EventBus._critical_error = None
+    EventBus._listener_error_streaks = {}
     yield
     EventBus._listeners = {}
     EventBus._subscribed_events = {}
     EventBus._tasks = set()
     EventBus._critical_error = None
+    EventBus._listener_error_streaks = {}
 
 
 @pytest.fixture
