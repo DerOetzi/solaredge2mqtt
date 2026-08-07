@@ -52,11 +52,7 @@ class ServiceStatusController:
 
     @EventBus.subscribe(ServiceOfflineEvent)
     async def handle_offline(self, event: ServiceOfflineEvent):
-        service_name = event.SERVICE_NAME
-        if service_name not in self._configurations:
-            return
-
-        await self._update_service_status(service_name, False)
+        await self._update_service_status(event.SERVICE_NAME, False)
 
     async def _update_service_status(self, service_name: str, is_online: bool):
         current_status = self._status.get(service_name, None)
