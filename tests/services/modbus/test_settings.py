@@ -103,6 +103,7 @@ class TestModbusSettings:
         assert settings.port == 1502
         assert settings.timeout == 1
         assert settings.check_grid_status is False
+        assert settings.storedge_control_enabled is False
         assert settings.follower == []
         assert settings.retain is False
 
