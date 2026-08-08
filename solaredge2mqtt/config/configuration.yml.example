@@ -36,9 +36,10 @@ modbus:
   
   # Check grid status (requires extra hardware like Export+Import meter)
   check_grid_status: false
-  
-  # Advanced power controls (enabled, disabled, or disable)
-  advanced_power_controls: disabled
+
+  # Read the StorEdge Control Block (battery charge/discharge control state).
+  # Off by default — only relevant for StorEdge/backup-capable systems.
+  storedge_control_enabled: false
 
   # Startup device detection retry (retries indefinitely on failure)
   # startup_retry_delay: 30      # Initial delay between retries in seconds
