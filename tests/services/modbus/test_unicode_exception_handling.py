@@ -23,7 +23,6 @@ def mock_service_settings():
     settings.modbus.unit = 1
     settings.modbus.has_followers = False
     settings.modbus.check_grid_status = True
-    settings.modbus.advanced_power_controls_enabled = False
 
     # Create unit settings with meters enabled
     mock_unit_settings = MagicMock()
