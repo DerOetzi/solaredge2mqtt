@@ -80,6 +80,7 @@ class ModbusSettings(ModbusUnitSettings):
     timeout: int = Field(default=1)
 
     check_grid_status: bool = Field(default=False)
+    storedge_control_enabled: bool = Field(default=False)
 
     follower: list[ModbusFollowerSettings] = Field(default_factory=list)
 

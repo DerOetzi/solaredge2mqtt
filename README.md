@@ -196,6 +196,10 @@ modbus:
   # Check grid status (requires extra hardware)
   check_grid_status: false
 
+  # Read the StorEdge Control Block (battery charge/discharge control state).
+  # Off by default — only relevant for StorEdge/backup-capable systems.
+  storedge_control_enabled: false
+
   # Startup device detection retry (retries indefinitely, never gives up)
   startup_retry_delay: 30       # Initial delay between retries in seconds (default: 30)
   startup_retry_max_delay: 300  # Delay doubles after each retry, capped here (default: 300)

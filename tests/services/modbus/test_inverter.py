@@ -7,7 +7,10 @@ from solaredge2mqtt.services.modbus.models.base import (
     ModbusUnitInfo,
     ModbusUnitRole,
 )
-from solaredge2mqtt.services.modbus.models.inverter import ModbusInverter
+from solaredge2mqtt.services.modbus.models.inverter import (
+    ModbusInverter,
+    ModbusStorEdgeControl,
+)
 from solaredge2mqtt.services.modbus.sunspec.values import SunSpecPayload
 
 
@@ -28,10 +31,26 @@ def make_device_info(with_unit: bool = False) -> ModbusDeviceInfo:
     )
 
 
+def make_storedge_control_data() -> dict:
+    """Create StorEdge control register payload for testing."""
+    return {
+        "storage_control_mode": 4,
+        "storage_ac_charge_policy": 1,
+        "storage_ac_charge_limit": 5000.0,
+        "storage_backup_reserved_setting": 10.0,
+        "storage_default_mode": 6,
+        "remote_control_command_timeout": 3600,
+        "remote_control_command_mode": 0,
+        "remote_control_charge_limit": 5000.0,
+        "remote_control_discharge_limit": 5000.0,
+    }
+
+
 def make_inverter_data(
     status: int = 4,
     with_grid_status: bool = False,
     grid_status: int = 0,
+    with_storedge_control: bool = False,
 ) -> dict:
     """Create inverter data for testing."""
     data = {
@@ -68,6 +87,9 @@ def make_inverter_data(
 
     if with_grid_status:
         data["grid_status"] = grid_status
+
+    if with_storedge_control:
+        data.update(make_storedge_control_data())
 
     return data
 
@@ -192,3 +214,43 @@ class TestModbusInverter:
             data = make_inverter_data(status=status)
             inverter = ModbusInverter.from_sunspec(info, data)
             assert inverter.status_text == expected_text
+
+    def test_inverter_without_storedge_control(self):
+        """Test inverter without StorEdge control data."""
+        info = make_device_info()
+        data = make_inverter_data(with_storedge_control=False)
+
+        inverter = ModbusInverter.from_sunspec(info, data)
+
+        assert inverter.storedge_control is None
+
+    def test_inverter_with_storedge_control(self):
+        """Test inverter attaches StorEdge control data when present."""
+        info = make_device_info()
+        data = make_inverter_data(with_storedge_control=True)
+
+        inverter = ModbusInverter.from_sunspec(info, data)
+
+        assert inverter.storedge_control is not None
+        assert inverter.storedge_control.storage_control_mode == 4
+        assert inverter.storedge_control.storage_default_mode == 6
+
+
+class TestModbusStorEdgeControl:
+    """Tests for ModbusStorEdgeControl class."""
+
+    def test_storedge_control_creation(self):
+        """Test ModbusStorEdgeControl creation from a full StorEdge payload."""
+        data = make_storedge_control_data()
+
+        control = ModbusStorEdgeControl.from_sunspec(data)
+
+        assert control.storage_control_mode == 4
+        assert control.storage_ac_charge_policy == 1
+        assert control.storage_ac_charge_limit == pytest.approx(5000.0)
+        assert control.storage_backup_reserved_setting == pytest.approx(10.0)
+        assert control.storage_default_mode == 6
+        assert control.remote_control_command_timeout == 3600
+        assert control.remote_control_command_mode == 0
+        assert control.remote_control_charge_limit == pytest.approx(5000.0)
+        assert control.remote_control_discharge_limit == pytest.approx(5000.0)

@@ -26,6 +26,7 @@ def mock_service_settings():
     settings.modbus.unit = 1
     settings.modbus.has_followers = False
     settings.modbus.check_grid_status = True
+    settings.modbus.storedge_control_enabled = False
     settings.modbus.startup_retry_delay = 30
     settings.modbus.startup_retry_max_delay = 300
 
@@ -463,6 +464,7 @@ class TestModbusRawDataCollection:
     ):
         """_get_raw_data should include optional and detected payloads."""
         mock_service_settings.modbus.check_grid_status = True
+        mock_service_settings.modbus.storedge_control_enabled = True
 
         modbus = Modbus(mock_service_settings)
         modbus._device_info = {
@@ -483,6 +485,11 @@ class TestModbusRawDataCollection:
                 return_value=[MagicMock()],
             ),
             patch(
+                "solaredge2mqtt.services.modbus.SunSpecStorEdgeControlRegister"
+                ".request_bundles",
+                return_value=[MagicMock()],
+            ),
+            patch(
                 "solaredge2mqtt.services.modbus.SunSpecMeterRegister.request_bundles",
                 return_value=[MagicMock()],
             ),
@@ -495,6 +502,7 @@ class TestModbusRawDataCollection:
                 side_effect=[
                     {"status": 4},
                     {"grid_status": 0},
+                    {"storage_control_mode": 4},
                     {"power": 100},
                     {"soe": 80},
                 ]
@@ -506,6 +514,7 @@ class TestModbusRawDataCollection:
 
         assert "status" in inverter_raw
         assert "grid_status" in inverter_raw
+        assert "storage_control_mode" in inverter_raw
         assert "meter0" in meters_raw
         assert "battery0" in batteries_raw
 
@@ -515,6 +524,7 @@ class TestModbusRawDataCollection:
     ):
         """_get_raw_data should skip optional reads when disabled."""
         mock_service_settings.modbus.check_grid_status = False
+        mock_service_settings.modbus.storedge_control_enabled = False
 
         modbus = Modbus(mock_service_settings)
         modbus._device_info = {"leader": {"inverter": MagicMock()}}
