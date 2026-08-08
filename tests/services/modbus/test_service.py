@@ -26,7 +26,6 @@ def mock_service_settings():
     settings.modbus.unit = 1
     settings.modbus.has_followers = False
     settings.modbus.check_grid_status = True
-    settings.modbus.advanced_power_controls_enabled = False
     settings.modbus.startup_retry_delay = 30
     settings.modbus.startup_retry_max_delay = 300
 
@@ -459,12 +458,11 @@ class TestModbusRawDataCollection:
     """Tests for _get_raw_data and block handling."""
 
     @pytest.mark.asyncio
-    async def test_get_raw_data_reads_grid_advanced_meter_battery(
+    async def test_get_raw_data_reads_grid_meter_battery(
         self, mock_service_settings, mock_event_bus
     ):
         """_get_raw_data should include optional and detected payloads."""
         mock_service_settings.modbus.check_grid_status = True
-        mock_service_settings.modbus.advanced_power_controls_enabled = True
 
         modbus = Modbus(mock_service_settings)
         modbus._device_info = {
@@ -485,10 +483,6 @@ class TestModbusRawDataCollection:
                 return_value=[MagicMock()],
             ),
             patch(
-                "solaredge2mqtt.services.modbus.SunSpecPowerControlRegister.request_bundles",
-                return_value=[MagicMock()],
-            ),
-            patch(
                 "solaredge2mqtt.services.modbus.SunSpecMeterRegister.request_bundles",
                 return_value=[MagicMock()],
             ),
@@ -501,7 +495,6 @@ class TestModbusRawDataCollection:
                 side_effect=[
                     {"status": 4},
                     {"grid_status": 0},
-                    {"advanced_power_control_enable": 1},
                     {"power": 100},
                     {"soe": 80},
                 ]
@@ -513,7 +506,6 @@ class TestModbusRawDataCollection:
 
         assert "status" in inverter_raw
         assert "grid_status" in inverter_raw
-        assert "advanced_power_control_enable" in inverter_raw
         assert "meter0" in meters_raw
         assert "battery0" in batteries_raw
 
@@ -523,7 +515,6 @@ class TestModbusRawDataCollection:
     ):
         """_get_raw_data should skip optional reads when disabled."""
         mock_service_settings.modbus.check_grid_status = False
-        mock_service_settings.modbus.advanced_power_controls_enabled = False
 
         modbus = Modbus(mock_service_settings)
         modbus._device_info = {"leader": {"inverter": MagicMock()}}

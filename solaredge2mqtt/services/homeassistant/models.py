@@ -146,7 +146,6 @@ class HomeAssistantEntityBaseType(BaseField):
 
 
 class HomeAssistantBinarySensorType(HomeAssistantEntityBaseType):
-    ENABLED = "enabled", None, None
     GRID_STATUS = "grid_status", "power", None
     PLUG = "plug", "plug", None
 
@@ -166,7 +165,6 @@ class HomeAssistantBinarySensorType(HomeAssistantEntityBaseType):
 
 
 class HomeAssistantNumberType(HomeAssistantEntityBaseType):
-    ACTIVE_POWER_LIMIT = "active_power_limit", None, "%", 0, 100, 1, "slider"
     EV_CHARGE_LEVEL = "charge_level", None, "%", 0, 100, 100, "slider"
 
     def __init__(
