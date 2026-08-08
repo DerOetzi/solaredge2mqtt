@@ -4,26 +4,10 @@ import pytest
 
 from solaredge2mqtt.services.modbus.models.base import ModbusUnitRole
 from solaredge2mqtt.services.modbus.settings import (
-    AdvancedControlsSettings,
     ModbusFollowerSettings,
     ModbusSettings,
     ModbusUnitSettings,
 )
-
-
-class TestAdvancedControlsSettings:
-    """Tests for AdvancedControlsSettings enum."""
-
-    def test_advanced_controls_settings_values(self):
-        """Test AdvancedControlsSettings enum values."""
-        assert AdvancedControlsSettings.ENABLED.value == "enabled"
-        assert AdvancedControlsSettings.DISABLED.value == "disabled"
-        assert AdvancedControlsSettings.DISABLE.value == "disable"
-
-    def test_advanced_controls_settings_string(self):
-        """Test AdvancedControlsSettings string representation."""
-        assert str(AdvancedControlsSettings.ENABLED) == "enabled"
-        assert str(AdvancedControlsSettings.DISABLED) == "disabled"
 
 
 class TestModbusUnitSettings:
@@ -119,7 +103,6 @@ class TestModbusSettings:
         assert settings.port == 1502
         assert settings.timeout == 1
         assert settings.check_grid_status is False
-        assert settings.advanced_power_controls == AdvancedControlsSettings.DISABLED
         assert settings.follower == []
         assert settings.retain is False
 
@@ -138,18 +121,6 @@ class TestModbusSettings:
         assert settings.timeout == 5
         assert settings.check_grid_status is True
         assert settings.retain is True
-
-    def test_modbus_settings_advanced_power_controls_enabled(self):
-        """Test advanced_power_controls_enabled property."""
-        settings_enabled = ModbusSettings(
-            host="test", advanced_power_controls=AdvancedControlsSettings.ENABLED
-        )
-        settings_disabled = ModbusSettings(
-            host="test", advanced_power_controls=AdvancedControlsSettings.DISABLED
-        )
-
-        assert settings_enabled.advanced_power_controls_enabled is True
-        assert settings_disabled.advanced_power_controls_enabled is False
 
     def test_modbus_settings_units_without_followers(self):
         """Test units property without followers."""

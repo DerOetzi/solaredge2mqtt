@@ -4,7 +4,6 @@ from solaredge2mqtt.services.modbus.sunspec.inverter import (
     SunSpecGridStatusRegister,
     SunSpecInverterInfoRegister,
     SunSpecInverterRegister,
-    SunSpecPowerControlRegister,
     SunSpecSiteLimitRegister,
 )
 from solaredge2mqtt.services.modbus.sunspec.values import SunSpecValueType
@@ -138,87 +137,6 @@ class TestSunSpecGridStatusRegister:
         assert reg.address == 40113
         assert reg.value_type == SunSpecValueType.UINT32
         assert reg.required is True
-
-
-class TestSunSpecPowerControlRegister:
-    """Tests for SunSpecPowerControlRegister class."""
-
-    def test_rrcr_state_register(self):
-        """Test RRCR_STATE register properties."""
-        reg = SunSpecPowerControlRegister.RRCR_STATE
-
-        assert reg.identifier == "rrcr_state"
-        assert reg.address == 61440
-        assert reg.value_type == SunSpecValueType.UINT16
-        assert reg.required is True
-
-    def test_active_power_limit_register(self):
-        """Test ACTIVE_POWER_LIMIT register properties."""
-        reg = SunSpecPowerControlRegister.ACTIVE_POWER_LIMIT
-
-        assert reg.identifier == "active_power_limit"
-        assert reg.address == 61441
-        assert reg.required is True
-
-    def test_commit_power_control_settings_register(self):
-        """Test COMMIT_POWER_CONTROL_SETTINGS register properties."""
-        reg = SunSpecPowerControlRegister.COMMIT_POWER_CONTROL_SETTINGS
-
-        assert reg.identifier == "commit_power_control_settings"
-        assert reg.address == 61696
-        assert reg.required is True
-
-    def test_advanced_power_control_enable_register(self):
-        """Test ADVANCED_POWER_CONTROL_ENABLE register properties."""
-        reg = SunSpecPowerControlRegister.ADVANCED_POWER_CONTROL_ENABLE
-
-        assert reg.identifier == "advanced_power_control_enable"
-        assert reg.address == 61762
-        assert reg.value_type == SunSpecValueType.INT32
-        assert reg.required is True
-
-    def test_reactive_power_config_register(self):
-        """Test REACTIVE_POWER_CONFIG register properties."""
-        reg = SunSpecPowerControlRegister.REACTIVE_POWER_CONFIG
-
-        assert reg.identifier == "reactive_power_config"
-        assert reg.address == 61700
-        assert reg.value_type == SunSpecValueType.INT32
-        assert reg.required is True
-
-    def test_wordorder_little_endian(self):
-        """Test wordorder returns little for power control registers."""
-        assert SunSpecPowerControlRegister.wordorder() == "little"
-
-    def test_decode_response_advanced_power_control_enable_true(self):
-        """Test decode_response converts 1 to True for advanced power control."""
-        reg = SunSpecPowerControlRegister.ADVANCED_POWER_CONTROL_ENABLE
-        data = {}
-
-        # INT32 little endian: value 1 is [1, 0]
-        result = reg.decode_response([1, 0], data)
-
-        assert result["advanced_power_control_enable"] is True
-
-    def test_decode_response_advanced_power_control_enable_false(self):
-        """Test decode_response converts non-1 to False for advanced power control."""
-        reg = SunSpecPowerControlRegister.ADVANCED_POWER_CONTROL_ENABLE
-        data = {}
-
-        result = reg.decode_response([0, 0], data)
-
-        assert result["advanced_power_control_enable"] is False
-
-    def test_decode_response_non_advanced_register_passes_through(self):
-        """Test decode_response on a non-ADVANCED_POWER_CONTROL_ENABLE register
-        does not modify the decoded value."""
-        reg = SunSpecPowerControlRegister.RRCR_STATE
-        data = {}
-
-        # UINT16 value 42, little endian (single register)
-        result = reg.decode_response([42], data)
-
-        assert result["rrcr_state"] == 42
 
 
 class TestSunSpecSiteLimitRegister:

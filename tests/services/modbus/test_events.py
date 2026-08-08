@@ -4,7 +4,7 @@ import pytest
 
 from solaredge2mqtt.core.events.events import BaseEvent
 from solaredge2mqtt.services.modbus.events import ModbusUnitsReadEvent, ModbusWriteEvent
-from solaredge2mqtt.services.modbus.sunspec.inverter import SunSpecPowerControlRegister
+from solaredge2mqtt.services.modbus.sunspec.inverter import SunSpecSiteLimitRegister
 
 
 class TestModbusUnitsReadEvent:
@@ -32,7 +32,7 @@ class TestModbusWriteEvent:
 
     def test_event_register_property(self):
         """Test register property."""
-        register = SunSpecPowerControlRegister.ACTIVE_POWER_LIMIT
+        register = SunSpecSiteLimitRegister.EXPORT_CONTROL_SITE_LIMIT
 
         event = ModbusWriteEvent(register, 100)
 
@@ -40,7 +40,7 @@ class TestModbusWriteEvent:
 
     def test_event_payload_property_int(self):
         """Test payload property with int."""
-        register = SunSpecPowerControlRegister.ACTIVE_POWER_LIMIT
+        register = SunSpecSiteLimitRegister.EXPORT_CONTROL_SITE_LIMIT
 
         event = ModbusWriteEvent(register, 100)
 
@@ -48,7 +48,7 @@ class TestModbusWriteEvent:
 
     def test_event_payload_property_float(self):
         """Test payload property with float."""
-        register = SunSpecPowerControlRegister.COSPHI
+        register = SunSpecSiteLimitRegister.EXPORT_CONTROL_SITE_LIMIT
 
         event = ModbusWriteEvent(register, 0.95)
 
@@ -56,7 +56,7 @@ class TestModbusWriteEvent:
 
     def test_event_payload_property_bool(self):
         """Test payload property with bool."""
-        register = SunSpecPowerControlRegister.ADVANCED_POWER_CONTROL_ENABLE
+        register = SunSpecSiteLimitRegister.EXPORT_CONTROL_MODE
 
         event = ModbusWriteEvent(register, True)
 
@@ -64,7 +64,7 @@ class TestModbusWriteEvent:
 
     def test_event_unit_key_defaults_to_leader(self):
         """Test unit_key defaults to leader when not specified."""
-        register = SunSpecPowerControlRegister.ACTIVE_POWER_LIMIT
+        register = SunSpecSiteLimitRegister.EXPORT_CONTROL_SITE_LIMIT
 
         event = ModbusWriteEvent(register, 100)
 
@@ -72,7 +72,7 @@ class TestModbusWriteEvent:
 
     def test_event_unit_key_custom(self):
         """Test unit_key can be set to a follower."""
-        register = SunSpecPowerControlRegister.ACTIVE_POWER_LIMIT
+        register = SunSpecSiteLimitRegister.EXPORT_CONTROL_SITE_LIMIT
 
         event = ModbusWriteEvent(register, 100, unit_key="follower0")
 

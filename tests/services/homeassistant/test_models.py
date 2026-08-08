@@ -124,13 +124,6 @@ class TestHomeAssistantType:
 class TestHomeAssistantBinarySensorType:
     """Tests for HomeAssistantBinarySensorType enum."""
 
-    def test_enabled_type(self):
-        """Test ENABLED binary sensor type."""
-        sensor = HomeAssistantBinarySensorType.ENABLED
-
-        assert sensor.typed == HomeAssistantType.BINARY_SENSOR
-        assert sensor.device_class is None
-
     def test_grid_status_type(self):
         """Test GRID_STATUS binary sensor type."""
         sensor = HomeAssistantBinarySensorType.GRID_STATUS
@@ -149,15 +142,15 @@ class TestHomeAssistantBinarySensorType:
 class TestHomeAssistantNumberType:
     """Tests for HomeAssistantNumberType enum."""
 
-    def test_active_power_limit_type(self):
-        """Test ACTIVE_POWER_LIMIT number type."""
-        number = HomeAssistantNumberType.ACTIVE_POWER_LIMIT
+    def test_ev_charge_level_type(self):
+        """Test EV_CHARGE_LEVEL number type."""
+        number = HomeAssistantNumberType.EV_CHARGE_LEVEL
 
         assert number.typed == HomeAssistantType.NUMBER
         assert number.unit_of_measurement == "%"
         assert number._min == 0
         assert number._max == 100
-        assert number._step == 1
+        assert number._step == 100
         assert number._mode == "slider"
 
 
@@ -540,7 +533,7 @@ class TestHomeAssistantEntity:
             device=device,
             name="Power Limit",
             path=["power_limit"],
-            ha_type=HomeAssistantNumberType.ACTIVE_POWER_LIMIT,
+            ha_type=HomeAssistantNumberType.EV_CHARGE_LEVEL,
         )
 
         assert entity.command_topic == "solaredge/inverter/power_limit"
@@ -573,7 +566,7 @@ class TestHomeAssistantEntity:
         entity = HomeAssistantEntity(
             device=device,
             name="Power Limit",
-            ha_type=HomeAssistantNumberType.ACTIVE_POWER_LIMIT,
+            ha_type=HomeAssistantNumberType.EV_CHARGE_LEVEL,
         )
 
         assert entity.command_topic == "solaredge/inverter"
@@ -590,7 +583,7 @@ class TestHomeAssistantEntity:
             device=device,
             name="Power Limit",
             path=["power_limit"],
-            ha_type=HomeAssistantNumberType.ACTIVE_POWER_LIMIT,
+            ha_type=HomeAssistantNumberType.EV_CHARGE_LEVEL,
             min=0,
             max=100,
             step=1,

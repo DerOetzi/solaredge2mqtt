@@ -147,12 +147,6 @@ class HomeAssistantDiscovery:
                 ):
                     continue
 
-                if (
-                    not self.settings.modbus.advanced_power_controls_enabled
-                    and path[0] == "advanced_power_controls"
-                ):
-                    continue
-
             if (
                 self.settings.prices.is_configured
                 and entity_info["ha_type"] == HomeAssistantSensorType.MONETARY

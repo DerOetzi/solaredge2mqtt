@@ -2,14 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, model_validator
 
-from solaredge2mqtt.core.models import EnumModel
 from solaredge2mqtt.services.modbus.models.base import ModbusUnitRole
-
-
-class AdvancedControlsSettings(EnumModel):
-    ENABLED = "enabled"
-    DISABLED = "disabled"
-    DISABLE = "disable"
 
 
 class ModbusUnitSettings(BaseModel):
@@ -87,9 +80,6 @@ class ModbusSettings(ModbusUnitSettings):
     timeout: int = Field(default=1)
 
     check_grid_status: bool = Field(default=False)
-    advanced_power_controls: AdvancedControlsSettings = Field(
-        default=AdvancedControlsSettings.DISABLED
-    )
 
     follower: list[ModbusFollowerSettings] = Field(default_factory=list)
 
@@ -120,10 +110,6 @@ class ModbusSettings(ModbusUnitSettings):
             values["follower"][i] = slave_values
 
         return values
-
-    @property
-    def advanced_power_controls_enabled(self) -> bool:
-        return self.advanced_power_controls == AdvancedControlsSettings.ENABLED
 
     @property
     def units(self) -> dict[str, ModbusUnitSettings]:
