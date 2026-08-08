@@ -12,7 +12,6 @@ from solaredge2mqtt.core.exceptions import (
     InvalidDataException,
 )
 from solaredge2mqtt.core.logging import logger
-from solaredge2mqtt.services.modbus.control import ModbusAdvancedControl
 from solaredge2mqtt.services.modbus.events import (
     ModbusOfflineEvent,
     ModbusOnlineEvent,
@@ -42,7 +41,6 @@ from solaredge2mqtt.services.modbus.sunspec.inverter import (
     SunSpecGridStatusRegister,
     SunSpecInverterInfoRegister,
     SunSpecInverterRegister,
-    SunSpecPowerControlRegister,
 )
 from solaredge2mqtt.services.modbus.sunspec.meter import (
     SunSpecMeterInfoRegister,
@@ -83,8 +81,6 @@ class Modbus:
         self._device_info: dict[str, dict[str, ModbusDeviceInfo]] = {}
 
         self._clients: dict[str, AsyncModbusTcpClient] = {}
-
-        self._control: ModbusAdvancedControl = ModbusAdvancedControl(settings)
 
         EventBus.register(self)
 
@@ -364,20 +360,6 @@ class Modbus:
                 client=client,
             )
             inverter_raw = {**inverter_raw, **grid_status_raw}
-
-        if self.settings.advanced_power_controls_enabled:
-            advanced_power_control_raw = await self._read_from_modbus(
-                SunSpecPowerControlRegister.request_bundles(),
-                unit_key,
-                unit,
-                client=client,
-            )
-            inverter_raw = {
-                **inverter_raw,
-                **advanced_power_control_raw,
-            }
-
-            logger.debug(advanced_power_control_raw)
 
         meters_raw = {}
         batteries_raw = {}

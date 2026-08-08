@@ -130,59 +130,6 @@ class SunSpecGridStatusRegister(SunSpecRegister):
     GRID_STATUS = "grid_status", 40113, SunSpecValueType.UINT32, True
 
 
-class SunSpecPowerControlRegister(SunSpecRegister):
-    RRCR_STATE = "rrcr_state", 61440, SunSpecValueType.UINT16, True
-    ACTIVE_POWER_LIMIT = ("active_power_limit", 61441, SunSpecValueType.UINT16, True)
-    COSPHI = "cosphi", 61442, SunSpecValueType.FLOAT32, False
-
-    COMMIT_POWER_CONTROL_SETTINGS = (
-        "commit_power_control_settings",
-        61696,
-        SunSpecValueType.INT16,
-        True,
-    )
-    RESTORE_POWER_CONTROL_SETTINGS = (
-        "restore_power_control_settings",
-        61697,
-        SunSpecValueType.INT16,
-        True,
-    )
-
-    ADVANCED_POWER_CONTROL_ENABLE = (
-        "advanced_power_control_enable",
-        61762,
-        SunSpecValueType.INT32,
-        True,
-    )
-
-    REACTIVE_POWER_CONFIG = (
-        "reactive_power_config",
-        61700,
-        SunSpecValueType.INT32,
-        True,
-    )
-    REACTIVE_POWER_RESPONSE_TIME = (
-        "reactive_power_response_time",
-        61702,
-        SunSpecValueType.UINT32,
-        True,
-    )
-
-    def decode_response(
-        self, registers: list[int], data: SunSpecPayload
-    ) -> SunSpecPayload:
-        data = super().decode_response(registers, data)
-
-        if self == SunSpecPowerControlRegister.ADVANCED_POWER_CONTROL_ENABLE:
-            data[self.identifier] = data[self.identifier] == 1
-
-        return data
-
-    @staticmethod
-    def wordorder() -> SunSpecWordOrder:
-        return "little"
-
-
 class SunSpecSiteLimitRegister(SunSpecRegister):
     EXPORT_CONTROL_MODE = ("export_control_mode", 57344, SunSpecValueType.UINT16, True)
     EXPORT_CONTROL_LIMIT_MODE = (

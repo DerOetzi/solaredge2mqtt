@@ -43,7 +43,6 @@ def mock_service_settings():
     settings.modbus = MagicMock()
     settings.modbus.has_followers = False
     settings.modbus.check_grid_status = True
-    settings.modbus.advanced_power_controls_enabled = False
 
     settings.is_prices_configured = False
     settings.prices = MagicMock()
@@ -164,12 +163,14 @@ class TestHomeAssistantDiscoveryPropertyParser:
     def test_property_parser_binary_sensor_type(self):
         """Test property_parser with binary sensor type."""
         prop = {
-            "ha_type": "enabled",
+            "ha_type": "grid_status",
             "ha_typed": "binary_sensor",
             "icon": "mdi:power",
         }
 
-        result = HomeAssistantDiscovery.property_parser(prop, "Enabled", ["enabled"])
+        result = HomeAssistantDiscovery.property_parser(
+            prop, "Grid status", ["grid_status"]
+        )
 
         assert result is not None
         assert isinstance(result["ha_type"], HomeAssistantBinarySensorType)
@@ -177,7 +178,7 @@ class TestHomeAssistantDiscoveryPropertyParser:
     def test_property_parser_number_type(self):
         """Test property_parser with number type."""
         prop = {
-            "ha_type": "active_power_limit",
+            "ha_type": "charge_level",
             "ha_typed": "number",
             "icon": "mdi:gauge",
         }
@@ -499,45 +500,6 @@ class TestHomeAssistantDiscoveryPublishComponent:
         assert mock_event_bus.emit.call_count >= 1
 
     @pytest.mark.asyncio
-    async def test_publish_component_with_advanced_power_controls(
-        self, mock_service_settings, mock_event_bus
-    ):
-        """Test publish_component filters advanced power controls."""
-        from solaredge2mqtt.services.modbus.models.inverter import (
-            ModbusInverter,
-        )
-
-        # Disable advanced power controls
-        mock_service_settings.modbus.advanced_power_controls_enabled = False
-
-        discovery = HomeAssistantDiscovery(mock_service_settings)
-
-        mock_inverter = MagicMock(spec=ModbusInverter)
-        mock_inverter.mqtt_topic.return_value = "modbus/inverter"
-        mock_inverter.parse_schema.return_value = [
-            {
-                "name": "Power Limit",
-                "path": ["advanced_power_controls", "power_limit"],
-                "icon": "mdi:gauge",
-                "ha_type": HomeAssistantNumberType.ACTIVE_POWER_LIMIT,
-            },
-            {
-                "name": "Power",
-                "path": ["power"],
-                "icon": "mdi:lightning-bolt",
-                "ha_type": HomeAssistantSensorType.POWER_W,
-            },
-        ]
-
-        device_info = {"name": "Inverter"}
-        state_topic = "solaredge/modbus/inverter"
-
-        await discovery.publish_component(mock_inverter, device_info, state_topic)
-
-        # advanced_power_controls should be filtered out
-        assert mock_event_bus.emit.call_count >= 1
-
-    @pytest.mark.asyncio
     async def test_publish_component_with_monetary_type(
         self, mock_service_settings, mock_event_bus
     ):
@@ -574,7 +536,7 @@ class TestHomeAssistantPropertyParserAdditionalFields:
     def test_property_parser_number_type_with_additional_fields(self):
         """Test property_parser with number type and additional fields."""
         prop = {
-            "ha_type": "active_power_limit",
+            "ha_type": "charge_level",
             "ha_typed": "number",
             "icon": "mdi:gauge",
             "min": 0,
