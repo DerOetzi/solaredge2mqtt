@@ -5,10 +5,13 @@ concurrency:
   cancel-in-progress: true
 
 on:
+  # Keep these branch lists in sync with the `PACKAGE_BRANCHES` repo variable
+  # (used below to gate docker publish) -- GitHub Actions `on:` triggers can't
+  # reference vars/expressions directly.
   push:
-    branches: [main]
+    branches: [main, storedge]
   pull_request:
-    branches: main
+    branches: [main, storedge]
   release:
     types: [published]
 
