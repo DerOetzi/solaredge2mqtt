@@ -57,7 +57,7 @@ dev = [
     "pyarrow==25.0.0",
 ]
 forecast = [
-    "pvlearn==0.2.0",
+    "pvlearn==0.2.2",
 ]
 
 [build-system]
