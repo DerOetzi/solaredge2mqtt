@@ -41,6 +41,7 @@ from solaredge2mqtt.services.modbus.sunspec.inverter import (
     SunSpecGridStatusRegister,
     SunSpecInverterInfoRegister,
     SunSpecInverterRegister,
+    SunSpecStorEdgeControlRegister,
 )
 from solaredge2mqtt.services.modbus.sunspec.meter import (
     SunSpecMeterInfoRegister,
@@ -360,6 +361,15 @@ class Modbus:
                 client=client,
             )
             inverter_raw = {**inverter_raw, **grid_status_raw}
+
+        if self.settings.storedge_control_enabled:
+            storedge_control_raw = await self._read_from_modbus(
+                SunSpecStorEdgeControlRegister.request_bundles(),
+                unit_key,
+                unit,
+                client=client,
+            )
+            inverter_raw = {**inverter_raw, **storedge_control_raw}
 
         meters_raw = {}
         batteries_raw = {}

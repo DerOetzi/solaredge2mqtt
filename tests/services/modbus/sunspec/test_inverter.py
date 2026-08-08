@@ -5,6 +5,7 @@ from solaredge2mqtt.services.modbus.sunspec.inverter import (
     SunSpecInverterInfoRegister,
     SunSpecInverterRegister,
     SunSpecSiteLimitRegister,
+    SunSpecStorEdgeControlRegister,
 )
 from solaredge2mqtt.services.modbus.sunspec.values import SunSpecValueType
 
@@ -222,3 +223,123 @@ class TestSunSpecSiteLimitRegister:
         result = reg.decode_response([2], data)
 
         assert result["export_control_limit_mode"] == 2
+
+
+class TestSunSpecStorEdgeControlRegister:
+    """Tests for SunSpecStorEdgeControlRegister class."""
+
+    def test_storage_control_mode_register(self):
+        """Test STORAGE_CONTROL_MODE register properties."""
+        reg = SunSpecStorEdgeControlRegister.STORAGE_CONTROL_MODE
+
+        assert reg.identifier == "storage_control_mode"
+        assert reg.address == 57348
+        assert reg.value_type == SunSpecValueType.UINT16
+        assert reg.required is True
+
+    def test_storage_ac_charge_policy_register(self):
+        """Test STORAGE_AC_CHARGE_POLICY register properties."""
+        reg = SunSpecStorEdgeControlRegister.STORAGE_AC_CHARGE_POLICY
+
+        assert reg.identifier == "storage_ac_charge_policy"
+        assert reg.address == 57349
+        assert reg.value_type == SunSpecValueType.UINT16
+        assert reg.required is True
+
+    def test_storage_ac_charge_limit_register(self):
+        """Test STORAGE_AC_CHARGE_LIMIT register properties."""
+        reg = SunSpecStorEdgeControlRegister.STORAGE_AC_CHARGE_LIMIT
+
+        assert reg.identifier == "storage_ac_charge_limit"
+        assert reg.address == 57350
+        assert reg.value_type == SunSpecValueType.FLOAT32
+        assert reg.required is True
+
+    def test_storage_backup_reserved_setting_register(self):
+        """Test STORAGE_BACKUP_RESERVED_SETTING register properties."""
+        reg = SunSpecStorEdgeControlRegister.STORAGE_BACKUP_RESERVED_SETTING
+
+        assert reg.identifier == "storage_backup_reserved_setting"
+        assert reg.address == 57352
+        assert reg.value_type == SunSpecValueType.FLOAT32
+        assert reg.required is True
+
+    def test_storage_default_mode_register(self):
+        """Test STORAGE_DEFAULT_MODE register properties."""
+        reg = SunSpecStorEdgeControlRegister.STORAGE_DEFAULT_MODE
+
+        assert reg.identifier == "storage_default_mode"
+        assert reg.address == 57354
+        assert reg.value_type == SunSpecValueType.UINT16
+        assert reg.required is True
+
+    def test_remote_control_command_timeout_register(self):
+        """Test REMOTE_CONTROL_COMMAND_TIMEOUT register properties."""
+        reg = SunSpecStorEdgeControlRegister.REMOTE_CONTROL_COMMAND_TIMEOUT
+
+        assert reg.identifier == "remote_control_command_timeout"
+        assert reg.address == 57355
+        assert reg.value_type == SunSpecValueType.UINT32
+        assert reg.required is True
+
+    def test_remote_control_command_mode_register(self):
+        """Test REMOTE_CONTROL_COMMAND_MODE register properties."""
+        reg = SunSpecStorEdgeControlRegister.REMOTE_CONTROL_COMMAND_MODE
+
+        assert reg.identifier == "remote_control_command_mode"
+        assert reg.address == 57357
+        assert reg.value_type == SunSpecValueType.UINT16
+        assert reg.required is True
+
+    def test_remote_control_charge_limit_register(self):
+        """Test REMOTE_CONTROL_CHARGE_LIMIT register properties."""
+        reg = SunSpecStorEdgeControlRegister.REMOTE_CONTROL_CHARGE_LIMIT
+
+        assert reg.identifier == "remote_control_charge_limit"
+        assert reg.address == 57358
+        assert reg.value_type == SunSpecValueType.FLOAT32
+        assert reg.required is True
+
+    def test_remote_control_discharge_limit_register(self):
+        """Test REMOTE_CONTROL_DISCHARGE_LIMIT register properties."""
+        reg = SunSpecStorEdgeControlRegister.REMOTE_CONTROL_DISCHARGE_LIMIT
+
+        assert reg.identifier == "remote_control_discharge_limit"
+        assert reg.address == 57360
+        assert reg.value_type == SunSpecValueType.FLOAT32
+        assert reg.required is True
+
+    def test_wordorder_little_endian(self):
+        """Test wordorder returns little for StorEdge control registers."""
+        assert SunSpecStorEdgeControlRegister.wordorder() == "little"
+
+    def test_decode_response_charge_limit_negative_clamped_to_zero(self):
+        """Test a FLOAT32 field is clamped to 0.0 when the raw value is negative."""
+        reg = SunSpecStorEdgeControlRegister.REMOTE_CONTROL_CHARGE_LIMIT
+        data = {}
+
+        # FLOAT32 -5.0 in little word order: big endian words [0xC0A0, 0x0000]
+        # → little word order registers [0x0000, 0xC0A0]
+        result = reg.decode_response([0x0000, 0xC0A0], data)
+
+        assert result["remote_control_charge_limit"] == 0.0
+
+    def test_decode_response_charge_limit_positive_passes_through(self):
+        """Test a FLOAT32 field keeps its value when the raw value is positive."""
+        reg = SunSpecStorEdgeControlRegister.REMOTE_CONTROL_CHARGE_LIMIT
+        data = {}
+
+        # FLOAT32 5.0 in little word order: big endian words [0x40A0, 0x0000]
+        # → little word order registers [0x0000, 0x40A0]
+        result = reg.decode_response([0x0000, 0x40A0], data)
+
+        assert result["remote_control_charge_limit"] == 5.0
+
+    def test_decode_response_storage_control_mode_not_clamped(self):
+        """Test a non-FLOAT32 field is unaffected by the clamp branch."""
+        reg = SunSpecStorEdgeControlRegister.STORAGE_CONTROL_MODE
+        data = {}
+
+        result = reg.decode_response([4], data)
+
+        assert result["storage_control_mode"] == 4
