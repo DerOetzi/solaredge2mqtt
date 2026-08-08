@@ -207,6 +207,47 @@ modbus:
 
 If the inverter is unreachable during startup device detection (e.g. a brief Modbus outage), the service retries with exponential backoff instead of crashing — the delay starts at `startup_retry_delay` and doubles on each attempt up to `startup_retry_max_delay`.
 
+#### StorEdge battery control
+
+For SolarEdge StorEdge/backup-capable systems, the battery's charge/discharge behavior (Storage Control Mode, AC charge policy, backup reserve, and — while in Remote Control mode — the default and timed charge/discharge command) can be read and written over Modbus.
+
+```yaml
+modbus:
+  storedge_control_enabled: true
+```
+
+This is off by default: changing these settings affects real battery cycling, unlike a passive telemetry read.
+
+Once enabled, the current values are published as part of the inverter payload under `storedge_control`, and nine command topics accept writes:
+
+```
+modbus/inverter/storedge_control/storage_control_mode
+modbus/inverter/storedge_control/storage_ac_charge_policy
+modbus/inverter/storedge_control/storage_ac_charge_limit
+modbus/inverter/storedge_control/storage_backup_reserved_setting
+modbus/inverter/storedge_control/storage_default_mode
+modbus/inverter/storedge_control/remote_control_command_timeout
+modbus/inverter/storedge_control/remote_control_command_mode
+modbus/inverter/storedge_control/remote_control_charge_limit
+modbus/inverter/storedge_control/remote_control_discharge_limit
+```
+
+Payloads are a bare value or a JSON object, e.g. publishing `4` or `{"mode": 4}` to `storage_control_mode` switches the battery to Remote Control mode:
+
+| Topic suffix | Field | Range |
+|---|---|---|
+| `storage_control_mode` | `mode` | 0–4 (0 Disabled, 1 Maximize Self Consumption, 2 Time of Use, 3 Backup Only, 4 Remote Control) |
+| `storage_ac_charge_policy` | `policy` | 0–3 |
+| `storage_ac_charge_limit` | `limit` | ≥ 0 (kWh or %, depending on policy) |
+| `storage_backup_reserved_setting` | `percentage` | 0–100 |
+| `storage_default_mode` | `mode` | 0–7 (charge/discharge mode) |
+| `remote_control_command_timeout` | `seconds` | 0–86400 |
+| `remote_control_command_mode` | `mode` | 0–7 |
+| `remote_control_charge_limit` | `limit` | ≥ 0 (W) |
+| `remote_control_discharge_limit` | `limit` | ≥ 0 (W) |
+
+`storage_control_mode`, `storage_ac_charge_policy`, `storage_ac_charge_limit`, and `storage_backup_reserved_setting` always take effect. The remaining five only take effect once `storage_control_mode` is `4` (Remote Control) — writing to them otherwise is rejected and logged, since SolarEdge ignores them outside Remote Control mode.
+
 ### Leader/follower setup
 
 SolarEdge inverters support a cascading setup, where one inverter acts as the leader and up to ten others act as followers.
