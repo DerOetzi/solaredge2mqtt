@@ -40,9 +40,7 @@ class ModbusInverter(ModbusComponent):
     grid_status: bool | None = Field(
         default=None, **HABinarySensor.GRID_STATUS.field("Grid status")
     )
-    storedge_control: ModbusStorEdgeControl | None = Field(
-        default=None, title="StorEdge Control"
-    )
+    storedge_control: ModbusStorEdgeControl | None = Field(default=None, title=None)
 
     @classmethod
     def extract_sunspec_payload(cls, payload: SunSpecPayload) -> dict[str, Any]:
@@ -109,14 +107,14 @@ class ModbusStorEdgeControl(ModbusComponentValueGroup):
     )
     storage_ac_charge_policy: int = Field(
         **HASelect.GENERIC.field(
-            "Storage AC charge policy",
+            "AC charge policy",
             command_topic="storedge/ac_charge_policy",
             options_map=STORAGE_AC_CHARGE_POLICY_OPTIONS,
         )
     )
     storage_ac_charge_limit: float = Field(
         **HANumber.GENERIC.field(
-            "Storage AC charge limit",
+            "AC charge limit",
             command_topic="storedge/ac_charge_limit",
             min=0,
             max=100000,
@@ -126,7 +124,7 @@ class ModbusStorEdgeControl(ModbusComponentValueGroup):
     )
     storage_backup_reserved_setting: float = Field(
         **HANumber.GENERIC.field(
-            "Storage backup reserved setting",
+            "Backup reserve",
             command_topic="storedge/backup_reserved_setting",
             unit_of_measurement="%",
             min=0,
@@ -137,14 +135,14 @@ class ModbusStorEdgeControl(ModbusComponentValueGroup):
     )
     storage_default_mode: int = Field(
         **HASelect.GENERIC.field(
-            "Storage default mode (Remote Control mode only)",
+            "Storage default mode",
             command_topic="storedge/default_mode",
             options_map=STORAGE_CHARGE_DISCHARGE_MODE_OPTIONS,
         )
     )
     remote_control_command_timeout: int = Field(
         **HANumber.GENERIC.field(
-            "Remote control command timeout (Remote Control mode only)",
+            "Command timeout",
             command_topic="storedge/command_timeout",
             unit_of_measurement="s",
             min=0,
@@ -155,14 +153,14 @@ class ModbusStorEdgeControl(ModbusComponentValueGroup):
     )
     remote_control_command_mode: int = Field(
         **HASelect.GENERIC.field(
-            "Remote control command mode (Remote Control mode only)",
+            "Storage command mode",
             command_topic="storedge/command_mode",
             options_map=STORAGE_CHARGE_DISCHARGE_MODE_OPTIONS,
         )
     )
     remote_control_charge_limit: float = Field(
         **HANumber.GENERIC.field(
-            "Remote control charge limit (Remote Control mode only)",
+            "Charge limit",
             command_topic="storedge/charge_limit",
             device_class="power",
             unit_of_measurement="W",
@@ -174,7 +172,7 @@ class ModbusStorEdgeControl(ModbusComponentValueGroup):
     )
     remote_control_discharge_limit: float = Field(
         **HANumber.GENERIC.field(
-            "Remote control discharge limit (Remote Control mode only)",
+            "Discharge limit",
             command_topic="storedge/discharge_limit",
             device_class="power",
             unit_of_measurement="W",
