@@ -131,8 +131,14 @@ class EVCharger(Component):
     info: SkipJsonSchema[EVChargerInfo]
 
     charge_level: int = Field(
-        **HANumber.EV_CHARGE_LEVEL.field(
-            "Charge level", input_field=EVChargerControlInput.CHARGE_LEVEL
+        **HANumber.GENERIC.field(
+            "Charge level",
+            input_field=EVChargerControlInput.CHARGE_LEVEL,
+            unit_of_measurement="%",
+            min=0,
+            max=100,
+            step=100,
+            mode="slider",
         )
     )
     charger_status: str = Field(**HASensor.STATUS.field("Charger status"))
