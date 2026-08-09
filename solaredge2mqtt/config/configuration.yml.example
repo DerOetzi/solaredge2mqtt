@@ -74,6 +74,9 @@ mqtt:
   retain: false                 # Retain MQTT messages
 # use_tls: false                # MQTT over TLS
 # ca_certs: path_to_CA          # Path to trusted CA boundle - usefull for self sign certificates
+# certfile: path_to_client_cert # Client certificate, for brokers requiring mutual TLS
+# keyfile: path_to_client_key   # Private key matching certfile
+# keyfile_password: !secret mqtt_keyfile_password  # Only if the private key is encrypted
 # tls_verify: true              # Verify mqtt certificate. If set to false ignore certificate expiration, CN missmatch, etc.
 # logging_level: ERROR          # Minimum log level forwarded to MQTT logging topic (default: ERROR)
 
