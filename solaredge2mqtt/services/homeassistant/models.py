@@ -74,6 +74,7 @@ class HomeAssistantDevice(HomeAssistantBaseModel):
 class HomeAssistantType(EnumModel):
     BINARY_SENSOR = "binary_sensor", False, []
     NUMBER = "number", True, ["min", "max", "step", "mode"]
+    SELECT = "select", True, ["options"]
     SENSOR = "sensor", False, []
 
     def __init__(
@@ -166,6 +167,51 @@ class HomeAssistantBinarySensorType(HomeAssistantEntityBaseType):
 
 class HomeAssistantNumberType(HomeAssistantEntityBaseType):
     EV_CHARGE_LEVEL = "charge_level", None, "%", 0, 100, 100, "slider"
+    STOREDGE_AC_CHARGE_LIMIT = (
+        "storedge_ac_charge_limit",
+        None,
+        None,
+        0,
+        100000,
+        1,
+        "box",
+    )
+    STOREDGE_BACKUP_RESERVED = (
+        "storedge_backup_reserved",
+        None,
+        "%",
+        0,
+        100,
+        1,
+        "slider",
+    )
+    STOREDGE_COMMAND_TIMEOUT = (
+        "storedge_command_timeout",
+        None,
+        "s",
+        0,
+        86400,
+        1,
+        "box",
+    )
+    STOREDGE_CHARGE_LIMIT = (
+        "storedge_charge_limit",
+        "power",
+        "W",
+        0,
+        20000,
+        1,
+        "box",
+    )
+    STOREDGE_DISCHARGE_LIMIT = (
+        "storedge_discharge_limit",
+        "power",
+        "W",
+        0,
+        20000,
+        1,
+        "box",
+    )
 
     def __init__(
         self,
@@ -198,6 +244,71 @@ class HomeAssistantNumberType(HomeAssistantEntityBaseType):
             "max": self._max,
             "step": self._step,
             "mode": self._mode,
+            **json_schema_extra,
+        }
+
+        return super().field(
+            title,
+            input_field,
+            **json_schema_extra,
+        )
+
+
+class HomeAssistantSelectType(HomeAssistantEntityBaseType):
+    STOREDGE_CONTROL_MODE = (
+        "storedge_control_mode",
+        {
+            0: "Disabled",
+            1: "Maximize Self Consumption",
+            2: "Time of Use",
+            3: "Backup Only",
+            4: "Remote Control",
+        },
+    )
+    STOREDGE_AC_CHARGE_POLICY = (
+        "storedge_ac_charge_policy",
+        {
+            0: "Disabled",
+            1: "Always Allowed",
+            2: "Fixed Energy Limit",
+            3: "Percent of Production",
+        },
+    )
+    STOREDGE_CHARGE_DISCHARGE_MODE = (
+        "storedge_charge_discharge_mode",
+        {
+            0: "Off",
+            1: "Charge from Clipped Solar Power",
+            2: "Charge from Solar Power",
+            3: "Charge from Solar Power and Grid",
+            4: "Discharge to Maximize Export",
+            5: "Discharge to Minimize Import",
+            7: "Maximize Self Consumption",
+        },
+    )
+
+    def __init__(self, key: str, options_map: dict[int, str]):
+        super().__init__(key, HomeAssistantType.SELECT, None, None, None)
+
+        self._options_map: dict[int, str] = options_map
+
+    @property
+    def options_map(self) -> dict[int, str]:
+        return self._options_map
+
+    @property
+    def options(self) -> list[str]:
+        return list(self._options_map.values())
+
+    def field(
+        self,
+        title: str | None = None,
+        input_field: BaseInputFieldEnumModel | None = None,
+        **json_schema_extra: Any,
+    ) -> dict[str, Any]:
+
+        json_schema_extra = {
+            "options": self.options,
             **json_schema_extra,
         }
 
@@ -249,6 +360,11 @@ class HomeAssistantSensorType(HomeAssistantEntityBaseType):
         )
 
 
+def _jinja_dict_literal(mapping: dict[Any, Any]) -> str:
+    items = ", ".join(f"{key!r}: {value!r}" for key, value in mapping.items())
+    return f"{{{items}}}"
+
+
 class HomeAssistantEntity(HomeAssistantBaseModel):
     name: str
     device: HomeAssistantDevice
@@ -256,6 +372,7 @@ class HomeAssistantEntity(HomeAssistantBaseModel):
     path: list[str] | None = Field(None, exclude=True)
     ha_type: HomeAssistantEntityBaseType = Field(exclude=True)
     unit: str | None = Field(None, exclude=True)
+    command_topic_override: str | None = Field(None, exclude=True)
 
     _icon: str | None = PrivateAttr(default=None)
     _additional_fields: dict[str, Any] = PrivateAttr(default_factory=dict)
@@ -285,6 +402,9 @@ class HomeAssistantEntity(HomeAssistantBaseModel):
         if not self.ha_type.typed.command_topic:
             return None
 
+        if self.command_topic_override:
+            return f"{self.device.state_topic}/{self.command_topic_override}"
+
         path = [self.device.state_topic]
 
         if self.path:
@@ -305,7 +425,26 @@ class HomeAssistantEntity(HomeAssistantBaseModel):
     @computed_field
     @property
     def value_template(self) -> str | None:
-        return f"{{{{ value_json.{'.'.join(self.path)} }}}}" if self.path else None
+        if not self.path:
+            return None
+
+        value_expr = f"value_json.{'.'.join(self.path)}"
+
+        if isinstance(self.ha_type, HomeAssistantSelectType):
+            mapping = _jinja_dict_literal(self.ha_type.options_map)
+            value_expr = f"{mapping}[{value_expr}]"
+
+        return f"{{{{ {value_expr} }}}}"
+
+    @computed_field
+    @property
+    def command_template(self) -> str | None:
+        if not isinstance(self.ha_type, HomeAssistantSelectType):
+            return None
+
+        reverse_map = {label: code for code, label in self.ha_type.options_map.items()}
+        mapping = _jinja_dict_literal(reverse_map)
+        return f"{{{{ {mapping}[value] }}}}"
 
     @computed_field
     @property

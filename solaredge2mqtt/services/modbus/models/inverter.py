@@ -8,6 +8,12 @@ from solaredge2mqtt.services.homeassistant.models import (
     HomeAssistantBinarySensorType as HABinarySensor,
 )
 from solaredge2mqtt.services.homeassistant.models import (
+    HomeAssistantNumberType as HANumber,
+)
+from solaredge2mqtt.services.homeassistant.models import (
+    HomeAssistantSelectType as HASelect,
+)
+from solaredge2mqtt.services.homeassistant.models import (
     HomeAssistantSensorType as HASensor,
 )
 from solaredge2mqtt.services.modbus.models.base import ModbusComponent
@@ -71,18 +77,56 @@ REMOTE_CONTROL_MODE = 4
 
 
 class ModbusStorEdgeControl(ModbusComponentValueGroup):
-    storage_control_mode: int = Field(title="Storage control mode")
-    storage_ac_charge_policy: int = Field(title="Storage AC charge policy")
-    storage_ac_charge_limit: float = Field(title="Storage AC charge limit")
-    storage_backup_reserved_setting: float = Field(
-        title="Storage backup reserved setting"
+    storage_control_mode: int = Field(
+        **HASelect.STOREDGE_CONTROL_MODE.field(
+            "Storage control mode", command_topic="storedge/control_mode"
+        )
     )
-    storage_default_mode: int = Field(title="Storage default mode")
-    remote_control_command_timeout: int = Field(title="Remote control command timeout")
-    remote_control_command_mode: int = Field(title="Remote control command mode")
-    remote_control_charge_limit: float = Field(title="Remote control charge limit")
+    storage_ac_charge_policy: int = Field(
+        **HASelect.STOREDGE_AC_CHARGE_POLICY.field(
+            "Storage AC charge policy", command_topic="storedge/ac_charge_policy"
+        )
+    )
+    storage_ac_charge_limit: float = Field(
+        **HANumber.STOREDGE_AC_CHARGE_LIMIT.field(
+            "Storage AC charge limit", command_topic="storedge/ac_charge_limit"
+        )
+    )
+    storage_backup_reserved_setting: float = Field(
+        **HANumber.STOREDGE_BACKUP_RESERVED.field(
+            "Storage backup reserved setting",
+            command_topic="storedge/backup_reserved_setting",
+        )
+    )
+    storage_default_mode: int = Field(
+        **HASelect.STOREDGE_CHARGE_DISCHARGE_MODE.field(
+            "Storage default mode (Remote Control mode only)",
+            command_topic="storedge/default_mode",
+        )
+    )
+    remote_control_command_timeout: int = Field(
+        **HANumber.STOREDGE_COMMAND_TIMEOUT.field(
+            "Remote control command timeout (Remote Control mode only)",
+            command_topic="storedge/command_timeout",
+        )
+    )
+    remote_control_command_mode: int = Field(
+        **HASelect.STOREDGE_CHARGE_DISCHARGE_MODE.field(
+            "Remote control command mode (Remote Control mode only)",
+            command_topic="storedge/command_mode",
+        )
+    )
+    remote_control_charge_limit: float = Field(
+        **HANumber.STOREDGE_CHARGE_LIMIT.field(
+            "Remote control charge limit (Remote Control mode only)",
+            command_topic="storedge/charge_limit",
+        )
+    )
     remote_control_discharge_limit: float = Field(
-        title="Remote control discharge limit"
+        **HANumber.STOREDGE_DISCHARGE_LIMIT.field(
+            "Remote control discharge limit (Remote Control mode only)",
+            command_topic="storedge/discharge_limit",
+        )
     )
 
     @classmethod
