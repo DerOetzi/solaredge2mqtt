@@ -72,7 +72,7 @@ class TestStorEdgeControlInit:
         """Test topic_prefix omits unit key when there are no followers."""
         control = StorEdgeControl(mock_service_settings)
 
-        assert control.topic_prefix == "modbus/inverter/storedge_control"
+        assert control.topic_prefix == "modbus/inverter/storedge"
 
     def test_topic_prefix_with_followers(self, mock_service_settings, mock_event_bus):
         """Test topic_prefix includes the leader unit key when followers exist."""
@@ -80,7 +80,7 @@ class TestStorEdgeControlInit:
 
         control = StorEdgeControl(mock_service_settings)
 
-        assert control.topic_prefix == "modbus/leader/inverter/storedge_control"
+        assert control.topic_prefix == "modbus/leader/inverter/storedge"
 
     def test_init_registers_with_event_bus(self, mock_service_settings, mock_event_bus):
         """Test the instance registers itself with the EventBus."""
@@ -105,15 +105,15 @@ class TestStorEdgeControlAsyncInit:
         topics = {event.topic for event in emitted}
 
         assert topics == {
-            "modbus/inverter/storedge_control/control_mode",
-            "modbus/inverter/storedge_control/ac_charge_policy",
-            "modbus/inverter/storedge_control/ac_charge_limit",
-            "modbus/inverter/storedge_control/backup_reserved_setting",
-            "modbus/inverter/storedge_control/default_mode",
-            "modbus/inverter/storedge_control/command_timeout",
-            "modbus/inverter/storedge_control/command_mode",
-            "modbus/inverter/storedge_control/charge_limit",
-            "modbus/inverter/storedge_control/discharge_limit",
+            "modbus/inverter/storedge/control_mode",
+            "modbus/inverter/storedge/ac_charge_policy",
+            "modbus/inverter/storedge/ac_charge_limit",
+            "modbus/inverter/storedge/backup_reserved_setting",
+            "modbus/inverter/storedge/default_mode",
+            "modbus/inverter/storedge/command_timeout",
+            "modbus/inverter/storedge/command_mode",
+            "modbus/inverter/storedge/charge_limit",
+            "modbus/inverter/storedge/discharge_limit",
         }
 
     @pytest.mark.asyncio
@@ -179,7 +179,7 @@ class TestStorEdgeControlAlwaysAllowedWriteHandlers:
         control = StorEdgeControl(mock_service_settings)
 
         event = StoredgeControlModeEvent(
-            topic="modbus/inverter/storedge_control/control_mode",
+            topic="modbus/inverter/storedge/control_mode",
             input=StoredgeControlModeInput(mode=4),
         )
         await control.handle_storage_control_mode(event)
@@ -198,7 +198,7 @@ class TestStorEdgeControlAlwaysAllowedWriteHandlers:
         control = StorEdgeControl(mock_service_settings)
 
         event = StoredgeAcChargePolicyEvent(
-            topic="modbus/inverter/storedge_control/ac_charge_policy",
+            topic="modbus/inverter/storedge/ac_charge_policy",
             input=StoredgeAcChargePolicyInput(policy=1),
         )
         await control.handle_storage_ac_charge_policy(event)
@@ -217,7 +217,7 @@ class TestStorEdgeControlAlwaysAllowedWriteHandlers:
         control = StorEdgeControl(mock_service_settings)
 
         event = StoredgeAcChargeLimitEvent(
-            topic="modbus/inverter/storedge_control/ac_charge_limit",
+            topic="modbus/inverter/storedge/ac_charge_limit",
             input=StoredgeAcChargeLimitInput(limit=2500.0),
         )
         await control.handle_storage_ac_charge_limit(event)
@@ -236,7 +236,7 @@ class TestStorEdgeControlAlwaysAllowedWriteHandlers:
         control = StorEdgeControl(mock_service_settings)
 
         event = StoredgeBackupReservedSettingEvent(
-            topic=("modbus/inverter/storedge_control/backup_reserved_setting"),
+            topic=("modbus/inverter/storedge/backup_reserved_setting"),
             input=StoredgeBackupReservedSettingInput(percentage=10.0),
         )
         await control.handle_storage_backup_reserved_setting(event)
@@ -260,7 +260,7 @@ class TestStorEdgeControlRemoteControlGatedWriteHandlers:
         control = StorEdgeControl(mock_service_settings)
 
         event = StoredgeDefaultModeEvent(
-            topic="modbus/inverter/storedge_control/default_mode",
+            topic="modbus/inverter/storedge/default_mode",
             input=StoredgeDefaultModeInput(mode=0),
         )
         await control.handle_storage_default_mode(event)
@@ -276,7 +276,7 @@ class TestStorEdgeControlRemoteControlGatedWriteHandlers:
         control._last_known["leader"] = make_last_known()
 
         event = StoredgeDefaultModeEvent(
-            topic="modbus/inverter/storedge_control/default_mode",
+            topic="modbus/inverter/storedge/default_mode",
             input=StoredgeDefaultModeInput(mode=0),
         )
         await control.handle_storage_default_mode(event)
@@ -293,7 +293,7 @@ class TestStorEdgeControlRemoteControlGatedWriteHandlers:
         control = StorEdgeControl(mock_service_settings)
 
         event = StoredgeCommandTimeoutEvent(
-            topic=("modbus/inverter/storedge_control/command_timeout"),
+            topic=("modbus/inverter/storedge/command_timeout"),
             input=StoredgeCommandTimeoutInput(seconds=3600),
         )
         await control.handle_command_timeout(event)
@@ -318,7 +318,7 @@ class TestStorEdgeControlRemoteControlGatedWriteHandlers:
         control._last_known["leader"] = make_last_known()
 
         event = StoredgeCommandModeEvent(
-            topic=("modbus/inverter/storedge_control/command_mode"),
+            topic=("modbus/inverter/storedge/command_mode"),
             input=StoredgeCommandModeInput(mode=1),
         )
         await control.handle_command_mode(event)
@@ -339,7 +339,7 @@ class TestStorEdgeControlRemoteControlGatedWriteHandlers:
         control._last_known["leader"] = make_last_known(storage_control_mode=1)
 
         event = StoredgeChargeLimitEvent(
-            topic=("modbus/inverter/storedge_control/charge_limit"),
+            topic=("modbus/inverter/storedge/charge_limit"),
             input=StoredgeChargeLimitInput(limit=5000.0),
         )
         await control.handle_charge_limit(event)
@@ -355,7 +355,7 @@ class TestStorEdgeControlRemoteControlGatedWriteHandlers:
         control._last_known["leader"] = make_last_known()
 
         event = StoredgeDischargeLimitEvent(
-            topic=("modbus/inverter/storedge_control/discharge_limit"),
+            topic=("modbus/inverter/storedge/discharge_limit"),
             input=StoredgeDischargeLimitInput(limit=5000.0),
         )
         await control.handle_discharge_limit(event)
@@ -380,7 +380,7 @@ class TestStorEdgeControlNoopWrites:
         control._last_known["leader"] = make_last_known(storage_control_mode=4)
 
         event = StoredgeControlModeEvent(
-            topic="modbus/inverter/storedge_control/control_mode",
+            topic="modbus/inverter/storedge/control_mode",
             input=StoredgeControlModeInput(mode=4),
         )
         await control.handle_storage_control_mode(event)
@@ -396,7 +396,7 @@ class TestStorEdgeControlNoopWrites:
         control._last_known["leader"] = make_last_known(storage_control_mode=1)
 
         event = StoredgeControlModeEvent(
-            topic="modbus/inverter/storedge_control/control_mode",
+            topic="modbus/inverter/storedge/control_mode",
             input=StoredgeControlModeInput(mode=4),
         )
         await control.handle_storage_control_mode(event)
@@ -414,7 +414,7 @@ class TestStorEdgeControlNoopWrites:
         )
 
         event = StoredgeDefaultModeEvent(
-            topic="modbus/inverter/storedge_control/default_mode",
+            topic="modbus/inverter/storedge/default_mode",
             input=StoredgeDefaultModeInput(mode=6),
         )
         await control.handle_storage_default_mode(event)
@@ -432,7 +432,7 @@ class TestStorEdgeControlNoopWrites:
         )
 
         event = StoredgeDefaultModeEvent(
-            topic="modbus/inverter/storedge_control/default_mode",
+            topic="modbus/inverter/storedge/default_mode",
             input=StoredgeDefaultModeInput(mode=0),
         )
         await control.handle_storage_default_mode(event)
@@ -452,7 +452,7 @@ class TestStorEdgeControlForceWrites:
         control._last_known["leader"] = make_last_known(storage_control_mode=4)
 
         event = StoredgeControlModeEvent(
-            topic="modbus/inverter/storedge_control/control_mode",
+            topic="modbus/inverter/storedge/control_mode",
             input=StoredgeControlModeInput(mode=4, force=True),
         )
         await control.handle_storage_control_mode(event)
@@ -472,7 +472,7 @@ class TestStorEdgeControlForceWrites:
         )
 
         event = StoredgeDefaultModeEvent(
-            topic="modbus/inverter/storedge_control/default_mode",
+            topic="modbus/inverter/storedge/default_mode",
             input=StoredgeDefaultModeInput(mode=6, force=True),
         )
         await control.handle_storage_default_mode(event)
@@ -492,7 +492,7 @@ class TestStorEdgeControlForceWrites:
         )
 
         event = StoredgeDefaultModeEvent(
-            topic="modbus/inverter/storedge_control/default_mode",
+            topic="modbus/inverter/storedge/default_mode",
             input=StoredgeDefaultModeInput(mode=6, force=True),
         )
         await control.handle_storage_default_mode(event)

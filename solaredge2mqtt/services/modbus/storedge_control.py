@@ -50,7 +50,7 @@ class StorEdgeControl:
             if self.settings.has_followers
             else ModbusInverter.generate_topic_prefix()
         )
-        self.topic_prefix = f"{inverter_topic}/storedge_control"
+        self.topic_prefix = f"{inverter_topic}/storedge"
 
         self._last_known: dict[str, ModbusStorEdgeControl] = {}
 
