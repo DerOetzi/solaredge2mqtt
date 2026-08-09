@@ -95,6 +95,9 @@ class TestMQTTSettings:
 
         assert settings.use_tls is False
         assert settings.ca_certs is None
+        assert settings.certfile is None
+        assert settings.keyfile is None
+        assert settings.keyfile_password is None
         assert settings.tls_verify is True
 
     def test_mqtt_settings_kargs_without_tls(self):
@@ -117,6 +120,48 @@ class TestMQTTSettings:
         assert kargs["tls_params"] is not None
         assert kargs["tls_params"].ca_certs == "/tmp/ca.crt"
         assert kargs["tls_params"].cert_reqs == ssl.CERT_REQUIRED
+
+    def test_mqtt_settings_kargs_without_client_certificate(self):
+        """Test kargs property leaves client certificate unset by default."""
+        settings = MQTTSettings(
+            broker="localhost",
+            use_tls=True,
+            ca_certs="/tmp/ca.crt",
+        )
+        kargs = settings.kargs
+
+        assert kargs["tls_params"].certfile is None
+        assert kargs["tls_params"].keyfile is None
+        assert kargs["tls_params"].keyfile_password is None
+
+    def test_mqtt_settings_kargs_with_client_certificate(self):
+        """Test kargs property builds TLS params for mutual TLS."""
+        settings = MQTTSettings(
+            broker="localhost",
+            use_tls=True,
+            ca_certs="/tmp/ca.crt",
+            certfile="/tmp/client.crt",
+            keyfile="/tmp/client.key",
+        )
+        kargs = settings.kargs
+
+        assert kargs["tls_params"].ca_certs == "/tmp/ca.crt"
+        assert kargs["tls_params"].certfile == "/tmp/client.crt"
+        assert kargs["tls_params"].keyfile == "/tmp/client.key"
+        assert kargs["tls_params"].cert_reqs == ssl.CERT_REQUIRED
+
+    def test_mqtt_settings_kargs_unwraps_keyfile_password(self):
+        """Test kargs property passes the key password as a plain string."""
+        settings = MQTTSettings(
+            broker="localhost",
+            use_tls=True,
+            certfile="/tmp/client.crt",
+            keyfile="/tmp/client.key",
+            keyfile_password=SecretStr("s3cret"),
+        )
+        kargs = settings.kargs
+
+        assert kargs["tls_params"].keyfile_password == "s3cret"
 
     def test_mqtt_settings_kargs_with_tls_and_verify_disabled(self):
         """Test kargs property builds TLS params without cert verification."""

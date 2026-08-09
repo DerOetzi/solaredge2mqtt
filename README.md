@@ -281,13 +281,22 @@ mqtt:
   topic_prefix: solaredge          # MQTT topic prefix
   use_tls: false                   # Enable TLS encryption (default: false)
   ca_certs: /path/to/ca.pem        # Path to CA certificate bundle
+  certfile: /path/to/client.pem    # Client certificate for mutual TLS
+  keyfile: /path/to/client.key     # Private key matching certfile
+  keyfile_password: !secret mqtt_keyfile_password  # Only if the private key is encrypted
   tls_verify: true                 # Verify TLS certificates (default: true)
 ```
+
+If your broker authenticates clients by certificate instead of (or in addition to) a
+password, set `certfile` and `keyfile` to the client keypair. They are only used when
+`use_tls` is enabled, and `keyfile_password` is needed only when the private key itself is
+encrypted. All three are unset by default.
 
 **Note**: Store your password securely in `secrets.yml`:
 ```yaml
 # secrets.yml
 mqtt_password: "your_actual_password"
+mqtt_keyfile_password: "your_actual_key_password"
 ```
 
 The service also publishes operational topics below the configured `topic_prefix`:
