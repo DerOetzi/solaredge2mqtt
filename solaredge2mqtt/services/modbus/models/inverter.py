@@ -40,7 +40,7 @@ class ModbusInverter(ModbusComponent):
     grid_status: bool | None = Field(
         default=None, **HABinarySensor.GRID_STATUS.field("Grid status")
     )
-    storedge_control: ModbusStorEdgeControl | None = Field(default=None, title=None)
+    storedge_control: ModbusStorEdgeControl | None = Field(default=None, title="")
 
     @classmethod
     def extract_sunspec_payload(cls, payload: SunSpecPayload) -> dict[str, Any]:
