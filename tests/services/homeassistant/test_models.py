@@ -468,6 +468,25 @@ class TestHomeAssistantEntity:
 
         assert entity.device_class == "power"
 
+    def test_entity_device_class_override(self):
+        """Test device_class_override takes precedence over ha_type.device_class."""
+        device = HomeAssistantDevice(
+            client_id="test_client",
+            name="Test Device",
+            state_topic="solaredge/powerflow",
+        )
+
+        entity = HomeAssistantEntity(
+            device=device,
+            name="Temperature",
+            path=["temperature"],
+            ha_type=HomeAssistantSensorType.TEMP_C,
+            device_class_override="power",
+        )
+
+        assert HomeAssistantSensorType.TEMP_C.device_class == "temperature"
+        assert entity.device_class == "power"
+
     def test_entity_unit_of_measurement(self):
         """Test unit_of_measurement computed field."""
         device = HomeAssistantDevice(
@@ -665,6 +684,31 @@ class TestHomeAssistantEntity:
         assert "value_json.storedge_control.storage_control_mode" in template
         assert "'Remote Control'" in template
 
+    def test_entity_value_template_casts_lookup_to_string(self):
+        """Regression: pydantic's JSON-schema serialization stringifies
+        options_map keys ('4' not 4), but the raw MQTT payload holds a real
+        int. Without casting the lookup value to string too, the dict
+        lookup silently mismatches and HA shows the entity with no value."""
+        device = HomeAssistantDevice(
+            client_id="test_client",
+            name="Test Device",
+            state_topic="solaredge/modbus/inverter",
+        )
+
+        entity = HomeAssistantEntity(
+            device=device,
+            name="Storage control mode",
+            path=["storedge_control", "storage_control_mode"],
+            ha_type=HomeAssistantSelectType.GENERIC,
+            options_map=STOREDGE_CONTROL_MODE_OPTIONS,
+        )
+
+        template = entity.value_template
+
+        assert template is not None
+        assert "| string" in template
+        assert "'4': 'Remote Control'" in template
+
     def test_entity_command_template_for_select(self):
         """Test command_template reverses the options map for select types."""
         device = HomeAssistantDevice(
@@ -684,7 +728,7 @@ class TestHomeAssistantEntity:
         template = entity.command_template
 
         assert template is not None
-        assert "'Remote Control': 4" in template
+        assert "'Remote Control': '4'" in template
         assert "[value]" in template
 
     def test_entity_command_template_none_for_non_select(self):

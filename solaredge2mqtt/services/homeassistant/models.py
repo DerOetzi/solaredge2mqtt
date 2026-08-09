@@ -383,8 +383,14 @@ class HomeAssistantEntity(HomeAssistantBaseModel):
         value_expr = f"value_json.{'.'.join(self.path)}"
 
         if self.options_map:
-            mapping = _jinja_dict_literal(self.options_map)
-            value_expr = f"{mapping}[{value_expr}]"
+            # options_map keys are stringified by pydantic's JSON-schema
+            # serialization (json_schema_extra round-trips through
+            # model_json_schema), even though the raw MQTT payload holds a
+            # real int. Normalize both sides to string so the lookup matches.
+            mapping = _jinja_dict_literal(
+                {str(code): label for code, label in self.options_map.items()}
+            )
+            value_expr = f"{mapping}[({value_expr}) | string]"
 
         return f"{{{{ {value_expr} }}}}"
 
@@ -394,7 +400,7 @@ class HomeAssistantEntity(HomeAssistantBaseModel):
         if not self.options_map:
             return None
 
-        reverse_map = {label: code for code, label in self.options_map.items()}
+        reverse_map = {label: str(code) for code, label in self.options_map.items()}
         mapping = _jinja_dict_literal(reverse_map)
         return f"{{{{ {mapping}[value] }}}}"
 
