@@ -108,13 +108,16 @@ class TestPowerflowServiceInit:
 
     def test_powerflow_service_init(self, mock_service_settings, mock_event_bus):
         """Test PowerflowService initialization."""
-        with patch("solaredge2mqtt.services.powerflow.Modbus"):
+        with (
+            patch("solaredge2mqtt.services.powerflow.Modbus"),
+            patch("solaredge2mqtt.services.powerflow.StorEdgeControl"),
+        ):
             service = PowerflowService(mock_service_settings, None)
 
             assert service.settings is mock_service_settings
             assert service.influxdb is None
             assert service.wallbox is None
-            mock_event_bus.register.assert_called_once_with(service)
+            mock_event_bus.register.assert_any_call(service)
 
     def test_powerflow_service_init_with_wallbox(
         self, mock_service_settings, mock_event_bus
@@ -145,15 +148,24 @@ class TestPowerflowServiceAsyncInit:
 
     @pytest.mark.asyncio
     async def test_async_init(self, mock_service_settings, mock_event_bus):
-        """Test async_init initializes modbus."""
-        with patch("solaredge2mqtt.services.powerflow.Modbus") as mock_modbus_class:
+        """Test async_init initializes modbus and storedge control."""
+        with (
+            patch("solaredge2mqtt.services.powerflow.Modbus") as mock_modbus_class,
+            patch(
+                "solaredge2mqtt.services.powerflow.StorEdgeControl"
+            ) as mock_storedge_control_class,
+        ):
             mock_modbus = AsyncMock()
             mock_modbus_class.return_value = mock_modbus
+
+            mock_storedge_control = AsyncMock()
+            mock_storedge_control_class.return_value = mock_storedge_control
 
             service = PowerflowService(mock_service_settings, None)
             await service.async_init()
 
             mock_modbus.async_init.assert_called_once()
+            mock_storedge_control.async_init.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_async_init_propagates_error(

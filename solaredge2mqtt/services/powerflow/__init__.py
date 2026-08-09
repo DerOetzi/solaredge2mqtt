@@ -10,6 +10,7 @@ from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
 from solaredge2mqtt.core.timer.events import IntervalBaseTriggerEvent
 from solaredge2mqtt.services.modbus import Modbus
 from solaredge2mqtt.services.modbus.models.battery import ModbusBattery
+from solaredge2mqtt.services.modbus.storedge_control import StorEdgeControl
 from solaredge2mqtt.services.powerflow.events import PowerflowGeneratedEvent
 from solaredge2mqtt.services.powerflow.models import Powerflow
 from solaredge2mqtt.services.wallbox import WallboxClient
@@ -30,6 +31,7 @@ class PowerflowService:
         self.influxdb = influxdb
 
         self.modbus = Modbus(self.settings)
+        self.storedge_control = StorEdgeControl(self.settings)
 
         self.wallbox = (
             WallboxClient(self.settings.wallbox)
@@ -41,6 +43,7 @@ class PowerflowService:
 
     async def async_init(self) -> None:
         await self.modbus.async_init()
+        await self.storedge_control.async_init()
 
     @EventBus.subscribe(IntervalBaseTriggerEvent)
     async def calculate_powerflow(

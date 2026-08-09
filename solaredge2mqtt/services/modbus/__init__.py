@@ -82,6 +82,7 @@ class Modbus:
         self._device_info: dict[str, dict[str, ModbusDeviceInfo]] = {}
 
         self._clients: dict[str, AsyncModbusTcpClient] = {}
+        self._client_locks: dict[str, asyncio.Lock] = {}
 
         EventBus.register(self)
 
@@ -101,6 +102,7 @@ class Modbus:
 
             leader_client = self._build_client(self.settings.host, self.settings.port)
             self._clients["leader"] = leader_client
+            self._client_locks["leader"] = asyncio.Lock()
 
             for i, follower in enumerate(self.settings.follower):
                 unit_key = f"follower{i}"
@@ -114,8 +116,12 @@ class Modbus:
                         port=port,
                     )
                     self._clients[unit_key] = self._build_client(host, port)
+                    self._client_locks[unit_key] = asyncio.Lock()
                 else:
+                    # Cascaded follower: shares the leader's TCP connection, so it
+                    # must also share the leader's lock to serialize access to it.
                     self._clients[unit_key] = leader_client
+                    self._client_locks[unit_key] = self._client_locks["leader"]
 
             await self._detect_devices_with_retry()
 
@@ -167,7 +173,10 @@ class Modbus:
 
             self._device_info[unit_key] = {}
 
-            async with self._clients[unit_key]:
+            async with (
+                self._client_locks[unit_key],
+                self._clients[unit_key],
+            ):
                 inverter_raw = await self.read_device_info(
                     SunSpecInverterInfoRegister,
                     unit_key,
@@ -309,7 +318,10 @@ class Modbus:
 
         try:
             for unit_key, unit_settings in self.settings.units.items():
-                async with self._clients[unit_key]:
+                async with (
+                    self._client_locks[unit_key],
+                    self._clients[unit_key],
+                ):
                     (
                         inverter_raw,
                         meters_raw,
@@ -580,6 +592,9 @@ class Modbus:
     async def _handle_write_event(self, event: ModbusWriteEvent) -> None:
         await self._write_to_modbus(event.register, event.payload, event.unit_key)
 
+    WRITE_RETRY_ATTEMPTS = 3
+    WRITE_RETRY_DELAY = 1
+
     async def _write_to_modbus(
         self,
         register: SunSpecRegister,
@@ -589,6 +604,7 @@ class Modbus:
         try:
             unit_settings = self.settings.units[unit_key]
             client = self._clients[unit_key]
+            lock = self._client_locks[unit_key]
         except KeyError as error:
             raise InvalidDataException(
                 f"Unknown modbus unit_key: {unit_key}"
@@ -601,14 +617,27 @@ class Modbus:
         value_decoded = register.encode_request(value)
         logger.trace(f"Encoded value: {value_decoded}")
 
-        try:
-            async with client:
-                await client.write_registers(
-                    register.address,
-                    value_decoded,
-                    device_id=unit_settings.unit,
-                )
+        for attempt in range(1, self.WRITE_RETRY_ATTEMPTS + 1):
+            try:
+                async with lock, client:
+                    await client.write_registers(
+                        register.address,
+                        value_decoded,
+                        device_id=unit_settings.unit,
+                    )
+                return
 
-        except ModbusException as error:
-            logger.debug(f"Modbus write exception: {error}")
-            logger.error(f"Unwriteable register {register.address}")
+            except ModbusException as error:
+                logger.debug(f"Modbus write exception: {error}")
+                if attempt < self.WRITE_RETRY_ATTEMPTS:
+                    logger.warning(
+                        f"Write to register {register.address} failed "
+                        f"(attempt {attempt}/{self.WRITE_RETRY_ATTEMPTS}), "
+                        f"retrying in {self.WRITE_RETRY_DELAY}s"
+                    )
+                    await asyncio.sleep(self.WRITE_RETRY_DELAY)
+                else:
+                    logger.error(
+                        f"Unwriteable register {register.address} "
+                        f"after {self.WRITE_RETRY_ATTEMPTS} attempts"
+                    )
