@@ -22,37 +22,37 @@ class ForceableScalarInput(BaseInputScalarField):
         return {value_field: scalar}
 
 
-class StorageControlModeInput(ForceableScalarInput):
+class StoredgeControlModeInput(ForceableScalarInput):
     mode: int = Field(ge=0, le=4)
 
 
-class StorageAcChargePolicyInput(ForceableScalarInput):
+class StoredgeAcChargePolicyInput(ForceableScalarInput):
     policy: int = Field(ge=0, le=3)
 
 
-class StorageAcChargeLimitInput(ForceableScalarInput):
+class StoredgeAcChargeLimitInput(ForceableScalarInput):
     limit: float = Field(ge=0)
 
 
-class StorageBackupReservedSettingInput(ForceableScalarInput):
+class StoredgeBackupReservedSettingInput(ForceableScalarInput):
     percentage: float = Field(ge=0, le=100)
 
 
-class StorageDefaultModeInput(ForceableScalarInput):
+class StoredgeDefaultModeInput(ForceableScalarInput):
     mode: int = Field(ge=0, le=7)
 
 
-class RemoteControlCommandTimeoutInput(ForceableScalarInput):
+class StoredgeRemoteControlCommandTimeoutInput(ForceableScalarInput):
     seconds: int = Field(ge=0, le=86400)
 
 
-class RemoteControlCommandModeInput(ForceableScalarInput):
+class StoredgeRemoteControlCommandModeInput(ForceableScalarInput):
     mode: int = Field(ge=0, le=7)
 
 
-class RemoteControlChargeLimitInput(ForceableScalarInput):
+class StoredgeRemoteControlChargeLimitInput(ForceableScalarInput):
     limit: float = Field(ge=0)
 
 
-class RemoteControlDischargeLimitInput(ForceableScalarInput):
+class StoredgeRemoteControlDischargeLimitInput(ForceableScalarInput):
     limit: float = Field(ge=0)

@@ -7,28 +7,29 @@ from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.services.modbus.events import ModbusUnitsReadEvent, ModbusWriteEvent
 from solaredge2mqtt.services.modbus.models.base import ModbusUnitRole
 from solaredge2mqtt.services.modbus.models.inverter import (
+    REMOTE_CONTROL_MODE,
     ModbusInverter,
     ModbusStorEdgeControl,
 )
 from solaredge2mqtt.services.modbus.storedge_control_events import (
-    RemoteControlChargeLimitEvent,
-    RemoteControlChargeLimitSubscribeEvent,
-    RemoteControlCommandModeEvent,
-    RemoteControlCommandModeSubscribeEvent,
-    RemoteControlCommandTimeoutEvent,
-    RemoteControlCommandTimeoutSubscribeEvent,
-    RemoteControlDischargeLimitEvent,
-    RemoteControlDischargeLimitSubscribeEvent,
-    StorageAcChargeLimitEvent,
-    StorageAcChargeLimitSubscribeEvent,
-    StorageAcChargePolicyEvent,
-    StorageAcChargePolicySubscribeEvent,
-    StorageBackupReservedSettingEvent,
-    StorageBackupReservedSettingSubscribeEvent,
-    StorageControlModeEvent,
-    StorageControlModeSubscribeEvent,
-    StorageDefaultModeEvent,
-    StorageDefaultModeSubscribeEvent,
+    StoredgeAcChargeLimitEvent,
+    StoredgeAcChargeLimitSubscribeEvent,
+    StoredgeAcChargePolicyEvent,
+    StoredgeAcChargePolicySubscribeEvent,
+    StoredgeBackupReservedSettingEvent,
+    StoredgeBackupReservedSettingSubscribeEvent,
+    StoredgeControlModeEvent,
+    StoredgeControlModeSubscribeEvent,
+    StoredgeDefaultModeEvent,
+    StoredgeDefaultModeSubscribeEvent,
+    StoredgeRemoteControlChargeLimitEvent,
+    StoredgeRemoteControlChargeLimitSubscribeEvent,
+    StoredgeRemoteControlCommandModeEvent,
+    StoredgeRemoteControlCommandModeSubscribeEvent,
+    StoredgeRemoteControlCommandTimeoutEvent,
+    StoredgeRemoteControlCommandTimeoutSubscribeEvent,
+    StoredgeRemoteControlDischargeLimitEvent,
+    StoredgeRemoteControlDischargeLimitSubscribeEvent,
 )
 from solaredge2mqtt.services.modbus.sunspec.inverter import (
     SunSpecStorEdgeControlRegister,
@@ -37,7 +38,6 @@ from solaredge2mqtt.services.modbus.sunspec.inverter import (
 if TYPE_CHECKING:
     from solaredge2mqtt.core.settings.models import ServiceSettings
 
-REMOTE_CONTROL_MODE = 4
 DEFAULT_UNIT_KEY = "leader"
 
 
@@ -50,8 +50,6 @@ class StorEdgeControl:
             if self.settings.has_followers
             else ModbusInverter.generate_topic_prefix()
         )
-        # The MQTT client prepends its own topic_prefix in _subscribe_topic,
-        # so this must stay relative (no service_settings.mqtt.topic_prefix here).
         self.topic_prefix = f"{inverter_topic}/storedge_control"
 
         self._last_known: dict[str, ModbusStorEdgeControl] = {}
@@ -63,47 +61,47 @@ class StorEdgeControl:
             return
 
         await EventBus.emit(
-            StorageControlModeSubscribeEvent(
+            StoredgeControlModeSubscribeEvent(
                 f"{self.topic_prefix}/storage_control_mode"
             )
         )
         await EventBus.emit(
-            StorageAcChargePolicySubscribeEvent(
+            StoredgeAcChargePolicySubscribeEvent(
                 f"{self.topic_prefix}/storage_ac_charge_policy"
             )
         )
         await EventBus.emit(
-            StorageAcChargeLimitSubscribeEvent(
+            StoredgeAcChargeLimitSubscribeEvent(
                 f"{self.topic_prefix}/storage_ac_charge_limit"
             )
         )
         await EventBus.emit(
-            StorageBackupReservedSettingSubscribeEvent(
+            StoredgeBackupReservedSettingSubscribeEvent(
                 f"{self.topic_prefix}/storage_backup_reserved_setting"
             )
         )
         await EventBus.emit(
-            StorageDefaultModeSubscribeEvent(
+            StoredgeDefaultModeSubscribeEvent(
                 f"{self.topic_prefix}/storage_default_mode"
             )
         )
         await EventBus.emit(
-            RemoteControlCommandTimeoutSubscribeEvent(
+            StoredgeRemoteControlCommandTimeoutSubscribeEvent(
                 f"{self.topic_prefix}/remote_control_command_timeout"
             )
         )
         await EventBus.emit(
-            RemoteControlCommandModeSubscribeEvent(
+            StoredgeRemoteControlCommandModeSubscribeEvent(
                 f"{self.topic_prefix}/remote_control_command_mode"
             )
         )
         await EventBus.emit(
-            RemoteControlChargeLimitSubscribeEvent(
+            StoredgeRemoteControlChargeLimitSubscribeEvent(
                 f"{self.topic_prefix}/remote_control_charge_limit"
             )
         )
         await EventBus.emit(
-            RemoteControlDischargeLimitSubscribeEvent(
+            StoredgeRemoteControlDischargeLimitSubscribeEvent(
                 f"{self.topic_prefix}/remote_control_discharge_limit"
             )
         )
@@ -180,8 +178,10 @@ class StorEdgeControl:
 
         await self._write(register, value, field_name, unit_key, force=force)
 
-    @EventBus.subscribe(StorageControlModeEvent)
-    async def handle_storage_control_mode(self, event: StorageControlModeEvent) -> None:
+    @EventBus.subscribe(StoredgeControlModeEvent)
+    async def handle_storage_control_mode(
+        self, event: StoredgeControlModeEvent
+    ) -> None:
         await self._write(
             SunSpecStorEdgeControlRegister.STORAGE_CONTROL_MODE,
             event.input.mode,
@@ -189,9 +189,9 @@ class StorEdgeControl:
             force=event.input.force,
         )
 
-    @EventBus.subscribe(StorageAcChargePolicyEvent)
+    @EventBus.subscribe(StoredgeAcChargePolicyEvent)
     async def handle_storage_ac_charge_policy(
-        self, event: StorageAcChargePolicyEvent
+        self, event: StoredgeAcChargePolicyEvent
     ) -> None:
         await self._write(
             SunSpecStorEdgeControlRegister.STORAGE_AC_CHARGE_POLICY,
@@ -200,9 +200,9 @@ class StorEdgeControl:
             force=event.input.force,
         )
 
-    @EventBus.subscribe(StorageAcChargeLimitEvent)
+    @EventBus.subscribe(StoredgeAcChargeLimitEvent)
     async def handle_storage_ac_charge_limit(
-        self, event: StorageAcChargeLimitEvent
+        self, event: StoredgeAcChargeLimitEvent
     ) -> None:
         await self._write(
             SunSpecStorEdgeControlRegister.STORAGE_AC_CHARGE_LIMIT,
@@ -211,9 +211,9 @@ class StorEdgeControl:
             force=event.input.force,
         )
 
-    @EventBus.subscribe(StorageBackupReservedSettingEvent)
+    @EventBus.subscribe(StoredgeBackupReservedSettingEvent)
     async def handle_storage_backup_reserved_setting(
-        self, event: StorageBackupReservedSettingEvent
+        self, event: StoredgeBackupReservedSettingEvent
     ) -> None:
         await self._write(
             SunSpecStorEdgeControlRegister.STORAGE_BACKUP_RESERVED_SETTING,
@@ -222,8 +222,10 @@ class StorEdgeControl:
             force=event.input.force,
         )
 
-    @EventBus.subscribe(StorageDefaultModeEvent)
-    async def handle_storage_default_mode(self, event: StorageDefaultModeEvent) -> None:
+    @EventBus.subscribe(StoredgeDefaultModeEvent)
+    async def handle_storage_default_mode(
+        self, event: StoredgeDefaultModeEvent
+    ) -> None:
         await self._write_remote_control_gated(
             SunSpecStorEdgeControlRegister.STORAGE_DEFAULT_MODE,
             event.input.mode,
@@ -231,9 +233,9 @@ class StorEdgeControl:
             force=event.input.force,
         )
 
-    @EventBus.subscribe(RemoteControlCommandTimeoutEvent)
+    @EventBus.subscribe(StoredgeRemoteControlCommandTimeoutEvent)
     async def handle_remote_control_command_timeout(
-        self, event: RemoteControlCommandTimeoutEvent
+        self, event: StoredgeRemoteControlCommandTimeoutEvent
     ) -> None:
         await self._write_remote_control_gated(
             SunSpecStorEdgeControlRegister.REMOTE_CONTROL_COMMAND_TIMEOUT,
@@ -242,9 +244,9 @@ class StorEdgeControl:
             force=event.input.force,
         )
 
-    @EventBus.subscribe(RemoteControlCommandModeEvent)
+    @EventBus.subscribe(StoredgeRemoteControlCommandModeEvent)
     async def handle_remote_control_command_mode(
-        self, event: RemoteControlCommandModeEvent
+        self, event: StoredgeRemoteControlCommandModeEvent
     ) -> None:
         await self._write_remote_control_gated(
             SunSpecStorEdgeControlRegister.REMOTE_CONTROL_COMMAND_MODE,
@@ -253,9 +255,9 @@ class StorEdgeControl:
             force=event.input.force,
         )
 
-    @EventBus.subscribe(RemoteControlChargeLimitEvent)
+    @EventBus.subscribe(StoredgeRemoteControlChargeLimitEvent)
     async def handle_remote_control_charge_limit(
-        self, event: RemoteControlChargeLimitEvent
+        self, event: StoredgeRemoteControlChargeLimitEvent
     ) -> None:
         await self._write_remote_control_gated(
             SunSpecStorEdgeControlRegister.REMOTE_CONTROL_CHARGE_LIMIT,
@@ -264,9 +266,9 @@ class StorEdgeControl:
             force=event.input.force,
         )
 
-    @EventBus.subscribe(RemoteControlDischargeLimitEvent)
+    @EventBus.subscribe(StoredgeRemoteControlDischargeLimitEvent)
     async def handle_remote_control_discharge_limit(
-        self, event: RemoteControlDischargeLimitEvent
+        self, event: StoredgeRemoteControlDischargeLimitEvent
     ) -> None:
         await self._write_remote_control_gated(
             SunSpecStorEdgeControlRegister.REMOTE_CONTROL_DISCHARGE_LIMIT,

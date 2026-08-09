@@ -8,26 +8,26 @@ from pydantic import ValidationError
 from solaredge2mqtt.services.modbus.models.inverter import ModbusStorEdgeControl
 from solaredge2mqtt.services.modbus.storedge_control import StorEdgeControl
 from solaredge2mqtt.services.modbus.storedge_control_events import (
-    RemoteControlChargeLimitEvent,
-    RemoteControlCommandModeEvent,
-    RemoteControlCommandTimeoutEvent,
-    RemoteControlDischargeLimitEvent,
-    StorageAcChargeLimitEvent,
-    StorageAcChargePolicyEvent,
-    StorageBackupReservedSettingEvent,
-    StorageControlModeEvent,
-    StorageDefaultModeEvent,
+    StoredgeAcChargeLimitEvent,
+    StoredgeAcChargePolicyEvent,
+    StoredgeBackupReservedSettingEvent,
+    StoredgeControlModeEvent,
+    StoredgeDefaultModeEvent,
+    StoredgeRemoteControlChargeLimitEvent,
+    StoredgeRemoteControlCommandModeEvent,
+    StoredgeRemoteControlCommandTimeoutEvent,
+    StoredgeRemoteControlDischargeLimitEvent,
 )
 from solaredge2mqtt.services.modbus.storedge_control_inputs import (
-    RemoteControlChargeLimitInput,
-    RemoteControlCommandModeInput,
-    RemoteControlCommandTimeoutInput,
-    RemoteControlDischargeLimitInput,
-    StorageAcChargeLimitInput,
-    StorageAcChargePolicyInput,
-    StorageBackupReservedSettingInput,
-    StorageControlModeInput,
-    StorageDefaultModeInput,
+    StoredgeAcChargeLimitInput,
+    StoredgeAcChargePolicyInput,
+    StoredgeBackupReservedSettingInput,
+    StoredgeControlModeInput,
+    StoredgeDefaultModeInput,
+    StoredgeRemoteControlChargeLimitInput,
+    StoredgeRemoteControlCommandModeInput,
+    StoredgeRemoteControlCommandTimeoutInput,
+    StoredgeRemoteControlDischargeLimitInput,
 )
 from solaredge2mqtt.services.modbus.sunspec.inverter import (
     SunSpecStorEdgeControlRegister,
@@ -178,9 +178,9 @@ class TestStorEdgeControlAlwaysAllowedWriteHandlers:
         """Test storage_control_mode writes even without Remote Control active."""
         control = StorEdgeControl(mock_service_settings)
 
-        event = StorageControlModeEvent(
+        event = StoredgeControlModeEvent(
             topic="modbus/inverter/storedge_control/storage_control_mode",
-            input=StorageControlModeInput(mode=4),
+            input=StoredgeControlModeInput(mode=4),
         )
         await control.handle_storage_control_mode(event)
 
@@ -197,9 +197,9 @@ class TestStorEdgeControlAlwaysAllowedWriteHandlers:
         """Test storage_ac_charge_policy writes unconditionally."""
         control = StorEdgeControl(mock_service_settings)
 
-        event = StorageAcChargePolicyEvent(
+        event = StoredgeAcChargePolicyEvent(
             topic="modbus/inverter/storedge_control/storage_ac_charge_policy",
-            input=StorageAcChargePolicyInput(policy=1),
+            input=StoredgeAcChargePolicyInput(policy=1),
         )
         await control.handle_storage_ac_charge_policy(event)
 
@@ -216,9 +216,9 @@ class TestStorEdgeControlAlwaysAllowedWriteHandlers:
         """Test storage_ac_charge_limit writes unconditionally."""
         control = StorEdgeControl(mock_service_settings)
 
-        event = StorageAcChargeLimitEvent(
+        event = StoredgeAcChargeLimitEvent(
             topic="modbus/inverter/storedge_control/storage_ac_charge_limit",
-            input=StorageAcChargeLimitInput(limit=2500.0),
+            input=StoredgeAcChargeLimitInput(limit=2500.0),
         )
         await control.handle_storage_ac_charge_limit(event)
 
@@ -235,9 +235,9 @@ class TestStorEdgeControlAlwaysAllowedWriteHandlers:
         """Test storage_backup_reserved_setting writes unconditionally."""
         control = StorEdgeControl(mock_service_settings)
 
-        event = StorageBackupReservedSettingEvent(
+        event = StoredgeBackupReservedSettingEvent(
             topic=("modbus/inverter/storedge_control/storage_backup_reserved_setting"),
-            input=StorageBackupReservedSettingInput(percentage=10.0),
+            input=StoredgeBackupReservedSettingInput(percentage=10.0),
         )
         await control.handle_storage_backup_reserved_setting(event)
 
@@ -259,9 +259,9 @@ class TestStorEdgeControlRemoteControlGatedWriteHandlers:
         """Test the write is rejected when storage_control_mode isn't cached as 4."""
         control = StorEdgeControl(mock_service_settings)
 
-        event = StorageDefaultModeEvent(
+        event = StoredgeDefaultModeEvent(
             topic="modbus/inverter/storedge_control/storage_default_mode",
-            input=StorageDefaultModeInput(mode=0),
+            input=StoredgeDefaultModeInput(mode=0),
         )
         await control.handle_storage_default_mode(event)
 
@@ -275,9 +275,9 @@ class TestStorEdgeControlRemoteControlGatedWriteHandlers:
         control = StorEdgeControl(mock_service_settings)
         control._last_known["leader"] = make_last_known()
 
-        event = StorageDefaultModeEvent(
+        event = StoredgeDefaultModeEvent(
             topic="modbus/inverter/storedge_control/storage_default_mode",
-            input=StorageDefaultModeInput(mode=0),
+            input=StoredgeDefaultModeInput(mode=0),
         )
         await control.handle_storage_default_mode(event)
 
@@ -292,9 +292,9 @@ class TestStorEdgeControlRemoteControlGatedWriteHandlers:
         """Test remote_control_command_timeout is gated behind Remote Control mode."""
         control = StorEdgeControl(mock_service_settings)
 
-        event = RemoteControlCommandTimeoutEvent(
+        event = StoredgeRemoteControlCommandTimeoutEvent(
             topic=("modbus/inverter/storedge_control/remote_control_command_timeout"),
-            input=RemoteControlCommandTimeoutInput(seconds=3600),
+            input=StoredgeRemoteControlCommandTimeoutInput(seconds=3600),
         )
         await control.handle_remote_control_command_timeout(event)
         mock_event_bus.emit.assert_not_called()
@@ -317,9 +317,9 @@ class TestStorEdgeControlRemoteControlGatedWriteHandlers:
         control = StorEdgeControl(mock_service_settings)
         control._last_known["leader"] = make_last_known()
 
-        event = RemoteControlCommandModeEvent(
+        event = StoredgeRemoteControlCommandModeEvent(
             topic=("modbus/inverter/storedge_control/remote_control_command_mode"),
-            input=RemoteControlCommandModeInput(mode=1),
+            input=StoredgeRemoteControlCommandModeInput(mode=1),
         )
         await control.handle_remote_control_command_mode(event)
 
@@ -338,9 +338,9 @@ class TestStorEdgeControlRemoteControlGatedWriteHandlers:
         control = StorEdgeControl(mock_service_settings)
         control._last_known["leader"] = make_last_known(storage_control_mode=1)
 
-        event = RemoteControlChargeLimitEvent(
+        event = StoredgeRemoteControlChargeLimitEvent(
             topic=("modbus/inverter/storedge_control/remote_control_charge_limit"),
-            input=RemoteControlChargeLimitInput(limit=5000.0),
+            input=StoredgeRemoteControlChargeLimitInput(limit=5000.0),
         )
         await control.handle_remote_control_charge_limit(event)
 
@@ -354,9 +354,9 @@ class TestStorEdgeControlRemoteControlGatedWriteHandlers:
         control = StorEdgeControl(mock_service_settings)
         control._last_known["leader"] = make_last_known()
 
-        event = RemoteControlDischargeLimitEvent(
+        event = StoredgeRemoteControlDischargeLimitEvent(
             topic=("modbus/inverter/storedge_control/remote_control_discharge_limit"),
-            input=RemoteControlDischargeLimitInput(limit=5000.0),
+            input=StoredgeRemoteControlDischargeLimitInput(limit=5000.0),
         )
         await control.handle_remote_control_discharge_limit(event)
 
@@ -379,9 +379,9 @@ class TestStorEdgeControlNoopWrites:
         control = StorEdgeControl(mock_service_settings)
         control._last_known["leader"] = make_last_known(storage_control_mode=4)
 
-        event = StorageControlModeEvent(
+        event = StoredgeControlModeEvent(
             topic="modbus/inverter/storedge_control/storage_control_mode",
-            input=StorageControlModeInput(mode=4),
+            input=StoredgeControlModeInput(mode=4),
         )
         await control.handle_storage_control_mode(event)
 
@@ -395,9 +395,9 @@ class TestStorEdgeControlNoopWrites:
         control = StorEdgeControl(mock_service_settings)
         control._last_known["leader"] = make_last_known(storage_control_mode=1)
 
-        event = StorageControlModeEvent(
+        event = StoredgeControlModeEvent(
             topic="modbus/inverter/storedge_control/storage_control_mode",
-            input=StorageControlModeInput(mode=4),
+            input=StoredgeControlModeInput(mode=4),
         )
         await control.handle_storage_control_mode(event)
 
@@ -413,9 +413,9 @@ class TestStorEdgeControlNoopWrites:
             storage_control_mode=1, storage_default_mode=6
         )
 
-        event = StorageDefaultModeEvent(
+        event = StoredgeDefaultModeEvent(
             topic="modbus/inverter/storedge_control/storage_default_mode",
-            input=StorageDefaultModeInput(mode=6),
+            input=StoredgeDefaultModeInput(mode=6),
         )
         await control.handle_storage_default_mode(event)
 
@@ -431,9 +431,9 @@ class TestStorEdgeControlNoopWrites:
             storage_control_mode=4, storage_default_mode=6
         )
 
-        event = StorageDefaultModeEvent(
+        event = StoredgeDefaultModeEvent(
             topic="modbus/inverter/storedge_control/storage_default_mode",
-            input=StorageDefaultModeInput(mode=0),
+            input=StoredgeDefaultModeInput(mode=0),
         )
         await control.handle_storage_default_mode(event)
 
@@ -451,9 +451,9 @@ class TestStorEdgeControlForceWrites:
         control = StorEdgeControl(mock_service_settings)
         control._last_known["leader"] = make_last_known(storage_control_mode=4)
 
-        event = StorageControlModeEvent(
+        event = StoredgeControlModeEvent(
             topic="modbus/inverter/storedge_control/storage_control_mode",
-            input=StorageControlModeInput(mode=4, force=True),
+            input=StoredgeControlModeInput(mode=4, force=True),
         )
         await control.handle_storage_control_mode(event)
 
@@ -471,9 +471,9 @@ class TestStorEdgeControlForceWrites:
             storage_control_mode=4, storage_default_mode=6
         )
 
-        event = StorageDefaultModeEvent(
+        event = StoredgeDefaultModeEvent(
             topic="modbus/inverter/storedge_control/storage_default_mode",
-            input=StorageDefaultModeInput(mode=6, force=True),
+            input=StoredgeDefaultModeInput(mode=6, force=True),
         )
         await control.handle_storage_default_mode(event)
 
@@ -491,9 +491,9 @@ class TestStorEdgeControlForceWrites:
             storage_control_mode=1, storage_default_mode=6
         )
 
-        event = StorageDefaultModeEvent(
+        event = StoredgeDefaultModeEvent(
             topic="modbus/inverter/storedge_control/storage_default_mode",
-            input=StorageDefaultModeInput(mode=6, force=True),
+            input=StoredgeDefaultModeInput(mode=6, force=True),
         )
         await control.handle_storage_default_mode(event)
 
@@ -501,14 +501,16 @@ class TestStorEdgeControlForceWrites:
 
     def test_bare_scalar_payload_still_wraps_with_force_false(self):
         """Test a bare scalar payload keeps working and defaults force to False."""
-        input_model = StorageControlModeInput.model_validate(4)
+        input_model = StoredgeControlModeInput.model_validate(4)
 
         assert input_model.mode == 4
         assert input_model.force is False
 
     def test_json_payload_can_set_force_true(self):
         """Test a JSON object payload can opt into force."""
-        input_model = StorageControlModeInput.model_validate({"mode": 4, "force": True})
+        input_model = StoredgeControlModeInput.model_validate(
+            {"mode": 4, "force": True}
+        )
 
         assert input_model.mode == 4
         assert input_model.force is True
@@ -519,60 +521,60 @@ class TestStorEdgeControlInputValidation:
 
     @pytest.mark.parametrize("value", [0, 4])
     def test_storage_control_mode_valid_bounds(self, value):
-        """Test StorageControlModeInput accepts its documented bounds."""
-        assert StorageControlModeInput(mode=value).mode == value
+        """Test StoredgeControlModeInput accepts its documented bounds."""
+        assert StoredgeControlModeInput(mode=value).mode == value
 
     @pytest.mark.parametrize("value", [-1, 5])
     def test_storage_control_mode_rejects_out_of_range(self, value):
-        """Test StorageControlModeInput rejects out-of-range values."""
+        """Test StoredgeControlModeInput rejects out-of-range values."""
         with pytest.raises(ValidationError):
-            StorageControlModeInput(mode=value)
+            StoredgeControlModeInput(mode=value)
 
     @pytest.mark.parametrize("value", [-1, 4])
     def test_storage_ac_charge_policy_rejects_out_of_range(self, value):
-        """Test StorageAcChargePolicyInput rejects out-of-range values."""
+        """Test StoredgeAcChargePolicyInput rejects out-of-range values."""
         with pytest.raises(ValidationError):
-            StorageAcChargePolicyInput(policy=value)
+            StoredgeAcChargePolicyInput(policy=value)
 
     def test_storage_ac_charge_limit_rejects_negative(self):
-        """Test StorageAcChargeLimitInput rejects negative values."""
+        """Test StoredgeAcChargeLimitInput rejects negative values."""
         with pytest.raises(ValidationError):
-            StorageAcChargeLimitInput(limit=-1.0)
+            StoredgeAcChargeLimitInput(limit=-1.0)
 
     @pytest.mark.parametrize("value", [-1, 101])
     def test_storage_backup_reserved_setting_rejects_out_of_range(self, value):
-        """Test StorageBackupReservedSettingInput rejects out-of-range values."""
+        """Test StoredgeBackupReservedSettingInput rejects out-of-range values."""
         with pytest.raises(ValidationError):
-            StorageBackupReservedSettingInput(percentage=value)
+            StoredgeBackupReservedSettingInput(percentage=value)
 
     @pytest.mark.parametrize("value", [-1, 8])
     def test_storage_default_mode_rejects_out_of_range(self, value):
-        """Test StorageDefaultModeInput rejects out-of-range values."""
+        """Test StoredgeDefaultModeInput rejects out-of-range values."""
         with pytest.raises(ValidationError):
-            StorageDefaultModeInput(mode=value)
+            StoredgeDefaultModeInput(mode=value)
 
     @pytest.mark.parametrize("value", [-1, 86401])
     def test_remote_control_command_timeout_rejects_out_of_range(self, value):
-        """Test RemoteControlCommandTimeoutInput rejects out-of-range values."""
+        """Test StoredgeRemoteControlCommandTimeoutInput rejects out-of-range values."""
         with pytest.raises(ValidationError):
-            RemoteControlCommandTimeoutInput(seconds=value)
+            StoredgeRemoteControlCommandTimeoutInput(seconds=value)
 
     @pytest.mark.parametrize("value", [-1, 8])
     def test_remote_control_command_mode_rejects_out_of_range(self, value):
-        """Test RemoteControlCommandModeInput rejects out-of-range values."""
+        """Test StoredgeRemoteControlCommandModeInput rejects out-of-range values."""
         with pytest.raises(ValidationError):
-            RemoteControlCommandModeInput(mode=value)
+            StoredgeRemoteControlCommandModeInput(mode=value)
 
     def test_remote_control_charge_limit_rejects_negative(self):
-        """Test RemoteControlChargeLimitInput rejects negative values."""
+        """Test StoredgeRemoteControlChargeLimitInput rejects negative values."""
         with pytest.raises(ValidationError):
-            RemoteControlChargeLimitInput(limit=-1.0)
+            StoredgeRemoteControlChargeLimitInput(limit=-1.0)
 
     def test_remote_control_discharge_limit_rejects_negative(self):
-        """Test RemoteControlDischargeLimitInput rejects negative values."""
+        """Test StoredgeRemoteControlDischargeLimitInput rejects negative values."""
         with pytest.raises(ValidationError):
-            RemoteControlDischargeLimitInput(limit=-1.0)
+            StoredgeRemoteControlDischargeLimitInput(limit=-1.0)
 
     def test_scalar_input_wraps_bare_value(self):
         """Test a bare scalar MQTT payload (not a dict) still validates."""
-        assert StorageControlModeInput.model_validate(4).mode == 4
+        assert StoredgeControlModeInput.model_validate(4).mode == 4
