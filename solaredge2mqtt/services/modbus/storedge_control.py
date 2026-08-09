@@ -47,9 +47,9 @@ class StorEdgeControl:
             if self.settings.has_followers
             else ModbusInverter.generate_topic_prefix()
         )
-        self.topic_prefix = (
-            f"{service_settings.mqtt.topic_prefix}/{inverter_topic}/storedge_control"
-        )
+        # The MQTT client prepends its own topic_prefix in _subscribe_topic,
+        # so this must stay relative (no service_settings.mqtt.topic_prefix here).
+        self.topic_prefix = f"{inverter_topic}/storedge_control"
 
         self._storage_control_mode: dict[str, int] = {}
 
