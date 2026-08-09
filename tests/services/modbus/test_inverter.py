@@ -279,3 +279,30 @@ class TestModbusStorEdgeControl:
             "remote_control_charge_limit": "storedge/charge_limit",
             "remote_control_discharge_limit": "storedge/discharge_limit",
         }
+
+    def test_inverter_parse_schema_includes_storedge_control_fields(self):
+        """Regression: ModbusInverter.parse_schema() must walk the Optional
+        storedge_control field without raising. storedge_control is declared
+        as `ModbusStorEdgeControl | None`, so its schema entry is wrapped in
+        an "anyOf" with no top-level "title" key (its own title is set to ""
+        to suppress the "StorEdge Control" name prefix) — a blank string
+        parent title crashed _walk_schema with KeyError('title') before,
+        because it only checked `"title" in prop` indirectly via truthiness
+        of a plain dict access rather than presence. Calling parse_schema on
+        the outer ModbusInverter (not ModbusStorEdgeControl directly)
+        exercises that Optional-wrapping path, unlike the sibling test
+        above.
+        """
+        from solaredge2mqtt.services.homeassistant.service import (
+            HomeAssistantDiscovery,
+        )
+
+        entities = ModbusInverter.parse_schema(HomeAssistantDiscovery.property_parser)
+        names = {
+            entity["path"][-1]: entity["name"]
+            for entity in entities
+            if entity["path"] and entity["path"][0] == "storedge_control"
+        }
+
+        assert names["storage_control_mode"] == "Storage control mode"
+        assert names["storage_ac_charge_policy"] == "AC charge policy"
