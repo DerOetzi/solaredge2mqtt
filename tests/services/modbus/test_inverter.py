@@ -254,3 +254,28 @@ class TestModbusStorEdgeControl:
         assert control.remote_control_command_mode == 0
         assert control.remote_control_charge_limit == pytest.approx(5000.0)
         assert control.remote_control_discharge_limit == pytest.approx(5000.0)
+
+    def test_storedge_control_fields_carry_ha_command_topics(self):
+        """Test each field exposes the short write-topic suffix from Phase 2."""
+        from solaredge2mqtt.services.homeassistant.service import (
+            HomeAssistantDiscovery,
+        )
+
+        entities = ModbusStorEdgeControl.parse_schema(
+            HomeAssistantDiscovery.property_parser
+        )
+        command_topics = {
+            entity["path"][0]: entity["command_topic_override"] for entity in entities
+        }
+
+        assert command_topics == {
+            "storage_control_mode": "storedge/control_mode",
+            "storage_ac_charge_policy": "storedge/ac_charge_policy",
+            "storage_ac_charge_limit": "storedge/ac_charge_limit",
+            "storage_backup_reserved_setting": "storedge/backup_reserved_setting",
+            "storage_default_mode": "storedge/default_mode",
+            "remote_control_command_timeout": "storedge/command_timeout",
+            "remote_control_command_mode": "storedge/command_mode",
+            "remote_control_charge_limit": "storedge/charge_limit",
+            "remote_control_discharge_limit": "storedge/discharge_limit",
+        }

@@ -9,11 +9,20 @@ from solaredge2mqtt.services.homeassistant.models import (
     HomeAssistantDevice,
     HomeAssistantEntity,
     HomeAssistantNumberType,
+    HomeAssistantSelectType,
     HomeAssistantSensorType,
     HomeAssistantStatus,
     HomeAssistantStatusInput,
     HomeAssistantType,
 )
+
+STOREDGE_CONTROL_MODE_OPTIONS = {
+    0: "Disabled",
+    1: "Maximize Self Consumption",
+    2: "Time of Use",
+    3: "Backup Only",
+    4: "Remote Control",
+}
 
 
 class TestHomeAssistantStatus:
@@ -142,16 +151,60 @@ class TestHomeAssistantBinarySensorType:
 class TestHomeAssistantNumberType:
     """Tests for HomeAssistantNumberType enum."""
 
-    def test_ev_charge_level_type(self):
-        """Test EV_CHARGE_LEVEL number type."""
-        number = HomeAssistantNumberType.EV_CHARGE_LEVEL
+    def test_generic_number_type_field_kwargs(self):
+        """Test GENERIC number type applies field() kwargs."""
+        number = HomeAssistantNumberType.GENERIC
 
         assert number.typed == HomeAssistantType.NUMBER
-        assert number.unit_of_measurement == "%"
-        assert number._min == 0
-        assert number._max == 100
-        assert number._step == 100
-        assert number._mode == "slider"
+
+        result = number.field(
+            "Charge level",
+            unit_of_measurement="%",
+            min=0,
+            max=100,
+            step=100,
+            mode="slider",
+        )
+
+        assert result["json_schema_extra"]["min"] == 0
+        assert result["json_schema_extra"]["max"] == 100
+        assert result["json_schema_extra"]["step"] == 100
+        assert result["json_schema_extra"]["mode"] == "slider"
+        assert result["json_schema_extra"]["unit_of_measurement"] == "%"
+
+
+class TestHomeAssistantSelectType:
+    """Tests for HomeAssistantSelectType enum."""
+
+    def test_generic_select_type(self):
+        """Test GENERIC select type properties."""
+        select = HomeAssistantSelectType.GENERIC
+
+        assert select.typed == HomeAssistantType.SELECT
+
+    def test_field_includes_options_map(self):
+        """Test field() injects options + options_map into json_schema_extra."""
+        select = HomeAssistantSelectType.GENERIC
+        options_map = {
+            0: "Disabled",
+            1: "Always Allowed",
+            2: "Fixed Energy Limit",
+            3: "Percent of Production",
+        }
+
+        result = select.field("Storage AC charge policy", options_map=options_map)
+
+        assert result["json_schema_extra"]["options"] == list(options_map.values())
+        assert result["json_schema_extra"]["options_map"] == options_map
+
+    def test_field_without_options_map(self):
+        """Test field() defaults to empty options list without options_map."""
+        select = HomeAssistantSelectType.GENERIC
+
+        result = select.field("Some select")
+
+        assert result["json_schema_extra"]["options"] == []
+        assert result["json_schema_extra"]["options_map"] is None
 
 
 class TestHomeAssistantSensorType:
@@ -533,7 +586,7 @@ class TestHomeAssistantEntity:
             device=device,
             name="Power Limit",
             path=["power_limit"],
-            ha_type=HomeAssistantNumberType.EV_CHARGE_LEVEL,
+            ha_type=HomeAssistantNumberType.GENERIC,
         )
 
         assert entity.command_topic == "solaredge/inverter/power_limit"
@@ -566,10 +619,90 @@ class TestHomeAssistantEntity:
         entity = HomeAssistantEntity(
             device=device,
             name="Power Limit",
-            ha_type=HomeAssistantNumberType.EV_CHARGE_LEVEL,
+            ha_type=HomeAssistantNumberType.GENERIC,
         )
 
         assert entity.command_topic == "solaredge/inverter"
+
+    def test_entity_command_topic_uses_override(self):
+        """Test command_topic prefers command_topic_override over the schema path."""
+        device = HomeAssistantDevice(
+            client_id="test_client",
+            name="Test Device",
+            state_topic="solaredge/modbus/inverter",
+        )
+
+        entity = HomeAssistantEntity(
+            device=device,
+            name="Storage control mode",
+            path=["storedge_control", "storage_control_mode"],
+            ha_type=HomeAssistantSelectType.GENERIC,
+            options_map=STOREDGE_CONTROL_MODE_OPTIONS,
+            command_topic_override="storedge/control_mode",
+        )
+
+        assert entity.command_topic == "solaredge/modbus/inverter/storedge/control_mode"
+
+    def test_entity_value_template_select_maps_int_to_label(self):
+        """Test value_template wraps the path in a dict lookup for select types."""
+        device = HomeAssistantDevice(
+            client_id="test_client",
+            name="Test Device",
+            state_topic="solaredge/modbus/inverter",
+        )
+
+        entity = HomeAssistantEntity(
+            device=device,
+            name="Storage control mode",
+            path=["storedge_control", "storage_control_mode"],
+            ha_type=HomeAssistantSelectType.GENERIC,
+            options_map=STOREDGE_CONTROL_MODE_OPTIONS,
+        )
+
+        template = entity.value_template
+
+        assert template is not None
+        assert "value_json.storedge_control.storage_control_mode" in template
+        assert "'Remote Control'" in template
+
+    def test_entity_command_template_for_select(self):
+        """Test command_template reverses the options map for select types."""
+        device = HomeAssistantDevice(
+            client_id="test_client",
+            name="Test Device",
+            state_topic="solaredge/modbus/inverter",
+        )
+
+        entity = HomeAssistantEntity(
+            device=device,
+            name="Storage control mode",
+            path=["storedge_control", "storage_control_mode"],
+            ha_type=HomeAssistantSelectType.GENERIC,
+            options_map=STOREDGE_CONTROL_MODE_OPTIONS,
+        )
+
+        template = entity.command_template
+
+        assert template is not None
+        assert "'Remote Control': 4" in template
+        assert "[value]" in template
+
+    def test_entity_command_template_none_for_non_select(self):
+        """Test command_template is None for non-select entity types."""
+        device = HomeAssistantDevice(
+            client_id="test_client",
+            name="Test Device",
+            state_topic="solaredge/inverter",
+        )
+
+        entity = HomeAssistantEntity(
+            device=device,
+            name="Power",
+            path=["power"],
+            ha_type=HomeAssistantSensorType.POWER_W,
+        )
+
+        assert entity.command_template is None
 
     def test_entity_model_dump_json(self):
         """Test model_dump_json includes additional fields."""
@@ -583,7 +716,7 @@ class TestHomeAssistantEntity:
             device=device,
             name="Power Limit",
             path=["power_limit"],
-            ha_type=HomeAssistantNumberType.EV_CHARGE_LEVEL,
+            ha_type=HomeAssistantNumberType.GENERIC,
             min=0,
             max=100,
             step=1,
