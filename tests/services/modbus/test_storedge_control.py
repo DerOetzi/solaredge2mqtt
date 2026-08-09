@@ -440,6 +440,80 @@ class TestStorEdgeControlNoopWrites:
         mock_event_bus.emit.assert_called_once()
 
 
+class TestStorEdgeControlForceWrites:
+    """Tests for the force flag bypassing no-op write skipping."""
+
+    @pytest.mark.asyncio
+    async def test_always_allowed_field_force_writes_despite_unchanged_value(
+        self, mock_service_settings, mock_event_bus
+    ):
+        """Test force=True re-sends an always-allowed field even if unchanged."""
+        control = StorEdgeControl(mock_service_settings)
+        control._last_known["leader"] = make_last_known(storage_control_mode=4)
+
+        event = StorageControlModeEvent(
+            topic="modbus/inverter/storedge_control/storage_control_mode",
+            input=StorageControlModeInput(mode=4, force=True),
+        )
+        await control.handle_storage_control_mode(event)
+
+        written = mock_event_bus.emit.call_args_list[0][0][0]
+        assert written.register == SunSpecStorEdgeControlRegister.STORAGE_CONTROL_MODE
+        assert written.payload == 4
+
+    @pytest.mark.asyncio
+    async def test_gated_field_force_writes_despite_unchanged_value(
+        self, mock_service_settings, mock_event_bus
+    ):
+        """Test force=True re-sends a gated field once Remote Control is active."""
+        control = StorEdgeControl(mock_service_settings)
+        control._last_known["leader"] = make_last_known(
+            storage_control_mode=4, storage_default_mode=6
+        )
+
+        event = StorageDefaultModeEvent(
+            topic="modbus/inverter/storedge_control/storage_default_mode",
+            input=StorageDefaultModeInput(mode=6, force=True),
+        )
+        await control.handle_storage_default_mode(event)
+
+        written = mock_event_bus.emit.call_args_list[0][0][0]
+        assert written.register == SunSpecStorEdgeControlRegister.STORAGE_DEFAULT_MODE
+        assert written.payload == 6
+
+    @pytest.mark.asyncio
+    async def test_force_does_not_bypass_remote_control_gate(
+        self, mock_service_settings, mock_event_bus
+    ):
+        """Test force=True still respects the Remote Control gate."""
+        control = StorEdgeControl(mock_service_settings)
+        control._last_known["leader"] = make_last_known(
+            storage_control_mode=1, storage_default_mode=6
+        )
+
+        event = StorageDefaultModeEvent(
+            topic="modbus/inverter/storedge_control/storage_default_mode",
+            input=StorageDefaultModeInput(mode=6, force=True),
+        )
+        await control.handle_storage_default_mode(event)
+
+        mock_event_bus.emit.assert_not_called()
+
+    def test_bare_scalar_payload_still_wraps_with_force_false(self):
+        """Test a bare scalar payload keeps working and defaults force to False."""
+        input_model = StorageControlModeInput.model_validate(4)
+
+        assert input_model.mode == 4
+        assert input_model.force is False
+
+    def test_json_payload_can_set_force_true(self):
+        """Test a JSON object payload can opt into force."""
+        input_model = StorageControlModeInput.model_validate({"mode": 4, "force": True})
+
+        assert input_model.mode == 4
+        assert input_model.force is True
+
+
 class TestStorEdgeControlInputValidation:
     """Tests for the input model validation ranges."""
 

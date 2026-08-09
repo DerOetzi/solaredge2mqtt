@@ -130,8 +130,9 @@ class StorEdgeControl:
         value: int | float,
         field_name: str,
         unit_key: str = DEFAULT_UNIT_KEY,
+        force: bool = False,
     ) -> None:
-        if self._is_noop_write(field_name, value, unit_key):
+        if not force and self._is_noop_write(field_name, value, unit_key):
             logger.debug(
                 "Skipping StorEdge control {field}: {value} already active "
                 "on unit {unit_key}",
@@ -155,8 +156,9 @@ class StorEdgeControl:
         value: int | float,
         field_name: str,
         unit_key: str = DEFAULT_UNIT_KEY,
+        force: bool = False,
     ) -> None:
-        if self._is_noop_write(field_name, value, unit_key):
+        if not force and self._is_noop_write(field_name, value, unit_key):
             logger.debug(
                 "Skipping StorEdge control {field}: {value} already active "
                 "on unit {unit_key}",
@@ -176,7 +178,7 @@ class StorEdgeControl:
             )
             return
 
-        await self._write(register, value, field_name, unit_key)
+        await self._write(register, value, field_name, unit_key, force=force)
 
     @EventBus.subscribe(StorageControlModeEvent)
     async def handle_storage_control_mode(self, event: StorageControlModeEvent) -> None:
@@ -184,6 +186,7 @@ class StorEdgeControl:
             SunSpecStorEdgeControlRegister.STORAGE_CONTROL_MODE,
             event.input.mode,
             "storage_control_mode",
+            force=event.input.force,
         )
 
     @EventBus.subscribe(StorageAcChargePolicyEvent)
@@ -194,6 +197,7 @@ class StorEdgeControl:
             SunSpecStorEdgeControlRegister.STORAGE_AC_CHARGE_POLICY,
             event.input.policy,
             "storage_ac_charge_policy",
+            force=event.input.force,
         )
 
     @EventBus.subscribe(StorageAcChargeLimitEvent)
@@ -204,6 +208,7 @@ class StorEdgeControl:
             SunSpecStorEdgeControlRegister.STORAGE_AC_CHARGE_LIMIT,
             event.input.limit,
             "storage_ac_charge_limit",
+            force=event.input.force,
         )
 
     @EventBus.subscribe(StorageBackupReservedSettingEvent)
@@ -214,6 +219,7 @@ class StorEdgeControl:
             SunSpecStorEdgeControlRegister.STORAGE_BACKUP_RESERVED_SETTING,
             event.input.percentage,
             "storage_backup_reserved_setting",
+            force=event.input.force,
         )
 
     @EventBus.subscribe(StorageDefaultModeEvent)
@@ -222,6 +228,7 @@ class StorEdgeControl:
             SunSpecStorEdgeControlRegister.STORAGE_DEFAULT_MODE,
             event.input.mode,
             "storage_default_mode",
+            force=event.input.force,
         )
 
     @EventBus.subscribe(RemoteControlCommandTimeoutEvent)
@@ -232,6 +239,7 @@ class StorEdgeControl:
             SunSpecStorEdgeControlRegister.REMOTE_CONTROL_COMMAND_TIMEOUT,
             event.input.seconds,
             "remote_control_command_timeout",
+            force=event.input.force,
         )
 
     @EventBus.subscribe(RemoteControlCommandModeEvent)
@@ -242,6 +250,7 @@ class StorEdgeControl:
             SunSpecStorEdgeControlRegister.REMOTE_CONTROL_COMMAND_MODE,
             event.input.mode,
             "remote_control_command_mode",
+            force=event.input.force,
         )
 
     @EventBus.subscribe(RemoteControlChargeLimitEvent)
@@ -252,6 +261,7 @@ class StorEdgeControl:
             SunSpecStorEdgeControlRegister.REMOTE_CONTROL_CHARGE_LIMIT,
             event.input.limit,
             "remote_control_charge_limit",
+            force=event.input.force,
         )
 
     @EventBus.subscribe(RemoteControlDischargeLimitEvent)
@@ -262,4 +272,5 @@ class StorEdgeControl:
             SunSpecStorEdgeControlRegister.REMOTE_CONTROL_DISCHARGE_LIMIT,
             event.input.limit,
             "remote_control_discharge_limit",
+            force=event.input.force,
         )
