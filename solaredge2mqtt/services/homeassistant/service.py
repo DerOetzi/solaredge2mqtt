@@ -23,6 +23,7 @@ from solaredge2mqtt.services.homeassistant.models import (
     HomeAssistantDevice,
     HomeAssistantEntity,
     HomeAssistantNumberType,
+    HomeAssistantSelectType,
     HomeAssistantSensorType,
     HomeAssistantStatus,
     HomeAssistantType,
@@ -147,6 +148,12 @@ class HomeAssistantDiscovery:
                 ):
                     continue
 
+                if (
+                    not self.settings.modbus.storedge_control_enabled
+                    and path[0] == "storedge_control"
+                ):
+                    continue
+
             if (
                 self.settings.prices.is_configured
                 and entity_info["ha_type"] == HomeAssistantSensorType.MONETARY
@@ -226,10 +233,24 @@ class HomeAssistantDiscovery:
                 entity["ha_type"] = HomeAssistantBinarySensorType.from_string(ha_type)
             elif typed == HomeAssistantType.NUMBER:
                 entity["ha_type"] = HomeAssistantNumberType.from_string(ha_type)
+            elif typed == HomeAssistantType.SELECT:
+                entity["ha_type"] = HomeAssistantSelectType.from_string(ha_type)
             elif typed == HomeAssistantType.SENSOR:
                 entity["ha_type"] = HomeAssistantSensorType.from_string(ha_type)
 
             for field in typed.additional_fields:
                 entity[field] = prop.get(field, None)
+
+            if "command_topic" in prop:
+                entity["command_topic_override"] = prop["command_topic"]
+
+            if "options_map" in prop:
+                entity["options_map"] = prop["options_map"]
+
+            if "unit_of_measurement" in prop:
+                entity["unit"] = prop["unit_of_measurement"]
+
+            if "device_class" in prop:
+                entity["device_class_override"] = prop["device_class"]
 
         return entity
