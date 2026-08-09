@@ -42,17 +42,17 @@ class StoredgeDefaultModeInput(ForceableScalarInput):
     mode: int = Field(ge=0, le=7)
 
 
-class StoredgeRemoteControlCommandTimeoutInput(ForceableScalarInput):
+class StoredgeCommandTimeoutInput(ForceableScalarInput):
     seconds: int = Field(ge=0, le=86400)
 
 
-class StoredgeRemoteControlCommandModeInput(ForceableScalarInput):
+class StoredgeCommandModeInput(ForceableScalarInput):
     mode: int = Field(ge=0, le=7)
 
 
-class StoredgeRemoteControlChargeLimitInput(ForceableScalarInput):
+class StoredgeChargeLimitInput(ForceableScalarInput):
     limit: float = Field(ge=0)
 
 
-class StoredgeRemoteControlDischargeLimitInput(ForceableScalarInput):
+class StoredgeDischargeLimitInput(ForceableScalarInput):
     limit: float = Field(ge=0)

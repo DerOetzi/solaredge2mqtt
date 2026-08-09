@@ -11,23 +11,23 @@ from solaredge2mqtt.services.modbus.storedge_control_events import (
     StoredgeAcChargeLimitEvent,
     StoredgeAcChargePolicyEvent,
     StoredgeBackupReservedSettingEvent,
+    StoredgeChargeLimitEvent,
+    StoredgeCommandModeEvent,
+    StoredgeCommandTimeoutEvent,
     StoredgeControlModeEvent,
     StoredgeDefaultModeEvent,
-    StoredgeRemoteControlChargeLimitEvent,
-    StoredgeRemoteControlCommandModeEvent,
-    StoredgeRemoteControlCommandTimeoutEvent,
-    StoredgeRemoteControlDischargeLimitEvent,
+    StoredgeDischargeLimitEvent,
 )
 from solaredge2mqtt.services.modbus.storedge_control_inputs import (
     StoredgeAcChargeLimitInput,
     StoredgeAcChargePolicyInput,
     StoredgeBackupReservedSettingInput,
+    StoredgeChargeLimitInput,
+    StoredgeCommandModeInput,
+    StoredgeCommandTimeoutInput,
     StoredgeControlModeInput,
     StoredgeDefaultModeInput,
-    StoredgeRemoteControlChargeLimitInput,
-    StoredgeRemoteControlCommandModeInput,
-    StoredgeRemoteControlCommandTimeoutInput,
-    StoredgeRemoteControlDischargeLimitInput,
+    StoredgeDischargeLimitInput,
 )
 from solaredge2mqtt.services.modbus.sunspec.inverter import (
     SunSpecStorEdgeControlRegister,
@@ -110,10 +110,10 @@ class TestStorEdgeControlAsyncInit:
             "modbus/inverter/storedge_control/ac_charge_limit",
             "modbus/inverter/storedge_control/backup_reserved_setting",
             "modbus/inverter/storedge_control/default_mode",
-            "modbus/inverter/storedge_control/remote_control_command_timeout",
-            "modbus/inverter/storedge_control/remote_control_command_mode",
-            "modbus/inverter/storedge_control/remote_control_charge_limit",
-            "modbus/inverter/storedge_control/remote_control_discharge_limit",
+            "modbus/inverter/storedge_control/command_timeout",
+            "modbus/inverter/storedge_control/command_mode",
+            "modbus/inverter/storedge_control/charge_limit",
+            "modbus/inverter/storedge_control/discharge_limit",
         }
 
     @pytest.mark.asyncio
@@ -286,21 +286,21 @@ class TestStorEdgeControlRemoteControlGatedWriteHandlers:
         assert written.payload == 0
 
     @pytest.mark.asyncio
-    async def test_handle_remote_control_command_timeout_gated(
+    async def test_handle_command_timeout_gated(
         self, mock_service_settings, mock_event_bus
     ):
         """Test remote_control_command_timeout is gated behind Remote Control mode."""
         control = StorEdgeControl(mock_service_settings)
 
-        event = StoredgeRemoteControlCommandTimeoutEvent(
-            topic=("modbus/inverter/storedge_control/remote_control_command_timeout"),
-            input=StoredgeRemoteControlCommandTimeoutInput(seconds=3600),
+        event = StoredgeCommandTimeoutEvent(
+            topic=("modbus/inverter/storedge_control/command_timeout"),
+            input=StoredgeCommandTimeoutInput(seconds=3600),
         )
-        await control.handle_remote_control_command_timeout(event)
+        await control.handle_command_timeout(event)
         mock_event_bus.emit.assert_not_called()
 
         control._last_known["leader"] = make_last_known()
-        await control.handle_remote_control_command_timeout(event)
+        await control.handle_command_timeout(event)
 
         written = mock_event_bus.emit.call_args_list[0][0][0]
         assert (
@@ -310,18 +310,18 @@ class TestStorEdgeControlRemoteControlGatedWriteHandlers:
         assert written.payload == 3600
 
     @pytest.mark.asyncio
-    async def test_handle_remote_control_command_mode_gated(
+    async def test_handle_command_mode_gated(
         self, mock_service_settings, mock_event_bus
     ):
         """Test remote_control_command_mode is gated behind Remote Control mode."""
         control = StorEdgeControl(mock_service_settings)
         control._last_known["leader"] = make_last_known()
 
-        event = StoredgeRemoteControlCommandModeEvent(
-            topic=("modbus/inverter/storedge_control/remote_control_command_mode"),
-            input=StoredgeRemoteControlCommandModeInput(mode=1),
+        event = StoredgeCommandModeEvent(
+            topic=("modbus/inverter/storedge_control/command_mode"),
+            input=StoredgeCommandModeInput(mode=1),
         )
-        await control.handle_remote_control_command_mode(event)
+        await control.handle_command_mode(event)
 
         written = mock_event_bus.emit.call_args_list[0][0][0]
         assert (
@@ -331,34 +331,34 @@ class TestStorEdgeControlRemoteControlGatedWriteHandlers:
         assert written.payload == 1
 
     @pytest.mark.asyncio
-    async def test_handle_remote_control_charge_limit_gated(
+    async def test_handle_charge_limit_gated(
         self, mock_service_settings, mock_event_bus
     ):
         """Test remote_control_charge_limit is rejected when mode isn't 4."""
         control = StorEdgeControl(mock_service_settings)
         control._last_known["leader"] = make_last_known(storage_control_mode=1)
 
-        event = StoredgeRemoteControlChargeLimitEvent(
-            topic=("modbus/inverter/storedge_control/remote_control_charge_limit"),
-            input=StoredgeRemoteControlChargeLimitInput(limit=5000.0),
+        event = StoredgeChargeLimitEvent(
+            topic=("modbus/inverter/storedge_control/charge_limit"),
+            input=StoredgeChargeLimitInput(limit=5000.0),
         )
-        await control.handle_remote_control_charge_limit(event)
+        await control.handle_charge_limit(event)
 
         mock_event_bus.emit.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_handle_remote_control_discharge_limit_writes_when_active(
+    async def test_handle_discharge_limit_writes_when_active(
         self, mock_service_settings, mock_event_bus
     ):
         """Test remote_control_discharge_limit writes once mode is 4."""
         control = StorEdgeControl(mock_service_settings)
         control._last_known["leader"] = make_last_known()
 
-        event = StoredgeRemoteControlDischargeLimitEvent(
-            topic=("modbus/inverter/storedge_control/remote_control_discharge_limit"),
-            input=StoredgeRemoteControlDischargeLimitInput(limit=5000.0),
+        event = StoredgeDischargeLimitEvent(
+            topic=("modbus/inverter/storedge_control/discharge_limit"),
+            input=StoredgeDischargeLimitInput(limit=5000.0),
         )
-        await control.handle_remote_control_discharge_limit(event)
+        await control.handle_discharge_limit(event)
 
         written = mock_event_bus.emit.call_args_list[0][0][0]
         assert (
@@ -554,26 +554,26 @@ class TestStorEdgeControlInputValidation:
             StoredgeDefaultModeInput(mode=value)
 
     @pytest.mark.parametrize("value", [-1, 86401])
-    def test_remote_control_command_timeout_rejects_out_of_range(self, value):
-        """Test StoredgeRemoteControlCommandTimeoutInput rejects out-of-range values."""
+    def test_command_timeout_rejects_out_of_range(self, value):
+        """Test StoredgeCommandTimeoutInput rejects out-of-range values."""
         with pytest.raises(ValidationError):
-            StoredgeRemoteControlCommandTimeoutInput(seconds=value)
+            StoredgeCommandTimeoutInput(seconds=value)
 
     @pytest.mark.parametrize("value", [-1, 8])
-    def test_remote_control_command_mode_rejects_out_of_range(self, value):
-        """Test StoredgeRemoteControlCommandModeInput rejects out-of-range values."""
+    def test_command_mode_rejects_out_of_range(self, value):
+        """Test StoredgeCommandModeInput rejects out-of-range values."""
         with pytest.raises(ValidationError):
-            StoredgeRemoteControlCommandModeInput(mode=value)
+            StoredgeCommandModeInput(mode=value)
 
-    def test_remote_control_charge_limit_rejects_negative(self):
-        """Test StoredgeRemoteControlChargeLimitInput rejects negative values."""
+    def test_charge_limit_rejects_negative(self):
+        """Test StoredgeChargeLimitInput rejects negative values."""
         with pytest.raises(ValidationError):
-            StoredgeRemoteControlChargeLimitInput(limit=-1.0)
+            StoredgeChargeLimitInput(limit=-1.0)
 
-    def test_remote_control_discharge_limit_rejects_negative(self):
-        """Test StoredgeRemoteControlDischargeLimitInput rejects negative values."""
+    def test_discharge_limit_rejects_negative(self):
+        """Test StoredgeDischargeLimitInput rejects negative values."""
         with pytest.raises(ValidationError):
-            StoredgeRemoteControlDischargeLimitInput(limit=-1.0)
+            StoredgeDischargeLimitInput(limit=-1.0)
 
     def test_scalar_input_wraps_bare_value(self):
         """Test a bare scalar MQTT payload (not a dict) still validates."""

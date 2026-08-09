@@ -3,12 +3,12 @@ from solaredge2mqtt.services.modbus.storedge_control_inputs import (
     StoredgeAcChargeLimitInput,
     StoredgeAcChargePolicyInput,
     StoredgeBackupReservedSettingInput,
+    StoredgeChargeLimitInput,
+    StoredgeCommandModeInput,
+    StoredgeCommandTimeoutInput,
     StoredgeControlModeInput,
     StoredgeDefaultModeInput,
-    StoredgeRemoteControlChargeLimitInput,
-    StoredgeRemoteControlCommandModeInput,
-    StoredgeRemoteControlCommandTimeoutInput,
-    StoredgeRemoteControlDischargeLimitInput,
+    StoredgeDischargeLimitInput,
 )
 
 
@@ -62,41 +62,41 @@ class StoredgeDefaultModeSubscribeEvent(
 ): ...  # pragma: no cover
 
 
-class StoredgeRemoteControlCommandTimeoutEvent(
-    MQTTReceivedEvent[StoredgeRemoteControlCommandTimeoutInput]
+class StoredgeCommandTimeoutEvent(
+    MQTTReceivedEvent[StoredgeCommandTimeoutInput]
 ): ...  # pragma: no cover
 
 
-class StoredgeRemoteControlCommandTimeoutSubscribeEvent(
-    MQTTSubscribeEvent[StoredgeRemoteControlCommandTimeoutEvent]
+class StoredgeCommandTimeoutSubscribeEvent(
+    MQTTSubscribeEvent[StoredgeCommandTimeoutEvent]
 ): ...  # pragma: no cover
 
 
-class StoredgeRemoteControlCommandModeEvent(
-    MQTTReceivedEvent[StoredgeRemoteControlCommandModeInput]
+class StoredgeCommandModeEvent(
+    MQTTReceivedEvent[StoredgeCommandModeInput]
 ): ...  # pragma: no cover
 
 
-class StoredgeRemoteControlCommandModeSubscribeEvent(
-    MQTTSubscribeEvent[StoredgeRemoteControlCommandModeEvent]
+class StoredgeCommandModeSubscribeEvent(
+    MQTTSubscribeEvent[StoredgeCommandModeEvent]
 ): ...  # pragma: no cover
 
 
-class StoredgeRemoteControlChargeLimitEvent(
-    MQTTReceivedEvent[StoredgeRemoteControlChargeLimitInput]
+class StoredgeChargeLimitEvent(
+    MQTTReceivedEvent[StoredgeChargeLimitInput]
 ): ...  # pragma: no cover
 
 
-class StoredgeRemoteControlChargeLimitSubscribeEvent(
-    MQTTSubscribeEvent[StoredgeRemoteControlChargeLimitEvent]
+class StoredgeChargeLimitSubscribeEvent(
+    MQTTSubscribeEvent[StoredgeChargeLimitEvent]
 ): ...  # pragma: no cover
 
 
-class StoredgeRemoteControlDischargeLimitEvent(
-    MQTTReceivedEvent[StoredgeRemoteControlDischargeLimitInput]
+class StoredgeDischargeLimitEvent(
+    MQTTReceivedEvent[StoredgeDischargeLimitInput]
 ): ...  # pragma: no cover
 
 
-class StoredgeRemoteControlDischargeLimitSubscribeEvent(
-    MQTTSubscribeEvent[StoredgeRemoteControlDischargeLimitEvent]
+class StoredgeDischargeLimitSubscribeEvent(
+    MQTTSubscribeEvent[StoredgeDischargeLimitEvent]
 ): ...  # pragma: no cover
