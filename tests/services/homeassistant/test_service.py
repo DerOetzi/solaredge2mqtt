@@ -13,6 +13,7 @@ from solaredge2mqtt.services.homeassistant.events import HomeAssistantStatusEven
 from solaredge2mqtt.services.homeassistant.models import (
     HomeAssistantBinarySensorType,
     HomeAssistantNumberType,
+    HomeAssistantSelectType,
     HomeAssistantSensorType,
     HomeAssistantStatus,
     HomeAssistantStatusInput,
@@ -43,6 +44,7 @@ def mock_service_settings():
     settings.modbus = MagicMock()
     settings.modbus.has_followers = False
     settings.modbus.check_grid_status = True
+    settings.modbus.storedge_control_enabled = True
 
     settings.is_prices_configured = False
     settings.prices = MagicMock()
@@ -178,7 +180,7 @@ class TestHomeAssistantDiscoveryPropertyParser:
     def test_property_parser_number_type(self):
         """Test property_parser with number type."""
         prop = {
-            "ha_type": "charge_level",
+            "ha_type": "number",
             "ha_typed": "number",
             "icon": "mdi:gauge",
         }
@@ -187,6 +189,53 @@ class TestHomeAssistantDiscoveryPropertyParser:
 
         assert result is not None
         assert isinstance(result["ha_type"], HomeAssistantNumberType)
+
+    def test_property_parser_select_type(self):
+        """Test property_parser with select type."""
+        prop = {
+            "ha_type": "select",
+            "ha_typed": "select",
+            "icon": None,
+            "options": ["Disabled", "Remote Control"],
+        }
+
+        result = HomeAssistantDiscovery.property_parser(
+            prop, "Storage control mode", ["storedge_control", "storage_control_mode"]
+        )
+
+        assert result is not None
+        assert isinstance(result["ha_type"], HomeAssistantSelectType)
+        assert result["options"] == ["Disabled", "Remote Control"]
+
+    def test_property_parser_picks_up_command_topic_override(self):
+        """Test property_parser carries a command_topic override into entity_info."""
+        prop = {
+            "ha_type": "select",
+            "ha_typed": "select",
+            "icon": None,
+            "options": ["Disabled", "Remote Control"],
+            "command_topic": "storedge/control_mode",
+        }
+
+        result = HomeAssistantDiscovery.property_parser(
+            prop, "Storage control mode", ["storedge_control", "storage_control_mode"]
+        )
+
+        assert result is not None
+        assert result["command_topic_override"] == "storedge/control_mode"
+
+    def test_property_parser_without_command_topic_override(self):
+        """Test property_parser omits command_topic_override when not present."""
+        prop = {
+            "ha_type": "power_w",
+            "ha_typed": "sensor",
+            "icon": None,
+        }
+
+        result = HomeAssistantDiscovery.property_parser(prop, "Power", ["power"])
+
+        assert result is not None
+        assert "command_topic_override" not in result
 
 
 class TestHomeAssistantDiscoveryComponentDiscovery:
@@ -500,6 +549,101 @@ class TestHomeAssistantDiscoveryPublishComponent:
         assert mock_event_bus.emit.call_count >= 1
 
     @pytest.mark.asyncio
+    async def test_publish_component_filters_storedge_control_when_disabled(
+        self, mock_service_settings, mock_event_bus
+    ):
+        """Test publish_component skips storedge_control fields when disabled."""
+        from solaredge2mqtt.services.modbus.models.inverter import (
+            ModbusInverter,
+        )
+
+        mock_service_settings.modbus.storedge_control_enabled = False
+
+        discovery = HomeAssistantDiscovery(mock_service_settings)
+
+        mock_inverter = MagicMock(spec=ModbusInverter)
+        mock_inverter.mqtt_topic.return_value = "modbus/inverter"
+        mock_inverter.parse_schema.return_value = [
+            {
+                "name": "Storage control mode",
+                "path": ["storedge_control", "storage_control_mode"],
+                "icon": None,
+                "ha_type": HomeAssistantSelectType.GENERIC,
+                "options": [
+                    "Disabled",
+                    "Maximize Self Consumption",
+                    "Time of Use",
+                    "Backup Only",
+                    "Remote Control",
+                ],
+                "command_topic_override": "storedge/control_mode",
+            },
+            {
+                "name": "Power",
+                "path": ["power"],
+                "icon": "mdi:lightning-bolt",
+                "ha_type": HomeAssistantSensorType.POWER_W,
+            },
+        ]
+
+        device_info = {"name": "Inverter"}
+        state_topic = "solaredge/modbus/inverter"
+
+        await discovery.publish_component(mock_inverter, device_info, state_topic)
+
+        published_names = [
+            call.args[0].payload.name
+            for call in mock_event_bus.emit.call_args_list
+            if call.args and hasattr(call.args[0], "payload")
+        ]
+        assert "Storage control mode" not in published_names
+        assert "Power" in published_names
+
+    @pytest.mark.asyncio
+    async def test_publish_component_includes_storedge_control_when_enabled(
+        self, mock_service_settings, mock_event_bus
+    ):
+        """Test publish_component includes storedge_control fields when enabled."""
+        from solaredge2mqtt.services.modbus.models.inverter import (
+            ModbusInverter,
+        )
+
+        mock_service_settings.modbus.storedge_control_enabled = True
+
+        discovery = HomeAssistantDiscovery(mock_service_settings)
+
+        mock_inverter = MagicMock(spec=ModbusInverter)
+        mock_inverter.mqtt_topic.return_value = "modbus/inverter"
+        mock_inverter.parse_schema.return_value = [
+            {
+                "name": "Storage control mode",
+                "path": ["storedge_control", "storage_control_mode"],
+                "icon": None,
+                "ha_type": HomeAssistantSelectType.GENERIC,
+                "options": [
+                    "Disabled",
+                    "Maximize Self Consumption",
+                    "Time of Use",
+                    "Backup Only",
+                    "Remote Control",
+                ],
+                "command_topic_override": "storedge/control_mode",
+            },
+        ]
+
+        device_info = {"name": "Inverter"}
+        state_topic = "solaredge/modbus/inverter"
+
+        await discovery.publish_component(mock_inverter, device_info, state_topic)
+
+        published_names = [
+            call.args[0].payload.name
+            for call in mock_event_bus.emit.call_args_list
+            if call.args and hasattr(call.args[0], "payload")
+        ]
+        assert "Storage control mode" in published_names
+
+    @pytest.mark.asyncio
     async def test_publish_component_with_monetary_type(
         self, mock_service_settings, mock_event_bus
     ):
@@ -536,7 +680,7 @@ class TestHomeAssistantPropertyParserAdditionalFields:
     def test_property_parser_number_type_with_additional_fields(self):
         """Test property_parser with number type and additional fields."""
         prop = {
-            "ha_type": "charge_level",
+            "ha_type": "number",
             "ha_typed": "number",
             "icon": "mdi:gauge",
             "min": 0,

@@ -252,6 +252,15 @@ The write topic suffixes are shorter than the read-back field names — the `sto
 
 If a published value already matches the last value read back from the inverter, the write is skipped — these registers don't need to be exercised more than necessary. To force a write anyway (e.g. if the cached value might be stale), publish a JSON object with `"force": true`, e.g. `{"mode": 4, "force": true}`. Force only bypasses this no-op check — it does not bypass the Remote Control gate above.
 
+**Home Assistant entities**
+
+When Home Assistant auto discovery is enabled (and `storedge_control_enabled: true`), all nine fields are also created as native HA entities on the inverter device:
+
+- **Select** entities for `control_mode`, `ac_charge_policy`, `default_mode`, and `command_mode` — the dropdown shows SolarEdge's own mode names (e.g. "Remote Control", "Maximize Self Consumption"); HA translates the selected label to the numeric value before publishing.
+- **Number** entities for `ac_charge_limit`, `backup_reserved_setting`, `command_timeout`, `charge_limit`, and `discharge_limit`.
+
+Each entity's command topic matches the write topics documented above, so changing a value in the HA UI is equivalent to publishing to MQTT directly. The five Remote-Control-gated fields are labeled accordingly in their entity name.
+
 ### Leader/follower setup
 
 SolarEdge inverters support a cascading setup, where one inverter acts as the leader and up to ten others act as followers.
