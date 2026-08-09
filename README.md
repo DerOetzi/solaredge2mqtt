@@ -248,6 +248,8 @@ Payloads are a bare value or a JSON object, e.g. publishing `4` or `{"mode": 4}`
 
 `storage_control_mode`, `storage_ac_charge_policy`, `storage_ac_charge_limit`, and `storage_backup_reserved_setting` always take effect. The remaining five only take effect once `storage_control_mode` is `4` (Remote Control) — writing to them otherwise is rejected and logged, since SolarEdge ignores them outside Remote Control mode.
 
+If a published value already matches the last value read back from the inverter, the write is skipped — these registers don't need to be exercised more than necessary.
+
 ### Leader/follower setup
 
 SolarEdge inverters support a cascading setup, where one inverter acts as the leader and up to ten others act as followers.

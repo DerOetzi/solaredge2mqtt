@@ -6,7 +6,10 @@ from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.services.modbus.events import ModbusUnitsReadEvent, ModbusWriteEvent
 from solaredge2mqtt.services.modbus.models.base import ModbusUnitRole
-from solaredge2mqtt.services.modbus.models.inverter import ModbusInverter
+from solaredge2mqtt.services.modbus.models.inverter import (
+    ModbusInverter,
+    ModbusStorEdgeControl,
+)
 from solaredge2mqtt.services.modbus.storedge_control_events import (
     RemoteControlChargeLimitEvent,
     RemoteControlChargeLimitSubscribeEvent,
@@ -51,7 +54,7 @@ class StorEdgeControl:
         # so this must stay relative (no service_settings.mqtt.topic_prefix here).
         self.topic_prefix = f"{inverter_topic}/storedge_control"
 
-        self._storage_control_mode: dict[str, int] = {}
+        self._last_known: dict[str, ModbusStorEdgeControl] = {}
 
         EventBus.register(self)
 
@@ -106,15 +109,20 @@ class StorEdgeControl:
         )
 
     @EventBus.subscribe(ModbusUnitsReadEvent)
-    async def cache_storage_control_mode(self, event: ModbusUnitsReadEvent) -> None:
+    async def cache_storedge_control(self, event: ModbusUnitsReadEvent) -> None:
         for unit_key, unit in event.units.items():
             if unit.inverter.storedge_control is not None:
-                self._storage_control_mode[unit_key] = (
-                    unit.inverter.storedge_control.storage_control_mode
-                )
+                self._last_known[unit_key] = unit.inverter.storedge_control
 
     def _is_remote_control_active(self, unit_key: str = DEFAULT_UNIT_KEY) -> bool:
-        return self._storage_control_mode.get(unit_key) == REMOTE_CONTROL_MODE
+        last = self._last_known.get(unit_key)
+        return last is not None and last.storage_control_mode == REMOTE_CONTROL_MODE
+
+    def _is_noop_write(
+        self, field_name: str, value: int | float, unit_key: str
+    ) -> bool:
+        last = self._last_known.get(unit_key)
+        return last is not None and getattr(last, field_name) == value
 
     async def _write(
         self,
@@ -123,6 +131,16 @@ class StorEdgeControl:
         field_name: str,
         unit_key: str = DEFAULT_UNIT_KEY,
     ) -> None:
+        if self._is_noop_write(field_name, value, unit_key):
+            logger.debug(
+                "Skipping StorEdge control {field}: {value} already active "
+                "on unit {unit_key}",
+                field=field_name,
+                value=value,
+                unit_key=unit_key,
+            )
+            return
+
         logger.info(
             "Writing StorEdge control {field}: {value} (unit {unit_key})",
             field=field_name,
@@ -138,6 +156,16 @@ class StorEdgeControl:
         field_name: str,
         unit_key: str = DEFAULT_UNIT_KEY,
     ) -> None:
+        if self._is_noop_write(field_name, value, unit_key):
+            logger.debug(
+                "Skipping StorEdge control {field}: {value} already active "
+                "on unit {unit_key}",
+                field=field_name,
+                value=value,
+                unit_key=unit_key,
+            )
+            return
+
         if not self._is_remote_control_active(unit_key):
             logger.error(
                 "Cannot write StorEdge control {field}: Storage Control Mode is not "

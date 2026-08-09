@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import ValidationError
 
+from solaredge2mqtt.services.modbus.models.inverter import ModbusStorEdgeControl
 from solaredge2mqtt.services.modbus.storedge_control import StorEdgeControl
 from solaredge2mqtt.services.modbus.storedge_control_events import (
     RemoteControlChargeLimitEvent,
@@ -31,6 +32,23 @@ from solaredge2mqtt.services.modbus.storedge_control_inputs import (
 from solaredge2mqtt.services.modbus.sunspec.inverter import (
     SunSpecStorEdgeControlRegister,
 )
+
+
+def make_last_known(**overrides) -> ModbusStorEdgeControl:
+    """Build a ModbusStorEdgeControl to seed StorEdgeControl._last_known in tests."""
+    defaults = {
+        "storage_control_mode": 4,
+        "storage_ac_charge_policy": 1,
+        "storage_ac_charge_limit": 0.0,
+        "storage_backup_reserved_setting": 10.0,
+        "storage_default_mode": 6,
+        "remote_control_command_timeout": 1800,
+        "remote_control_command_mode": 6,
+        "remote_control_charge_limit": 4000.0,
+        "remote_control_discharge_limit": 4000.0,
+    }
+    defaults.update(overrides)
+    return ModbusStorEdgeControl(**defaults)
 
 
 @pytest.fixture
@@ -111,30 +129,32 @@ class TestStorEdgeControlAsyncInit:
         mock_event_bus.emit.assert_not_called()
 
 
-class TestStorEdgeControlCacheStorageControlMode:
-    """Tests for StorEdgeControl.cache_storage_control_mode."""
+class TestStorEdgeControlCacheStoredgeControl:
+    """Tests for StorEdgeControl.cache_storedge_control."""
 
     @pytest.mark.asyncio
-    async def test_caches_mode_from_units_with_storedge_control(
+    async def test_caches_last_known_from_units_with_storedge_control(
         self, mock_service_settings, mock_event_bus
     ):
-        """Test the current storage_control_mode is cached per unit."""
+        """Test the last known StorEdge state is cached per unit."""
         control = StorEdgeControl(mock_service_settings)
 
+        last_known = make_last_known(storage_control_mode=4)
         unit = MagicMock()
-        unit.inverter.storedge_control.storage_control_mode = 4
+        unit.inverter.storedge_control = last_known
         event = MagicMock()
         event.units = {"leader": unit}
 
-        await control.cache_storage_control_mode(event)
+        await control.cache_storedge_control(event)
 
         assert control._is_remote_control_active("leader") is True
+        assert control._last_known["leader"] is last_known
 
     @pytest.mark.asyncio
     async def test_skips_units_without_storedge_control(
         self, mock_service_settings, mock_event_bus
     ):
-        """Test units without a decoded StorEdge block are skipped, not cached as 0."""
+        """Test units without a decoded StorEdge block are skipped, not cached."""
         control = StorEdgeControl(mock_service_settings)
 
         unit = MagicMock()
@@ -142,10 +162,10 @@ class TestStorEdgeControlCacheStorageControlMode:
         event = MagicMock()
         event.units = {"leader": unit}
 
-        await control.cache_storage_control_mode(event)
+        await control.cache_storedge_control(event)
 
         assert control._is_remote_control_active("leader") is False
-        assert "leader" not in control._storage_control_mode
+        assert "leader" not in control._last_known
 
 
 class TestStorEdgeControlAlwaysAllowedWriteHandlers:
@@ -253,7 +273,7 @@ class TestStorEdgeControlRemoteControlGatedWriteHandlers:
     ):
         """Test the write goes through once Remote Control mode is cached."""
         control = StorEdgeControl(mock_service_settings)
-        control._storage_control_mode["leader"] = 4
+        control._last_known["leader"] = make_last_known()
 
         event = StorageDefaultModeEvent(
             topic="modbus/inverter/storedge_control/storage_default_mode",
@@ -279,7 +299,7 @@ class TestStorEdgeControlRemoteControlGatedWriteHandlers:
         await control.handle_remote_control_command_timeout(event)
         mock_event_bus.emit.assert_not_called()
 
-        control._storage_control_mode["leader"] = 4
+        control._last_known["leader"] = make_last_known()
         await control.handle_remote_control_command_timeout(event)
 
         written = mock_event_bus.emit.call_args_list[0][0][0]
@@ -295,7 +315,7 @@ class TestStorEdgeControlRemoteControlGatedWriteHandlers:
     ):
         """Test remote_control_command_mode is gated behind Remote Control mode."""
         control = StorEdgeControl(mock_service_settings)
-        control._storage_control_mode["leader"] = 4
+        control._last_known["leader"] = make_last_known()
 
         event = RemoteControlCommandModeEvent(
             topic=("modbus/inverter/storedge_control/remote_control_command_mode"),
@@ -316,7 +336,7 @@ class TestStorEdgeControlRemoteControlGatedWriteHandlers:
     ):
         """Test remote_control_charge_limit is rejected when mode isn't 4."""
         control = StorEdgeControl(mock_service_settings)
-        control._storage_control_mode["leader"] = 1
+        control._last_known["leader"] = make_last_known(storage_control_mode=1)
 
         event = RemoteControlChargeLimitEvent(
             topic=("modbus/inverter/storedge_control/remote_control_charge_limit"),
@@ -332,7 +352,7 @@ class TestStorEdgeControlRemoteControlGatedWriteHandlers:
     ):
         """Test remote_control_discharge_limit writes once mode is 4."""
         control = StorEdgeControl(mock_service_settings)
-        control._storage_control_mode["leader"] = 4
+        control._last_known["leader"] = make_last_known()
 
         event = RemoteControlDischargeLimitEvent(
             topic=("modbus/inverter/storedge_control/remote_control_discharge_limit"),
@@ -346,6 +366,78 @@ class TestStorEdgeControlRemoteControlGatedWriteHandlers:
             == SunSpecStorEdgeControlRegister.REMOTE_CONTROL_DISCHARGE_LIMIT
         )
         assert written.payload == pytest.approx(5000.0)
+
+
+class TestStorEdgeControlNoopWrites:
+    """Tests that a write matching the last known value is skipped."""
+
+    @pytest.mark.asyncio
+    async def test_always_allowed_field_skips_when_value_unchanged(
+        self, mock_service_settings, mock_event_bus
+    ):
+        """Test an always-allowed field is not rewritten when already at that value."""
+        control = StorEdgeControl(mock_service_settings)
+        control._last_known["leader"] = make_last_known(storage_control_mode=4)
+
+        event = StorageControlModeEvent(
+            topic="modbus/inverter/storedge_control/storage_control_mode",
+            input=StorageControlModeInput(mode=4),
+        )
+        await control.handle_storage_control_mode(event)
+
+        mock_event_bus.emit.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_always_allowed_field_writes_when_value_changed(
+        self, mock_service_settings, mock_event_bus
+    ):
+        """Test the same field still writes when the requested value differs."""
+        control = StorEdgeControl(mock_service_settings)
+        control._last_known["leader"] = make_last_known(storage_control_mode=1)
+
+        event = StorageControlModeEvent(
+            topic="modbus/inverter/storedge_control/storage_control_mode",
+            input=StorageControlModeInput(mode=4),
+        )
+        await control.handle_storage_control_mode(event)
+
+        mock_event_bus.emit.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_gated_field_skips_when_value_unchanged_even_if_not_remote_control(
+        self, mock_service_settings, mock_event_bus
+    ):
+        """Test a no-op write is skipped before the Remote Control gate is checked."""
+        control = StorEdgeControl(mock_service_settings)
+        control._last_known["leader"] = make_last_known(
+            storage_control_mode=1, storage_default_mode=6
+        )
+
+        event = StorageDefaultModeEvent(
+            topic="modbus/inverter/storedge_control/storage_default_mode",
+            input=StorageDefaultModeInput(mode=6),
+        )
+        await control.handle_storage_default_mode(event)
+
+        mock_event_bus.emit.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_gated_field_writes_when_value_changed_and_remote_control_active(
+        self, mock_service_settings, mock_event_bus
+    ):
+        """Test a genuinely different value still writes once gated and unchanged."""
+        control = StorEdgeControl(mock_service_settings)
+        control._last_known["leader"] = make_last_known(
+            storage_control_mode=4, storage_default_mode=6
+        )
+
+        event = StorageDefaultModeEvent(
+            topic="modbus/inverter/storedge_control/storage_default_mode",
+            input=StorageDefaultModeInput(mode=0),
+        )
+        await control.handle_storage_default_mode(event)
+
+        mock_event_bus.emit.assert_called_once()
 
 
 class TestStorEdgeControlInputValidation:
