@@ -135,6 +135,7 @@ class TestModbusAsyncInit:
         """detect_devices should read inverter info and run detectors."""
         modbus = Modbus(mock_service_settings)
         modbus._clients = {"leader": mock_modbus_client}
+        modbus._client_locks = {key: asyncio.Lock() for key in modbus._clients}
         modbus.read_device_info = AsyncMock(return_value={"meter0": 1})
         modbus._detect_meters = AsyncMock()
         modbus._detect_batteries = AsyncMock()
@@ -152,6 +153,7 @@ class TestModbusAsyncInit:
         """get_data should set offline and re-raise on exception."""
         modbus = Modbus(mock_service_settings)
         modbus._clients = {"leader": mock_modbus_client}
+        modbus._client_locks = {key: asyncio.Lock() for key in modbus._clients}
         modbus._device_info = {"leader": {"inverter": MagicMock()}}
         modbus._get_raw_data = AsyncMock(
             side_effect=InvalidDataException("Invalid data")
@@ -167,6 +169,7 @@ class TestModbusAsyncInit:
         """async_init should set offline state and re-raise on exception."""
         modbus = Modbus(mock_service_settings)
         modbus._clients = {"leader": mock_modbus_client}
+        modbus._client_locks = {key: asyncio.Lock() for key in modbus._clients}
         modbus.detect_devices = AsyncMock(
             side_effect=InvalidDataException("Invalid data")
         )
@@ -181,6 +184,7 @@ class TestModbusAsyncInit:
         """detect_devices should set offline state and re-raise on exception."""
         modbus = Modbus(mock_service_settings)
         modbus._clients = {"leader": mock_modbus_client}
+        modbus._client_locks = {key: asyncio.Lock() for key in modbus._clients}
         modbus.read_device_info = AsyncMock(
             side_effect=InvalidDataException("Invalid data")
         )
@@ -218,6 +222,7 @@ class TestModbusAsyncInit:
 
         mock_info = MagicMock()
         modbus._clients = {"leader": AsyncMock()}
+        modbus._client_locks = {key: asyncio.Lock() for key in modbus._clients}
         with patch(
             "solaredge2mqtt.services.modbus.ModbusDeviceInfo.from_sunspec",
             return_value=mock_info,
@@ -400,6 +405,7 @@ class TestModbusAsyncInitFollowerWithOwnIp:
         assert "leader" in modbus._clients
         assert "follower0" in modbus._clients
         assert modbus._clients["leader"] is not modbus._clients["follower0"]
+        assert modbus._client_locks["leader"] is not modbus._client_locks["follower0"]
 
     @pytest.mark.asyncio
     async def test_async_init_follower_without_host_reuses_leader_client(
@@ -425,6 +431,7 @@ class TestModbusAsyncInitFollowerWithOwnIp:
 
         assert client_cls.call_count == 1
         assert modbus._clients["leader"] is modbus._clients["follower0"]
+        assert modbus._client_locks["leader"] is modbus._client_locks["follower0"]
 
     @pytest.mark.asyncio
     async def test_async_init_follower_uses_custom_port(self, mock_event_bus):
@@ -564,6 +571,7 @@ class TestModbusReadFromModbus:
         """Test successful modbus read."""
         modbus = Modbus(mock_service_settings)
         modbus._clients = {"leader": mock_modbus_client}
+        modbus._client_locks = {key: asyncio.Lock() for key in modbus._clients}
 
         mock_bundle = MagicMock()
         mock_bundle.address = 40000
@@ -587,6 +595,7 @@ class TestModbusReadFromModbus:
         """Successful read should also work when service is already initialized."""
         modbus = Modbus(mock_service_settings)
         modbus._clients = {"leader": mock_modbus_client}
+        modbus._client_locks = {key: asyncio.Lock() for key in modbus._clients}
         modbus._initialized = True
 
         mock_bundle = MagicMock()
@@ -610,6 +619,7 @@ class TestModbusReadFromModbus:
         """Test modbus read error blocks register."""
         modbus = Modbus(mock_service_settings)
         modbus._clients = {"leader": mock_modbus_client}
+        modbus._client_locks = {key: asyncio.Lock() for key in modbus._clients}
         modbus._initialized = False
 
         mock_bundle = MagicMock()
@@ -631,6 +641,7 @@ class TestModbusReadFromModbus:
         """Test modbus exception blocks register."""
         modbus = Modbus(mock_service_settings)
         modbus._clients = {"leader": mock_modbus_client}
+        modbus._client_locks = {key: asyncio.Lock() for key in modbus._clients}
         modbus._initialized = False
 
         mock_bundle = MagicMock()
@@ -652,6 +663,7 @@ class TestModbusReadFromModbus:
         """Test modbus read skips blocked registers."""
         modbus = Modbus(mock_service_settings)
         modbus._clients = {"leader": mock_modbus_client}
+        modbus._client_locks = {key: asyncio.Lock() for key in modbus._clients}
         modbus._block_unreadable = {40000}
 
         mock_bundle = MagicMock()
@@ -669,6 +681,7 @@ class TestModbusReadFromModbus:
         """Repeated failures for the same register are debounced to DEBUG."""
         modbus = Modbus(mock_service_settings)
         modbus._clients = {"leader": mock_modbus_client}
+        modbus._client_locks = {key: asyncio.Lock() for key in modbus._clients}
         modbus._initialized = True
 
         mock_bundle = MagicMock()
@@ -698,6 +711,7 @@ class TestModbusReadFromModbus:
         """A sustained failure re-escalates to ERROR every repeat threshold."""
         modbus = Modbus(mock_service_settings)
         modbus._clients = {"leader": mock_modbus_client}
+        modbus._client_locks = {key: asyncio.Lock() for key in modbus._clients}
         modbus._initialized = True
         modbus._unreadable_streaks[40071] = 59
 
@@ -722,6 +736,7 @@ class TestModbusReadFromModbus:
         """A successful read after failures clears the streak and logs once."""
         modbus = Modbus(mock_service_settings)
         modbus._clients = {"leader": mock_modbus_client}
+        modbus._client_locks = {key: asyncio.Lock() for key in modbus._clients}
         modbus._initialized = True
         modbus._unreadable_streaks[40071] = 5
 
@@ -748,6 +763,7 @@ class TestModbusReadFromModbus:
         """A single isolated failure followed by success doesn't log a recovery."""
         modbus = Modbus(mock_service_settings)
         modbus._clients = {"leader": mock_modbus_client}
+        modbus._client_locks = {key: asyncio.Lock() for key in modbus._clients}
         modbus._initialized = True
         modbus._unreadable_streaks[40071] = 1
 
@@ -775,6 +791,7 @@ class TestModbusReadFromModbus:
         modbus = Modbus(mock_service_settings)
         stored_client = AsyncMock()
         modbus._clients = {"leader": stored_client}
+        modbus._client_locks = {key: asyncio.Lock() for key in modbus._clients}
 
         mock_bundle = MagicMock()
         mock_bundle.address = 40000
@@ -804,6 +821,7 @@ class TestModbusGetData:
         """Test get_data returns units."""
         modbus = Modbus(mock_service_settings)
         modbus._clients = {"leader": mock_modbus_client}
+        modbus._client_locks = {key: asyncio.Lock() for key in modbus._clients}
         modbus._initialized = True
 
         mock_info = MagicMock()
@@ -844,6 +862,7 @@ class TestModbusGetData:
         """Test get_data raises on KeyError."""
         modbus = Modbus(mock_service_settings)
         modbus._clients = {"leader": mock_modbus_client}
+        modbus._client_locks = {key: asyncio.Lock() for key in modbus._clients}
         modbus._initialized = True
         modbus._device_info = {}
 
@@ -929,6 +948,7 @@ class TestModbusWriteToModbus:
         """Test successful modbus write to leader."""
         modbus = Modbus(mock_service_settings)
         modbus._clients = {"leader": mock_modbus_client}
+        modbus._client_locks = {key: asyncio.Lock() for key in modbus._clients}
 
         mock_register = MagicMock()
         mock_register.address = 40000
@@ -957,6 +977,7 @@ class TestModbusWriteToModbus:
 
         modbus = Modbus(mock_service_settings)
         modbus._clients = {"leader": mock_modbus_client, "follower0": follower_client}
+        modbus._client_locks = {key: asyncio.Lock() for key in modbus._clients}
 
         mock_register = MagicMock()
         mock_register.address = 40000
@@ -973,9 +994,10 @@ class TestModbusWriteToModbus:
     async def test_write_to_modbus_exception(
         self, mock_service_settings, mock_event_bus, mock_modbus_client
     ):
-        """Test modbus write handles exception."""
+        """Test modbus write retries and gives up after exhausting attempts."""
         modbus = Modbus(mock_service_settings)
         modbus._clients = {"leader": mock_modbus_client}
+        modbus._client_locks = {key: asyncio.Lock() for key in modbus._clients}
 
         mock_register = MagicMock()
         mock_register.address = 40000
@@ -984,7 +1006,41 @@ class TestModbusWriteToModbus:
 
         mock_modbus_client.write_registers.side_effect = ModbusException("Write error")
 
-        await modbus._write_to_modbus(mock_register, 100)
+        with patch(
+            "solaredge2mqtt.services.modbus.asyncio.sleep", new_callable=AsyncMock
+        ):
+            await modbus._write_to_modbus(mock_register, 100)
+
+        assert (
+            mock_modbus_client.write_registers.call_count == Modbus.WRITE_RETRY_ATTEMPTS
+        )
+
+    @pytest.mark.asyncio
+    async def test_write_to_modbus_retries_then_succeeds(
+        self, mock_service_settings, mock_event_bus, mock_modbus_client
+    ):
+        """Test a transient failure on the first attempt is retried and succeeds."""
+        modbus = Modbus(mock_service_settings)
+        modbus._clients = {"leader": mock_modbus_client}
+        modbus._client_locks = {key: asyncio.Lock() for key in modbus._clients}
+
+        mock_register = MagicMock()
+        mock_register.address = 40000
+        mock_register.name = "test_register"
+        mock_register.encode_request.return_value = [1, 2, 3]
+
+        mock_modbus_client.write_registers.side_effect = [
+            ModbusException("Transient error"),
+            None,
+        ]
+
+        with patch(
+            "solaredge2mqtt.services.modbus.asyncio.sleep", new_callable=AsyncMock
+        ) as sleep_mock:
+            await modbus._write_to_modbus(mock_register, 100)
+
+        assert mock_modbus_client.write_registers.call_count == 2
+        sleep_mock.assert_called_once_with(Modbus.WRITE_RETRY_DELAY)
 
     @pytest.mark.asyncio
     async def test_write_to_modbus_unknown_unit_key(
@@ -993,6 +1049,7 @@ class TestModbusWriteToModbus:
         """Test _write_to_modbus raises InvalidDataException for unknown unit_key."""
         modbus = Modbus(mock_service_settings)
         modbus._clients = {"leader": mock_modbus_client}
+        modbus._client_locks = {key: asyncio.Lock() for key in modbus._clients}
 
         mock_register = MagicMock()
         mock_register.address = 40000
@@ -1036,3 +1093,57 @@ class TestModbusHandleWriteEvent:
         await modbus._handle_write_event(event)
 
         modbus._write_to_modbus.assert_called_once_with(mock_register, 50, "follower0")
+
+
+class TestModbusClientLockSerializesAccess:
+    """Regression tests for the per-unit client lock."""
+
+    @pytest.mark.asyncio
+    async def test_read_and_write_never_hold_client_concurrently(
+        self, mock_service_settings, mock_event_bus
+    ):
+        """A concurrent read cycle and write must never overlap on the client."""
+        active = 0
+        max_active = 0
+
+        class TrackingClient:
+            async def __aenter__(self):
+                nonlocal active, max_active
+                active += 1
+                max_active = max(max_active, active)
+                await asyncio.sleep(0.02)
+                return self
+
+            async def __aexit__(self, *exc_info):
+                nonlocal active
+                active -= 1
+
+            async def write_registers(self, *args, **kwargs):
+                await asyncio.sleep(0.02)
+
+        modbus = Modbus(mock_service_settings)
+        modbus._clients = {"leader": TrackingClient()}  # pyright: ignore[reportAttributeAccessIssue]
+        modbus._client_locks = {"leader": asyncio.Lock()}
+        modbus._device_info = {"leader": {"inverter": MagicMock()}}
+
+        async def fake_get_raw_data(*args, **kwargs):
+            await asyncio.sleep(0.02)
+            return {}, {}, {}
+
+        modbus._get_raw_data = fake_get_raw_data
+        modbus._map_inverter = MagicMock(return_value=MagicMock())
+        modbus._map_meters = MagicMock(return_value={})
+        modbus._map_batteries = MagicMock(return_value={})
+
+        mock_register = MagicMock()
+        mock_register.address = 40000
+        mock_register.name = "test_register"
+        mock_register.encode_request.return_value = [1, 2, 3]
+
+        with patch("solaredge2mqtt.services.modbus.ModbusUnit"):
+            await asyncio.gather(
+                modbus.get_data(),
+                modbus._write_to_modbus(mock_register, 100),
+            )
+
+        assert max_active == 1
