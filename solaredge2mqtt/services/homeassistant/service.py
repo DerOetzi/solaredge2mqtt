@@ -244,4 +244,13 @@ class HomeAssistantDiscovery:
             if "command_topic" in prop:
                 entity["command_topic_override"] = prop["command_topic"]
 
+            if "options_map" in prop:
+                entity["options_map"] = prop["options_map"]
+
+            if "unit_of_measurement" in prop:
+                entity["unit"] = prop["unit_of_measurement"]
+
+            if "device_class" in prop:
+                entity["device_class_override"] = prop["device_class"]
+
         return entity

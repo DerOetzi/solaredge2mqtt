@@ -16,6 +16,14 @@ from solaredge2mqtt.services.homeassistant.models import (
     HomeAssistantType,
 )
 
+STOREDGE_CONTROL_MODE_OPTIONS = {
+    0: "Disabled",
+    1: "Maximize Self Consumption",
+    2: "Time of Use",
+    3: "Backup Only",
+    4: "Remote Control",
+}
+
 
 class TestHomeAssistantStatus:
     """Tests for HomeAssistantStatus enum."""
@@ -143,49 +151,60 @@ class TestHomeAssistantBinarySensorType:
 class TestHomeAssistantNumberType:
     """Tests for HomeAssistantNumberType enum."""
 
-    def test_ev_charge_level_type(self):
-        """Test EV_CHARGE_LEVEL number type."""
-        number = HomeAssistantNumberType.EV_CHARGE_LEVEL
+    def test_generic_number_type_field_kwargs(self):
+        """Test GENERIC number type applies field() kwargs."""
+        number = HomeAssistantNumberType.GENERIC
 
         assert number.typed == HomeAssistantType.NUMBER
-        assert number.unit_of_measurement == "%"
-        assert number._min == 0
-        assert number._max == 100
-        assert number._step == 100
-        assert number._mode == "slider"
+
+        result = number.field(
+            "Charge level",
+            unit_of_measurement="%",
+            min=0,
+            max=100,
+            step=100,
+            mode="slider",
+        )
+
+        assert result["json_schema_extra"]["min"] == 0
+        assert result["json_schema_extra"]["max"] == 100
+        assert result["json_schema_extra"]["step"] == 100
+        assert result["json_schema_extra"]["mode"] == "slider"
+        assert result["json_schema_extra"]["unit_of_measurement"] == "%"
 
 
 class TestHomeAssistantSelectType:
     """Tests for HomeAssistantSelectType enum."""
 
-    def test_storedge_control_mode_type(self):
-        """Test STOREDGE_CONTROL_MODE select type."""
-        select = HomeAssistantSelectType.STOREDGE_CONTROL_MODE
+    def test_generic_select_type(self):
+        """Test GENERIC select type properties."""
+        select = HomeAssistantSelectType.GENERIC
 
         assert select.typed == HomeAssistantType.SELECT
-        assert select.options_map[4] == "Remote Control"
-        assert select.options == [
-            "Disabled",
-            "Maximize Self Consumption",
-            "Time of Use",
-            "Backup Only",
-            "Remote Control",
-        ]
 
-    def test_storedge_charge_discharge_mode_skips_reserved_value(self):
-        """Test the shared charge/discharge mode map has no entry for value 6."""
-        select = HomeAssistantSelectType.STOREDGE_CHARGE_DISCHARGE_MODE
+    def test_field_includes_options_map(self):
+        """Test field() injects options + options_map into json_schema_extra."""
+        select = HomeAssistantSelectType.GENERIC
+        options_map = {
+            0: "Disabled",
+            1: "Always Allowed",
+            2: "Fixed Energy Limit",
+            3: "Percent of Production",
+        }
 
-        assert 6 not in select.options_map
-        assert select.options_map[7] == "Maximize Self Consumption"
+        result = select.field("Storage AC charge policy", options_map=options_map)
 
-    def test_field_includes_options(self):
-        """Test field() injects the options list into json_schema_extra."""
-        select = HomeAssistantSelectType.STOREDGE_AC_CHARGE_POLICY
+        assert result["json_schema_extra"]["options"] == list(options_map.values())
+        assert result["json_schema_extra"]["options_map"] == options_map
 
-        result = select.field("Storage AC charge policy")
+    def test_field_without_options_map(self):
+        """Test field() defaults to empty options list without options_map."""
+        select = HomeAssistantSelectType.GENERIC
 
-        assert result["json_schema_extra"]["options"] == select.options
+        result = select.field("Some select")
+
+        assert result["json_schema_extra"]["options"] == []
+        assert result["json_schema_extra"]["options_map"] is None
 
 
 class TestHomeAssistantSensorType:
@@ -567,7 +586,7 @@ class TestHomeAssistantEntity:
             device=device,
             name="Power Limit",
             path=["power_limit"],
-            ha_type=HomeAssistantNumberType.EV_CHARGE_LEVEL,
+            ha_type=HomeAssistantNumberType.GENERIC,
         )
 
         assert entity.command_topic == "solaredge/inverter/power_limit"
@@ -600,7 +619,7 @@ class TestHomeAssistantEntity:
         entity = HomeAssistantEntity(
             device=device,
             name="Power Limit",
-            ha_type=HomeAssistantNumberType.EV_CHARGE_LEVEL,
+            ha_type=HomeAssistantNumberType.GENERIC,
         )
 
         assert entity.command_topic == "solaredge/inverter"
@@ -617,8 +636,8 @@ class TestHomeAssistantEntity:
             device=device,
             name="Storage control mode",
             path=["storedge_control", "storage_control_mode"],
-            ha_type=HomeAssistantSelectType.STOREDGE_CONTROL_MODE,
-            options=HomeAssistantSelectType.STOREDGE_CONTROL_MODE.options,
+            ha_type=HomeAssistantSelectType.GENERIC,
+            options_map=STOREDGE_CONTROL_MODE_OPTIONS,
             command_topic_override="storedge/control_mode",
         )
 
@@ -636,8 +655,8 @@ class TestHomeAssistantEntity:
             device=device,
             name="Storage control mode",
             path=["storedge_control", "storage_control_mode"],
-            ha_type=HomeAssistantSelectType.STOREDGE_CONTROL_MODE,
-            options=HomeAssistantSelectType.STOREDGE_CONTROL_MODE.options,
+            ha_type=HomeAssistantSelectType.GENERIC,
+            options_map=STOREDGE_CONTROL_MODE_OPTIONS,
         )
 
         template = entity.value_template
@@ -658,8 +677,8 @@ class TestHomeAssistantEntity:
             device=device,
             name="Storage control mode",
             path=["storedge_control", "storage_control_mode"],
-            ha_type=HomeAssistantSelectType.STOREDGE_CONTROL_MODE,
-            options=HomeAssistantSelectType.STOREDGE_CONTROL_MODE.options,
+            ha_type=HomeAssistantSelectType.GENERIC,
+            options_map=STOREDGE_CONTROL_MODE_OPTIONS,
         )
 
         template = entity.command_template
@@ -697,7 +716,7 @@ class TestHomeAssistantEntity:
             device=device,
             name="Power Limit",
             path=["power_limit"],
-            ha_type=HomeAssistantNumberType.EV_CHARGE_LEVEL,
+            ha_type=HomeAssistantNumberType.GENERIC,
             min=0,
             max=100,
             step=1,

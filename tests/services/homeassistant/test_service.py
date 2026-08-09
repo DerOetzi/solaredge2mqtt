@@ -180,7 +180,7 @@ class TestHomeAssistantDiscoveryPropertyParser:
     def test_property_parser_number_type(self):
         """Test property_parser with number type."""
         prop = {
-            "ha_type": "charge_level",
+            "ha_type": "number",
             "ha_typed": "number",
             "icon": "mdi:gauge",
         }
@@ -193,7 +193,7 @@ class TestHomeAssistantDiscoveryPropertyParser:
     def test_property_parser_select_type(self):
         """Test property_parser with select type."""
         prop = {
-            "ha_type": "storedge_control_mode",
+            "ha_type": "select",
             "ha_typed": "select",
             "icon": None,
             "options": ["Disabled", "Remote Control"],
@@ -210,7 +210,7 @@ class TestHomeAssistantDiscoveryPropertyParser:
     def test_property_parser_picks_up_command_topic_override(self):
         """Test property_parser carries a command_topic override into entity_info."""
         prop = {
-            "ha_type": "storedge_control_mode",
+            "ha_type": "select",
             "ha_typed": "select",
             "icon": None,
             "options": ["Disabled", "Remote Control"],
@@ -568,8 +568,14 @@ class TestHomeAssistantDiscoveryPublishComponent:
                 "name": "Storage control mode",
                 "path": ["storedge_control", "storage_control_mode"],
                 "icon": None,
-                "ha_type": HomeAssistantSelectType.STOREDGE_CONTROL_MODE,
-                "options": HomeAssistantSelectType.STOREDGE_CONTROL_MODE.options,
+                "ha_type": HomeAssistantSelectType.GENERIC,
+                "options": [
+                    "Disabled",
+                    "Maximize Self Consumption",
+                    "Time of Use",
+                    "Backup Only",
+                    "Remote Control",
+                ],
                 "command_topic_override": "storedge/control_mode",
             },
             {
@@ -613,8 +619,14 @@ class TestHomeAssistantDiscoveryPublishComponent:
                 "name": "Storage control mode",
                 "path": ["storedge_control", "storage_control_mode"],
                 "icon": None,
-                "ha_type": HomeAssistantSelectType.STOREDGE_CONTROL_MODE,
-                "options": HomeAssistantSelectType.STOREDGE_CONTROL_MODE.options,
+                "ha_type": HomeAssistantSelectType.GENERIC,
+                "options": [
+                    "Disabled",
+                    "Maximize Self Consumption",
+                    "Time of Use",
+                    "Backup Only",
+                    "Remote Control",
+                ],
                 "command_topic_override": "storedge/control_mode",
             },
         ]
@@ -668,7 +680,7 @@ class TestHomeAssistantPropertyParserAdditionalFields:
     def test_property_parser_number_type_with_additional_fields(self):
         """Test property_parser with number type and additional fields."""
         prop = {
-            "ha_type": "charge_level",
+            "ha_type": "number",
             "ha_typed": "number",
             "icon": "mdi:gauge",
             "min": 0,

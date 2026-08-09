@@ -75,57 +75,113 @@ class ModbusInverter(ModbusComponent):
 
 REMOTE_CONTROL_MODE = 4
 
+STORAGE_CONTROL_MODE_OPTIONS = {
+    0: "Disabled",
+    1: "Maximize Self Consumption",
+    2: "Time of Use",
+    3: "Backup Only",
+    4: "Remote Control",
+}
+STORAGE_AC_CHARGE_POLICY_OPTIONS = {
+    0: "Disabled",
+    1: "Always Allowed",
+    2: "Fixed Energy Limit",
+    3: "Percent of Production",
+}
+STORAGE_CHARGE_DISCHARGE_MODE_OPTIONS = {
+    0: "Off",
+    1: "Charge from Clipped Solar Power",
+    2: "Charge from Solar Power",
+    3: "Charge from Solar Power and Grid",
+    4: "Discharge to Maximize Export",
+    5: "Discharge to Minimize Import",
+    7: "Maximize Self Consumption",
+}
+
 
 class ModbusStorEdgeControl(ModbusComponentValueGroup):
     storage_control_mode: int = Field(
-        **HASelect.STOREDGE_CONTROL_MODE.field(
-            "Storage control mode", command_topic="storedge/control_mode"
+        **HASelect.GENERIC.field(
+            "Storage control mode",
+            command_topic="storedge/control_mode",
+            options_map=STORAGE_CONTROL_MODE_OPTIONS,
         )
     )
     storage_ac_charge_policy: int = Field(
-        **HASelect.STOREDGE_AC_CHARGE_POLICY.field(
-            "Storage AC charge policy", command_topic="storedge/ac_charge_policy"
+        **HASelect.GENERIC.field(
+            "Storage AC charge policy",
+            command_topic="storedge/ac_charge_policy",
+            options_map=STORAGE_AC_CHARGE_POLICY_OPTIONS,
         )
     )
     storage_ac_charge_limit: float = Field(
-        **HANumber.STOREDGE_AC_CHARGE_LIMIT.field(
-            "Storage AC charge limit", command_topic="storedge/ac_charge_limit"
+        **HANumber.GENERIC.field(
+            "Storage AC charge limit",
+            command_topic="storedge/ac_charge_limit",
+            min=0,
+            max=100000,
+            step=1,
+            mode="box",
         )
     )
     storage_backup_reserved_setting: float = Field(
-        **HANumber.STOREDGE_BACKUP_RESERVED.field(
+        **HANumber.GENERIC.field(
             "Storage backup reserved setting",
             command_topic="storedge/backup_reserved_setting",
+            unit_of_measurement="%",
+            min=0,
+            max=100,
+            step=1,
+            mode="slider",
         )
     )
     storage_default_mode: int = Field(
-        **HASelect.STOREDGE_CHARGE_DISCHARGE_MODE.field(
+        **HASelect.GENERIC.field(
             "Storage default mode (Remote Control mode only)",
             command_topic="storedge/default_mode",
+            options_map=STORAGE_CHARGE_DISCHARGE_MODE_OPTIONS,
         )
     )
     remote_control_command_timeout: int = Field(
-        **HANumber.STOREDGE_COMMAND_TIMEOUT.field(
+        **HANumber.GENERIC.field(
             "Remote control command timeout (Remote Control mode only)",
             command_topic="storedge/command_timeout",
+            unit_of_measurement="s",
+            min=0,
+            max=86400,
+            step=1,
+            mode="box",
         )
     )
     remote_control_command_mode: int = Field(
-        **HASelect.STOREDGE_CHARGE_DISCHARGE_MODE.field(
+        **HASelect.GENERIC.field(
             "Remote control command mode (Remote Control mode only)",
             command_topic="storedge/command_mode",
+            options_map=STORAGE_CHARGE_DISCHARGE_MODE_OPTIONS,
         )
     )
     remote_control_charge_limit: float = Field(
-        **HANumber.STOREDGE_CHARGE_LIMIT.field(
+        **HANumber.GENERIC.field(
             "Remote control charge limit (Remote Control mode only)",
             command_topic="storedge/charge_limit",
+            device_class="power",
+            unit_of_measurement="W",
+            min=0,
+            max=20000,
+            step=1,
+            mode="box",
         )
     )
     remote_control_discharge_limit: float = Field(
-        **HANumber.STOREDGE_DISCHARGE_LIMIT.field(
+        **HANumber.GENERIC.field(
             "Remote control discharge limit (Remote Control mode only)",
             command_topic="storedge/discharge_limit",
+            device_class="power",
+            unit_of_measurement="W",
+            min=0,
+            max=20000,
+            step=1,
+            mode="box",
         )
     )
 

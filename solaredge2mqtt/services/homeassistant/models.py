@@ -166,52 +166,17 @@ class HomeAssistantBinarySensorType(HomeAssistantEntityBaseType):
 
 
 class HomeAssistantNumberType(HomeAssistantEntityBaseType):
-    EV_CHARGE_LEVEL = "charge_level", None, "%", 0, 100, 100, "slider"
-    STOREDGE_AC_CHARGE_LIMIT = (
-        "storedge_ac_charge_limit",
-        None,
-        None,
-        0,
-        100000,
-        1,
-        "box",
-    )
-    STOREDGE_BACKUP_RESERVED = (
-        "storedge_backup_reserved",
-        None,
-        "%",
-        0,
-        100,
-        1,
-        "slider",
-    )
-    STOREDGE_COMMAND_TIMEOUT = (
-        "storedge_command_timeout",
-        None,
-        "s",
-        0,
-        86400,
-        1,
-        "box",
-    )
-    STOREDGE_CHARGE_LIMIT = (
-        "storedge_charge_limit",
-        "power",
-        "W",
-        0,
-        20000,
-        1,
-        "box",
-    )
-    STOREDGE_DISCHARGE_LIMIT = (
-        "storedge_discharge_limit",
-        "power",
-        "W",
-        0,
-        20000,
-        1,
-        "box",
-    )
+    """Generic writable-number presentation.
+
+    Deliberately holds no domain-specific members — device_class,
+    unit_of_measurement, min/max/step/mode are all supplied per call site via
+    field(), so callers don't need to register a new enum member here for
+    every numeric config value a service happens to expose. Keeps SolarEdge
+    (or any other domain's) presentation metadata in that domain's own
+    module instead of leaking into this generic HA layer.
+    """
+
+    GENERIC = "number", None, None, None, None, None, None
 
     def __init__(
         self,
@@ -255,60 +220,45 @@ class HomeAssistantNumberType(HomeAssistantEntityBaseType):
 
 
 class HomeAssistantSelectType(HomeAssistantEntityBaseType):
-    STOREDGE_CONTROL_MODE = (
-        "storedge_control_mode",
-        {
-            0: "Disabled",
-            1: "Maximize Self Consumption",
-            2: "Time of Use",
-            3: "Backup Only",
-            4: "Remote Control",
-        },
-    )
-    STOREDGE_AC_CHARGE_POLICY = (
-        "storedge_ac_charge_policy",
-        {
-            0: "Disabled",
-            1: "Always Allowed",
-            2: "Fixed Energy Limit",
-            3: "Percent of Production",
-        },
-    )
-    STOREDGE_CHARGE_DISCHARGE_MODE = (
-        "storedge_charge_discharge_mode",
-        {
-            0: "Off",
-            1: "Charge from Clipped Solar Power",
-            2: "Charge from Solar Power",
-            3: "Charge from Solar Power and Grid",
-            4: "Discharge to Maximize Export",
-            5: "Discharge to Minimize Import",
-            7: "Maximize Self Consumption",
-        },
-    )
+    """Generic writable-select presentation.
 
-    def __init__(self, key: str, options_map: dict[int, str]):
-        super().__init__(key, HomeAssistantType.SELECT, None, None, None)
+    Like HomeAssistantNumberType, holds no domain-specific members: the
+    options map (raw value -> human label) is supplied per call site via
+    field(options_map=...), not baked into an enum member here. The map
+    itself flows through to HomeAssistantEntity via json_schema_extra and
+    drives its value_template/command_template — this class only knows how
+    to render "a select with an optional label mapping", never what any
+    particular domain's labels actually are.
+    """
 
-        self._options_map: dict[int, str] = options_map
+    GENERIC = "select", None, None, None
 
-    @property
-    def options_map(self) -> dict[int, str]:
-        return self._options_map
-
-    @property
-    def options(self) -> list[str]:
-        return list(self._options_map.values())
+    def __init__(
+        self,
+        key: str,
+        device_class: str | None = None,
+        state_class: str | None = None,
+        unit_of_measurement: str | None = None,
+    ):
+        super().__init__(
+            key,
+            HomeAssistantType.SELECT,
+            device_class,
+            state_class,
+            unit_of_measurement,
+        )
 
     def field(
         self,
         title: str | None = None,
         input_field: BaseInputFieldEnumModel | None = None,
+        options_map: dict[Any, Any] | None = None,
         **json_schema_extra: Any,
     ) -> dict[str, Any]:
 
         json_schema_extra = {
-            "options": self.options,
+            "options": list(options_map.values()) if options_map else [],
+            "options_map": options_map,
             **json_schema_extra,
         }
 
@@ -372,7 +322,9 @@ class HomeAssistantEntity(HomeAssistantBaseModel):
     path: list[str] | None = Field(None, exclude=True)
     ha_type: HomeAssistantEntityBaseType = Field(exclude=True)
     unit: str | None = Field(None, exclude=True)
+    device_class_override: str | None = Field(None, exclude=True)
     command_topic_override: str | None = Field(None, exclude=True)
+    options_map: dict[Any, Any] | None = Field(None, exclude=True)
 
     _icon: str | None = PrivateAttr(default=None)
     _additional_fields: dict[str, Any] = PrivateAttr(default_factory=dict)
@@ -430,8 +382,8 @@ class HomeAssistantEntity(HomeAssistantBaseModel):
 
         value_expr = f"value_json.{'.'.join(self.path)}"
 
-        if isinstance(self.ha_type, HomeAssistantSelectType):
-            mapping = _jinja_dict_literal(self.ha_type.options_map)
+        if self.options_map:
+            mapping = _jinja_dict_literal(self.options_map)
             value_expr = f"{mapping}[{value_expr}]"
 
         return f"{{{{ {value_expr} }}}}"
@@ -439,10 +391,10 @@ class HomeAssistantEntity(HomeAssistantBaseModel):
     @computed_field
     @property
     def command_template(self) -> str | None:
-        if not isinstance(self.ha_type, HomeAssistantSelectType):
+        if not self.options_map:
             return None
 
-        reverse_map = {label: code for code, label in self.ha_type.options_map.items()}
+        reverse_map = {label: code for code, label in self.options_map.items()}
         mapping = _jinja_dict_literal(reverse_map)
         return f"{{{{ {mapping}[value] }}}}"
 
@@ -454,6 +406,9 @@ class HomeAssistantEntity(HomeAssistantBaseModel):
     @computed_field
     @property
     def device_class(self) -> str | None:
+        if self.device_class_override is not None:
+            return self.device_class_override
+
         return self.ha_type.device_class
 
     @computed_field
