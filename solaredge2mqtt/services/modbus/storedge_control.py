@@ -61,29 +61,23 @@ class StorEdgeControl:
             return
 
         await EventBus.emit(
-            StoredgeControlModeSubscribeEvent(
-                f"{self.topic_prefix}/storage_control_mode"
-            )
+            StoredgeControlModeSubscribeEvent(f"{self.topic_prefix}/control_mode")
         )
         await EventBus.emit(
             StoredgeAcChargePolicySubscribeEvent(
-                f"{self.topic_prefix}/storage_ac_charge_policy"
+                f"{self.topic_prefix}/ac_charge_policy"
             )
         )
         await EventBus.emit(
-            StoredgeAcChargeLimitSubscribeEvent(
-                f"{self.topic_prefix}/storage_ac_charge_limit"
-            )
+            StoredgeAcChargeLimitSubscribeEvent(f"{self.topic_prefix}/ac_charge_limit")
         )
         await EventBus.emit(
             StoredgeBackupReservedSettingSubscribeEvent(
-                f"{self.topic_prefix}/storage_backup_reserved_setting"
+                f"{self.topic_prefix}/backup_reserved_setting"
             )
         )
         await EventBus.emit(
-            StoredgeDefaultModeSubscribeEvent(
-                f"{self.topic_prefix}/storage_default_mode"
-            )
+            StoredgeDefaultModeSubscribeEvent(f"{self.topic_prefix}/default_mode")
         )
         await EventBus.emit(
             StoredgeRemoteControlCommandTimeoutSubscribeEvent(

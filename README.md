@@ -221,32 +221,34 @@ This is off by default: changing these settings affects real battery cycling, un
 Once enabled, the current values are published as part of the inverter payload under `storedge_control`, and nine command topics accept writes:
 
 ```
-modbus/inverter/storedge_control/storage_control_mode
-modbus/inverter/storedge_control/storage_ac_charge_policy
-modbus/inverter/storedge_control/storage_ac_charge_limit
-modbus/inverter/storedge_control/storage_backup_reserved_setting
-modbus/inverter/storedge_control/storage_default_mode
+modbus/inverter/storedge_control/control_mode
+modbus/inverter/storedge_control/ac_charge_policy
+modbus/inverter/storedge_control/ac_charge_limit
+modbus/inverter/storedge_control/backup_reserved_setting
+modbus/inverter/storedge_control/default_mode
 modbus/inverter/storedge_control/remote_control_command_timeout
 modbus/inverter/storedge_control/remote_control_command_mode
 modbus/inverter/storedge_control/remote_control_charge_limit
 modbus/inverter/storedge_control/remote_control_discharge_limit
 ```
 
-Payloads are a bare value or a JSON object, e.g. publishing `4` or `{"mode": 4}` to `storage_control_mode` switches the battery to Remote Control mode:
+Payloads are a bare value or a JSON object, e.g. publishing `4` or `{"mode": 4}` to `control_mode` switches the battery to Remote Control mode:
 
-| Topic suffix | Field | Range |
-|---|---|---|
-| `storage_control_mode` | `mode` | 0–4 (0 Disabled, 1 Maximize Self Consumption, 2 Time of Use, 3 Backup Only, 4 Remote Control) |
-| `storage_ac_charge_policy` | `policy` | 0–3 |
-| `storage_ac_charge_limit` | `limit` | ≥ 0 (kWh or %, depending on policy) |
-| `storage_backup_reserved_setting` | `percentage` | 0–100 |
-| `storage_default_mode` | `mode` | 0–7 (charge/discharge mode) |
-| `remote_control_command_timeout` | `seconds` | 0–86400 |
-| `remote_control_command_mode` | `mode` | 0–7 |
-| `remote_control_charge_limit` | `limit` | ≥ 0 (W) |
-| `remote_control_discharge_limit` | `limit` | ≥ 0 (W) |
+| Topic suffix | Field | Range | Read-back field (under `storedge_control`) |
+|---|---|---|---|
+| `control_mode` | `mode` | 0–4 (0 Disabled, 1 Maximize Self Consumption, 2 Time of Use, 3 Backup Only, 4 Remote Control) | `storage_control_mode` |
+| `ac_charge_policy` | `policy` | 0–3 | `storage_ac_charge_policy` |
+| `ac_charge_limit` | `limit` | ≥ 0 (kWh or %, depending on policy) | `storage_ac_charge_limit` |
+| `backup_reserved_setting` | `percentage` | 0–100 | `storage_backup_reserved_setting` |
+| `default_mode` | `mode` | 0–7 (charge/discharge mode) | `storage_default_mode` |
+| `remote_control_command_timeout` | `seconds` | 0–86400 | `remote_control_command_timeout` |
+| `remote_control_command_mode` | `mode` | 0–7 | `remote_control_command_mode` |
+| `remote_control_charge_limit` | `limit` | ≥ 0 (W) | `remote_control_charge_limit` |
+| `remote_control_discharge_limit` | `limit` | ≥ 0 (W) | `remote_control_discharge_limit` |
 
-`storage_control_mode`, `storage_ac_charge_policy`, `storage_ac_charge_limit`, and `storage_backup_reserved_setting` always take effect. The remaining five only take effect once `storage_control_mode` is `4` (Remote Control) — writing to them otherwise is rejected and logged, since SolarEdge ignores them outside Remote Control mode.
+The write topic suffixes are shorter than the read-back field names for the first four — the `storedge_control/` path segment already says what block this is, so the write topic drops the redundant `storage_` prefix. The read-back payload (published under `storedge_control` on the inverter's state topic) keeps the full SolarEdge-protocol field name for the SunSpec register.
+
+`control_mode`, `ac_charge_policy`, `ac_charge_limit`, and `backup_reserved_setting` always take effect. The remaining five only take effect once `storage_control_mode` is `4` (Remote Control) — writing to them otherwise is rejected and logged, since SolarEdge ignores them outside Remote Control mode.
 
 If a published value already matches the last value read back from the inverter, the write is skipped — these registers don't need to be exercised more than necessary. To force a write anyway (e.g. if the cached value might be stale), publish a JSON object with `"force": true`, e.g. `{"mode": 4, "force": true}`. Force only bypasses this no-op check — it does not bypass the Remote Control gate above.
 
