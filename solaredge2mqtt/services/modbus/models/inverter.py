@@ -67,6 +67,9 @@ class ModbusInverter(ModbusComponent):
         return self.info.homeassistant_device_info("Inverter")
 
 
+REMOTE_CONTROL_MODE = 4
+
+
 class ModbusStorEdgeControl(ModbusComponentValueGroup):
     storage_control_mode: int = Field(title="Storage control mode")
     storage_ac_charge_policy: int = Field(title="Storage AC charge policy")
