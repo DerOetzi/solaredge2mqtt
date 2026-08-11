@@ -36,8 +36,6 @@ LOCAL_TZ = get_localzone()
 #: Resolution of the weather forecast, the training data and the prediction.
 INTERVAL_MINUTES = 60
 
-WEATHER_PROVIDER = "openweathermap"
-
 ENERGY_FIELD = "energy"
 POWER_FIELD = "power"
 
@@ -63,7 +61,6 @@ class ForecastService:
         )
         forecaster_config = ForecasterConfig(
             interval_minutes=INTERVAL_MINUTES,
-            weather_provider=WEATHER_PROVIDER,
             hyperparametertuning=settings.hyperparametertuning,
             cachingdir=settings.cachingdir,
             cache_size_limit_mb=settings.cache_size_limit_mb,
