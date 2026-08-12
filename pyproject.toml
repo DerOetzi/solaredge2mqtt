@@ -48,7 +48,6 @@ solaredge2mqtt-forecast = "forecast:main"
 dev = [
     "setuptools-scm[toml]>=8",
     "ruff",
-    "tomli",
     "pyright==1.1.411",
     "pytest==9.1.1",
     "pytest-asyncio==1.4.0",
