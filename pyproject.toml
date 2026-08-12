@@ -48,7 +48,6 @@ solaredge2mqtt-forecast = "forecast:main"
 dev = [
     "setuptools-scm[toml]>=8",
     "ruff",
-    "tomli",
     "pyright==1.1.411",
     "pytest==9.1.1",
     "pytest-asyncio==1.4.0",
@@ -80,6 +79,7 @@ py-modules = ["migrate_config", "monitoring", "forecast"]
 version_scheme = "post-release"
 local_scheme = "node-and-date"
 fallback_version = "0.0.0.unknown"
+version_file = "solaredge2mqtt/_version.py"
 
 [tool.ruff]
 line-length = 88
