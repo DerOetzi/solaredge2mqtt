@@ -38,7 +38,6 @@ services/forecast/
 - InfluxDB, location, and weather (`SE2MQTT_FORECAST__*`) settings configured
 
 **Architecture constraints:**
-- Not available for `arm/v7`
 - Must run on low-powered devices (Raspberry Pi) — prefer simple, memory-efficient models
 
 ## Domain Knowledge — PV Production Factors
