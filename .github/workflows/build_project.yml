@@ -55,31 +55,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python 3.13
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
         with:
+          version: "0.12.3"
           python-version: "3.13"
-
-      - name: Cache Python packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: |
-            ~/.cache/pip
-            !~/.cache/pip/log
-          key: ${{ runner.os }}-python-3.13-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-python-3.13-pip-
-            ${{ runner.os }}-python-3.13-
-            ${{ runner.os }}-python-
-            ${{ runner.os }}-pip-
-
-      - name: Install build package
-        run: |
-          python -m pip install --upgrade pip
-          pip install build
+          enable-cache: true
+          cache-suffix: "3.13"
 
       - name: Install package with dev dependencies
-        run: pip install -e ".[dev,forecast]"
+        run: uv sync --locked --extra dev --extra forecast
 
       - name: Get changed Python files
         id: changed-py-files
@@ -95,22 +80,22 @@ jobs:
       - name: Lint with ruff
         run: |
           FILES="${{ steps.changed-py-files.outputs.files }}"
-          ruff check ${FILES:-.}
+          uv run ruff check ${FILES:-.}
 
       - name: Type check with pyright
         run: |
           FILES="${{ steps.changed-py-files.outputs.files }}"
           if [ -z "$FILES" ]; then
-            pyright
+            uv run pyright
           else
-            pyright $FILES
+            uv run pyright $FILES
           fi
 
       - name: Run tests with coverage
-        run: python -m pytest --cov=solaredge2mqtt --cov-report=xml:coverage.xml --tb=short
+        run: uv run pytest --cov=solaredge2mqtt --cov-report=xml:coverage.xml --tb=short
 
       - name: Build package
-        run: python -m build
+        run: uv build
 
       - name: Save python artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -152,34 +137,22 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
         with:
+          version: "0.12.3"
           python-version: ${{ matrix.python-version }}
-
-      - name: Cache Python packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: |
-            ~/.cache/pip
-            !~/.cache/pip/log
-          key: ${{ runner.os }}-python-${{ matrix.python-version }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-python-${{ matrix.python-version }}-pip-
-            ${{ runner.os }}-python-${{ matrix.python-version }}-
-            ${{ runner.os }}-python-
-            ${{ runner.os }}-pip-
+          enable-cache: true
+          cache-suffix: ${{ matrix.python-version }}
 
       - name: Install package with dev dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev,forecast]"
+        run: uv sync --locked --extra dev --extra forecast
 
       - name: Run tests
-        run: python -m pytest --tb=short
+        run: uv run pytest --tb=short
 
   build-docker:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     needs: [variables, build-check]
     env:
       REF_NAME: ${{ needs.variables.outputs.ref_name }}
@@ -191,26 +164,28 @@ jobs:
       packages: write
     strategy:
       matrix:
-        arch: [amd64, arm64, arm/v7]
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
 
-      - name: Install setuptools-scm and tomli
-        run: pip install setuptools-scm[toml]>=8 tomli
-
-      - name: Generate static version.json
-        run: python freeze_version.py
-
-      - name: Generate requirements hashFiles
-        run: python generate_requirements.py
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
         with:
-          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          version: "0.12.3"
+
+      - name: Generate static solaredge2mqtt/_version.py
+        # --system would install setuptools-scm into the runner's own Python,
+        # which Ubuntu marks externally-managed (PEP 668) and uv refuses to
+        # touch. --with runs freeze_version.py in a throwaway uv-managed
+        # environment instead - no system Python involved at all.
+        run: uv run --no-project --with 'setuptools-scm[toml]>=8' python freeze_version.py
 
       - name: Set up Docker Buildx
         id: buildx
@@ -237,7 +212,6 @@ jobs:
           case "${{ matrix.arch }}" in
             amd64)   echo "ARCH_TAG=amd64" >> $GITHUB_ENV ;;
             arm64)   echo "ARCH_TAG=arm64" >> $GITHUB_ENV ;;
-            arm/v7)  echo "ARCH_TAG=armv7" >> $GITHUB_ENV ;;
           esac
 
       - name: Extract Docker metadata
@@ -253,6 +227,7 @@ jobs:
             type=raw,value=${{ env.REF_NAME }}-${{ env.ARCH_TAG }},enable=${{ github.event_name != 'release' }}
 
       - name: Build and push Docker image
+        id: build
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
         with:
           builder: ${{ steps.buildx.outputs.name }}
@@ -264,6 +239,28 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ github.repository }}-${{ env.REF_NAME }}-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=${{ github.repository }}-${{ env.REF_NAME }}-${{ matrix.arch }}
+
+      # merge-manifest combines these per-arch builds by digest, not by the
+      # mutable per-arch tags above: two overlapping workflow runs racing to
+      # push the same tag (e.g. arm64's longer build time letting an older
+      # commit's push land after a newer one's) must never let the older
+      # image win the final multi-arch manifest silently. A digest is
+      # immutable and always names the exact image this job just built.
+      - name: Export digest
+        if: ${{github.event_name == 'release' || (github.event_name == 'push' && contains(fromJSON(vars.PACKAGE_BRANCHES), github.ref_name))}}
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        if: ${{github.event_name == 'release' || (github.event_name == 'push' && contains(fromJSON(vars.PACKAGE_BRANCHES), github.ref_name))}}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: digests-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
 
   merge-manifest:
     runs-on: ubuntu-latest
@@ -307,40 +304,53 @@ jobs:
             type=raw,value=${{ env.VERSION }},enable=${{ github.event_name == 'release' }}
             type=raw,value=${{ env.REF_NAME }},enable=${{ github.event_name != 'release' }}
 
+      # Downloads one file per build-docker leg, named after that leg's image
+      # digest (see "Export digest" in build-docker). Combining by digest
+      # rather than by the mutable per-arch tags (:REF_NAME-amd64 etc.) means
+      # this job always assembles exactly the images this workflow run built,
+      # immune to a slower/older run's push landing after this one's.
+      - name: Download digests
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: digests-*
+          path: /tmp/digests
+          merge-multiple: true
+
       - name: Create and push multi-arch manifest
         run: |
           set -eux
 
+          cd /tmp/digests
+          ghcr_refs=()
+          for digest in *; do
+            ghcr_refs+=("${{ env.GHCR_IMAGE }}@sha256:$digest")
+          done
+
           if [ "${{ github.event_name }}" == "release" ]; then
+            dockerhub_refs=()
+            for digest in *; do
+              dockerhub_refs+=("${{ env.IMAGE_NAME }}@sha256:$digest")
+            done
+
             # Create latest tag
             docker buildx imagetools create \
               -t ${{ env.GHCR_IMAGE }}:latest \
-              ${{ env.GHCR_IMAGE }}:latest-amd64 \
-              ${{ env.GHCR_IMAGE }}:latest-arm64 \
-              ${{ env.GHCR_IMAGE }}:latest-armv7
+              "${ghcr_refs[@]}"
 
             docker buildx imagetools create \
               -t ${{ env.IMAGE_NAME }}:latest \
-              ${{ env.IMAGE_NAME }}:latest-amd64 \
-              ${{ env.IMAGE_NAME }}:latest-arm64 \
-              ${{ env.IMAGE_NAME }}:latest-armv7
+              "${dockerhub_refs[@]}"
 
             # Create version tag
             docker buildx imagetools create \
               -t ${{ env.GHCR_IMAGE }}:${{ env.VERSION }} \
-              ${{ env.GHCR_IMAGE }}:${{ env.VERSION }}-amd64 \
-              ${{ env.GHCR_IMAGE }}:${{ env.VERSION }}-arm64 \
-              ${{ env.GHCR_IMAGE }}:${{ env.VERSION }}-armv7
+              "${ghcr_refs[@]}"
 
             docker buildx imagetools create \
               -t ${{ env.IMAGE_NAME }}:${{ env.VERSION }} \
-              ${{ env.IMAGE_NAME }}:${{ env.VERSION }}-amd64 \
-              ${{ env.IMAGE_NAME }}:${{ env.VERSION }}-arm64 \
-              ${{ env.IMAGE_NAME }}:${{ env.VERSION }}-armv7
+              "${dockerhub_refs[@]}"
           else
             docker buildx imagetools create \
               -t ${{ env.GHCR_IMAGE }}:${{ env.REF_NAME }} \
-              ${{ env.GHCR_IMAGE }}:${{ env.REF_NAME }}-amd64 \
-              ${{ env.GHCR_IMAGE }}:${{ env.REF_NAME }}-arm64 \
-              ${{ env.GHCR_IMAGE }}:${{ env.REF_NAME }}-armv7
+              "${ghcr_refs[@]}"
           fi

@@ -2,147 +2,95 @@
 
 import builtins
 import importlib
-import io
-import json
 import sys
-from pathlib import Path
 from types import ModuleType
 from unittest.mock import patch
 
 
 def _reload_package() -> ModuleType:
-    """Reload package module to re-run module-level init code."""
+    """Reload package module to re-run module-level init code.
+
+    Does not touch sys.modules["solaredge2mqtt._version"] itself - callers
+    control that submodule's presence/absence via patch.dict/_block_import,
+    and popping it here would undo whatever they just set up.
+    """
     sys.modules.pop("solaredge2mqtt", None)
     return importlib.import_module("solaredge2mqtt")
 
 
-def test_version_from_version_file(monkeypatch):
-    """Use version from version.json when file exists and is valid."""
+def _block_import(*names_to_block: str):
+    """Patch builtins.__import__ to raise ImportError for the given names."""
+    original_import = builtins.__import__
 
-    def fake_exists(self: Path) -> bool:
-        return self.name == "version.json"
+    def fake_import(name, *args, **kwargs):
+        if name in names_to_block:
+            raise ImportError(f"missing {name}")
+        return original_import(name, *args, **kwargs)
 
-    def fake_open(self: Path, encoding: str = "utf-8"):
-        del encoding
-        return io.StringIO(json.dumps({"version": "1.2.3-test"}))
+    return patch("builtins.__import__", side_effect=fake_import)
 
-    monkeypatch.setattr(Path, "exists", fake_exists)
-    monkeypatch.setattr(Path, "open", fake_open)
 
-    module = _reload_package()
+def test_version_from_version_file():
+    """Use __version__ from solaredge2mqtt._version when it is importable."""
+    fake_version_module = ModuleType("solaredge2mqtt._version")
+    setattr(fake_version_module, "__version__", "1.2.3-test")
+
+    with patch.dict(sys.modules, {"solaredge2mqtt._version": fake_version_module}):
+        module = _reload_package()
 
     assert module.__version__ == "1.2.3-test"
 
 
-def test_version_file_read_error_falls_back_to_default(monkeypatch):
-    """Keep default version when version file exists but fails to read."""
-
-    def fake_exists(self: Path) -> bool:
-        return self.name == "version.json"
-
-    def fake_open(self: Path, encoding: str = "utf-8"):
-        del self, encoding
-        raise OSError("cannot read")
-
-    monkeypatch.setattr(Path, "exists", fake_exists)
-    monkeypatch.setattr(Path, "open", fake_open)
-
-    module = _reload_package()
-
-    assert module.__version__ == "0.0.0-unknown"
-
-
-def test_version_from_pkg_metadata_when_no_version_file(monkeypatch):
-    """Use package metadata fallback when no version file exists."""
-
-    def fake_exists(self: Path) -> bool:
-        return False
-
-    monkeypatch.setattr(Path, "exists", fake_exists)
-
-    module = _reload_package()
-
-    assert isinstance(module.__version__, str)
-    assert len(module.__version__) > 0
-
-
-def test_version_from_setuptools_scm_when_available(monkeypatch):
-    """Use setuptools_scm get_version when version file is absent."""
-
-    def fake_exists(self: Path) -> bool:
-        return False
-
-    monkeypatch.setattr(Path, "exists", fake_exists)
-
+def test_version_from_setuptools_scm_when_version_file_absent():
+    """Fall back to a live setuptools_scm query when _version.py is missing."""
     fake_scm = ModuleType("setuptools_scm")
     setattr(fake_scm, "get_version", lambda **kwargs: "2.3.4-scm")  # noqa: ARG005
 
-    with patch.dict(sys.modules, {"setuptools_scm": fake_scm}):
-        module = _reload_package()
+    with _block_import("solaredge2mqtt._version"):
+        with patch.dict(sys.modules, {"setuptools_scm": fake_scm}):
+            module = _reload_package()
 
     assert module.__version__ == "2.3.4-scm"
 
 
-def test_version_setuptools_scm_failure_keeps_default(monkeypatch):
-    """If setuptools_scm fails, keep default version string."""
+def test_setuptools_scm_called_with_matching_scheme():
+    """The fallback query must use the same scheme as [tool.setuptools_scm]."""
+    captured_kwargs = {}
 
-    def fake_exists(self: Path) -> bool:
-        return False
-
-    monkeypatch.setattr(Path, "exists", fake_exists)
+    def fake_get_version(**kwargs):
+        captured_kwargs.update(kwargs)
+        return "2.3.4-scm"
 
     fake_scm = ModuleType("setuptools_scm")
+    setattr(fake_scm, "get_version", fake_get_version)
+
+    with _block_import("solaredge2mqtt._version"):
+        with patch.dict(sys.modules, {"setuptools_scm": fake_scm}):
+            _reload_package()
+
+    assert captured_kwargs["version_scheme"] == "post-release"
+    assert captured_kwargs["local_scheme"] == "node-and-date"
+
+
+def test_version_setuptools_scm_failure_keeps_default():
+    """If the live query fails, keep the hardcoded default version string."""
 
     def _raise(**kwargs):  # noqa: ARG001
         raise RuntimeError("scm failed")
 
+    fake_scm = ModuleType("setuptools_scm")
     setattr(fake_scm, "get_version", _raise)
 
-    with patch.dict(sys.modules, {"setuptools_scm": fake_scm}):
-        module = _reload_package()
-
-    assert isinstance(module.__version__, str)
-
-
-def test_version_from_pkg_metadata_when_setuptools_scm_unavailable(monkeypatch):
-    """Use package metadata when setuptools_scm import is unavailable."""
-
-    def fake_exists(self: Path) -> bool:
-        return False
-
-    monkeypatch.setattr(Path, "exists", fake_exists)
-
-    original_import = builtins.__import__
-
-    def fake_import(name, *args, **kwargs):
-        if name == "setuptools_scm":
-            raise ImportError("missing setuptools_scm")
-        return original_import(name, *args, **kwargs)
-
-    with patch("builtins.__import__", side_effect=fake_import):
-        module = _reload_package()
-
-    assert isinstance(module.__version__, str)
-    assert len(module.__version__) > 0
-
-
-def test_version_pkg_metadata_failure_keeps_default_when_scm_unavailable(monkeypatch):
-    """Keep default when both setuptools_scm import and pkg metadata fail."""
-
-    def fake_exists(self: Path) -> bool:
-        return False
-
-    monkeypatch.setattr(Path, "exists", fake_exists)
-
-    original_import = builtins.__import__
-
-    def fake_import(name, *args, **kwargs):
-        if name == "setuptools_scm":
-            raise ImportError("missing setuptools_scm")
-        return original_import(name, *args, **kwargs)
-
-    with patch("builtins.__import__", side_effect=fake_import):
-        with patch("importlib.metadata.version", side_effect=RuntimeError("no pkg")):
+    with _block_import("solaredge2mqtt._version"):
+        with patch.dict(sys.modules, {"setuptools_scm": fake_scm}):
             module = _reload_package()
+
+    assert module.__version__ == "0.0.0-unknown"
+
+
+def test_version_setuptools_scm_import_error_keeps_default():
+    """If setuptools_scm itself can't be imported, keep the default version."""
+    with _block_import("solaredge2mqtt._version", "setuptools_scm"):
+        module = _reload_package()
 
     assert module.__version__ == "0.0.0-unknown"
