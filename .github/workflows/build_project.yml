@@ -180,11 +180,12 @@ jobs:
         with:
           version: "0.12.3"
 
-      - name: Install setuptools-scm
-        run: uv pip install --system setuptools-scm[toml]>=8
-
-      - name: Generate static version.json
-        run: python freeze_version.py
+      - name: Generate static solaredge2mqtt/_version.py
+        # --system would install setuptools-scm into the runner's own Python,
+        # which Ubuntu marks externally-managed (PEP 668) and uv refuses to
+        # touch. --with runs freeze_version.py in a throwaway uv-managed
+        # environment instead - no system Python involved at all.
+        run: uv run --no-project --with 'setuptools-scm[toml]>=8' python freeze_version.py
 
       - name: Set up Docker Buildx
         id: buildx
