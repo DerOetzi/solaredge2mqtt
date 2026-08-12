@@ -850,7 +850,7 @@ wheels = [
 
 [[package]]
 name = "pvlearn"
-version = "0.2.2"
+version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "astral" },
@@ -861,9 +861,9 @@ dependencies = [
     { name = "scikit-learn" },
     { name = "scipy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ed/44/aa0ae4ef59c134290de5bca4b0806a5a9ccb50366d77db13d308d99db70b/pvlearn-0.2.2.tar.gz", hash = "sha256:a093993eef72c37f2044ad41aa032538484e14adbc7a283a917ce16269d93b92", size = 375669, upload-time = "2026-08-08T11:57:10.419Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/27/91/49ec31322b40e6d697e7230558ad1dba53774c64da22524966d4048f4287/pvlearn-0.4.0.tar.gz", hash = "sha256:259ab80a6ff4b38b1e20034576b546ae061dead47cb896c4178eba1c4a58e1e1", size = 366043, upload-time = "2026-08-11T21:26:52.124Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/53/81/cf76d245085e0930cdad5ab4883ee37a0f9f8bc7d1f3899f41492f6f0916/pvlearn-0.2.2-py3-none-any.whl", hash = "sha256:7357c6aea48086a1ecf63f7919bd65b73e0a5ab40e3b4dce3eb206d43ccfaaec", size = 17744, upload-time = "2026-08-08T11:57:08.883Z" },
+    { url = "https://files.pythonhosted.org/packages/82/de/76cf2f9ac5e66c5123888d3adda23d9e0247382287d56da1be35ec6f374a/pvlearn-0.4.0-py3-none-any.whl", hash = "sha256:8fa36c40a0d1a876bfa0fbe0a5fa5308953caa1e6e8699d819a6f4775e62b341", size = 17679, upload-time = "2026-08-11T21:26:50.671Z" },
 ]
 
 [[package]]
@@ -1348,7 +1348,7 @@ requires-dist = [
     { name = "jsonref", specifier = "==1.1.0" },
     { name = "loguru", specifier = "==0.7.3" },
     { name = "platformdirs", specifier = "==4.11.0" },
-    { name = "pvlearn", marker = "extra == 'forecast'", specifier = "==0.2.2" },
+    { name = "pvlearn", marker = "extra == 'forecast'", specifier = "==0.4.0" },
     { name = "pyarrow", marker = "extra == 'dev'", specifier = "==25.0.0" },
     { name = "pydantic", specifier = "==2.13.4" },
     { name = "pyjwt", specifier = "==2.13.0" },
