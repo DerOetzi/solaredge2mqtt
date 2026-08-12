@@ -1,38 +1,21 @@
+# syntax=docker/dockerfile:1
 FROM python:3.13-slim AS buildimage
-
-ARG TARGETARCH
 
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PATH="/venv/bin:$PATH"
+    PATH="/venv/bin:$PATH" \
+    UV_PROJECT_ENVIRONMENT=/venv \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=never
 
-COPY requirements*.txt .
+COPY --from=ghcr.io/astral-sh/uv:0.12.3 /uv /usr/local/bin/uv
 
-RUN set -eux && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
-    build-essential \
-    gcc && \
-    rm -rf /var/lib/apt/lists/* && \
-    python3 -m venv /venv && \
-    . /venv/bin/activate && \
-    pip install --upgrade pip && \
-    if [ "$TARGETARCH" = "arm" ]; then \
-    pip install \
-    --prefer-binary \
-    --no-cache-dir \
-    --extra-index-url https://www.piwheels.org/simple \
-    --extra-index-url https://download.pytorch.org/whl/cpu \
-    -r requirements-armv7.txt; \
-    else  \
-    pip install \
-    --prefer-binary \
-    --no-cache-dir \
-    --extra-index-url https://download.pytorch.org/whl/cpu \
-    -r requirements.txt; \
-    fi 
+COPY pyproject.toml uv.lock ./
+
+RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
+    uv sync --frozen --no-install-project --extra forecast
 
 FROM python:3.13-slim
 

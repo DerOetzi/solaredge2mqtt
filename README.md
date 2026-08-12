@@ -558,8 +558,6 @@ If a battery is detected via Modbus, the forecast also publishes `battery_charge
 - Minimum 60 hours of training data must be collected before forecasting begins
 - Data recording must be consistent (gaps longer than an hour prevent training data collection)
 
-> **Note**: Forecast service is not available for `arm/v7` architectures due to dependency compatibility issues.
-
 **Tip**:
 
 Want to use SolarEdge2MQTT forecasts in the Home Assistant Energy Dashboard?
@@ -613,6 +611,8 @@ For development and testing environments:
 ## Docker Deployment
 
 For Docker and Docker Compose deployment instructions, see the **[Docker Deployment Guide](DOCKER.md)**.
+
+> **Note**: `arm/v7` (32-bit ARM) images are no longer built or published as of this version. See [ADR 0004](docs/decisions/0004-drop-armv7-support.md) for why, and for a self-build recipe if you're still on that platform.
 
 The Docker deployment guide covers:
 - Running with Docker

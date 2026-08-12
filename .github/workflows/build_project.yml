@@ -66,7 +66,7 @@ jobs:
           path: |
             ~/.cache/pip
             !~/.cache/pip/log
-          key: ${{ runner.os }}-python-3.13-pip-${{ hashFiles('**/requirements.txt') }}
+          key: ${{ runner.os }}-python-3.13-pip-${{ hashFiles('uv.lock') }}
           restore-keys: |
             ${{ runner.os }}-python-3.13-pip-
             ${{ runner.os }}-python-3.13-
@@ -163,7 +163,7 @@ jobs:
           path: |
             ~/.cache/pip
             !~/.cache/pip/log
-          key: ${{ runner.os }}-python-${{ matrix.python-version }}-pip-${{ hashFiles('**/requirements.txt') }}
+          key: ${{ runner.os }}-python-${{ matrix.python-version }}-pip-${{ hashFiles('uv.lock') }}
           restore-keys: |
             ${{ runner.os }}-python-${{ matrix.python-version }}-pip-
             ${{ runner.os }}-python-${{ matrix.python-version }}-
@@ -179,7 +179,7 @@ jobs:
         run: python -m pytest --tb=short
 
   build-docker:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     needs: [variables, build-check]
     env:
       REF_NAME: ${{ needs.variables.outputs.ref_name }}
@@ -191,26 +191,22 @@ jobs:
       packages: write
     strategy:
       matrix:
-        arch: [amd64, arm64, arm/v7]
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
 
-      - name: Install setuptools-scm and tomli
-        run: pip install setuptools-scm[toml]>=8 tomli
+      - name: Install setuptools-scm
+        run: pip install setuptools-scm[toml]>=8
 
       - name: Generate static version.json
         run: python freeze_version.py
-
-      - name: Generate requirements hashFiles
-        run: python generate_requirements.py
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8
-        with:
-          platforms: linux/amd64,linux/arm64,linux/arm/v7
 
       - name: Set up Docker Buildx
         id: buildx
@@ -237,7 +233,6 @@ jobs:
           case "${{ matrix.arch }}" in
             amd64)   echo "ARCH_TAG=amd64" >> $GITHUB_ENV ;;
             arm64)   echo "ARCH_TAG=arm64" >> $GITHUB_ENV ;;
-            arm/v7)  echo "ARCH_TAG=armv7" >> $GITHUB_ENV ;;
           esac
 
       - name: Extract Docker metadata
@@ -316,31 +311,26 @@ jobs:
             docker buildx imagetools create \
               -t ${{ env.GHCR_IMAGE }}:latest \
               ${{ env.GHCR_IMAGE }}:latest-amd64 \
-              ${{ env.GHCR_IMAGE }}:latest-arm64 \
-              ${{ env.GHCR_IMAGE }}:latest-armv7
+              ${{ env.GHCR_IMAGE }}:latest-arm64
 
             docker buildx imagetools create \
               -t ${{ env.IMAGE_NAME }}:latest \
               ${{ env.IMAGE_NAME }}:latest-amd64 \
-              ${{ env.IMAGE_NAME }}:latest-arm64 \
-              ${{ env.IMAGE_NAME }}:latest-armv7
+              ${{ env.IMAGE_NAME }}:latest-arm64
 
             # Create version tag
             docker buildx imagetools create \
               -t ${{ env.GHCR_IMAGE }}:${{ env.VERSION }} \
               ${{ env.GHCR_IMAGE }}:${{ env.VERSION }}-amd64 \
-              ${{ env.GHCR_IMAGE }}:${{ env.VERSION }}-arm64 \
-              ${{ env.GHCR_IMAGE }}:${{ env.VERSION }}-armv7
+              ${{ env.GHCR_IMAGE }}:${{ env.VERSION }}-arm64
 
             docker buildx imagetools create \
               -t ${{ env.IMAGE_NAME }}:${{ env.VERSION }} \
               ${{ env.IMAGE_NAME }}:${{ env.VERSION }}-amd64 \
-              ${{ env.IMAGE_NAME }}:${{ env.VERSION }}-arm64 \
-              ${{ env.IMAGE_NAME }}:${{ env.VERSION }}-armv7
+              ${{ env.IMAGE_NAME }}:${{ env.VERSION }}-arm64
           else
             docker buildx imagetools create \
               -t ${{ env.GHCR_IMAGE }}:${{ env.REF_NAME }} \
               ${{ env.GHCR_IMAGE }}:${{ env.REF_NAME }}-amd64 \
-              ${{ env.GHCR_IMAGE }}:${{ env.REF_NAME }}-arm64 \
-              ${{ env.GHCR_IMAGE }}:${{ env.REF_NAME }}-armv7
+              ${{ env.GHCR_IMAGE }}:${{ env.REF_NAME }}-arm64
           fi

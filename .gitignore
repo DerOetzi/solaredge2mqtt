@@ -171,6 +171,3 @@ docker/container/
 version.json
 
 node_modules/
-
-requirements.txt
-requirements-armv7.txt
