@@ -79,6 +79,7 @@ py-modules = ["migrate_config", "monitoring", "forecast"]
 version_scheme = "post-release"
 local_scheme = "node-and-date"
 fallback_version = "0.0.0.unknown"
+version_file = "solaredge2mqtt/_version.py"
 
 [tool.ruff]
 line-length = 88

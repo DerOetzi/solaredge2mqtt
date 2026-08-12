@@ -168,6 +168,6 @@ data.csv
 
 docker/container/
 
-version.json
+solaredge2mqtt/_version.py
 
 node_modules/
