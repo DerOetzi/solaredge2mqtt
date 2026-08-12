@@ -115,7 +115,6 @@ class TestForecastServiceInit:
 
         assert isinstance(service.forecaster, Forecaster)
         assert service.forecaster.config.interval_minutes == 60
-        assert service.forecaster.config.weather_provider == "openweathermap"
 
     def test_forecast_service_subscribes_events(self, mock_event_bus):
         """Test ForecastService registers event handlers."""
@@ -815,8 +814,10 @@ class TestForecastServiceTrain:
             ENERGY_FIELD,
             "cloud_cover",
             "condition_code",
+            "weather_provider",
         ]
         assert trained_with["condition_code"].iloc[0] == 0
+        assert trained_with["weather_provider"].iloc[0] == "openweathermap"
 
     def test_training_wraps_pvlearn_errors(self):
         """pvlearn errors should surface as InvalidDataException."""
