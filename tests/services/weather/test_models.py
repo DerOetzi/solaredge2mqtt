@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 
 import pytest
-from pandas import DataFrame, isna
+from pandas import DataFrame, concat, isna
 from pvlearn.schema import (
     CATEGORICAL_FEATURES,
     CYCLICAL_FEATURES,
@@ -346,6 +346,16 @@ class TestCanonicalMapping:
 
         assert not {"ghi", "dni", "dhi"} & mapped
 
+    def test_provider_field_is_a_canonical_categorical(self):
+        """pvlearn learns the provider per row, so the name has to match."""
+        assert OpenWeatherMapBaseData.PROVIDER_FIELD in CATEGORICAL_FEATURES
+
+    def test_provider_is_not_read_off_the_payload(self):
+        """The adapter stamps its own name; no provider field maps onto it."""
+        assert OpenWeatherMapBaseData.PROVIDER_FIELD not in (
+            OpenWeatherMapBaseData.CANONICAL_FIELDS.values()
+        )
+
 
 class TestToWmoCode:
     """Tests for translating condition ids to WMO codes."""
@@ -399,6 +409,7 @@ class TestToCanonical:
         )
 
         assert canonical == {
+            "weather_provider": "openweathermap",
             "cloud_cover": 20,
             "temperature": 25.0,
             "wind_direction": 180,
@@ -410,21 +421,33 @@ class TestToCanonical:
             {"weather_main": "Clear", "snow": 0.0, "temp": 25.0}
         )
 
-        assert canonical == {"temperature": 25.0}
+        assert canonical == {
+            "weather_provider": "openweathermap",
+            "temperature": 25.0,
+        }
 
     def test_translates_the_condition(self):
         canonical = OpenWeatherMapBaseData.to_canonical({"weather_id": 500})
 
-        assert canonical == {"condition_code": 61}
+        assert canonical == {
+            "weather_provider": "openweathermap",
+            "condition_code": 61,
+        }
 
     def test_non_numeric_condition_becomes_none(self):
         """A string where a code belongs is missing data, not overcast."""
         canonical = OpenWeatherMapBaseData.to_canonical({"weather_id": "Clear"})
 
-        assert canonical == {"condition_code": None}
+        assert canonical == {
+            "weather_provider": "openweathermap",
+            "condition_code": None,
+        }
 
-    def test_empty_input_yields_empty_output(self):
-        assert OpenWeatherMapBaseData.to_canonical({}) == {}
+    def test_empty_input_yields_only_the_provider(self):
+        """The provider is this adapter's own fact, not one of the payload's."""
+        assert OpenWeatherMapBaseData.to_canonical({}) == {
+            "weather_provider": "openweathermap"
+        }
 
 
 class TestToCanonicalFrame:
@@ -470,6 +493,13 @@ class TestToCanonicalFrame:
         )
 
         assert isna(canonical["condition_code"].iloc[0])
+
+    def test_stamps_the_provider_onto_every_row(self):
+        data = concat([make_training_frame(), make_training_frame()])
+
+        canonical = OpenWeatherMapBaseData.to_canonical_frame(data)
+
+        assert list(canonical["weather_provider"]) == ["openweathermap"] * 2
 
     def test_input_frame_is_not_modified(self):
         data = make_training_frame()

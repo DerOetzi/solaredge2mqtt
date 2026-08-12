@@ -142,6 +142,12 @@ class OpenWeatherMapBaseData(Solaredge2MQTTBaseModel):
 
     CONDITION_FIELD: ClassVar[str] = "weather_id"
 
+    #: Canonical feature naming the provider a row came from. pvlearn treats it
+    #: as a per-row categorical feature rather than a training-run setting, so
+    #: the adapter stamps its own name onto every row it hands over.
+    PROVIDER_FIELD: ClassVar[str] = "weather_provider"
+    PROVIDER_NAME: ClassVar[str] = "openweathermap"
+
     #: Columns of a `forecast_training` frame the forecaster needs under their
     #: stored names, next to the translated weather fields.
     TRAINING_FIELDS: ClassVar[tuple[str, ...]] = ("time", "energy")
@@ -219,7 +225,7 @@ class OpenWeatherMapBaseData(Solaredge2MQTTBaseModel):
     @classmethod
     def to_canonical(cls, estimation_data: Mapping[str, Any]) -> WeatherData:
         """Rename one weather snapshot onto the canonical schema."""
-        canonical: WeatherData = {}
+        canonical: WeatherData = {cls.PROVIDER_FIELD: cls.PROVIDER_NAME}
 
         for field, value in estimation_data.items():
             canonical_name = cls.CANONICAL_FIELDS.get(field)
@@ -242,7 +248,8 @@ class OpenWeatherMapBaseData(Solaredge2MQTTBaseModel):
         Columns without a canonical counterpart are dropped, except the
         `TRAINING_FIELDS`, which the forecaster needs under those exact names.
         Rows older than a field's introduction simply carry NaN, which the
-        forecaster tolerates.
+        forecaster tolerates. Every row is stamped with `PROVIDER_NAME`: the
+        stored snapshots all come from this adapter.
         """
         canonical = data.copy()
 
@@ -259,6 +266,7 @@ class OpenWeatherMapBaseData(Solaredge2MQTTBaseModel):
             "DataFrame", canonical[[col for col in canonical.columns if col in keep]]
         )
         canonical.columns = [keep[str(col)] for col in canonical.columns]
+        canonical[cls.PROVIDER_FIELD] = cls.PROVIDER_NAME
 
         return canonical
 
