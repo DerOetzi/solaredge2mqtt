@@ -1,6 +1,5 @@
 """Tests for freeze_version.py script."""
 
-import json
 import os
 import subprocess
 import sys
@@ -10,63 +9,47 @@ from unittest.mock import ANY, patch
 import pytest
 
 
-class TestGenerateVersionJson:
-    """Tests for generate_version_json function."""
+class TestGenerateVersionFile:
+    """Unit tests for generate_version_file, with get_version mocked out."""
 
-    def test_writes_version_json(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-        """Test that generate_version_json writes a valid version.json file."""
-        monkeypatch.chdir(tmp_path)
-        version_file = tmp_path / "solaredge2mqtt" / "version.json"
-        version_file.parent.mkdir(parents=True)
-
+    def test_calls_get_version_with_matching_scheme(self):
+        """generate_version_file must pass the same scheme as pyproject.toml."""
         with patch("freeze_version.get_version", return_value="1.2.3") as mock_get:
-            from freeze_version import generate_version_json
+            from freeze_version import generate_version_file
 
-            generate_version_json()
+            generate_version_file()
 
-            mock_get.assert_called_once_with(root=".", relative_to=ANY)
-
-        data = json.loads(version_file.read_text(encoding="utf-8"))
-        assert data == {"version": "1.2.3"}
-
-    def test_version_json_ends_with_newline(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
-        """Test that the generated version.json file ends with a newline."""
-        monkeypatch.chdir(tmp_path)
-        (tmp_path / "solaredge2mqtt").mkdir()
-
-        with patch("freeze_version.get_version", return_value="0.9.0"):
-            from freeze_version import generate_version_json
-
-            generate_version_json()
-
-        content = (tmp_path / "solaredge2mqtt" / "version.json").read_text(
-            encoding="utf-8"
+        mock_get.assert_called_once_with(
+            root=".",
+            relative_to=ANY,
+            version_scheme="post-release",
+            local_scheme="node-and-date",
+            version_file="solaredge2mqtt/_version.py",
         )
-        assert content.endswith("\n")
 
-    def test_prints_generated_path(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-        capsys: pytest.CaptureFixture,
-    ):
-        """Test that generate_version_json prints the output path and version."""
-        monkeypatch.chdir(tmp_path)
-        (tmp_path / "solaredge2mqtt").mkdir()
-
+    def test_prints_generated_path_and_version(self, capsys: pytest.CaptureFixture):
+        """generate_version_file prints the output path and resolved version."""
         with patch("freeze_version.get_version", return_value="2.0.0"):
-            from freeze_version import generate_version_json
+            from freeze_version import generate_version_file
 
-            generate_version_json()
+            generate_version_file()
 
         captured = capsys.readouterr()
-        assert "version.json" in captured.out
+        assert "solaredge2mqtt/_version.py" in captured.out
         assert "2.0.0" in captured.out
 
-    def test_main_block_calls_generate_version_json(self, tmp_path: Path):
-        """Test that running freeze_version as __main__ writes the version file."""
+
+class TestGenerateVersionFileIntegration:
+    """Integration tests exercising the real setuptools_scm write path.
+
+    Writing the file is now setuptools_scm's own job (version_file=...), not
+    freeze_version.py's - mocking get_version out (as the unit tests above do)
+    bypasses that entirely, so these run the real script against
+    SETUPTOOLS_SCM_PRETEND_VERSION to verify the file actually lands with the
+    expected content.
+    """
+
+    def _copy_script_into(self, tmp_path: Path) -> None:
         script_copy = tmp_path / "freeze_version.py"
         script_copy.write_text(
             (Path(__file__).parent.parent / "freeze_version.py").read_text(
@@ -76,6 +59,9 @@ class TestGenerateVersionJson:
         )
         (tmp_path / "solaredge2mqtt").mkdir()
 
+    def test_writes_version_file_with_pretend_version(self, tmp_path: Path):
+        self._copy_script_into(tmp_path)
+
         result = subprocess.run(
             [sys.executable, "freeze_version.py"],
             capture_output=True,
@@ -83,67 +69,48 @@ class TestGenerateVersionJson:
             cwd=str(tmp_path),
             env={**os.environ, "SETUPTOOLS_SCM_PRETEND_VERSION": "1.2.3"},
         )
-        assert result.returncode == 0
-        assert "version.json" in result.stdout
+        assert result.returncode == 0, result.stderr
 
-        data = json.loads(
-            (tmp_path / "solaredge2mqtt" / "version.json").read_text(encoding="utf-8")
+        content = (tmp_path / "solaredge2mqtt" / "_version.py").read_text(
+            encoding="utf-8"
         )
-        assert data == {"version": "1.2.3"}
+        assert "__version__ = version = '1.2.3'" in content
 
-    def test_main_block_guard_executes_generate_version_json(
+    def test_prints_generated_path(self, tmp_path: Path):
+        self._copy_script_into(tmp_path)
+
+        result = subprocess.run(
+            [sys.executable, "freeze_version.py"],
+            capture_output=True,
+            text=True,
+            cwd=str(tmp_path),
+            env={**os.environ, "SETUPTOOLS_SCM_PRETEND_VERSION": "4.5.6"},
+        )
+
+        assert result.returncode == 0
+        assert "solaredge2mqtt/_version.py" in result.stdout
+        assert "4.5.6" in result.stdout
+
+    def test_main_block_guard_executes_generate_version_file(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ):
-        """The if __name__ == '__main__' guard is exercised via runpy."""
+        """The if __name__ == '__main__' guard is exercised via runpy.
+
+        The script must run from its copy inside tmp_path, not the real repo
+        path: version_file's write target resolves relative to __file__ (via
+        relative_to=__file__ in generate_version_file), not cwd, so running
+        the real file here while chdir'd elsewhere would write into the
+        actual checkout instead of tmp_path.
+        """
         import runpy
 
+        self._copy_script_into(tmp_path)
         monkeypatch.chdir(tmp_path)
-        (tmp_path / "solaredge2mqtt").mkdir()
+        monkeypatch.setenv("SETUPTOOLS_SCM_PRETEND_VERSION", "9.9.9")
 
-        with patch("setuptools_scm.get_version", return_value="9.9.9"):
-            runpy.run_path(
-                str(Path(__file__).parent.parent / "freeze_version.py"),
-                run_name="__main__",
-            )
+        runpy.run_path(str(tmp_path / "freeze_version.py"), run_name="__main__")
 
-        data = json.loads(
-            (tmp_path / "solaredge2mqtt" / "version.json").read_text(encoding="utf-8")
+        content = (tmp_path / "solaredge2mqtt" / "_version.py").read_text(
+            encoding="utf-8"
         )
-        assert data["version"] == "9.9.9"
-
-
-class TestGenerateVersionJsonIntegration:
-    """Integration tests verifying valid JSON structure."""
-
-    def test_version_json_is_valid_json(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
-        """Test that the written file is parseable JSON with a 'version' key."""
-        monkeypatch.chdir(tmp_path)
-        (tmp_path / "solaredge2mqtt").mkdir()
-
-        with patch("freeze_version.get_version", return_value="3.1.4"):
-            from freeze_version import generate_version_json
-
-            generate_version_json()
-
-        raw = (tmp_path / "solaredge2mqtt" / "version.json").read_text(encoding="utf-8")
-        parsed = json.loads(raw)
-        assert "version" in parsed
-        assert parsed["version"] == "3.1.4"
-
-    def test_version_json_pretty_printed(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ):
-        """Test that the file uses indent=2 for pretty printing."""
-        monkeypatch.chdir(tmp_path)
-        (tmp_path / "solaredge2mqtt").mkdir()
-
-        with patch("freeze_version.get_version", return_value="1.0.0"):
-            from freeze_version import generate_version_json
-
-            generate_version_json()
-
-        raw = (tmp_path / "solaredge2mqtt" / "version.json").read_text(encoding="utf-8")
-        # indent=2 produces lines like '  "version": ...'
-        assert '  "version"' in raw
+        assert "__version__ = version = '9.9.9'" in content

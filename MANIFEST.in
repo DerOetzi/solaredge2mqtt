@@ -7,8 +7,5 @@ include LICENSE
 # Include information about third party licensors
 include THIRD-PARTY-NOTICES
 
-include requirements.txt
-
-
 recursive-include solaredge2mqtt *.py
 recursive-include solaredge2mqtt *.flux
