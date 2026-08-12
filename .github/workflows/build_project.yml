@@ -248,6 +248,7 @@ jobs:
             type=raw,value=${{ env.REF_NAME }}-${{ env.ARCH_TAG }},enable=${{ github.event_name != 'release' }}
 
       - name: Build and push Docker image
+        id: build
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
         with:
           builder: ${{ steps.buildx.outputs.name }}
@@ -259,6 +260,28 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ github.repository }}-${{ env.REF_NAME }}-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=${{ github.repository }}-${{ env.REF_NAME }}-${{ matrix.arch }}
+
+      # merge-manifest combines these per-arch builds by digest, not by the
+      # mutable per-arch tags above: two overlapping workflow runs racing to
+      # push the same tag (e.g. arm64's longer build time letting an older
+      # commit's push land after a newer one's) must never let the older
+      # image win the final multi-arch manifest silently. A digest is
+      # immutable and always names the exact image this job just built.
+      - name: Export digest
+        if: ${{github.event_name == 'release' || (github.event_name == 'push' && contains(fromJSON(vars.PACKAGE_BRANCHES), github.ref_name))}}
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        if: ${{github.event_name == 'release' || (github.event_name == 'push' && contains(fromJSON(vars.PACKAGE_BRANCHES), github.ref_name))}}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: digests-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
 
   merge-manifest:
     runs-on: ubuntu-latest
@@ -302,35 +325,53 @@ jobs:
             type=raw,value=${{ env.VERSION }},enable=${{ github.event_name == 'release' }}
             type=raw,value=${{ env.REF_NAME }},enable=${{ github.event_name != 'release' }}
 
+      # Downloads one file per build-docker leg, named after that leg's image
+      # digest (see "Export digest" in build-docker). Combining by digest
+      # rather than by the mutable per-arch tags (:REF_NAME-amd64 etc.) means
+      # this job always assembles exactly the images this workflow run built,
+      # immune to a slower/older run's push landing after this one's.
+      - name: Download digests
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: digests-*
+          path: /tmp/digests
+          merge-multiple: true
+
       - name: Create and push multi-arch manifest
         run: |
           set -eux
 
+          cd /tmp/digests
+          ghcr_refs=()
+          for digest in *; do
+            ghcr_refs+=("${{ env.GHCR_IMAGE }}@sha256:$digest")
+          done
+
           if [ "${{ github.event_name }}" == "release" ]; then
+            dockerhub_refs=()
+            for digest in *; do
+              dockerhub_refs+=("${{ env.IMAGE_NAME }}@sha256:$digest")
+            done
+
             # Create latest tag
             docker buildx imagetools create \
               -t ${{ env.GHCR_IMAGE }}:latest \
-              ${{ env.GHCR_IMAGE }}:latest-amd64 \
-              ${{ env.GHCR_IMAGE }}:latest-arm64
+              "${ghcr_refs[@]}"
 
             docker buildx imagetools create \
               -t ${{ env.IMAGE_NAME }}:latest \
-              ${{ env.IMAGE_NAME }}:latest-amd64 \
-              ${{ env.IMAGE_NAME }}:latest-arm64
+              "${dockerhub_refs[@]}"
 
             # Create version tag
             docker buildx imagetools create \
               -t ${{ env.GHCR_IMAGE }}:${{ env.VERSION }} \
-              ${{ env.GHCR_IMAGE }}:${{ env.VERSION }}-amd64 \
-              ${{ env.GHCR_IMAGE }}:${{ env.VERSION }}-arm64
+              "${ghcr_refs[@]}"
 
             docker buildx imagetools create \
               -t ${{ env.IMAGE_NAME }}:${{ env.VERSION }} \
-              ${{ env.IMAGE_NAME }}:${{ env.VERSION }}-amd64 \
-              ${{ env.IMAGE_NAME }}:${{ env.VERSION }}-arm64
+              "${dockerhub_refs[@]}"
           else
             docker buildx imagetools create \
               -t ${{ env.GHCR_IMAGE }}:${{ env.REF_NAME }} \
-              ${{ env.GHCR_IMAGE }}:${{ env.REF_NAME }}-amd64 \
-              ${{ env.GHCR_IMAGE }}:${{ env.REF_NAME }}-arm64
+              "${ghcr_refs[@]}"
           fi
