@@ -41,6 +41,14 @@ COPY --chown=root:solaredge2mqtt --chmod=755 \
 COPY --chown=root:solaredge2mqtt --chmod=755 \
     pyproject.toml README.md LICENSE ./
 COPY --chown=root:root --chmod=755 docker-entrypoint.sh /usr/local/bin/
+# solaredge2mqtt/_version.py bakes the exact git commit, so it differs on
+# every build - never at repo root when this build starts (see
+# build_project.yml's "Generate static solaredge2mqtt/_version.py" step,
+# which moves it there before `docker build` runs). Copied in as its own
+# layer, last, so the source tree above stays cache-reusable across builds
+# of the same code and only this ~1KB layer is ever new.
+COPY --chown=root:solaredge2mqtt --chmod=755 \
+    _version.py ./solaredge2mqtt/_version.py
 
 VOLUME ["/app/config"]
 

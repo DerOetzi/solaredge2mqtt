@@ -169,5 +169,6 @@ data.csv
 docker/container/
 
 solaredge2mqtt/_version.py
+/_version.py
 
 node_modules/

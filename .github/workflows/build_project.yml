@@ -191,6 +191,14 @@ jobs:
         # environment instead - no system Python involved at all.
         run: uv run --no-project --with 'setuptools-scm[toml]>=8' python freeze_version.py
 
+      - name: Move _version.py out of the build context's source tree
+        # It bakes the exact commit, so it's different on every build -
+        # kept out of solaredge2mqtt/ here so the Dockerfile's bulk COPY of
+        # that directory stays cache-reusable across builds of the same
+        # code; the Dockerfile copies this back into place as its own,
+        # much smaller, always-fresh final layer.
+        run: mv solaredge2mqtt/_version.py _version.py
+
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
