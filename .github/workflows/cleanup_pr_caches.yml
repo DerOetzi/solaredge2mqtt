@@ -1,0 +1,30 @@
+name: cleanup-pr-caches
+
+# A cache created by a pull request run is readable only by re-runs of that
+# same pull request - not by the base branch, not by other PRs. Once the PR
+# closes it is dead weight that still counts against the repository's 10GB
+# cache quota until GitHub's 7-day eviction gets to it, pushing genuinely
+# useful branch caches out in the meantime.
+#
+# build_project.yml already avoids writing the Docker layer cache on pull
+# requests, so in the normal case there is nothing here to delete. This runs
+# as a safety net for anything that does end up PR-scoped anyway.
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Delete caches scoped to this pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_REF: refs/pull/${{ github.event.pull_request.number }}/merge
+        run: |
+          set -eux
+          gh cache delete --all --ref "$PR_REF" --succeed-on-no-caches
