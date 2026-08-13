@@ -22,6 +22,7 @@ jobs:
   variables:
     outputs:
       ref_name: ${{ steps.var.outputs.ref_name}}
+      cache_ref_name: ${{ steps.var.outputs.cache_ref_name }}
       image_name: ${{ steps.var.outputs.image_name }}
       ghcr_image: ${{ steps.var.outputs.ghcr_image }}
       version: ${{ steps.var.outputs.version }}
@@ -34,8 +35,18 @@ jobs:
         id: var
         with:
           script: |
+            const slug = (value) => value.toLowerCase().replaceAll(/[/.]/g, '-').trim('-');
             const refName = '${{ github.ref_name || github.event.release.tag_name }}';
-            core.setOutput('ref_name', refName.toLowerCase().replaceAll(/[/.]/g, '-').trim('-'));
+            core.setOutput('ref_name', slug(refName));
+            // Docker layer cache scope. On a pull request this points at the
+            // base branch instead of the PR's own ref: a PR-scoped cache can
+            // only ever be read back by re-runs of that same PR, so scoping
+            // to the PR means every PR build starts cold and then writes a
+            // few hundred MB that nothing will ever read again. Reading the
+            // base branch's scope instead makes PR builds warm; build-docker
+            // correspondingly only writes the cache on push/release.
+            const baseRef = '${{ github.base_ref }}';
+            core.setOutput('cache_ref_name', slug(baseRef || refName));
             core.setOutput('image_name', '${{ github.repository }}'.toLowerCase());
             core.setOutput('ghcr_image', '${{ env.REGISTRY_GITHUB }}/${{ github.repository }}'.toLowerCase());
             const version = refName.replace(/^v/, '');
@@ -160,6 +171,7 @@ jobs:
     needs: [variables, build-check]
     env:
       REF_NAME: ${{ needs.variables.outputs.ref_name }}
+      CACHE_REF_NAME: ${{ needs.variables.outputs.cache_ref_name }}
       IMAGE_NAME: ${{ needs.variables.outputs.image_name }}
       GHCR_IMAGE: ${{ needs.variables.outputs.ghcr_image }}
       VERSION: ${{ needs.variables.outputs.version }}
@@ -241,8 +253,14 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           annotations: ${{ steps.meta.outputs.annotations }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ github.repository }}-${{ env.REF_NAME }}-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=${{ github.repository }}-${{ env.REF_NAME }}-${{ matrix.arch }}
+          # CACHE_REF_NAME is the base branch on a pull request (see the
+          # variables job), so PR builds read the base branch's warm cache
+          # instead of starting cold in a PR-private scope.
+          cache-from: type=gha,scope=${{ github.repository }}-${{ env.CACHE_REF_NAME }}-${{ matrix.arch }}
+          # Written only on push/release. A cache written by a PR build is
+          # readable exclusively by re-runs of that same PR, so on a PR it is
+          # a few hundred MB of the repo's 10GB quota that nothing ever reads.
+          cache-to: ${{ (github.event_name == 'push' || github.event_name == 'release') && format('type=gha,mode=max,scope={0}-{1}-{2}', github.repository, env.CACHE_REF_NAME, matrix.arch) || '' }}
 
       # merge-manifest combines these per-arch builds by digest, not by the
       # mutable per-arch tags above: two overlapping workflow runs racing to
