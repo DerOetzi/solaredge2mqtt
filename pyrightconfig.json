@@ -2,7 +2,6 @@
   "venvPath": ".",
   "venv": ".venv",
   "include": [
-    "freeze_version.py",
     "migrate_config.py",
     "solaredge2mqtt",
     "tests"
