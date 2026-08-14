@@ -17,6 +17,16 @@ COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
     uv sync --frozen --no-install-project --extra forecast
 
+# The wheel carries the actual package -- including the version setuptools-scm
+# resolved from git at build time in build-check -- and installs on top of the
+# dependencies synced above with --no-deps. Replaces the old
+# freeze_version.py + raw source copy: a real uv build already writes
+# solaredge2mqtt/_version.py as a side effect (version_file in
+# pyproject.toml), the way --no-install-project deliberately skips.
+COPY dist/*.whl /app/dist/
+RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
+    uv pip install --no-deps /app/dist/*.whl
+
 FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -36,10 +46,6 @@ RUN set -eux && \
     chmod 700 /app/cache
 
 COPY --chown=root:solaredge2mqtt --chmod=755 --from=buildimage /venv /venv
-COPY --chown=root:solaredge2mqtt --chmod=755 \
-    solaredge2mqtt/ ./solaredge2mqtt/
-COPY --chown=root:solaredge2mqtt --chmod=755 \
-    pyproject.toml README.md LICENSE ./
 COPY --chown=root:root --chmod=755 docker-entrypoint.sh /usr/local/bin/
 
 VOLUME ["/app/config"]

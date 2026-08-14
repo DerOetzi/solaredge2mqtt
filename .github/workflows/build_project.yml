@@ -188,20 +188,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          fetch-depth: 0
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
+      - name: Download python artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
-          version: "0.12.3"
-
-      - name: Generate static solaredge2mqtt/_version.py
-        # --system would install setuptools-scm into the runner's own Python,
-        # which Ubuntu marks externally-managed (PEP 668) and uv refuses to
-        # touch. --with runs freeze_version.py in a throwaway uv-managed
-        # environment instead - no system Python involved at all.
-        run: uv run --no-project --with 'setuptools-scm[toml]>=8' python freeze_version.py
+          name: python-artifacts-3.13-${{ env.REF_NAME }}
+          path: dist
 
       - name: Set up Docker Buildx
         id: buildx
