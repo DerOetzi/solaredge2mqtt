@@ -153,11 +153,22 @@ class TestForecast:
     @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
     def test_battery_charge_optimal_start_time_skips_passed_slots(self, mock_now):
         """Test optimal start time ignores slots that are already in the past."""
-        # Today's 12:00 peak (1000 Wh) has already passed at 13:00.
+        # Today's 12:00 peak (1000 Wh) has already passed at 13:00, so 13:00
+        # (920 Wh) and 14:00 (840 Wh) together cover the need.
         mock_now.return_value = self.at_local_hour(13)
         forecast = self.make_forecast(battery_charge_needed_wh=1000)
 
-        assert forecast.battery_charge_optimal_start_time == self.at_local_hour(36)
+        assert forecast.battery_charge_optimal_start_time == self.at_local_hour(13)
+
+    @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
+    def test_battery_charge_optimal_start_time_ignores_tomorrow(self, mock_now):
+        """Tomorrow's production must not be proposed as today's start time."""
+        # After sunset today's remaining slots are all 0 Wh, while tomorrow
+        # would easily cover the need.
+        mock_now.return_value = self.at_local_hour(19)
+        forecast = self.make_forecast(battery_charge_needed_wh=1000)
+
+        assert forecast.battery_charge_optimal_start_time is None
 
     @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
     def test_battery_charge_optimal_start_time_none_when_forecast_is_over(
