@@ -552,7 +552,7 @@ forecast:
   battery_charge_efficiency: 0.92    # Charge efficiency used for the optimal charge start time
 ```
 
-If a battery is detected via Modbus, the forecast also publishes `battery_charge_optimal_start_time`: the earliest time today/tomorrow at which charging the battery from its strongest remaining forecasted production slots (sorted by output, accumulated until `battery_target_soc` is covered) should start.
+If a battery is detected via Modbus, the forecast also publishes `battery_charge_optimal_start_time`: the earliest time at which charging the battery from its strongest remaining forecasted production slots (sorted by output, accumulated until `battery_target_soc` is covered) should start. Only slots of the current day are considered; if today's remaining production cannot cover the need, no start time is published.
 
 **Prerequisites**:
 - Minimum 60 hours of training data must be collected before forecasting begins
