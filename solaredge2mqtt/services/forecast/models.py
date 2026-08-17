@@ -75,17 +75,22 @@ class Forecast(Component, ForecastResult):
         if not self.battery_charge_needed_wh or self.battery_charge_needed_wh <= 0:
             return None
 
-        now = self._hour_start(self._now_local())
-        upcoming_slots = [
-            (slot_time, slot_energy)
-            for slot_time, slot_energy in self.energy_period.items()
-            if slot_time >= now
+        now = self._now_local()
+        hour_start = self._instant(self._hour_start(now))
+        # Charging only makes sense within the current day, tomorrow's slots
+        # would be recomputed against tomorrow's state of charge anyway.
+        remaining_today = [
+            (period.instant, energy)
+            for period, energy in self._periods()
+            if period.local.date() == now.date() and period.instant >= hour_start
         ]
 
-        if not upcoming_slots:
+        if not remaining_today:
             return None
 
-        strongest_first = sorted(upcoming_slots, key=lambda slot: slot[1], reverse=True)
+        strongest_first = sorted(
+            remaining_today, key=lambda slot: slot[1], reverse=True
+        )
 
         accumulated = 0
         selected_times: list[datetime] = []
