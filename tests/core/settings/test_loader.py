@@ -179,8 +179,9 @@ class TestConfigurationLoader:
             assert result == {"interval": 5}
             mock_migrate.assert_called_once()
 
+    @patch("solaredge2mqtt.core.settings.loader.upgrade_configuration")
     @patch("solaredge2mqtt.core.settings.loader.path.exists")
-    def test_load_configuration_with_config_only(self, mock_exists):
+    def test_load_configuration_with_config_only(self, mock_exists, mock_upgrade):
         """Test loading configuration when only config file exists."""
         mock_exists.side_effect = lambda x: x == "config/configuration.yml"
 
@@ -201,8 +202,9 @@ class TestConfigurationLoader:
             assert result.modbus.host == "192.168.1.100"  # noqa: S1313
             assert result.mqtt.broker == "mqtt.example.com"
 
+    @patch("solaredge2mqtt.core.settings.loader.upgrade_configuration")
     @patch("solaredge2mqtt.core.settings.loader.path.exists")
-    def test_load_configuration_with_both_files(self, mock_exists):
+    def test_load_configuration_with_both_files(self, mock_exists, mock_upgrade):
         """Test loading configuration when both config and secrets exist."""
         mock_exists.return_value = True
 
@@ -229,8 +231,9 @@ class TestConfigurationLoader:
             # Secrets are available in SecretLoader.secrets but not merged into result
             # unless referenced via !secret tag in the config
 
+    @patch("solaredge2mqtt.core.settings.loader.upgrade_configuration")
     @patch("solaredge2mqtt.core.settings.loader.path.exists")
-    def test_load_configuration_with_override_data(self, mock_exists):
+    def test_load_configuration_with_override_data(self, mock_exists, mock_upgrade):
         """override_data should be deep-merged into loaded config."""
         mock_exists.side_effect = lambda x: x == "config/configuration.yml"
 
