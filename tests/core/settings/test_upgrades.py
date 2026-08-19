@@ -113,6 +113,20 @@ class TestUpgradeVersioning:
 
         assert read_raw(config_file)[CONFIG_VERSION_KEY] == CONFIG_VERSION
 
+    def test_comments_are_lost_on_a_migrated_file(self, tmp_path):
+        """Documented consequence of round-tripping the file through yaml."""
+        config_file = write_configuration(
+            tmp_path, "# my inverter\n" + INFLUXDB_CONFIGURATION
+        )
+
+        upgrade_configuration(config_file)
+
+        assert "# my inverter" not in Path(config_file).read_text()
+        assert (
+            "# my inverter"
+            in next(tmp_path.glob("configuration.yml.backup.*")).read_text()
+        )
+
     def test_is_idempotent(self, tmp_path):
         """A second start must not rewrite the file again."""
         config_file = write_configuration(tmp_path, INFLUXDB_CONFIGURATION)
@@ -122,14 +136,16 @@ class TestUpgradeVersioning:
         assert upgrade_configuration(config_file) is False
         assert Path(config_file).read_text() == content
 
-    def test_upgrades_a_configuration_without_influxdb(self, tmp_path):
-        """A file without the old section is only stamped with the version."""
-        config_file = write_configuration(
-            tmp_path, "modbus:\n  host: 192.168.1.100\nmqtt:\n  broker: broker\n"
+    def test_leaves_a_configuration_without_influxdb_alone(self, tmp_path):
+        """Nothing to migrate means no rewrite, so comments survive."""
+        content = (
+            "# the inverter\nmodbus:\n  host: 192.168.1.100\nmqtt:\n  broker: broker\n"
         )
+        config_file = write_configuration(tmp_path, content)
 
-        assert upgrade_configuration(config_file) is True
-        assert read_raw(config_file)[CONFIG_VERSION_KEY] == CONFIG_VERSION
+        assert upgrade_configuration(config_file) is False
+        assert Path(config_file).read_text() == content
+        assert not list(tmp_path.glob("configuration.yml.backup.*"))
 
 
 class TestLoaderIntegration:

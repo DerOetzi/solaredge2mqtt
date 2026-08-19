@@ -29,11 +29,11 @@ def _raw_secret_constructor(
 RawConfigLoader.add_constructor("!secret", _raw_secret_constructor)
 
 
-def _influxdb_to_storage(config_data: dict[str, Any]) -> dict[str, Any]:
+def _influxdb_to_storage(config_data: dict[str, Any]) -> bool:
     influxdb = config_data.pop("influxdb", None)
 
     if influxdb is None:
-        return config_data
+        return False
 
     logger.warning(
         "InfluxDB has been replaced by a local storage database. "
@@ -50,12 +50,13 @@ def _influxdb_to_storage(config_data: dict[str, Any]) -> dict[str, Any]:
 
     config_data["storage"] = storage
 
-    return config_data
+    return True
 
 
-UPGRADES: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {
-    1: _influxdb_to_storage
-}
+#: An upgrade mutates the configuration in place and reports whether it
+#: changed anything. Only a changed file is rewritten, so a configuration
+#: that needs no migration keeps its comments and its formatting.
+UPGRADES: dict[int, Callable[[dict[str, Any]], bool]] = {1: _influxdb_to_storage}
 
 
 def upgrade_configuration(config_file: str) -> bool:
@@ -66,15 +67,23 @@ def upgrade_configuration(config_file: str) -> bool:
     if current >= CONFIG_VERSION:
         return False
 
+    changed = False
     for version in range(current + 1, CONFIG_VERSION + 1):
-        config_data = UPGRADES[version](config_data)
+        changed = UPGRADES[version](config_data) or changed
+
+    if not changed:
+        return False
 
     config_data[CONFIG_VERSION_KEY] = CONFIG_VERSION
 
-    _backup_configuration(config_file)
+    backup_file = _backup_configuration(config_file)
     _write_raw_configuration(config_file, config_data)
 
-    logger.info(f"Upgraded {config_file} to configuration version {CONFIG_VERSION}")
+    logger.warning(
+        f"Upgraded {config_file} to configuration version {CONFIG_VERSION}. "
+        f"The previous file is kept as {backup_file}; comments and formatting "
+        "of the rewritten file are not preserved."
+    )
 
     return True
 
