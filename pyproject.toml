@@ -43,6 +43,7 @@ solaredge2mqtt = "solaredge2mqtt.__main__:main"
 solaredge2mqtt-migrate = "migrate_config:main"
 solaredge2mqtt-monitoring = "monitoring:main"
 solaredge2mqtt-forecast = "forecast:main"
+solaredge2mqtt-migrate-influxdb = "migrate_influxdb:main"
 
 [project.optional-dependencies]
 dev = [
@@ -73,7 +74,7 @@ include = ["solaredge2mqtt*"]
 exclude = ["tests*"]
 
 [tool.setuptools]
-py-modules = ["migrate_config", "monitoring", "forecast"]
+py-modules = ["migrate_config", "monitoring", "forecast", "migrate_influxdb"]
 
 [tool.setuptools_scm]
 version_scheme = "post-release"
