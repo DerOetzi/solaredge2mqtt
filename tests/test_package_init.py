@@ -13,9 +13,21 @@ def _reload_package() -> ModuleType:
     Does not touch sys.modules["solaredge2mqtt._version"] itself - callers
     control that submodule's presence/absence via patch.dict/_block_import,
     and popping it here would undo whatever they just set up.
+
+    The original module object is put back afterwards. Importing the package
+    again builds a fresh module object that carries none of the submodule
+    attributes the already imported submodules had set on the old one, so
+    leaving it in sys.modules breaks every later `solaredge2mqtt.core...`
+    attribute lookup in the same process - which is what monkeypatch does to
+    resolve a dotted target. The returned object stays valid for assertions.
     """
-    sys.modules.pop("solaredge2mqtt", None)
-    return importlib.import_module("solaredge2mqtt")
+    original = sys.modules.pop("solaredge2mqtt", None)
+
+    try:
+        return importlib.import_module("solaredge2mqtt")
+    finally:
+        if original is not None:
+            sys.modules["solaredge2mqtt"] = original
 
 
 def _block_import(*names_to_block: str):
