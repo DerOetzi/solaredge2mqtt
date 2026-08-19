@@ -58,7 +58,7 @@ class TestAnnotatedCsv:
 
         points = list(parse_annotated_csv(payload))
 
-        assert len(points) == 4
+        assert len(points) == 5
 
     def test_casts_values_by_datatype(self):
         """A double stays a float, a string stays a string."""
@@ -67,7 +67,7 @@ class TestAnnotatedCsv:
         points = list(parse_annotated_csv(payload))
 
         assert points[0].fields == {"pv_production": 3.5}
-        assert points[3].fields == {"weather_main": "Clouds"}
+        assert points[4].fields == {"weather_main": "Clouds"}
 
     def test_reads_the_timestamp(self):
         """The point keeps the timestamp it had in InfluxDB."""
@@ -92,6 +92,20 @@ class TestAnnotatedCsv:
         points = list(parse_annotated_csv(payload))
 
         assert points[2].tags == {}
+
+    def test_keeps_the_datatypes_across_continuation_blocks(self):
+        """A large answer repeats the header alone, without the annotations.
+
+        Dropping the datatypes there turned every column into a string, so the
+        timestamp of every continuation row stopped being a datetime.
+        """
+        payload = (FIXTURES / "influx_export.csv").read_text()
+
+        points = list(parse_annotated_csv(payload))
+
+        assert points[3].fields == {"pv_production": 5.5}
+        assert points[3].timestamp == datetime(2024, 1, 1, 12, 0, tzinfo=timezone.utc)
+        assert points[3].tags == {"unit": "cumulated"}
 
     def test_ignores_rows_without_a_value(self):
         """A row without measurement, field or value carries nothing."""
@@ -273,7 +287,7 @@ class TestImportFromInfluxdb:
                 storage, CREDENTIALS, START, STOP, ["energy"]
             )
 
-        assert imported == 4
+        assert imported == 5
 
     @pytest.mark.asyncio
     async def test_slices_the_range(self, storage):

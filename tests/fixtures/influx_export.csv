@@ -6,6 +6,9 @@
 ,,0,2024-01-01T00:00:00Z,2024-01-02T00:00:00Z,2024-01-01T11:00:00Z,4.5,pv_production,energy,cumulated
 ,,1,2024-01-01T00:00:00Z,2024-01-02T00:00:00Z,2024-01-01T10:00:00Z,1.5,grid_delivery,energy,
 
+,result,table,_start,_stop,_time,_value,_field,_measurement,unit
+,,2,2024-01-01T00:00:00Z,2024-01-02T00:00:00Z,2024-01-01T12:00:00Z,5.5,pv_production,energy,cumulated
+
 #group,false,false,true,true,false,false,true,true
 #datatype,string,long,dateTime:RFC3339,dateTime:RFC3339,dateTime:RFC3339,string,string,string
 #default,_result,,,,,,,

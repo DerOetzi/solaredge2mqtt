@@ -47,6 +47,13 @@ QUERY_TEMPLATE = (
     '  |> filter(fn: (r) => r._measurement == "{measurement}")\n'
 )
 
+#: Without this the server picks its own dialect and omits the annotations.
+DIALECT = {
+    "annotations": ["group", "datatype", "default"],
+    "delimiter": ",",
+    "header": True,
+}
+
 NANOSECONDS_PER_SECOND = 1_000_000_000
 
 #: A transform applied to every imported point. Returning None drops the point.
@@ -83,12 +90,19 @@ def _cast(datatype: str, value: str) -> FieldValue | datetime | None:
 
 
 def parse_annotated_csv(payload: str) -> Iterator[Point]:
+    """Turn an annotated CSV answer of the query API into points.
+
+    A large answer is split into blocks separated by a blank line, and only
+    the first block of a schema carries the annotations - the following ones
+    repeat the header alone. The datatypes therefore stay in force until a
+    new `#datatype` line replaces them, otherwise every column of a
+    continuation block would be read as a string.
+    """
     datatypes: list[str] = []
     header: list[str] = []
 
     for row in csv.reader(StringIO(payload)):
         if not row or not any(row):
-            datatypes = []
             header = []
             continue
 
@@ -122,6 +136,9 @@ def _point_from_record(record: dict[str, Any]) -> Point | None:
 
     if measurement is None or field is None or value is None or moment is None:
         return None
+
+    if not isinstance(moment, datetime):
+        moment = datetime.fromisoformat(str(moment).replace("Z", "+00:00"))
 
     point = Point(str(measurement)).field(str(field), value)
     point.time(moment)
@@ -228,6 +245,12 @@ async def query_influxdb(
     start: datetime,
     stop: datetime,
 ) -> str:
+    """Run one slice of the export.
+
+    The query is posted as JSON with an explicit dialect: a raw `vnd.flux`
+    body leaves the dialect to the server, which then answers without the
+    datatype annotation and turns every value into a string.
+    """
     query = QUERY_TEMPLATE.format(
         bucket=credentials.bucket,
         measurement=measurement,
@@ -238,10 +261,9 @@ async def query_influxdb(
     async with session.post(
         f"{credentials.url}/api/v2/query",
         params={"org": credentials.org},
-        data=query.encode("utf-8"),
+        json={"query": query, "dialect": DIALECT},
         headers={
             "Authorization": f"Token {credentials.token}",
-            "Content-Type": "application/vnd.flux",
             "Accept": "application/csv",
         },
     ) as response:
