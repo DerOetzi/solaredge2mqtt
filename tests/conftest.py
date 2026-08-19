@@ -93,14 +93,13 @@ def sample_mqtt_settings():
 
 
 @pytest.fixture
-def sample_influxdb_settings():
-    """Provide sample InfluxDB settings for testing."""
+def sample_storage_settings():
+    """Provide sample storage settings for testing."""
     return {
-        "host": "localhost",
-        "port": 8086,
-        "token": "test_token",
-        "org": "test_org",
-        "bucket": "test_bucket",
+        "enable": True,
+        "filename": "test.db",
+        "retention": 0,
+        "retention_raw": 25,
     }
 
 

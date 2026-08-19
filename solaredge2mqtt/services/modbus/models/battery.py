@@ -1,9 +1,9 @@
 from typing import Any
 
-from influxdb_client.client.write.point import Point
 from pydantic import Field
 
 from solaredge2mqtt.core.logging import logger
+from solaredge2mqtt.core.storage import Point
 from solaredge2mqtt.services.homeassistant.models import (
     HomeAssistantSensorType as HASensor,
 )

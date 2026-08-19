@@ -5,9 +5,9 @@ from aiohttp import ClientResponseError
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
-from solaredge2mqtt.core.influxdb import InfluxDBAsync, Point
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
+from solaredge2mqtt.core.storage import Point, StorageService
 from solaredge2mqtt.core.timer.events import (
     Interval5MinTriggerEvent,
     Interval15MinTriggerEvent,
@@ -44,12 +44,12 @@ class MonitoringSite(HTTPClientAsync):
     def __init__(
         self,
         settings: MonitoringSettings,
-        influxdb: InfluxDBAsync | None,
+        storage: StorageService | None,
     ) -> None:
         super().__init__("Monitoring Site")
         self.settings = settings
 
-        self.influxdb: InfluxDBAsync | None = influxdb
+        self.storage: StorageService | None = storage
 
         self.found_evchargers: bool = False
         self._cached_structure: dict | None = None
@@ -176,7 +176,7 @@ class MonitoringSite(HTTPClientAsync):
             energy_total = 0
             count_modules = 0
 
-            await self.save_to_influxdb(modules)
+            await self.save_to_storage(modules)
             await self.publish_mqtt(modules, energy_total, count_modules)
             await EventBus.emit(MonitoringOnlineEvent(self.settings.debounce_cycles))
         except (ConfigurationException, InvalidDataException):
@@ -526,8 +526,8 @@ class MonitoringSite(HTTPClientAsync):
 
         return modules
 
-    async def save_to_influxdb(self, modules):
-        if self.influxdb is not None:
+    async def save_to_storage(self, modules):
+        if self.storage is not None:
             points = []
             for module in modules.values():
                 if module.power is not None:
@@ -540,7 +540,7 @@ class MonitoringSite(HTTPClientAsync):
                         point.tag("identifier", module.info.identifier)
                         points.append(point)
 
-            await self.influxdb.write_points(points)
+            await self.storage.write_points(points)
 
     async def publish_mqtt(self, modules, energy_total, count_modules):
         for module in modules.values():

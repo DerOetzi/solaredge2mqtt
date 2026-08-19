@@ -99,9 +99,10 @@ class TestWeatherClientGetWeather:
 
         result = await client.get_weather()
 
-        assert result.lat == pytest.approx(52.52)
-        assert result.lon == pytest.approx(13.405)
-        assert result.current is not None
+        assert result.weather_provider == "openweathermap"
+        assert result.current.temperature == pytest.approx(5.5)
+        assert result.current.cloud_cover == pytest.approx(75.0)
+        assert result.current.condition_code == 3
 
     @pytest.mark.asyncio
     async def test_get_weather_none_response(

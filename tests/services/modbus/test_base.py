@@ -1,8 +1,5 @@
 """Tests for modbus base models module."""
 
-import sys
-import types
-
 import pytest
 
 from solaredge2mqtt.services.modbus.exceptions import InvalidRegisterDataException
@@ -13,37 +10,6 @@ from solaredge2mqtt.services.modbus.models.base import (
     ModbusUnitRole,
 )
 from solaredge2mqtt.services.modbus.sunspec.values import SunSpecPayload
-
-
-def _ensure_influx_point_stub() -> None:
-    """Provide a local fallback for influx Point import during test collection."""
-
-    influx_module = sys.modules.setdefault(
-        "influxdb_client", types.ModuleType("influxdb_client")
-    )
-    client_module = sys.modules.setdefault(
-        "influxdb_client.client", types.ModuleType("influxdb_client.client")
-    )
-    write_module = sys.modules.setdefault(
-        "influxdb_client.client.write", types.ModuleType("influxdb_client.client.write")
-    )
-
-    point_module = types.ModuleType("influxdb_client.client.write.point")
-
-    class Point: ...  # pragma: no cover
-
-    setattr(point_module, "Point", Point)
-    sys.modules["influxdb_client.client.write.point"] = point_module
-
-    setattr(influx_module, "client", client_module)
-    setattr(client_module, "write", write_module)
-    setattr(write_module, "point", point_module)
-
-
-try:
-    from influxdb_client.client.write.point import Point as _InfluxPoint  # noqa: F401
-except ImportError:
-    _ensure_influx_point_stub()
 
 
 class TestModbusUnitRole:
@@ -329,8 +295,8 @@ class TestModbusComponent:
         topic = TestComponent.generate_topic_prefix("leader")
         assert topic == "modbus/leader/test"
 
-    def test_component_model_dump_influxdb(self):
-        """Test model_dump_influxdb excludes info by default."""
+    def test_component_model_dump_storage(self):
+        """Test model_dump_storage excludes info by default."""
         from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
 
         # Create a real ModbusComponent subclass instance
@@ -366,7 +332,7 @@ class TestModbusComponent:
         }
 
         meter = ModbusMeter.from_sunspec(device_info, meter_data)
-        dumped = meter.model_dump_influxdb()
+        dumped = meter.model_dump_storage()
 
         # info should be excluded
         assert "info" not in dumped
@@ -380,8 +346,8 @@ class TestModbusComponent:
 
         assert "info" not in schema.get("properties", {})
 
-    def test_component_influxdb_tags(self):
-        """Test influxdb_tags returns correct tags."""
+    def test_component_storage_tags(self):
+        """Test storage_tags returns correct tags."""
         from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
 
         device_info = ModbusDeviceInfo.from_sunspec(
@@ -418,7 +384,7 @@ class TestModbusComponent:
         }
 
         meter = ModbusMeter.from_sunspec(device_info, meter_data)
-        tags = meter.influxdb_tags
+        tags = meter.storage_tags
 
         assert tags["manufacturer"] == "SolarEdge"
         assert tags["model"] == "Meter"
@@ -570,7 +536,7 @@ class TestModbusComponent:
         assert component.info == info
         assert component.value == 7
 
-    def test_component_model_dump_influxdb_with_extra_exclude(self):
+    def test_component_model_dump_storage_with_extra_exclude(self):
         """Test model dump excludes info and caller provided fields."""
 
         info = ModbusDeviceInfo.from_sunspec(
@@ -583,13 +549,13 @@ class TestModbusComponent:
         )
 
         component = self.DummyComponent(info=info, value=9)
-        dumped = component.model_dump_influxdb(exclude={"value"})
+        dumped = component.model_dump_storage(exclude={"value"})
 
         assert "info" not in dumped
         assert "value" not in dumped
 
-    def test_component_influxdb_tags_without_option(self):
-        """Test influx tags omit option when no option is configured."""
+    def test_component_storage_tags_without_option(self):
+        """Test storage tags omit option when no option is configured."""
 
         info = ModbusDeviceInfo.from_sunspec(
             {
@@ -601,7 +567,7 @@ class TestModbusComponent:
         )
 
         component = self.DummyComponent(info=info, value=1)
-        tags = component.influxdb_tags
+        tags = component.storage_tags
 
         assert tags["manufacturer"] == "SolarEdge"
         assert tags["model"] == "Dummy"
