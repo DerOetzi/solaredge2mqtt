@@ -34,7 +34,7 @@ basis of every review.
 
 ### Testing
 - [ ] Unit tests cover new functionality
-- [ ] External services mocked (MQTT, InfluxDB, Modbus)
+- [ ] External services mocked (MQTT, Modbus)
 - [ ] Async tests use `@pytest.mark.asyncio`
 - [ ] Test files mirror source structure
 

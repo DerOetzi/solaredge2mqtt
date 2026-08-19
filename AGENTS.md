@@ -14,7 +14,7 @@ tool-specific syntax on top.
 
 ```
 solaredge2mqtt/
-├── core/           # Event bus, logging, settings, MQTT, InfluxDB, timer
+├── core/           # Event bus, logging, settings, MQTT, storage, timer
 ├── services/       # Modular services (energy, forecast, homeassistant, modbus,
 │                   #   monitoring, powerflow, wallbox, weather)
 ├── __main__.py     # Entrypoint for CLI/console mode
@@ -30,15 +30,15 @@ docs/decisions/     # Architecture decision records, numbered and append-only
   `core/timer/events`). Subscribe via `event_bus.subscribe()`, emit via `event_bus.emit()`.
 - **Service boundaries:** Each service is isolated under `services/` with its own `settings.py`,
   `models.py`, and `events.py`.
-- **Data flow:** Inverter data (Modbus, Monitoring, Wallbox) → aggregated → InfluxDB + MQTT.
-  Forecasting uses historical InfluxDB data and OpenWeatherMap.
+- **Data flow:** Inverter data (Modbus, Monitoring, Wallbox) → aggregated → local storage + MQTT.
+  Forecasting uses the locally stored history and OpenWeatherMap.
 
 ### Integration Points
 
 | System | Role |
 |---|---|
 | MQTT | Publishes inverter/sensor data for home automation (`core/mqtt/`) |
-| InfluxDB | Logs raw and aggregated time-series data (`core/influxdb/`) |
+| SQLite | Logs raw and aggregated time-series data locally (`core/storage/`) |
 | Home Assistant | Auto-discovery support (`services/homeassistant/`) |
 | Modbus | TCP/IP communication with SolarEdge inverters |
 | OpenWeatherMap | Weather data for PV production forecasting |
@@ -129,7 +129,8 @@ class MyServiceEvent(BaseEvent):
 - Use `pytest` with `pytest-asyncio`; fixtures in `tests/conftest.py`.
 - Test classes prefixed with `Test`; methods prefixed with `test_`.
 - Async tests use `@pytest.mark.asyncio` (auto mode enabled).
-- Mock all external services (MQTT, InfluxDB, Modbus, HTTP APIs).
+- Mock all external services (MQTT, Modbus, HTTP APIs). Storage tests run against a real
+  temporary database file, see `tests/core/storage/conftest.py`.
 - All new code must be covered by unit tests; minimum coverage threshold is **90 %**.
 
 **Example mock pattern:**

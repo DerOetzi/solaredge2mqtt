@@ -1,0 +1,228 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "${sqlite}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "kwatth",
+          "custom": {
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "title": "PV production",
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "${sqlite}"
+          },
+          "queryText": "SELECT p.ts * 1000 AS time, p.value AS \"PV production\"\nFROM point AS p\nJOIN series AS s ON s.series_id = p.series_id\nWHERE s.measurement = 'energy'\n  AND s.field = 'pv_production'\n  \n  AND p.ts >= $__unixEpochFrom() AND p.ts <= $__unixEpochTo()\nORDER BY p.ts",
+          "queryType": "table",
+          "rawQueryText": "SELECT p.ts * 1000 AS time, p.value AS \"PV production\"\nFROM point AS p\nJOIN series AS s ON s.series_id = p.series_id\nWHERE s.measurement = 'energy'\n  AND s.field = 'pv_production'\n  \n  AND p.ts >= $__unixEpochFrom() AND p.ts <= $__unixEpochTo()\nORDER BY p.ts",
+          "refId": "A",
+          "timeColumns": [
+            "time"
+          ]
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "${sqlite}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "kwatth",
+          "custom": {
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "title": "PV production forecast",
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "${sqlite}"
+          },
+          "queryText": "SELECT p.ts * 1000 AS time, p.value AS \"Forecast\"\nFROM point AS p\nJOIN series AS s ON s.series_id = p.series_id\nWHERE s.measurement = 'forecast' AND s.field = 'energy'\n  AND p.ts >= $__unixEpochFrom() AND p.ts <= $__unixEpochTo()\nORDER BY p.ts",
+          "queryType": "table",
+          "rawQueryText": "SELECT p.ts * 1000 AS time, p.value AS \"Forecast\"\nFROM point AS p\nJOIN series AS s ON s.series_id = p.series_id\nWHERE s.measurement = 'forecast' AND s.field = 'energy'\n  AND p.ts >= $__unixEpochFrom() AND p.ts <= $__unixEpochTo()\nORDER BY p.ts",
+          "refId": "A",
+          "timeColumns": [
+            "time"
+          ]
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "${sqlite}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "kwatth",
+          "custom": {
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "title": "Grid",
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "${sqlite}"
+          },
+          "queryText": "SELECT p.ts * 1000 AS time, p.value AS \"Consumption\"\nFROM point AS p\nJOIN series AS s ON s.series_id = p.series_id\nWHERE s.measurement = 'energy'\n  AND s.field = 'grid_consumption'\n  \n  AND p.ts >= $__unixEpochFrom() AND p.ts <= $__unixEpochTo()\nORDER BY p.ts",
+          "queryType": "table",
+          "rawQueryText": "SELECT p.ts * 1000 AS time, p.value AS \"Consumption\"\nFROM point AS p\nJOIN series AS s ON s.series_id = p.series_id\nWHERE s.measurement = 'energy'\n  AND s.field = 'grid_consumption'\n  \n  AND p.ts >= $__unixEpochFrom() AND p.ts <= $__unixEpochTo()\nORDER BY p.ts",
+          "refId": "A",
+          "timeColumns": [
+            "time"
+          ]
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "${sqlite}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 4,
+      "title": "Battery state of charge",
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "${sqlite}"
+          },
+          "queryText": "SELECT p.ts * 1000 AS time, p.value AS \"State of charge\"\nFROM point AS p\nJOIN series AS s ON s.series_id = p.series_id\nWHERE s.measurement = 'battery'\n  AND s.field = 'state_of_charge'\n  AND EXISTS (SELECT 1 FROM series_tag t WHERE t.series_id = s.series_id AND t.tag_key = 'agg_type' AND t.tag_value = 'mean')\n  AND p.ts >= $__unixEpochFrom() AND p.ts <= $__unixEpochTo()\nORDER BY p.ts",
+          "queryType": "table",
+          "rawQueryText": "SELECT p.ts * 1000 AS time, p.value AS \"State of charge\"\nFROM point AS p\nJOIN series AS s ON s.series_id = p.series_id\nWHERE s.measurement = 'battery'\n  AND s.field = 'state_of_charge'\n  AND EXISTS (SELECT 1 FROM series_tag t WHERE t.series_id = s.series_id AND t.tag_key = 'agg_type' AND t.tag_value = 'mean')\n  AND p.ts >= $__unixEpochFrom() AND p.ts <= $__unixEpochTo()\nORDER BY p.ts",
+          "refId": "A",
+          "timeColumns": [
+            "time"
+          ]
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "${sqlite}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyEUR",
+          "custom": {
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "id": 5,
+      "title": "Savings",
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "${sqlite}"
+          },
+          "queryText": "SELECT p.ts * 1000 AS time, p.value AS \"Saved\"\nFROM point AS p\nJOIN series AS s ON s.series_id = p.series_id\nWHERE s.measurement = 'energy' AND s.field = 'money_saved'\n  AND p.ts >= $__unixEpochFrom() AND p.ts <= $__unixEpochTo()\nORDER BY p.ts",
+          "queryType": "table",
+          "rawQueryText": "SELECT p.ts * 1000 AS time, p.value AS \"Saved\"\nFROM point AS p\nJOIN series AS s ON s.series_id = p.series_id\nWHERE s.measurement = 'energy' AND s.field = 'money_saved'\n  AND p.ts >= $__unixEpochFrom() AND p.ts <= $__unixEpochTo()\nORDER BY p.ts",
+          "refId": "A",
+          "timeColumns": [
+            "time"
+          ]
+        }
+      ],
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "5m",
+  "schemaVersion": 39,
+  "tags": [
+    "solaredge2mqtt"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "label": "SQLite datasource",
+        "name": "sqlite",
+        "query": "frser-sqlite-datasource",
+        "type": "datasource"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "SolarEdge2MQTT",
+  "uid": "solaredge2mqtt-sqlite",
+  "version": 1
+}

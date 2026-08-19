@@ -15,11 +15,16 @@ services:
     environment:
       GF_RENDERING_SERVER_URL: http://renderer:8081/render
       GF_RENDERING_CALLBACK_URL: http://grafana:3000/
+      GF_INSTALL_PLUGINS: frser-sqlite-datasource
     ports:
       - "3000:3000"
     volumes:
       - "grafana:/var/lib/grafana"
       - "grafana.ini:/etc/grafana/grafana.ini"
+      # Mounted read-write on purpose: SQLite has to create the -wal and -shm
+      # sidecar files, a read-only mount of a WAL database cannot be opened.
+      # Point the datasource at /app/config/solaredge2mqtt.db
+      - "./config:/app/config"
     user: "1000:1000"
     restart: always
     networks:
@@ -33,20 +38,6 @@ services:
     restart: always
     networks:
       default:
-  influxdb:
-    image: influxdb:latest
-    container_name: influxdb
-    ports:
-      - "8086:8086"
-    volumes:
-      - "./data:/var/lib/influxdb2"
-      - "influxdb.conf:/etc/influxdb/influxdb.conf:ro"
-      - ".influx_history:/.influx_history"
-    restart: always
-    user: "1000:1000"
-    networks:
-      default:
-
 
 # Configuration is now managed via YAML files in ./config/
 # See config/configuration.yml.example and config/secrets.yml.example for reference
