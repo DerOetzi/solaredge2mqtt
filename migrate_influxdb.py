@@ -4,6 +4,7 @@
 import argparse
 import asyncio
 from datetime import datetime, timezone
+from glob import glob
 from os import environ, path
 from pathlib import Path
 from typing import Any
@@ -72,19 +73,38 @@ def training_point_to_canonical(point: Point) -> Point | None:
 ENV_PREFIX = "SE2MQTT_INFLUXDB__"
 
 
-def read_legacy_influxdb_section(config_dir: str) -> dict[str, Any]:
-    """Read the influxdb section of a configuration that was not upgraded yet."""
+def legacy_configuration_files(config_dir: str) -> list[str]:
+    """The configuration and its backups, newest first.
+
+    Starting the service upgrades the configuration and drops the influxdb
+    section, so the credentials usually live in the backup the upgrade wrote
+    rather than in the configuration itself.
+    """
     config_file = path.join(config_dir, "configuration.yml")
+    backups = sorted(glob(f"{config_file}.backup.*"), reverse=True)
+
+    return [config_file, *backups]
+
+
+def read_legacy_influxdb_section(config_dir: str) -> dict[str, Any]:
+    """Read the influxdb section of the configuration or of its newest backup."""
     secrets_file = path.join(config_dir, "secrets.yml")
 
-    if not path.exists(config_file):
-        return {}
+    influxdb = None
+    for candidate in legacy_configuration_files(config_dir):
+        if not path.exists(candidate):
+            continue
 
-    with open(config_file, "r", encoding="utf-8") as file:
-        config_data = yaml.load(file, Loader=RawConfigLoader) or {}
+        with open(candidate, "r", encoding="utf-8") as file:
+            config_data = yaml.load(file, Loader=RawConfigLoader) or {}
 
-    influxdb = config_data.get("influxdb")
-    if not isinstance(influxdb, dict):
+        section = config_data.get("influxdb")
+        if isinstance(section, dict):
+            logger.info(f"Reading InfluxDB credentials from {candidate}")
+            influxdb = section
+            break
+
+    if influxdb is None:
         return {}
 
     secrets: dict[str, Any] = {}
@@ -129,11 +149,22 @@ def build_credentials(arguments: argparse.Namespace) -> InfluxCredentials:
 
 
 async def _run(arguments: argparse.Namespace) -> None:
+    """Import the history into the storage.
+
+    The credentials are read before `service_settings`, which upgrades the
+    configuration and takes the influxdb section with it.
+    """
+    credentials = (
+        None if arguments.from_lp is not None else build_credentials(arguments)
+    )
+
     settings = service_settings(arguments.config_dir)
     initialize_logging(settings.logging_level)
 
     storage = StorageService(settings.storage, settings.prices, arguments.config_dir)
     await storage.async_init()
+
+    imported = 0
 
     try:
         if arguments.from_lp is not None:
@@ -143,10 +174,10 @@ async def _run(arguments: argparse.Namespace) -> None:
                 arguments.dry_run,
                 training_point_to_canonical,
             )
-        else:
+        elif credentials is not None:
             imported = await import_from_influxdb(
                 storage,
-                build_credentials(arguments),
+                credentials,
                 _parse_time(arguments.start, DEFAULT_START),
                 _parse_time(arguments.stop, datetime.now(tz=timezone.utc)),
                 measurements_to_import(arguments.measurements, arguments.include_raw),
