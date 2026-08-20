@@ -16,6 +16,15 @@ CONFIG_VERSION_KEY = "config_version"
 
 CARRIED_INFLUXDB_KEYS = ("retention_raw", "debounce_cycles")
 
+MIGRATION_COMMAND = "solaredge2mqtt-migrate-influxdb"
+
+#: Never resolved into the logged command -- a token in the service log is a
+#: token in journald, in the Docker logs and in every log someone attaches to
+#: an issue. The upgrade leaves secrets.yml alone, so it stays available.
+TOKEN_PLACEHOLDER = "YOUR_INFLUXDB_TOKEN"
+
+DEFAULT_INFLUXDB_PORT = 8086
+
 
 class RawConfigLoader(yaml.SafeLoader): ...  # pragma: no cover
 
@@ -29,16 +38,59 @@ def _raw_secret_constructor(
 RawConfigLoader.add_constructor("!secret", _raw_secret_constructor)
 
 
-def _influxdb_to_storage(config_data: dict[str, Any]) -> bool:
+def influx_url(host: Any, port: Any = None) -> str:
+    """The base URL of an InfluxDB, built as the removed settings model did."""
+    url = str(host)
+
+    if not url.startswith(("http://", "https://")):
+        url = f"https://{url}"
+
+    if ":" not in url.split("//", 1)[-1]:
+        url = f"{url}:{port or DEFAULT_INFLUXDB_PORT}"
+
+    return url
+
+
+def migration_command(influxdb: dict[str, Any], config_dir: str) -> str:
+    """The import command for a configuration that is about to lose its section.
+
+    The section is the only place the host, the organization and the bucket
+    are written down, and the upgrade removes it, so the command is spelled
+    out while they are still known.
+    """
+    parts = [MIGRATION_COMMAND, "--config-dir", config_dir]
+
+    host = influxdb.get("host")
+    if host is not None:
+        parts += ["--url", influx_url(host, influxdb.get("port"))]
+
+    for key in ("org", "bucket"):
+        value = influxdb.get(key)
+        if value is not None:
+            parts += [f"--{key}", str(value)]
+
+    parts += ["--token", TOKEN_PLACEHOLDER]
+
+    return " ".join(parts)
+
+
+def _influxdb_to_storage(config_data: dict[str, Any], config_file: str) -> bool:
     influxdb = config_data.pop("influxdb", None)
 
     if influxdb is None:
         return False
 
+    config_dir = path.dirname(config_file) or "."
+
     logger.warning(
-        "InfluxDB has been replaced by a local storage database. "
-        "The 'influxdb' configuration section is removed. "
-        "Run 'solaredge2mqtt-migrate-influxdb' to import the existing history."
+        "InfluxDB has been replaced by a local storage database and the "
+        "'influxdb' configuration section is removed. Import the existing "
+        "history with:"
+    )
+    logger.warning(f"  {migration_command(influxdb, config_dir)}")
+    logger.warning(
+        f"Replace {TOKEN_PLACEHOLDER} with the influxdb_token entry of "
+        "secrets.yml, which this upgrade leaves untouched."
     )
 
     storage = dict(config_data.get("storage") or {})
@@ -56,7 +108,7 @@ def _influxdb_to_storage(config_data: dict[str, Any]) -> bool:
 #: An upgrade mutates the configuration in place and reports whether it
 #: changed anything. Only a changed file is rewritten, so a configuration
 #: that needs no migration keeps its comments and its formatting.
-UPGRADES: dict[int, Callable[[dict[str, Any]], bool]] = {1: _influxdb_to_storage}
+UPGRADES: dict[int, Callable[[dict[str, Any], str], bool]] = {1: _influxdb_to_storage}
 
 
 def upgrade_configuration(config_file: str) -> bool:
@@ -69,7 +121,7 @@ def upgrade_configuration(config_file: str) -> bool:
 
     changed = False
     for version in range(current + 1, CONFIG_VERSION + 1):
-        changed = UPGRADES[version](config_data) or changed
+        changed = UPGRADES[version](config_data, config_file) or changed
 
     if not changed:
         return False

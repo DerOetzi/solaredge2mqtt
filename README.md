@@ -515,18 +515,29 @@ sqlite3 config/solaredge2mqtt.db "VACUUM INTO 'solaredge2mqtt-backup.db'"
 
 Releases before this one stored the history in InfluxDB. On the first start the `influxdb`
 section of `configuration.yml` is rewritten into a `storage` section, after a backup of the
-file. The data itself is imported separately, and the import is idempotent:
+file. Before it rewrites anything the service logs the import command for that section, filled
+in with the host, organization and bucket it is about to remove — copy it from the log and put
+your `influxdb_token` in place of `YOUR_INFLUXDB_TOKEN`:
 
 ```bash
-# From a running InfluxDB 2.x instance, credentials are taken from the backed up configuration
+# The command the upgrade logs
+solaredge2mqtt-migrate-influxdb --config-dir config \
+    --url http://influxdb:8086 --org my_org --bucket solaredge --token YOUR_INFLUXDB_TOKEN
+
+# Before the first start of this release the section is still there and is used
 solaredge2mqtt-migrate-influxdb --config-dir config
 
 # From a line protocol dump, no running InfluxDB needed
 solaredge2mqtt-migrate-influxdb --from-lp ./influx-export.lp
 ```
 
+The token is never written to the log. If you missed the message, the values are in the
+`influxdb` section of the `configuration.yml.backup.*` the upgrade wrote. The import is
+idempotent and can be repeated.
+
 Raw samples are skipped by default, they expire within a day anyway; add `--include-raw` to
-import them as well. `influxdb_token` in `secrets.yml` is no longer used and can be removed.
+import them as well. `influxdb_token` in `secrets.yml` is not read by the service any
+more, but the import still needs it — remove it once the history is in.
 
 The import also converts the forecast training history onto the schema the forecast model
 speaks: `temp` becomes `temperature`, the OpenWeatherMap condition id becomes its WMO code, the

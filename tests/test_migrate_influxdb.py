@@ -73,6 +73,15 @@ class TestReadLegacySection:
 
         assert read_legacy_influxdb_section(config_dir)["token"] is None
 
+    def test_ignores_a_backup(self, tmp_path):
+        """Which backup is the right one is not for the tool to guess."""
+        config_dir = write_legacy(tmp_path, "modbus:\n  host: 192.168.1.100\n")
+        (tmp_path / "configuration.yml.backup.20260101120000").write_text(
+            LEGACY_CONFIGURATION
+        )
+
+        assert read_legacy_influxdb_section(config_dir) == {}
+
 
 class TestBuildCredentials:
     """Tests for combining the credential sources."""
@@ -115,12 +124,23 @@ class TestBuildCredentials:
 
         assert credentials.url == "https://influx.local:8086"
 
+    def test_completes_a_bare_flag_url(self, tmp_path):
+        """A host given without a scheme is completed, not passed on broken."""
+        credentials = build_credentials(
+            arguments(write_legacy(tmp_path), url="influx.local")
+        )
+
+        assert credentials.url == "https://influx.local:8086"
+
     def test_requires_a_host(self, tmp_path):
         """Without a host there is nothing to import from."""
         config_dir = write_legacy(tmp_path, "modbus:\n  host: 192.168.1.100\n")
 
-        with pytest.raises(ConfigurationException):
+        with pytest.raises(ConfigurationException) as error:
             build_credentials(arguments(config_dir))
+
+        assert "--url" in error.value.message
+        assert "backup" in error.value.message
 
 
 class TestArgumentHelpers:

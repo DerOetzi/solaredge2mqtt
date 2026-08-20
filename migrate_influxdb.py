@@ -4,7 +4,6 @@
 import argparse
 import asyncio
 from datetime import datetime, timezone
-from glob import glob
 from os import environ, path
 from pathlib import Path
 from typing import Any
@@ -15,7 +14,7 @@ from solaredge2mqtt.core.exceptions import ConfigurationException
 from solaredge2mqtt.core.logging import initialize_logging, logger
 from solaredge2mqtt.core.settings import service_settings
 from solaredge2mqtt.core.settings.migrator import SecretReference
-from solaredge2mqtt.core.settings.upgrades import RawConfigLoader
+from solaredge2mqtt.core.settings.upgrades import RawConfigLoader, influx_url
 from solaredge2mqtt.core.storage import Point, StorageService
 from solaredge2mqtt.core.storage.influx_import import (
     InfluxCredentials,
@@ -74,38 +73,24 @@ def training_point_to_canonical(point: Point) -> Point | None:
 ENV_PREFIX = "SE2MQTT_INFLUXDB__"
 
 
-def legacy_configuration_files(config_dir: str) -> list[str]:
-    """The configuration and its backups, newest first.
+def read_legacy_influxdb_section(config_dir: str) -> dict[str, Any]:
+    """Read the influxdb section of a configuration that still carries one.
 
-    Starting the service upgrades the configuration and drops the influxdb
-    section, so the credentials usually live in the backup the upgrade wrote
-    rather than in the configuration itself.
+    Only the configuration itself is read. Starting the service upgrades it
+    and takes the section along, so from then on the connection is given on
+    the command line -- the upgrade logs the full command for that.
     """
     config_file = path.join(config_dir, "configuration.yml")
-    backups = sorted(glob(f"{config_file}.backup.*"), reverse=True)
-
-    return [config_file, *backups]
-
-
-def read_legacy_influxdb_section(config_dir: str) -> dict[str, Any]:
-    """Read the influxdb section of the configuration or of its newest backup."""
     secrets_file = path.join(config_dir, "secrets.yml")
 
-    influxdb = None
-    for candidate in legacy_configuration_files(config_dir):
-        if not path.exists(candidate):
-            continue
+    if not path.exists(config_file):
+        return {}
 
-        with open(candidate, "r", encoding="utf-8") as file:
-            config_data = yaml.load(file, Loader=RawConfigLoader) or {}
+    with open(config_file, "r", encoding="utf-8") as file:
+        config_data = yaml.load(file, Loader=RawConfigLoader) or {}
 
-        section = config_data.get("influxdb")
-        if isinstance(section, dict):
-            logger.info(f"Reading InfluxDB credentials from {candidate}")
-            influxdb = section
-            break
-
-    if influxdb is None:
+    influxdb = config_data.get("influxdb")
+    if not isinstance(influxdb, dict):
         return {}
 
     secrets: dict[str, Any] = {}
@@ -137,16 +122,17 @@ def build_credentials(arguments: argparse.Namespace) -> InfluxCredentials:
     )
 
     if host is None:
-        raise ConfigurationException("storage", "No InfluxDB host configured or given.")
+        raise ConfigurationException(
+            "storage",
+            "No InfluxDB connection given. Pass --url, --org and --token. "
+            "Upgrading the configuration logged the full command; the values "
+            "are also in the influxdb section of the backup the upgrade "
+            f"wrote next to {path.join(arguments.config_dir, 'configuration.yml')}.",
+        )
 
-    url = str(host)
-    if arguments.url is None and not url.startswith(("http://", "https://")):
-        url = f"https://{url}"
-
-    if ":" not in url.split("//", 1)[-1]:
-        url = f"{url}:{port}"
-
-    return InfluxCredentials(url, str(token or ""), str(org or ""), str(bucket))
+    return InfluxCredentials(
+        influx_url(host, port), str(token or ""), str(org or ""), str(bucket)
+    )
 
 
 async def _run(arguments: argparse.Namespace) -> None:

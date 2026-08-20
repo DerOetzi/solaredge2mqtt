@@ -4,12 +4,16 @@ from pathlib import Path
 
 import pytest
 import yaml
+from loguru import logger as loguru_logger
 
 from solaredge2mqtt.core.settings.loader import ConfigurationLoader
 from solaredge2mqtt.core.settings.upgrades import (
     CONFIG_VERSION,
     CONFIG_VERSION_KEY,
+    TOKEN_PLACEHOLDER,
     RawConfigLoader,
+    influx_url,
+    migration_command,
     upgrade_configuration,
 )
 
@@ -100,6 +104,83 @@ class TestInfluxdbUpgrade:
         upgrade_configuration(config_file)
 
         assert "!secret mqtt_password" in Path(config_file).read_text()
+
+
+class TestMigrationCommand:
+    """Tests for the import command the upgrade spells out."""
+
+    SECTION = {
+        "host": "http://localhost",
+        "port": 8086,
+        "org": "test_org",
+        "bucket": "solaredge",
+        "token": "super_secret",
+    }
+
+    def test_names_every_connection_value(self):
+        """The removed section is the only place these are written down."""
+        command = migration_command(self.SECTION, "config")
+
+        assert command == (
+            "solaredge2mqtt-migrate-influxdb --config-dir config "
+            "--url http://localhost:8086 --org test_org --bucket solaredge "
+            f"--token {TOKEN_PLACEHOLDER}"
+        )
+
+    def test_never_reveals_the_token(self):
+        """A token in the service log is a token in every log shipped from it."""
+        command = migration_command(self.SECTION, "config")
+
+        assert "super_secret" not in command
+
+    def test_skips_what_the_section_does_not_hold(self):
+        """A partial section still yields a command worth starting from."""
+        command = migration_command({"host": "influx.local"}, "config")
+
+        assert command == (
+            "solaredge2mqtt-migrate-influxdb --config-dir config "
+            f"--url https://influx.local:8086 --token {TOKEN_PLACEHOLDER}"
+        )
+
+    def test_is_logged_before_the_file_is_rewritten(self, tmp_path):
+        """Reading the file at log time proves the section is still there."""
+        config_file = write_configuration(tmp_path, INFLUXDB_CONFIGURATION)
+        seen = []
+
+        def sink(message):
+            text = str(message)
+            if "--url" in text:
+                seen.append((text, read_raw(config_file)))
+
+        sink_id = loguru_logger.add(sink, level=0)
+        try:
+            upgrade_configuration(config_file)
+        finally:
+            loguru_logger.remove(sink_id)
+
+        ((logged, config_while_logging),) = seen
+
+        assert "--url http://localhost:8086" in logged
+        assert "--org test_org" in logged
+        assert "test_token" not in logged
+        assert "influxdb" in config_while_logging
+        assert "influxdb" not in read_raw(config_file)
+
+
+class TestInfluxUrl:
+    """Tests for building the base URL of an InfluxDB."""
+
+    def test_keeps_an_explicit_scheme_and_port(self):
+        """A complete URL is passed through untouched."""
+        assert influx_url("http://influx.local:8086") == "http://influx.local:8086"
+
+    def test_assumes_https_and_the_default_port(self):
+        """A bare host is completed the way the removed settings did."""
+        assert influx_url("influx.local") == "https://influx.local:8086"
+
+    def test_uses_the_configured_port(self):
+        """A port next to the host in the section is honoured."""
+        assert influx_url("influx.local", 9999) == "https://influx.local:9999"
 
 
 class TestUpgradeVersioning:
