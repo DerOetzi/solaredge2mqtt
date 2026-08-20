@@ -275,6 +275,21 @@ class TestImportFromLineProtocol:
         assert rows[0][0] == 0
 
     @pytest.mark.asyncio
+    async def test_counts_a_repeated_stamp_once(self, storage):
+        """Stamping every record of an hour still writes a single row."""
+
+        def stamp(point):
+            return point.field("weather_provider", "openweathermap")
+
+        imported = await import_from_line_protocol(
+            storage, FIXTURES / "influx_export.lp", transform=stamp
+        )
+
+        rows = await storage.fetch_all("SELECT COUNT(*) FROM point")
+
+        assert imported == rows[0][0]
+
+    @pytest.mark.asyncio
     async def test_counts_the_fields_a_transform_adds(self, storage):
         """A transform that stamps a field writes -- and reports -- more rows."""
 

@@ -191,7 +191,7 @@ async def _run(arguments: argparse.Namespace) -> None:
         if not arguments.dry_run:
             await consolidate_modules(storage)
 
-        logger.info(f"Import finished, {imported} values written")
+        logger.info(f"Import finished, {imported} rows written")
     finally:
         await storage.close()
 
