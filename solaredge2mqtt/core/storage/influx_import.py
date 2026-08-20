@@ -283,6 +283,16 @@ def measurements_to_import(
     return list(DEFAULT_MEASUREMENTS)
 
 
+def _written_values(points: list[Point]) -> int:
+    """The number of rows the points write, one per field.
+
+    A point may carry more fields than the record it came from -- the
+    migration stamps the provider onto every weather snapshot -- so counting
+    points would understate the import.
+    """
+    return sum(len(point.fields) for point in points)
+
+
 def _transform(points: list[Point], transform: PointTransform | None) -> list[Point]:
     if transform is None:
         return points
@@ -303,9 +313,10 @@ async def import_from_line_protocol(
     if not dry_run:
         await storage.write_points(points)
 
-    logger.info(f"Imported {len(points)} points from {source}")
+    values = _written_values(points)
+    logger.info(f"Imported {values} values from {source}")
 
-    return len(points)
+    return values
 
 
 async def import_from_influxdb(
@@ -386,9 +397,10 @@ async def _import_measurement(
                 f"{CURSOR_KEY_PREFIX}:{measurement}", slice_stop.isoformat()
             )
 
-        imported += len(points)
+        values = _written_values(points)
+        imported += values
         logger.info(
-            f"Imported {len(points)} points of {measurement} "
+            f"Imported {values} values of {measurement} "
             f"from {slice_start.date()} to {slice_stop.date()}"
         )
 

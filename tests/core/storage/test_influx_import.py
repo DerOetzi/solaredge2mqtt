@@ -210,7 +210,7 @@ class TestImportFromLineProtocol:
 
         rows = await storage.fetch_all("SELECT COUNT(*) FROM point")
 
-        assert imported == 4
+        assert imported == 11
         assert rows[0][0] == 11
 
     @pytest.mark.asyncio
@@ -228,7 +228,7 @@ class TestImportFromLineProtocol:
         """A dump may be split across several files."""
         imported = await import_from_line_protocol(storage, FIXTURES)
 
-        assert imported == 4
+        assert imported == 11
 
     @pytest.mark.asyncio
     async def test_applies_the_transform(self, storage):
@@ -270,8 +270,24 @@ class TestImportFromLineProtocol:
 
         rows = await storage.fetch_all("SELECT COUNT(*) FROM point")
 
-        assert imported == 4
+        assert imported == 11
         assert rows[0][0] == 0
+
+    @pytest.mark.asyncio
+    async def test_counts_the_fields_a_transform_adds(self, storage):
+        """A transform that stamps a field writes -- and reports -- more rows."""
+
+        def stamp(point):
+            return point.field("weather_provider", "openweathermap")
+
+        imported = await import_from_line_protocol(
+            storage, FIXTURES / "influx_export.lp", transform=stamp
+        )
+
+        rows = await storage.fetch_all("SELECT COUNT(*) FROM point")
+
+        assert imported == 15
+        assert rows[0][0] == 15
 
 
 class TestImportFromInfluxdb:

@@ -187,7 +187,7 @@ async def _run(arguments: argparse.Namespace) -> None:
                 training_point_to_canonical,
             )
 
-        logger.info(f"Import finished, {imported} points processed")
+        logger.info(f"Import finished, {imported} values written")
     finally:
         await storage.close()
 
