@@ -13,6 +13,7 @@ from solaredge2mqtt.core.storage.influx_import import (
     DEFAULT_MEASUREMENTS,
     RAW_MEASUREMENTS,
     InfluxCredentials,
+    consolidate_modules,
     import_from_influxdb,
     import_from_line_protocol,
     measurements_to_import,
@@ -367,3 +368,155 @@ class TestImportFromInfluxdb:
 
         with pytest.raises(ConfigurationException):
             await import_from_influxdb(storage, credentials, START, STOP, ["energy"])
+
+
+SERIAL = "15FE5405-6C"
+
+#: The tag shape a release before the monitoring API change wrote.
+LEGACY_MODULE = {
+    "serialnumber": SERIAL,
+    "identifier": "254651790",
+    "name": "Module 1.4.8",
+}
+
+#: The shape written for a single day while the naming was still wrong.
+INTERIM_MODULE = {
+    "serialnumber": SERIAL,
+    "identifier": "15FE5405",
+    "name": "Optimizer 1.4.8",
+}
+
+#: The shape the running release writes.
+CURRENT_MODULE = {
+    "serialnumber": SERIAL,
+    "identifier": "15FE5405",
+    "name": "Module 1.4.8",
+}
+
+MODULE_HOURS = [datetime(2026, 8, day, 11, tzinfo=timezone.utc) for day in (1, 3, 5)]
+
+
+class TestConsolidateModules:
+    """Tests for folding the historic module tag shapes onto the current one."""
+
+    @pytest.fixture
+    def module_series(self, seed):
+        """Provide a helper seeding one module shape at the given hours."""
+
+        async def _seed(tags, samples):
+            await seed("modules", "power", tags, samples)
+
+        return _seed
+
+    async def module_tags(self, storage):
+        rows = await storage.fetch_all(
+            "SELECT tag_key, tag_value FROM series_tag WHERE series_id IN "
+            "(SELECT series_id FROM series WHERE measurement = 'modules')"
+        )
+        return {(str(row["tag_key"]), str(row["tag_value"])) for row in rows}
+
+    @pytest.mark.asyncio
+    async def test_merges_the_legacy_shapes(self, storage, module_series):
+        """The same module under three tag sets becomes one series."""
+        await module_series(LEGACY_MODULE, [(MODULE_HOURS[0], 100.0)])
+        await module_series(INTERIM_MODULE, [(MODULE_HOURS[1], 200.0)])
+        await module_series(CURRENT_MODULE, [(MODULE_HOURS[2], 300.0)])
+
+        merged = await consolidate_modules(storage)
+
+        series = await storage.fetch_all(
+            "SELECT COUNT(*) FROM series WHERE measurement = 'modules'"
+        )
+        points = await storage.fetch_all("SELECT ts, value FROM point ORDER BY ts")
+
+        assert merged == 2
+        assert series[0][0] == 1
+        assert [row["value"] for row in points] == [100.0, 200.0, 300.0]
+
+    @pytest.mark.asyncio
+    async def test_keeps_the_tags_of_the_newest_series(self, storage, module_series):
+        """The shape the running release writes is the one that survives."""
+        await module_series(LEGACY_MODULE, [(MODULE_HOURS[0], 100.0)])
+        await module_series(CURRENT_MODULE, [(MODULE_HOURS[2], 300.0)])
+
+        await consolidate_modules(storage)
+
+        assert await self.module_tags(storage) == {
+            ("serialnumber", SERIAL),
+            ("identifier", "15FE5405"),
+            ("name", "Module 1.4.8"),
+        }
+
+    @pytest.mark.asyncio
+    async def test_the_newest_series_wins_a_collision(self, storage, module_series):
+        """The older shape may hold an incomplete snapshot of the same hour."""
+        await module_series(CURRENT_MODULE, [(MODULE_HOURS[1], 267.0)])
+        await module_series(INTERIM_MODULE, [(MODULE_HOURS[1], 0.0)])
+        await module_series(CURRENT_MODULE, [(MODULE_HOURS[2], 300.0)])
+
+        await consolidate_modules(storage)
+
+        points = await storage.fetch_all("SELECT ts, value FROM point ORDER BY ts")
+
+        assert [row["value"] for row in points] == [267.0, 300.0]
+
+    @pytest.mark.asyncio
+    async def test_keeps_different_modules_apart(self, storage, module_series):
+        """The serial number is what identifies a module, not its name."""
+        await module_series(LEGACY_MODULE, [(MODULE_HOURS[0], 100.0)])
+        await module_series(
+            {**CURRENT_MODULE, "serialnumber": "178A16D7-8E", "identifier": "178A16D7"},
+            [(MODULE_HOURS[2], 300.0)],
+        )
+
+        merged = await consolidate_modules(storage)
+
+        series = await storage.fetch_all(
+            "SELECT COUNT(*) FROM series WHERE measurement = 'modules'"
+        )
+
+        assert merged == 0
+        assert series[0][0] == 2
+
+    @pytest.mark.asyncio
+    async def test_leaves_a_module_without_a_serial_alone(self, storage, module_series):
+        """Without the stable key there is nothing to merge onto."""
+        await module_series({"identifier": "254651790"}, [(MODULE_HOURS[0], 100.0)])
+        await module_series({"identifier": "15FE5405"}, [(MODULE_HOURS[2], 300.0)])
+
+        merged = await consolidate_modules(storage)
+
+        series = await storage.fetch_all(
+            "SELECT COUNT(*) FROM series WHERE measurement = 'modules'"
+        )
+
+        assert merged == 0
+        assert series[0][0] == 2
+
+    @pytest.mark.asyncio
+    async def test_is_idempotent(self, storage, module_series):
+        """A second run finds nothing left to merge."""
+        await module_series(LEGACY_MODULE, [(MODULE_HOURS[0], 100.0)])
+        await module_series(CURRENT_MODULE, [(MODULE_HOURS[2], 300.0)])
+
+        await consolidate_modules(storage)
+
+        assert await consolidate_modules(storage) == 0
+
+    @pytest.mark.asyncio
+    async def test_forgets_the_merged_series(self, storage, module_series):
+        """A write after the merge must not reuse a deleted series id."""
+        await module_series(LEGACY_MODULE, [(MODULE_HOURS[0], 100.0)])
+        await module_series(CURRENT_MODULE, [(MODULE_HOURS[2], 300.0)])
+
+        await consolidate_modules(storage)
+        await module_series(LEGACY_MODULE, [(MODULE_HOURS[1], 200.0)])
+
+        points = await storage.fetch_all("SELECT ts, value FROM point ORDER BY ts")
+
+        assert [row["value"] for row in points] == [100.0, 200.0, 300.0]
+
+    @pytest.mark.asyncio
+    async def test_does_nothing_without_modules(self, storage):
+        """An installation without the monitoring service is untouched."""
+        assert await consolidate_modules(storage) == 0

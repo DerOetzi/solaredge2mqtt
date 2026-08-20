@@ -533,6 +533,11 @@ speaks: `temp` becomes `temperature`, the OpenWeatherMap condition id becomes it
 provider is written into every row, and fields the model has no use for (such as `weather_main`)
 are dropped. See [ADR 0007](docs/decisions/0007-storage-holds-the-canonical-schema.md).
 
+Module history is consolidated as well. The monitoring API changed what it reports as an
+optimizer's `identifier`, so an older history holds the same module under several tag sets; the
+import merges them onto the shape written today, keyed by the serial number. See
+[ADR 0009](docs/decisions/0009-migration-consolidates-the-module-series.md).
+
 ### Price Configuration
 
 Calculate savings and earnings by specifying energy costs. Requires storage to be enabled.

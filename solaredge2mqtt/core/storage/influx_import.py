@@ -11,6 +11,11 @@ import aiohttp
 from solaredge2mqtt.core.exceptions import ConfigurationException
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.storage.models import FieldValue, Point
+from solaredge2mqtt.core.storage.queries import (
+    DELETE_SERIES,
+    MERGE_SERIES_POINTS,
+    MODULE_SERIES_MERGE_PLAN,
+)
 
 if TYPE_CHECKING:
     from solaredge2mqtt.core.storage import StorageService
@@ -407,3 +412,34 @@ async def _import_measurement(
         slice_start = slice_stop
 
     return imported
+
+
+async def consolidate_modules(storage: StorageService) -> int:
+    """Fold the historic module tag shapes onto the one written today.
+
+    The monitoring API changed what it reports as ``identifier``, and the
+    naming of an optimizer changed with it, so an imported history holds the
+    same physical module under several tag sets. The serial number stayed the
+    same throughout, so the series carrying the newest point wins and the
+    older ones are merged into it.
+
+    Doing nothing is an option -- no query reads ``modules`` back -- but it
+    would leave every dashboard to sort the shapes out by hand, forever.
+    """
+    plan = await storage.fetch_all(MODULE_SERIES_MERGE_PLAN)
+    if not plan:
+        return 0
+
+    for row in plan:
+        source_id = int(row["source_id"])
+        await storage.execute_write(
+            MERGE_SERIES_POINTS,
+            {"source_id": source_id, "target_id": int(row["target_id"])},
+        )
+        await storage.execute_write(DELETE_SERIES, {"series_id": source_id})
+
+    storage.forget_series_cache()
+
+    logger.info(f"Consolidated {len(plan)} legacy module series")
+
+    return len(plan)

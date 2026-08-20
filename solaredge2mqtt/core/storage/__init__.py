@@ -284,6 +284,10 @@ class StorageService:
             await EventBus.emit(StorageOfflineEvent())
             raise
 
+    def forget_series_cache(self) -> None:
+        """Drop the resolved series ids after series were merged or removed."""
+        self._series_cache.clear()
+
     async def all_series_ids(self) -> list[int]:
         rows = await self.fetch_all("SELECT series_id FROM series")
         return [int(row[0]) for row in rows]

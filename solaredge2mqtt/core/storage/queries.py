@@ -130,3 +130,45 @@ DELETE FROM point WHERE series_id = :series_id AND ts < :cutoff
 COUNT_POINTS_BEFORE = """
 SELECT COUNT(*) FROM point WHERE series_id = :series_id AND ts < :cutoff
 """
+
+#: The module series that lost their tag shape to a change in the monitoring
+#: API, mapped onto the series that carries the newest point for that serial.
+MODULE_SERIES_MERGE_PLAN = """
+WITH module_series AS (
+    SELECT s.series_id,
+           s.field,
+           (SELECT tag_value FROM series_tag
+             WHERE series_id = s.series_id
+               AND tag_key = 'serialnumber') AS serialnumber,
+           (SELECT MAX(ts) FROM point WHERE series_id = s.series_id) AS last_ts
+    FROM series s
+    WHERE s.measurement = 'modules'
+),
+newest AS (
+    SELECT serialnumber, field, series_id,
+           ROW_NUMBER() OVER (
+               PARTITION BY serialnumber, field
+               ORDER BY last_ts DESC, series_id DESC
+           ) AS position
+    FROM module_series
+    WHERE serialnumber IS NOT NULL AND last_ts IS NOT NULL
+)
+SELECT module_series.series_id AS source_id, newest.series_id AS target_id
+FROM module_series
+JOIN newest ON newest.serialnumber = module_series.serialnumber
+           AND newest.field = module_series.field
+           AND newest.position = 1
+WHERE module_series.series_id <> newest.series_id
+"""
+
+#: Points the target already holds win -- the older shape came from the
+#: release that got the tags wrong, and may hold an incomplete snapshot.
+MERGE_SERIES_POINTS = """
+INSERT INTO point (series_id, ts, value)
+SELECT :target_id, ts, value FROM point WHERE series_id = :source_id
+ON CONFLICT (series_id, ts) DO NOTHING
+"""
+
+DELETE_SERIES = """
+DELETE FROM series WHERE series_id = :series_id
+"""

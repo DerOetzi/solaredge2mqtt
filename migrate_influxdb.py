@@ -19,6 +19,7 @@ from solaredge2mqtt.core.settings.upgrades import RawConfigLoader
 from solaredge2mqtt.core.storage import Point, StorageService
 from solaredge2mqtt.core.storage.influx_import import (
     InfluxCredentials,
+    consolidate_modules,
     import_from_influxdb,
     import_from_line_protocol,
     measurements_to_import,
@@ -186,6 +187,9 @@ async def _run(arguments: argparse.Namespace) -> None:
                 arguments.resume,
                 training_point_to_canonical,
             )
+
+        if not arguments.dry_run:
+            await consolidate_modules(storage)
 
         logger.info(f"Import finished, {imported} values written")
     finally:
