@@ -17,6 +17,7 @@ from solaredge2mqtt.services.weather.events import (
     WeatherUpdateEvent,
 )
 from solaredge2mqtt.services.weather.models import OpenWeatherMapOneCall
+from solaredge2mqtt.services.weather.result import WeatherResult
 
 if TYPE_CHECKING:
     from solaredge2mqtt.core.settings import ServiceSettings
@@ -51,7 +52,7 @@ class WeatherClient(HTTPClientAsync):
             await EventBus.emit(WeatherOfflineEvent())
             raise
 
-    async def get_weather(self) -> OpenWeatherMapOneCall:
+    async def get_weather(self) -> WeatherResult:
         if self.location is None or self.settings is None:
             raise ConfigurationException(
                 "weather", "Weather service is not properly configured"
@@ -79,9 +80,7 @@ class WeatherClient(HTTPClientAsync):
                     "Unable to read weather data from OpenWeatherMap"
                 )
 
-            weather = OpenWeatherMapOneCall.model_validate(result)
-
-            return weather
+            return OpenWeatherMapOneCall.model_validate(result).to_result()
         except ClientResponseError as error:
             status_code = error.status
             if status_code == 401:

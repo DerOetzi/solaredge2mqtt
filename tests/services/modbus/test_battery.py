@@ -138,20 +138,19 @@ class TestModbusBattery:
         assert battery.is_valid is False
 
     def test_battery_prepare_point(self):
-        """Test prepare_point creates InfluxDB point."""
+        """Test prepare_point creates storage point."""
         info = make_device_info()
         data = make_battery_data()
 
         battery = ModbusBattery.from_sunspec(info, data)
         point = battery.prepare_point()
 
-        # Convert point to line protocol to verify fields
-        line = point.to_line_protocol()
-        assert "battery_raw" in line
-        assert "current=" in line
-        assert "voltage=" in line
-        assert "state_of_charge=" in line
-        assert "state_of_health=" in line
+        assert point.measurement == "battery_raw"
+        line = point.fields
+        assert "current" in line
+        assert "voltage" in line
+        assert "state_of_charge" in line
+        assert "state_of_health" in line
 
     def test_battery_prepare_point_custom_measurement(self):
         """Test prepare_point with custom measurement name."""
@@ -161,8 +160,7 @@ class TestModbusBattery:
         battery = ModbusBattery.from_sunspec(info, data)
         point = battery.prepare_point("custom_measurement")
 
-        line = point.to_line_protocol()
-        assert "custom_measurement" in line
+        assert point.measurement == "custom_measurement"
 
     def test_battery_prepare_point_with_unit(self):
         """Test prepare_point includes unit tag when unit is present."""
@@ -172,8 +170,7 @@ class TestModbusBattery:
         battery = ModbusBattery.from_sunspec(info, data)
         point = battery.prepare_point()
 
-        line = point.to_line_protocol()
-        assert "unit=" in line
+        assert point.tags["unit"] == "leader"
 
     def test_battery_homeassistant_device_info(self):
         """Test homeassistant_device_info_with_name method."""

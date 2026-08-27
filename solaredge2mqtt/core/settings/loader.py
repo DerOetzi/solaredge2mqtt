@@ -14,6 +14,7 @@ from solaredge2mqtt.core.settings.migrator import (
     EnvironmentReader,
 )
 from solaredge2mqtt.core.settings.models import ServiceSettings
+from solaredge2mqtt.core.settings.upgrades import upgrade_configuration
 
 
 class SecretLoader(yaml.SafeLoader):
@@ -67,6 +68,8 @@ class ConfigurationLoader:
             return ConfigurationLoader._migrate_from_environment(
                 config_file, secrets_file
             )
+
+        upgrade_configuration(config_file)
 
         if path.exists(secrets_file):
             SecretLoader.secrets = ConfigurationLoader._load_yaml_file(secrets_file)

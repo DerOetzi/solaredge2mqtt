@@ -33,29 +33,29 @@ def mock_monitoring_settings():
 
 
 @pytest.fixture
-def mock_influxdb():
-    """Create mock InfluxDB client."""
-    influxdb = AsyncMock()
-    influxdb.write_points = AsyncMock()
-    return influxdb
+def mock_storage():
+    """Create mock storage client."""
+    storage = AsyncMock()
+    storage.write_points = AsyncMock()
+    return storage
 
 
 class TestMonitoringSiteInit:
     """Tests for MonitoringSite initialization."""
 
-    def test_init(self, mock_monitoring_settings, mock_event_bus, mock_influxdb):
+    def test_init(self, mock_monitoring_settings, mock_event_bus, mock_storage):
         """Test MonitoringSite initialization."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
 
         assert site.settings is mock_monitoring_settings
         mock_event_bus.register.assert_called_once_with(site)
-        assert site.influxdb is mock_influxdb
+        assert site.storage is mock_storage
 
-    def test_init_without_influxdb(self, mock_monitoring_settings, mock_event_bus):
-        """Test MonitoringSite initialization without InfluxDB."""
+    def test_init_without_storage(self, mock_monitoring_settings, mock_event_bus):
+        """Test MonitoringSite initialization without storage."""
         site = MonitoringSite(mock_monitoring_settings, None)
 
-        assert site.influxdb is None
+        assert site.storage is None
 
     def test_subscribes_to_events(self, mock_monitoring_settings, mock_event_bus):
         """Test MonitoringSite subscribes to 15min interval event."""
@@ -69,10 +69,10 @@ class TestMonitoringSiteLogin:
 
     @pytest.mark.asyncio
     async def test_login_success(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test successful login returns (csrf_token, remember_me_cookie) tuple."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
         site._post = AsyncMock(return_value="success")
         site.get_cookie = MagicMock(
             side_effect=[None, None, "csrf-token", "remember-me-val"]
@@ -86,10 +86,10 @@ class TestMonitoringSiteLogin:
 
     @pytest.mark.asyncio
     async def test_login_returns_existing_token_without_post(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test login returns existing tokens as tuple without HTTP request."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
         site._post = AsyncMock()
         site.get_cookie = MagicMock(return_value="existing-csrf-token")
 
@@ -101,10 +101,10 @@ class TestMonitoringSiteLogin:
 
     @pytest.mark.asyncio
     async def test_login_missing_csrf_token_after_post(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test login raises when CSRF token is missing after POST."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
         site._post = AsyncMock(return_value="success")
         site.get_cookie = MagicMock(side_effect=[None, None, None, None])
 
@@ -113,10 +113,10 @@ class TestMonitoringSiteLogin:
 
     @pytest.mark.asyncio
     async def test_login_failure(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test login failure raises ConfigurationException."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
 
         mock_request_info = MagicMock(spec=RequestInfo)
         mock_request_info.real_url = "https://test.com"
@@ -133,10 +133,10 @@ class TestMonitoringSiteLogin:
 
     @pytest.mark.asyncio
     async def test_login_timeout(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test login timeout raises ConfigurationException."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
         site._post = AsyncMock(side_effect=asyncio.TimeoutError())
 
         with pytest.raises(ConfigurationException):
@@ -144,14 +144,14 @@ class TestMonitoringSiteLogin:
 
 
 class TestMonitoringSiteGetModules:
-    """Tests for MonitoringSite.get_modules (pure read, no EventBus/InfluxDB)."""
+    """Tests for MonitoringSite.get_modules (pure read, no EventBus/storage)."""
 
     @pytest.mark.asyncio
     async def test_get_modules_merges_energy_and_power_without_side_effects(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """get_modules fetches+merges data and emits nothing on the EventBus."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
 
         mock_module: LogicalModule = cast(LogicalModule, MagicMock(spec=LogicalModule))
         mock_module.power = None
@@ -196,15 +196,15 @@ class TestMonitoringSiteMergeModules:
         assert "SN123" in result
 
 
-class TestMonitoringSiteSaveToInfluxDB:
-    """Tests for MonitoringSite save_to_influxdb."""
+class TestMonitoringSiteSaveTostorage:
+    """Tests for MonitoringSite save_to_storage."""
 
     @pytest.mark.asyncio
-    async def test_save_to_influxdb(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+    async def test_save_to_storage(
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
-        """Test save_to_influxdb writes points."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        """Test save_to_storage writes points."""
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
 
         mock_info = MagicMock()
         mock_info.serialnumber = "SN123"
@@ -215,18 +215,16 @@ class TestMonitoringSiteSaveToInfluxDB:
         mock_module.info = mock_info
         mock_module.power = {datetime.now(timezone.utc): 100.0}
 
-        await site.save_to_influxdb({"SN123": mock_module})
+        await site.save_to_storage({"SN123": mock_module})
 
-        mock_influxdb.write_points.assert_called_once()
+        mock_storage.write_points.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_save_to_influxdb_none(
-        self, mock_monitoring_settings, mock_event_bus
-    ):
-        """Test save_to_influxdb does nothing when influxdb is None."""
+    async def test_save_to_storage_none(self, mock_monitoring_settings, mock_event_bus):
+        """Test save_to_storage does nothing when storage is None."""
         site = MonitoringSite(mock_monitoring_settings, None)
 
-        await site.save_to_influxdb({})
+        await site.save_to_storage({})
 
 
 class TestMonitoringSitePublishMQTT:
@@ -234,10 +232,10 @@ class TestMonitoringSitePublishMQTT:
 
     @pytest.mark.asyncio
     async def test_publish_mqtt(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test publish_mqtt emits events."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
 
         mock_info = MagicMock()
         mock_info.serialnumber = "SN123"
@@ -256,31 +254,31 @@ class TestMonitoringSiteGetData:
 
     @pytest.mark.asyncio
     async def test_get_data(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test get_data orchestrates data retrieval."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
 
         site.get_modules_energy = AsyncMock(return_value={})
         site.get_modules_power = AsyncMock(return_value={})
-        site.save_to_influxdb = AsyncMock()
+        site.save_to_storage = AsyncMock()
         site.publish_mqtt = AsyncMock()
 
         await site.get_data(Interval15MinTriggerEvent())
 
         site.get_modules_energy.assert_called_once()
         site.get_modules_power.assert_called_once()
-        site.save_to_influxdb.assert_called_once()
+        site.save_to_storage.assert_called_once()
         site.publish_mqtt.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_get_data_sets_offline_state_on_known_errors(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """get_data should emit monitoring offline event on data errors."""
         from solaredge2mqtt.services.monitoring.events import MonitoringOfflineEvent
 
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
         site.get_modules_energy = AsyncMock(
             side_effect=InvalidDataException("unable to read")
         )
@@ -299,10 +297,10 @@ class TestMonitoringSiteGetLogical:
 
     @pytest.mark.asyncio
     async def test_get_logical_needs_login(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test _get_logical calls login via _add_login_headers."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
         site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "test_token"})
         site._get = AsyncMock(return_value={"result": "data"})
 
@@ -313,10 +311,10 @@ class TestMonitoringSiteGetLogical:
 
     @pytest.mark.asyncio
     async def test_get_logical_error(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test _get_logical raises on error."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
         site.cookie_exists = MagicMock(return_value=True)
         site.get_cookie = MagicMock(return_value="test_token")
 
@@ -335,10 +333,10 @@ class TestMonitoringSiteGetLogical:
 
     @pytest.mark.asyncio
     async def test_get_logical_non_dict_response_raises_invalid_data(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test _get_logical raises on non-dict response payload."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
         site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "test_token"})
         site._get = AsyncMock(return_value=["unexpected", "list"])
 
@@ -353,10 +351,10 @@ class TestMonitoringSiteGetEnergyByInverter:
 
     @pytest.mark.asyncio
     async def test_empty_serials_returns_empty_without_request(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test _get_energy_by_inverter short-circuits when there are no inverters."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
         site._add_login_headers = AsyncMock()
         site._get = AsyncMock()
 
@@ -367,10 +365,10 @@ class TestMonitoringSiteGetEnergyByInverter:
 
     @pytest.mark.asyncio
     async def test_success_indexes_response(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test _get_energy_by_inverter parses and indexes a valid response."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
         site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
         site._get = AsyncMock(
             return_value={
@@ -403,10 +401,10 @@ class TestMonitoringSiteGetEnergyByInverter:
 
     @pytest.mark.asyncio
     async def test_error_raises_invalid_data(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test _get_energy_by_inverter raises InvalidDataException on HTTP error."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
         site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
 
         mock_request_info = MagicMock(spec=RequestInfo)
@@ -422,10 +420,10 @@ class TestMonitoringSiteGetEnergyByInverter:
 
     @pytest.mark.asyncio
     async def test_non_dict_response_raises_invalid_data(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test _get_energy_by_inverter raises on non-dict response payload."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
         site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
         site._get = AsyncMock(return_value=["unexpected", "list"])
 
@@ -516,10 +514,10 @@ class TestMonitoringSiteLoadStructure:
 
     @pytest.mark.asyncio
     async def test_success_caches_structure(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test _load_structure caches siteStructure from _get_logical."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
         site._get_logical = AsyncMock(return_value={"siteStructure": {"children": []}})
 
         await site._load_structure()
@@ -528,10 +526,10 @@ class TestMonitoringSiteLoadStructure:
 
     @pytest.mark.asyncio
     async def test_error_logs_warning_no_raise(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test _load_structure swallows errors, leaving cache empty."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
         site._get_logical = AsyncMock(
             side_effect=InvalidDataException("unable to read")
         )
@@ -542,10 +540,10 @@ class TestMonitoringSiteLoadStructure:
 
     @pytest.mark.asyncio
     async def test_missing_site_structure_key_logs_warning_no_raise(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test _load_structure treats a missing/non-dict siteStructure as an error."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
         site._get_logical = AsyncMock(return_value={"unexpected": "shape"})
 
         await site._load_structure()
@@ -561,10 +559,10 @@ class TestMonitoringSiteParseInverters:
     """Tests for MonitoringSite _parse_inverters."""
 
     def test_parse_inverters(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test _parse_inverters parses inverter data nested under a FOLDER."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
 
         site_structure = {
             "children": [
@@ -589,10 +587,10 @@ class TestMonitoringSiteParseInverters:
         assert result[0].info.serialnumber == "SN123"
 
     def test_parse_inverters_with_energy(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test _parse_inverters attaches energy from the energy-by-inverter index."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
 
         site_structure = {
             "children": [
@@ -619,10 +617,10 @@ class TestMonitoringSiteParseInverters:
         assert result[0].energy == pytest.approx(1234.5)
 
     def test_parse_inverters_unknown_type(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test _parse_inverters logs and skips unknown type nodes."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
 
         site_structure = {
             "children": [
@@ -646,10 +644,10 @@ class TestMonitoringSiteParseInverters:
         assert len(result) == 0
 
     def test_parse_inverters_no_inverter_folder(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test _parse_inverters returns empty list when no INVERTER folder exists."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
 
         result = site._parse_inverters({"children": []}, {})
 
@@ -684,10 +682,10 @@ class TestMonitoringSiteParseStrings:
     """Tests for MonitoringSite _parse_strings."""
 
     def test_parse_strings(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test _parse_strings parses string data nested under a FOLDER."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
 
         inverter = MagicMock()
         inverter.strings = []
@@ -713,10 +711,10 @@ class TestMonitoringSiteParseStrings:
         assert len(inverter.strings) == 1
 
     def test_parse_strings_with_energy(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test _parse_strings attaches energy matched by stringRelativeOrder."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
 
         inverter = MagicMock()
         inverter.strings = []
@@ -743,11 +741,11 @@ class TestMonitoringSiteParseStrings:
         assert inverter.strings[0].energy == pytest.approx(555.0)
 
     def test_parse_strings_skips_non_string_type(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test _parse_strings skips nodes inside the STRING folder with a
         mismatched type."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
 
         inverter = MagicMock()
         inverter.strings = []
@@ -776,11 +774,9 @@ class TestMonitoringSiteParseStrings:
 class TestMonitoringSiteParsePanels:
     """Tests for MonitoringSite _parse_panels."""
 
-    def test_parse_panels(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
-    ):
+    def test_parse_panels(self, mock_monitoring_settings, mock_event_bus, mock_storage):
         """Test _parse_panels parses optimizer data nested under a FOLDER."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
 
         string = MagicMock()
         string.modules = []
@@ -806,10 +802,10 @@ class TestMonitoringSiteParsePanels:
         assert len(string.modules) == 1
 
     def test_parse_panels_with_energy(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test _parse_panels attaches energy matched by optimizer serial."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
 
         string = MagicMock()
         string.modules = []
@@ -835,11 +831,11 @@ class TestMonitoringSiteParsePanels:
         assert string.modules[0].energy == pytest.approx(42.0)
 
     def test_parse_panels_skips_non_optimizer_type(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test _parse_panels skips nodes inside the OPTIMIZER folder with a
         mismatched type."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
 
         string = MagicMock()
         string.modules = []
@@ -869,10 +865,10 @@ class TestMonitoringSiteGetModulesEnergyFull:
 
     @pytest.mark.asyncio
     async def test_get_modules_energy_full(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test get_modules_energy with full data parsing."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
 
         site._cached_structure = {
             "children": [
@@ -934,10 +930,10 @@ class TestMonitoringSiteGetModulesEnergyFull:
 
     @pytest.mark.asyncio
     async def test_get_modules_energy_lazy_loads_structure_when_uncached(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test get_modules_energy lazily loads the structure if not cached yet."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
         assert site._cached_structure is None
 
         site._get_logical = AsyncMock(return_value={"siteStructure": {"children": []}})
@@ -950,10 +946,10 @@ class TestMonitoringSiteGetModulesEnergyFull:
 
     @pytest.mark.asyncio
     async def test_get_modules_energy_reuses_cached_structure(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test get_modules_energy does not refetch structure once cached."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
         site._cached_structure = {"children": []}
 
         site._get_logical = AsyncMock()
@@ -965,10 +961,10 @@ class TestMonitoringSiteGetModulesEnergyFull:
 
     @pytest.mark.asyncio
     async def test_get_modules_energy_raises_when_structure_unavailable(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test get_modules_energy raises if structure stays uncached after load."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
         site._load_structure = AsyncMock()
 
         with pytest.raises(InvalidDataException):
@@ -980,10 +976,10 @@ class TestMonitoringSiteGetModulesPowerFull:
 
     @pytest.mark.asyncio
     async def test_get_modules_power_full(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test get_modules_power decodes optimizers-compact into per-module power."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
         site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
         site._get = AsyncMock(
             return_value={
@@ -1002,10 +998,10 @@ class TestMonitoringSiteGetModulesPowerFull:
 
     @pytest.mark.asyncio
     async def test_get_modules_power_http_error_raises_invalid_data(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test get_modules_power raises InvalidDataException on HTTP error."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
         site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
 
         mock_request_info = MagicMock(spec=RequestInfo)
@@ -1021,10 +1017,10 @@ class TestMonitoringSiteGetModulesPowerFull:
 
     @pytest.mark.asyncio
     async def test_get_modules_power_non_dict_response_raises_invalid_data(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test get_modules_power raises InvalidDataException on non-dict response."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
         site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
         site._get = AsyncMock(return_value=["unexpected", "list"])
 
@@ -1033,10 +1029,10 @@ class TestMonitoringSiteGetModulesPowerFull:
 
     @pytest.mark.asyncio
     async def test_get_modules_power_timeout_raises_invalid_data(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """Test get_modules_power raises InvalidDataException on timeout."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
         site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
         site._get = AsyncMock(side_effect=asyncio.TimeoutError())
 
@@ -1110,11 +1106,11 @@ class TestMonitoringSiteExtraBranches:
     """Extra tests to cover remaining monitoring service branches."""
 
     @pytest.mark.asyncio
-    async def test_save_to_influxdb_skips_modules_without_power(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+    async def test_save_to_storage_skips_modules_without_power(
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
-        """save_to_influxdb ignores modules with no power data."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        """save_to_storage ignores modules with no power data."""
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
 
         with_power_info = MagicMock()
         with_power_info.serialnumber = "SN123"
@@ -1132,18 +1128,18 @@ class TestMonitoringSiteExtraBranches:
         without_power.info = without_power_info
         without_power.power = None
 
-        await site.save_to_influxdb({"a": with_power, "b": without_power})
+        await site.save_to_storage({"a": with_power, "b": without_power})
 
-        mock_influxdb.write_points.assert_called_once()
-        points = mock_influxdb.write_points.call_args[0][0]
+        mock_storage.write_points.assert_called_once()
+        points = mock_storage.write_points.call_args[0][0]
         assert len(points) == 1
 
     @pytest.mark.asyncio
     async def test_publish_mqtt_with_none_energy_still_emits_module_event(
-        self, mock_monitoring_settings, mock_event_bus, mock_influxdb
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
         """publish_mqtt emits module event even when module.energy is None."""
-        site = MonitoringSite(mock_monitoring_settings, mock_influxdb)
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
 
         module_info = MagicMock()
         module_info.serialnumber = "SN123"

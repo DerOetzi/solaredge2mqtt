@@ -18,7 +18,7 @@ def _build_service() -> Service:
     service.loops = set()
     service._run_task = None
     service.mqtt = None
-    service.influxdb = None
+    service.storage = None
     service.powerflow = cast(Any, None)
     service.monitoring = None
     service.weather = None
@@ -30,7 +30,7 @@ def _build_service() -> Service:
 
 def _build_settings(
     *,
-    influx_configured: bool,
+    storage_configured: bool,
     monitoring_configured: bool,
     weather_enabled: bool,
     forecast_enabled: bool,
@@ -40,7 +40,7 @@ def _build_settings(
     return SimpleNamespace(
         logging_level="INFO",
         interval=5,
-        influxdb=SimpleNamespace(is_configured=influx_configured, debounce_cycles=0),
+        storage=SimpleNamespace(is_configured=storage_configured, debounce_cycles=0),
         prices=SimpleNamespace(),
         energy=SimpleNamespace(),
         monitoring=SimpleNamespace(is_configured=monitoring_configured),
@@ -137,22 +137,22 @@ class TestServiceInitialization:
     def test_init_creates_all_optional_services_when_enabled(self):
         """Initialization should create optional services when configured."""
         settings = _build_settings(
-            influx_configured=True,
+            storage_configured=True,
             monitoring_configured=True,
             weather_enabled=True,
             forecast_enabled=True,
             homeassistant_enabled=True,
         )
 
-        influx = MagicMock()
+        storage_mock = MagicMock()
 
         with (
             patch("solaredge2mqtt.service.service_settings", return_value=settings),
             patch("solaredge2mqtt.service.initialize_logging") as init_logging,
             patch("solaredge2mqtt.service.Timer") as timer_cls,
             patch(
-                "solaredge2mqtt.service.InfluxDBAsync", return_value=influx
-            ) as influx_cls,
+                "solaredge2mqtt.service.StorageService", return_value=storage_mock
+            ) as storage_cls,
             patch("solaredge2mqtt.service.EnergyService") as energy_cls,
             patch("solaredge2mqtt.service.PowerflowService") as powerflow_cls,
             patch("solaredge2mqtt.service.MonitoringSite") as monitoring_cls,
@@ -165,16 +165,16 @@ class TestServiceInitialization:
 
         init_logging.assert_called_once_with("INFO")
         timer_cls.assert_called_once_with(settings.interval)
-        influx_cls.assert_called_once_with(settings.influxdb, settings.prices)
-        energy_cls.assert_called_once_with(settings.energy, influx)
-        powerflow_cls.assert_called_once_with(settings, influx)
+        storage_cls.assert_called_once_with(settings.storage, settings.prices, "config")
+        energy_cls.assert_called_once_with(settings.energy, storage_mock)
+        powerflow_cls.assert_called_once_with(settings, storage_mock)
         monitoring_cls.assert_called_once_with(
             settings.monitoring,
-            influx,
+            storage_mock,
         )
         weather_cls.assert_called_once_with(settings)
         forecast_cls.assert_called_once_with(
-            settings.forecast, settings.location, influx
+            settings.forecast, settings.location, storage_mock
         )
         homeassistant_cls.assert_called_once_with(settings)
         assert service.forecast is forecast_cls.return_value
@@ -182,7 +182,7 @@ class TestServiceInitialization:
     def test_init_logs_warning_when_forecast_unavailable_but_enabled(self):
         """Initialization should warn when forecast is enabled but unavailable."""
         settings = _build_settings(
-            influx_configured=False,
+            storage_configured=False,
             monitoring_configured=False,
             weather_enabled=False,
             forecast_enabled=True,
@@ -202,7 +202,7 @@ class TestServiceInitialization:
         mock_logger.warning.assert_called_once_with(
             "Forecast service not available, please refer to README"
         )
-        assert service.influxdb is None
+        assert service.storage is None
         assert service.energy is None
         assert service.monitoring is None
         assert service.weather is None
@@ -212,7 +212,7 @@ class TestServiceInitialization:
     def test_init_skips_warning_when_forecast_unavailable_and_disabled(self):
         """Initialization should not warn when forecast is unavailable and disabled."""
         settings = _build_settings(
-            influx_configured=False,
+            storage_configured=False,
             monitoring_configured=False,
             weather_enabled=False,
             forecast_enabled=False,
@@ -498,8 +498,8 @@ class TestServiceMainLoop:
         service.finalize.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_main_loop_skips_influxdb_initialization_when_not_configured(self):
-        """Main loop should skip influxdb operations when not configured."""
+    async def test_main_loop_skips_storage_initialization_when_not_configured(self):
+        """Main loop should skip storage operations when not configured."""
         service = _build_service()
         service.settings = cast(
             Any,
@@ -507,7 +507,7 @@ class TestServiceMainLoop:
                 mqtt=SimpleNamespace(logging_level=SimpleNamespace(level=40))
             ),
         )
-        service.influxdb = None
+        service.storage = None
         service.homeassistant = None
         service.powerflow = MagicMock()
         service.powerflow.async_init = AsyncMock()
@@ -547,7 +547,7 @@ class TestServiceMainLoop:
                 mqtt=SimpleNamespace(logging_level=SimpleNamespace(level=40))
             ),
         )
-        service.influxdb = None
+        service.storage = None
         service.homeassistant = None
         service.powerflow = MagicMock()
         service.powerflow.async_init = AsyncMock()
@@ -587,7 +587,7 @@ class TestServiceMainLoop:
                 mqtt=SimpleNamespace(logging_level=SimpleNamespace(level=40))
             ),
         )
-        service.influxdb = None
+        service.storage = None
         service.homeassistant = None
         service.powerflow = MagicMock()
         service.powerflow.async_init = AsyncMock()
@@ -619,7 +619,7 @@ class TestServiceMainLoop:
                 mqtt=SimpleNamespace(logging_level=SimpleNamespace(level=40))
             ),
         )
-        service.influxdb = None
+        service.storage = None
         service.homeassistant = None
         service.powerflow = MagicMock()
         service.powerflow.async_init = AsyncMock()
@@ -649,8 +649,8 @@ class TestServiceMainLoop:
         mock_logger.debug.assert_any_call("Loops cancelled")
 
     @pytest.mark.asyncio
-    async def test_main_loop_initializes_influxdb_when_configured(self):
-        """Main loop should call influxdb init and set_online when configured."""
+    async def test_main_loop_initializes_storage_when_configured(self):
+        """Main loop should call storage init and set_online when configured."""
         service = _build_service()
         service.settings = cast(
             Any,
@@ -665,10 +665,10 @@ class TestServiceMainLoop:
         service.timer.loop = AsyncMock()
         service.finalize = AsyncMock()
 
-        influxdb = MagicMock()
-        influxdb.init = MagicMock()
-        influxdb.set_online = AsyncMock()
-        service.influxdb = influxdb
+        storage = MagicMock()
+        storage.async_init = AsyncMock()
+        storage.set_online = AsyncMock()
+        service.storage = storage
 
         service._start_mqtt_listener = MagicMock()
         service.schedule_loop = MagicMock()
@@ -691,14 +691,14 @@ class TestServiceMainLoop:
         ):
             await service.main_loop()
 
-        influxdb.init.assert_called_once()
-        influxdb.set_online.assert_awaited_once()
+        storage.async_init.assert_awaited_once()
+        storage.set_online.assert_awaited_once()
         service.powerflow.async_init.assert_awaited_once()
         service.finalize.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_main_loop_skips_influxdb_when_not_configured(self):
-        """Main loop should skip influxdb calls when influxdb is None."""
+    async def test_main_loop_skips_storage_when_not_configured(self):
+        """Main loop should skip storage calls when storage is None."""
         service = _build_service()
         service.settings = cast(
             Any,
@@ -706,7 +706,7 @@ class TestServiceMainLoop:
                 mqtt=SimpleNamespace(logging_level=SimpleNamespace(level=40))
             ),
         )
-        service.influxdb = None
+        service.storage = None
         service.homeassistant = None
         service.powerflow = MagicMock()
         service.powerflow.async_init = AsyncMock()
@@ -748,7 +748,7 @@ class TestServiceMainLoop:
                 mqtt=SimpleNamespace(logging_level=SimpleNamespace(level=40))
             ),
         )
-        service.influxdb = None
+        service.storage = None
         service.homeassistant = None
         service.powerflow = MagicMock()
         service.powerflow.async_init = AsyncMock()
@@ -887,8 +887,8 @@ class TestServiceShutdown:
     async def test_close_closes_available_services(self):
         """Close should await close on all configured service clients."""
         service = _build_service()
-        service.influxdb = MagicMock()
-        service.influxdb.close = AsyncMock()
+        service.storage = MagicMock()
+        service.storage.close = AsyncMock()
         service.powerflow = MagicMock()
         service.powerflow.close = AsyncMock()
         service.monitoring = None
@@ -897,7 +897,7 @@ class TestServiceShutdown:
 
         await service.close()
 
-        service.influxdb.close.assert_awaited_once()
+        service.storage.close.assert_awaited_once()
         service.powerflow.close.assert_awaited_once()
         service.weather.close.assert_awaited_once()
 
@@ -905,7 +905,7 @@ class TestServiceShutdown:
     async def test_close_logs_warning_on_timeout(self):
         """Close should log timeout warning when close operations take too long."""
         service = _build_service()
-        service.influxdb = None
+        service.storage = None
         service.powerflow = cast(Any, None)
         service.monitoring = None
         service.weather = None

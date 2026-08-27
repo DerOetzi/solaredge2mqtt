@@ -1,0 +1,27 @@
+from pathlib import Path
+
+from pydantic import BaseModel, Field
+
+SECONDS_PER_DAY = 86400
+SECONDS_PER_YEAR = SECONDS_PER_DAY * 365
+
+DEFAULT_FILENAME = "solaredge2mqtt.db"
+
+
+class StorageSettings(BaseModel):
+    enable: bool = Field(default=True)
+    path: str | None = Field(default=None)
+    filename: str = Field(default=DEFAULT_FILENAME)
+    retention: int = Field(default=0, ge=0)
+    retention_raw: int = Field(default=25, ge=1)
+    debounce_cycles: int = Field(default=2, ge=1)
+
+    def resolve_path(self, config_dir: str) -> Path:
+        if self.path is not None:
+            return Path(self.path)
+
+        return Path(config_dir) / self.filename
+
+    @property
+    def is_configured(self) -> bool:
+        return self.enable

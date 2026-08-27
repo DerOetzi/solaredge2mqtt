@@ -10,7 +10,6 @@ from tzlocal import get_localzone_name
 from solaredge2mqtt import __version__
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import ConfigurationException
-from solaredge2mqtt.core.influxdb import InfluxDBAsync
 from solaredge2mqtt.core.logging import (
     initialize_logging,
     logger,
@@ -18,6 +17,7 @@ from solaredge2mqtt.core.logging import (
 from solaredge2mqtt.core.mqtt import MQTTClient
 from solaredge2mqtt.core.settings import service_settings
 from solaredge2mqtt.core.status import ServiceStatusController
+from solaredge2mqtt.core.storage import StorageService
 from solaredge2mqtt.core.timer import Timer
 from solaredge2mqtt.services.energy import EnergyService
 from solaredge2mqtt.services.forecast import FORECAST_AVAILABLE, ForecastService
@@ -63,24 +63,22 @@ class Service:
         self.loops: set[asyncio.Task] = set()
         self._run_task: asyncio.Task | None = None
 
-        self.influxdb: InfluxDBAsync | None = (
-            InfluxDBAsync(self.settings.influxdb, self.settings.prices)
-            if self.settings.influxdb.is_configured
+        self.storage: StorageService | None = (
+            StorageService(self.settings.storage, self.settings.prices, config_dir)
+            if self.settings.storage.is_configured
             else None
         )
 
         self.energy: EnergyService | None = (
-            EnergyService(self.settings.energy, self.influxdb)
-            if self.influxdb
-            else None
+            EnergyService(self.settings.energy, self.storage) if self.storage else None
         )
 
-        self.powerflow = PowerflowService(self.settings, self.influxdb)
+        self.powerflow = PowerflowService(self.settings, self.storage)
 
         self.monitoring: MonitoringSite | None = (
             MonitoringSite(
                 self.settings.monitoring,
-                self.influxdb,
+                self.storage,
             )
             if self.settings.monitoring.is_configured
             else None
@@ -96,9 +94,9 @@ class Service:
                 ForecastService(
                     self.settings.forecast,
                     self.settings.location,
-                    self.influxdb,
+                    self.storage,
                 )
-                if self.influxdb and self.settings.is_forecast_enabled
+                if self.storage and self.settings.is_forecast_enabled
                 else None
             )
         elif self.settings.is_forecast_enabled:
@@ -147,8 +145,8 @@ class Service:
         logger.debug(self.settings)
         logger.info("Timezone: {timezone}", timezone=LOCAL_TZ)
 
-        if self.influxdb:
-            self.influxdb.init()
+        if self.storage:
+            await self.storage.async_init()
 
         while not self.cancel_request.is_set():
             try:
@@ -157,8 +155,8 @@ class Service:
                 async with self.mqtt:
                     await self.status_controller.online()
 
-                    if self.influxdb:
-                        await self.influxdb.set_online()
+                    if self.storage:
+                        await self.storage.set_online()
 
                     if self.homeassistant:
                         await self.homeassistant.async_init()
@@ -271,7 +269,7 @@ class Service:
                     *[
                         service.close()
                         for service in [
-                            self.influxdb,
+                            self.storage,
                             self.powerflow,
                             self.monitoring,
                             self.weather,

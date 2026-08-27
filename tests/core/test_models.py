@@ -244,8 +244,8 @@ class TestSolaredge2MQTTBaseModel:
         model = TestModel(value=42, timestamp=ts)
         assert model.timestamp == ts
 
-    def test_model_dump_influxdb(self):
-        """Test model_dump_influxdb flattens nested data."""
+    def test_model_dump_storage(self):
+        """Test model_dump_storage flattens nested data."""
 
         class NestedModel(Solaredge2MQTTBaseModel):
             inner_value: int
@@ -258,7 +258,7 @@ class TestSolaredge2MQTTBaseModel:
             value=42,
             nested=NestedModel(inner_value=100),
         )
-        result = model.model_dump_influxdb()
+        result = model.model_dump_storage()
 
         assert "value" in result
         assert result["value"] == pytest.approx(42.0)
@@ -273,7 +273,7 @@ class TestSolaredge2MQTTBaseModel:
             value: int
 
         model = TestModel(value=42)
-        result = model.model_dump_influxdb()
+        result = model.model_dump_storage()
 
         assert isinstance(result["value"], float)
 
@@ -285,7 +285,7 @@ class TestSolaredge2MQTTBaseModel:
 
         ts = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
         model = TestModel(event_time=ts)
-        result = model.model_dump_influxdb()
+        result = model.model_dump_storage()
 
         assert result["event_time"] == ts.isoformat()
 

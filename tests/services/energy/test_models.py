@@ -22,13 +22,13 @@ class TestHistoricQuery:
 
     def test_actual_query(self):
         """Test ACTUAL query."""
-        assert str(HistoricQuery.ACTUAL) == "actual_unit"
-        assert HistoricQuery.ACTUAL.query == "actual_unit"
+        assert str(HistoricQuery.ACTUAL) == "actual"
+        assert HistoricQuery.ACTUAL.query == "actual"
 
     def test_last_query(self):
         """Test LAST query."""
-        assert str(HistoricQuery.LAST) == "historic_unit"
-        assert HistoricQuery.LAST.query == "historic_unit"
+        assert str(HistoricQuery.LAST) == "last"
+        assert HistoricQuery.LAST.query == "last"
 
 
 class TestHistoricPeriod:

@@ -1,6 +1,6 @@
 # 0002 — Speaking pvlearn's canonical weather schema
 
-**Status:** Accepted
+**Status:** Accepted — Decision 1 superseded by [ADR 0007](0007-storage-holds-the-canonical-schema.md)
 **Context:** Phase 1b of [pvlearn's Umsetzungsplan](https://github.com/LearningHouseService/pvlearn/blob/main/pvlearn-umsetzungsplan.md) — pvlearn 0.2.0 dropped the power model, publishes energy in Wh and expects provider-independent feature names (chapter 3.1) instead of OpenWeatherMap's. Mapping onto them is the caller's job until the provider adapters arrive in Phase 2.
 
 ## Decision 1: InfluxDB keeps the provider's field names, the translation happens on read

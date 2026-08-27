@@ -114,7 +114,7 @@ class Solaredge2MQTTBaseModel(BaseModel):
         default_factory=lambda: datetime.now(tz=timezone.utc)
     )
 
-    def model_dump_influxdb(self, exclude: set[str] | None = None) -> dict[str, Any]:
+    def model_dump_storage(self, exclude: set[str] | None = None) -> dict[str, Any]:
         ignore_keys = {"timestamp"}
         return self._flatten_dict(
             self.model_dump(exclude=exclude, exclude_none=True), ignore_keys=ignore_keys

@@ -20,8 +20,8 @@ SolarEdge2MQTT provides a comprehensive feature set for power monitoring, home a
 - 🕸️ **MQTT integration** for use with Home Assistant and other systems
 - 🔄 **Home Assistant auto discovery** support (optional)
 - 📈 **PV production forecasting** using a built-in machine learning model  
-  → uses live weather data from OpenWeatherMap and historical data from InfluxDB
-- 💡 **Data logging to InfluxDB** (raw and aggregated values)
+  → uses live weather data from OpenWeatherMap and the locally stored history
+- 💡 **Local data logging** (raw and aggregated values) into a SQLite database, no external service required
 - 💸 **Price-based savings calculation** for consumption and export
 - 🔌 **SolarEdge Wallbox monitoring** via REST API
 - 🌐 **Module-level monitoring** by retrieving data directly from the SolarEdge monitoring site (no API key needed)
@@ -30,7 +30,7 @@ SolarEdge2MQTT provides a comprehensive feature set for power monitoring, home a
 - 🧪 **Console mode** for development and testing
 
 
-It also enables the monitoring of SolarEdge Wallbox via the REST API and supports saving all values into InfluxDB for advanced visualization.
+It also enables the monitoring of SolarEdge Wallbox via the REST API and stores all values in a local SQLite database for advanced visualization.
 
 ## Contact and Feedback
 
@@ -169,7 +169,7 @@ modbus:
 # weather:
 #   debounce_cycles: 2
 
-# influxdb:
+# storage:
 #   debounce_cycles: 2
 ```
 
@@ -359,7 +359,7 @@ mqtt_keyfile_password: "your_actual_key_password"
 
 The service also publishes operational topics below the configured `topic_prefix`:
 
-- `status/<service>` for subservice connection states (`online`/`offline`) such as `modbus`, `wallbox`, `monitoring`, `influxdb`, and `weather_api`
+- `status/<service>` for subservice connection states (`online`/`offline`) such as `modbus`, `wallbox`, `monitoring`, `storage`, and `weather_api`
 - `logging` for runtime log messages (MQTT warnings/errors are excluded from MQTT log forwarding)
 
 Use the `debounce_cycles` field within each service's configuration to reduce status flapping by requiring repeated
@@ -486,32 +486,72 @@ homeassistant:
 
 _To remove entities, disable the feature, restart SolarEdge2MQTT first, then restart Home Assistant._
 
-### InfluxDB
+### Storage
 
-Configure InfluxDB for data storage:
+The history lives in a SQLite database inside the configuration directory. It is enabled by
+default and needs no external service:
 
 ```yaml
-influxdb:
-  host: http://localhost           # InfluxDB host
-  port: 8086                       # InfluxDB port (default: 8086)
-  token: !secret influxdb_token    # Access token (store in secrets.yml)
-  org: my_org                      # Organization ID
-  bucket: solaredge                # Bucket name (default: solaredge)
-  retention_raw: 25                # Raw data retention in hours
-  retention: 63072000              # Aggregated data retention in seconds (2 years)
+storage:
+  enable: true                     # Set to false to run without any history
+  filename: solaredge2mqtt.db      # File name inside the configuration directory
+  # path: /data/solaredge2mqtt.db  # Absolute path, overrides filename
+  retention_raw: 25                # Hours to keep the raw samples
+  retention: 0                     # Seconds to keep everything, 0 keeps it forever
+  debounce_cycles: 2               # Status debouncing
 ```
 
-Add the token to `secrets.yml`:
-```yaml
-# secrets.yml
-influxdb_token: "your_influxdb_token_with_full_access"
+Raw samples are written at the polling interval and aggregated into hourly minimum, maximum,
+mean and energy values every ten minutes. Only the raw samples expire, after `retention_raw`
+hours; the hourly history grows by roughly 35 MB per year and is kept unless `retention` is set.
+
+Back the database up while the service is running with:
+
+```bash
+sqlite3 config/solaredge2mqtt.db "VACUUM INTO 'solaredge2mqtt-backup.db'"
 ```
 
-**Note**: The token requires full access as the service manages buckets and tasks.
+#### Migrating an existing InfluxDB history
+
+Releases before this one stored the history in InfluxDB. On the first start the `influxdb`
+section of `configuration.yml` is rewritten into a `storage` section, after a backup of the
+file. Before it rewrites anything the service logs the import command for that section, filled
+in with the host, organization and bucket it is about to remove — copy it from the log and put
+your `influxdb_token` in place of `YOUR_INFLUXDB_TOKEN`:
+
+```bash
+# The command the upgrade logs
+solaredge2mqtt-migrate-influxdb --config-dir config \
+    --url http://influxdb:8086 --org my_org --bucket solaredge --token YOUR_INFLUXDB_TOKEN
+
+# Before the first start of this release the section is still there and is used
+solaredge2mqtt-migrate-influxdb --config-dir config
+
+# From a line protocol dump, no running InfluxDB needed
+solaredge2mqtt-migrate-influxdb --from-lp ./influx-export.lp
+```
+
+The token is never written to the log. If you missed the message, the values are in the
+`influxdb` section of the `configuration.yml.backup.*` the upgrade wrote. The import is
+idempotent and can be repeated.
+
+Raw samples are skipped by default, they expire within a day anyway; add `--include-raw` to
+import them as well. `influxdb_token` in `secrets.yml` is not read by the service any
+more, but the import still needs it — remove it once the history is in.
+
+The import also converts the forecast training history onto the schema the forecast model
+speaks: `temp` becomes `temperature`, the OpenWeatherMap condition id becomes its WMO code, the
+provider is written into every row, and fields the model has no use for (such as `weather_main`)
+are dropped. See [ADR 0007](docs/decisions/0007-storage-holds-the-canonical-schema.md).
+
+Module history is consolidated as well. The monitoring API changed what it reports as an
+optimizer's `identifier`, so an older history holds the same module under several tag sets; the
+import merges them onto the shape written today, keyed by the serial number. See
+[ADR 0009](docs/decisions/0009-migration-consolidates-the-module-series.md).
 
 ### Price Configuration
 
-Calculate savings and earnings by specifying energy costs. Requires InfluxDB.
+Calculate savings and earnings by specifying energy costs. Requires storage to be enabled.
 
 ```yaml
 prices:
@@ -538,9 +578,16 @@ weather_api_key: "your_openweathermap_api_key"
 
 To access weather data, you need an OpenWeatherMap account, an API key, and a [subscription](https://home.openweathermap.org/subscriptions) to the One-Call API. Visit [OpenWeatherMap](https://openweathermap.org/) for more information.
 
+The `weather/current` topic publishes the snapshot under the field names the forecast model
+uses, not the provider's own: `temperature`, `cloud_cover`, `relative_humidity`,
+`surface_pressure`, `wind_direction`, the WMO `condition_code`, and the `weather_provider` that
+delivered it. Automations reading the previous `temp`, `clouds` or `weather_id` fields need to be
+adjusted; Home Assistant discovery does not cover this topic. See
+[ADR 0008](docs/decisions/0008-the-weather-service-speaks-canonically.md).
+
 ### Forecast
 
-The service features machine learning-based PV production forecasting. Requires [location](#basic-configuration), [InfluxDB](#influxdb), and [weather](#weather) configuration.
+The service features machine learning-based PV production forecasting. Requires [location](#basic-configuration), [storage](#storage), and [weather](#weather) configuration.
 
 ```yaml
 forecast:
@@ -812,9 +859,10 @@ docker compose up -d
 docker compose logs solaredge2mqtt -f
 ```
 
-#### Example 6: Full-Stack Docker Compose with InfluxDB and Grafana
+#### Example 6: Full-Stack Docker Compose with Grafana
 
-Complete monitoring and visualization stack:
+Complete monitoring and visualization stack. Grafana reads the same SQLite database the
+service writes, through the community `frser-sqlite-datasource` plugin:
 
 ```yaml
 services:
@@ -827,27 +875,26 @@ services:
       - TZ=Europe/Berlin
     restart: unless-stopped
 
-  influxdb:
-    image: influxdb:latest
-    container_name: influxdb
-    ports:
-      - "8086:8086"
-    volumes:
-      - "./data:/var/lib/influxdb2"
-    restart: always
-
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
     ports:
       - "3000:3000"
+    environment:
+      GF_INSTALL_PLUGINS: frser-sqlite-datasource
     volumes:
       - "grafana:/var/lib/grafana"
+      # The database is mounted read-write on purpose: SQLite has to create the
+      # -wal and -shm sidecar files, a read-only mount cannot be opened.
+      - "./config:/app/config"
+    user: "1000:1000"
     restart: always
 
 volumes:
   grafana:
 ```
+
+Point the datasource at `/app/config/solaredge2mqtt.db`.
 
 **For the complete full-stack example with advanced features**, see [examples/docker-compose-full-stack.yaml](https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/examples/docker-compose-full-stack.yaml)
 
@@ -930,10 +977,10 @@ For Docker migrations, see the [Docker Deployment Guide](DOCKER.md).
 → Use [Example 1](#example-1-basic-console-installation) or [Example 4](#example-4-basic-docker-installation)
 
 **Need production forecasting?**  
-→ Use [Example 2](#example-2-console-installation-with-forecast-support) (requires InfluxDB and weather configuration)
+→ Use [Example 2](#example-2-console-installation-with-forecast-support) (requires weather configuration)
 
 **Want historical data and dashboards?**  
-→ Use [Example 6](#example-6-full-stack-docker-compose-with-influxdb-and-grafana)
+→ Use [Example 6](#example-6-full-stack-docker-compose-with-grafana)
 
 **Running on a server permanently?**  
 → Use [Example 7](#example-7-running-as-a-system-service) (systemd) or [Example 5](#example-5-basic-docker-compose) (Docker)

@@ -116,14 +116,12 @@ prices:
 #   topic_prefix: homeassistant
 #   retain: false
 
-# InfluxDB configuration (optional)
-# influxdb:
-#   host: http://localhost
-#   port: 8086
-#   token: !secret influxdb_token  # Reference to secrets.yml
-#   org: my_org
-#   bucket: solaredge
-#   retention: 63072000      # Retention for aggregated data in seconds (2 years)
+# Local storage configuration (optional, enabled by default)
+# storage:
+#   enable: true
+#   filename: solaredge2mqtt.db  # File inside the configuration directory
+#   path: /data/solaredge2mqtt.db  # Absolute path, overrides filename
+#   retention: 0             # Retention for all data in seconds, 0 keeps it forever
 #   retention_raw: 25        # Retention for raw data in hours
 #   debounce_cycles: 2  # Optional: consecutive checks before switching online/offline
 
@@ -134,7 +132,7 @@ prices:
 #   retain: false
 #   debounce_cycles: 2  # Optional: consecutive checks before switching online/offline
 
-# Forecast configuration (optional, requires weather and InfluxDB)
+# Forecast configuration (optional, requires weather and storage)
 # forecast:
 #   enable: false
 #   hyperparametertuning: false

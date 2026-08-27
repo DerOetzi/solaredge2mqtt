@@ -2,14 +2,15 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, ClassVar, TypeAlias, cast
+from typing import Any, ClassVar, TypeAlias
 
 from pydantic import Field, field_serializer, model_serializer
 
 from solaredge2mqtt.core.models import Solaredge2MQTTBaseModel
-
-if TYPE_CHECKING:
-    from pandas import DataFrame
+from solaredge2mqtt.services.weather.result import (
+    WeatherResult,
+    WeatherSnapshot,
+)
 
 WeatherData: TypeAlias = dict[
     str,
@@ -28,6 +29,14 @@ class OpenWeatherMapOneCall(OpenWeatherMapOneCallBase):
     current: OpenWeatherMapCurrentData
     hourly: list[OpenWeatherMapForecastData]
 
+    def to_result(self) -> WeatherResult:
+        """Translate the whole answer onto the canonical schema."""
+        return WeatherResult(
+            weather_provider=OpenWeatherMapBaseData.PROVIDER_NAME,
+            current=self.current.to_snapshot(),
+            hourly=[forecast.to_snapshot() for forecast in self.hourly],
+        )
+
 
 class OpenWeatherMapRain(Solaredge2MQTTBaseModel):
     one_hour: float = Field(default=0.0, alias="1h")
@@ -41,11 +50,11 @@ class OpenWeatherMapSnow(OpenWeatherMapRain): ...  # pragma: no cover
 
 
 class OpenWeatherMapBaseData(Solaredge2MQTTBaseModel):
-    """One weather snapshot, both under OpenWeatherMap's names and canonically.
+    """One OpenWeatherMap weather snapshot and its canonical translation.
 
-    Snapshots are persisted under the provider's own field names, so the
-    translation to pvlearn's canonical schema happens on the way to the model.
-    See `docs/decisions/0002-canonical-weather-schema.md`.
+    Nothing behind the weather service sees this model: `to_snapshot` hands out
+    a `WeatherSnapshot` in pvlearn's canonical schema instead. See
+    `docs/decisions/0008-the-weather-service-speaks-canonically.md`.
     """
 
     #: OpenWeatherMap One Call field -> canonical feature name. Fields with no
@@ -212,6 +221,15 @@ class OpenWeatherMapBaseData(Solaredge2MQTTBaseModel):
         """
         return self.to_canonical(self.model_dump_estimation_data())
 
+    def to_snapshot(self) -> WeatherSnapshot:
+        """This snapshot as the provider independent model of the service."""
+        return WeatherSnapshot.model_validate(
+            {
+                "time": self.localtime.replace(minute=0, second=0, microsecond=0),
+                **self.model_dump_canonical(),
+            }
+        )
+
     @classmethod
     def to_wmo_code(cls, condition_id: int | float | None) -> int | None:
         """Translate one OpenWeatherMap condition id to its WMO code."""
@@ -223,50 +241,32 @@ class OpenWeatherMapBaseData(Solaredge2MQTTBaseModel):
         )
 
     @classmethod
+    def to_canonical_field(cls, field: str, value: Any) -> tuple[str, Any] | None:
+        """Translate one provider field onto its canonical name and value.
+
+        Returns None for fields the canonical schema has no counterpart for.
+        """
+        canonical_name = cls.CANONICAL_FIELDS.get(field)
+        if canonical_name is None:
+            return None
+
+        if field == cls.CONDITION_FIELD:
+            value = cls.to_wmo_code(value if isinstance(value, (int, float)) else None)
+
+        return canonical_name, value
+
+    @classmethod
     def to_canonical(cls, estimation_data: Mapping[str, Any]) -> WeatherData:
         """Rename one weather snapshot onto the canonical schema."""
         canonical: WeatherData = {cls.PROVIDER_FIELD: cls.PROVIDER_NAME}
 
         for field, value in estimation_data.items():
-            canonical_name = cls.CANONICAL_FIELDS.get(field)
-            if canonical_name is None:
+            translated = cls.to_canonical_field(field, value)
+            if translated is None:
                 continue
 
-            if field == cls.CONDITION_FIELD:
-                value = cls.to_wmo_code(
-                    value if isinstance(value, (int, float)) else None
-                )
-
-            canonical[canonical_name] = value
-
-        return canonical
-
-    @classmethod
-    def to_canonical_frame(cls, data: DataFrame) -> DataFrame:
-        """Rename a `forecast_training` frame onto the canonical schema.
-
-        Columns without a canonical counterpart are dropped, except the
-        `TRAINING_FIELDS`, which the forecaster needs under those exact names.
-        Rows older than a field's introduction simply carry NaN, which the
-        forecaster tolerates. Every row is stamped with `PROVIDER_NAME`: the
-        stored snapshots all come from this adapter.
-        """
-        canonical = data.copy()
-
-        if cls.CONDITION_FIELD in canonical.columns:
-            canonical[cls.CONDITION_FIELD] = canonical[cls.CONDITION_FIELD].map(
-                cls.to_wmo_code
-            )
-
-        keep = {
-            **cls.CANONICAL_FIELDS,
-            **{field: field for field in cls.TRAINING_FIELDS},
-        }
-        canonical = cast(
-            "DataFrame", canonical[[col for col in canonical.columns if col in keep]]
-        )
-        canonical.columns = [keep[str(col)] for col in canonical.columns]
-        canonical[cls.PROVIDER_FIELD] = cls.PROVIDER_NAME
+            canonical_name, canonical_value = translated
+            canonical[canonical_name] = canonical_value
 
         return canonical
 

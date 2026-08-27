@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from influxdb_client.client.write.point import Point
 from pydantic import Field, computed_field
 from pydantic.json_schema import SkipJsonSchema
 
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.models import Solaredge2MQTTBaseModel
+from solaredge2mqtt.core.storage import Point
 from solaredge2mqtt.services.homeassistant.models import (
     HomeAssistantSensorType as HASensor,
 )
@@ -151,7 +151,7 @@ class Powerflow(Component):
 
     def prepare_point(self, measurement: str = "powerflow_raw") -> Point:
         point = Point(measurement)
-        for key, value in self.model_dump_influxdb(exclude={"unit"}).items():
+        for key, value in self.model_dump_storage(exclude={"unit"}).items():
             point.field(key, value)
 
         if self.unit:
@@ -163,7 +163,7 @@ class Powerflow(Component):
         self, measurement: str = "energy", prices: PriceSettings | None = None
     ) -> Point:
         point = Point(measurement)
-        for key, value in self.model_dump_influxdb().items():
+        for key, value in self.model_dump_storage().items():
             energy = value / 1000
             point.field(key, energy)
             if prices is not None:

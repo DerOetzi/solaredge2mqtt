@@ -41,9 +41,9 @@ class TestWeatherUpdateEvent:
             "hourly": [],
         }
 
-        weather = OpenWeatherMapOneCall(**weather_data)
+        weather = OpenWeatherMapOneCall(**weather_data).to_result()
         event = WeatherUpdateEvent(weather)
 
         assert event.weather is weather
-        assert event.weather.lat == pytest.approx(52.52)
-        assert event.weather.lon == pytest.approx(13.405)
+        assert event.weather.weather_provider == "openweathermap"
+        assert event.weather.current.temperature == pytest.approx(10.5)

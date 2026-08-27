@@ -21,7 +21,7 @@ dependencies = [
     "aiocsv==1.4.1",
     "aiohttp==3.14.3",
     "aiomqtt==2.5.1",
-    "influxdb-client==1.50.0",
+    "aiosqlite==0.21.0",
     "jsonref==1.1.0",
     "loguru==0.7.3",
     "platformdirs==4.11.3",
@@ -43,6 +43,7 @@ solaredge2mqtt = "solaredge2mqtt.__main__:main"
 solaredge2mqtt-migrate = "migrate_config:main"
 solaredge2mqtt-monitoring = "monitoring:main"
 solaredge2mqtt-forecast = "forecast:main"
+solaredge2mqtt-migrate-influxdb = "migrate_influxdb:main"
 
 [project.optional-dependencies]
 dev = [
@@ -73,7 +74,7 @@ include = ["solaredge2mqtt*"]
 exclude = ["tests*"]
 
 [tool.setuptools]
-py-modules = ["migrate_config", "monitoring", "forecast"]
+py-modules = ["migrate_config", "monitoring", "forecast", "migrate_influxdb"]
 
 [tool.setuptools_scm]
 version_scheme = "post-release"

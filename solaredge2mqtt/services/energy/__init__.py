@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import InvalidDataException
-from solaredge2mqtt.core.influxdb import InfluxDBAsync
-from solaredge2mqtt.core.influxdb.events import InfluxDBAggregatedEvent
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
+from solaredge2mqtt.core.storage import StorageService
+from solaredge2mqtt.core.storage.events import StorageAggregatedEvent
 from solaredge2mqtt.services.energy.events import EnergyReadEvent
 from solaredge2mqtt.services.energy.models import (
     HistoricEnergy,
@@ -19,17 +19,17 @@ class EnergyService:
     def __init__(
         self,
         settings: EnergySettings,
-        influxdb: InfluxDBAsync,
+        storage: StorageService,
     ):
-        self.influxdb = influxdb
+        self.storage = storage
         self.settings = settings
 
         EventBus.register(self)
 
-    @EventBus.subscribe(InfluxDBAggregatedEvent)
-    async def read_historic_energy(self, event: InfluxDBAggregatedEvent | None) -> None:
+    @EventBus.subscribe(StorageAggregatedEvent)
+    async def read_historic_energy(self, event: StorageAggregatedEvent | None) -> None:
         for period in HistoricPeriod:
-            records = await self.influxdb.query_timeunit(period, "energy")
+            records = await self.storage.query_timeunit(period, "energy")
             if records is None:
                 if period.query == HistoricQuery.LAST:
                     logger.info(
@@ -44,7 +44,7 @@ class EnergyService:
                 energy = HistoricEnergy.from_energy_data(record, period)
 
                 logger.info(
-                    "Read from influxdb {period} energy: {energy.pv_production} kWh",
+                    "Read from storage {period} energy: {energy.pv_production} kWh",
                     period=period,
                     energy=energy,
                 )

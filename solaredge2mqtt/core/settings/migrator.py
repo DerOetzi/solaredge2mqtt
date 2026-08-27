@@ -9,6 +9,8 @@ from solaredge2mqtt.core.settings.models import ServiceSettings
 
 DOCKER_SECRETS_DIR = "/run/secrets"
 
+LEGACY_INFLUXDB_STORAGE_KEYS = ("retention", "retention_raw", "debounce_cycles")
+
 
 class EnvironmentReader:
     PREFIX = "se2mqtt_"
@@ -217,12 +219,30 @@ class ConfigurationMigrator:
 
         for key, value in env_data.items():
             key = key.lower().strip()[8:]
-            subkeys = key.split("__")
+            subkeys = self._remap_legacy_keys(key.split("__"))
+
+            if not subkeys:
+                continue
 
             typed_value = value.strip()
             self._insert_nested_key(config_data, subkeys, typed_value)
 
         return config_data
+
+    @staticmethod
+    def _remap_legacy_keys(subkeys: list[str]) -> list[str]:
+        if subkeys[0] != "influxdb":
+            return subkeys
+
+        if subkeys[1:] and subkeys[1] in LEGACY_INFLUXDB_STORAGE_KEYS:
+            return ["storage", *subkeys[1:]]
+
+        logger.warning(
+            f"Ignoring obsolete environment variable for '{'__'.join(subkeys)}', "
+            "InfluxDB has been replaced by a local storage database."
+        )
+
+        return []
 
     def _insert_nested_key(
         self, container: dict[str, Any], keys: list[str], value: Any
