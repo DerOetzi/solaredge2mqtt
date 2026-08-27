@@ -44,11 +44,11 @@ def mock_service_settings():
 
 
 @pytest.fixture
-def mock_influxdb():
-    """Create mock InfluxDB client."""
-    influxdb = AsyncMock()
-    influxdb.write_points = AsyncMock()
-    return influxdb
+def mock_storage():
+    """Create mock storage client."""
+    storage = AsyncMock()
+    storage.write_points = AsyncMock()
+    return storage
 
 
 @pytest.fixture
@@ -115,7 +115,7 @@ class TestPowerflowServiceInit:
             service = PowerflowService(mock_service_settings, None)
 
             assert service.settings is mock_service_settings
-            assert service.influxdb is None
+            assert service.storage is None
             assert service.wallbox is None
             mock_event_bus.register.assert_any_call(service)
 
@@ -133,14 +133,14 @@ class TestPowerflowServiceInit:
 
             assert service.wallbox is not None
 
-    def test_powerflow_service_init_with_influxdb(
-        self, mock_service_settings, mock_event_bus, mock_influxdb
+    def test_powerflow_service_init_with_storage(
+        self, mock_service_settings, mock_event_bus, mock_storage
     ):
-        """Test PowerflowService initialization with InfluxDB."""
+        """Test PowerflowService initialization with storage."""
         with patch("solaredge2mqtt.services.powerflow.Modbus"):
-            service = PowerflowService(mock_service_settings, mock_influxdb)
+            service = PowerflowService(mock_service_settings, mock_storage)
 
-            assert service.influxdb is mock_influxdb
+            assert service.storage is mock_storage
 
 
 class TestPowerflowServiceAsyncInit:
@@ -363,7 +363,7 @@ class TestPowerflowServiceCalculate:
                     "follower": follower_powerflow,
                 }
             )
-            service.write_to_influxdb = AsyncMock()
+            service.write_to_storage = AsyncMock()
             service.publish_modbus = AsyncMock()
             service.publish_wallbox = AsyncMock()
             service.publish_powerflow = AsyncMock()
@@ -514,16 +514,16 @@ class TestPowerflowServiceHelpers:
             assert mock_from_modbus.call_count == 2
 
 
-class TestPowerflowServiceWriteInfluxDB:
-    """Tests for PowerflowService write_to_influxdb."""
+class TestPowerflowServiceWriteStorage:
+    """Tests for PowerflowService write_to_storage."""
 
     @pytest.mark.asyncio
-    async def test_write_to_influxdb(
-        self, mock_service_settings, mock_event_bus, mock_influxdb
+    async def test_write_to_storage(
+        self, mock_service_settings, mock_event_bus, mock_storage
     ):
-        """Test write_to_influxdb writes points."""
+        """Test write_to_storage writes points."""
         with patch("solaredge2mqtt.services.powerflow.Modbus"):
-            service = PowerflowService(mock_service_settings, mock_influxdb)
+            service = PowerflowService(mock_service_settings, mock_storage)
 
             # Create mock powerflow
             mock_powerflow = MagicMock()
@@ -533,20 +533,20 @@ class TestPowerflowServiceWriteInfluxDB:
             mock_battery = MagicMock()
             mock_battery.prepare_point.return_value = MagicMock()
 
-            await service.write_to_influxdb(
+            await service.write_to_storage(
                 {"leader": mock_powerflow}, {"battery0": mock_battery}
             )
 
-            mock_influxdb.write_points.assert_called_once()
+            mock_storage.write_points.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_write_to_influxdb_none(self, mock_service_settings, mock_event_bus):
-        """Test write_to_influxdb does nothing when influxdb is None."""
+    async def test_write_to_storage_none(self, mock_service_settings, mock_event_bus):
+        """Test write_to_storage does nothing when storage is None."""
         with patch("solaredge2mqtt.services.powerflow.Modbus"):
             service = PowerflowService(mock_service_settings, None)
 
             # Should not raise
-            await service.write_to_influxdb({}, {})
+            await service.write_to_storage({}, {})
 
 
 class TestPowerflowServicePublish:

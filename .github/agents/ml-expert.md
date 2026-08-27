@@ -33,9 +33,9 @@ services/forecast/
 ```
 
 **Preconditions for training:**
-- Minimum 60 hours of historical data in InfluxDB
+- Minimum 60 hours of historical data in the local storage
 - No data gaps > 1 hour
-- InfluxDB, location, and weather (`SE2MQTT_FORECAST__*`) settings configured
+- Storage, location, and weather (`SE2MQTT_FORECAST__*`) settings configured
 
 **Architecture constraints:**
 - Must run on low-powered devices (Raspberry Pi) — prefer simple, memory-efficient models

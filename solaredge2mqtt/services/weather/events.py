@@ -1,14 +1,14 @@
 from solaredge2mqtt.core.events.events import BaseEvent
 from solaredge2mqtt.core.status.events import ServiceOfflineEvent, ServiceOnlineEvent
-from solaredge2mqtt.services.weather.models import OpenWeatherMapOneCall
+from solaredge2mqtt.services.weather.result import WeatherResult
 
 
 class WeatherUpdateEvent(BaseEvent):
-    def __init__(self, weather: OpenWeatherMapOneCall) -> None:
+    def __init__(self, weather: WeatherResult) -> None:
         self._weather = weather
 
     @property
-    def weather(self) -> OpenWeatherMapOneCall:
+    def weather(self) -> WeatherResult:
         return self._weather
 
 

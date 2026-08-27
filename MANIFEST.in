@@ -8,4 +8,3 @@ include LICENSE
 include THIRD-PARTY-NOTICES
 
 recursive-include solaredge2mqtt *.py
-recursive-include solaredge2mqtt *.flux

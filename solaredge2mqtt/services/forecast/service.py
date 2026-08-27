@@ -2,30 +2,34 @@ from __future__ import annotations
 
 from asyncio import to_thread
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from pandas import DataFrame, to_datetime
 from pvlearn.config import ForecasterConfig
 from pvlearn.exceptions import PVLearnError
 from pvlearn.forecaster import Forecaster
 from pvlearn.location import Location
+from pvlearn.schema import (
+    CATEGORICAL_FEATURES,
+    CYCLICAL_FEATURES,
+    NUMERIC_FEATURES,
+    TARGET_FEATURE,
+    TIME_FEATURE,
+)
 from tzlocal import get_localzone
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import InvalidDataException
-from solaredge2mqtt.core.influxdb import InfluxDBAsync, Point
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
+from solaredge2mqtt.core.storage import Point, StorageService
 from solaredge2mqtt.core.timer.events import Interval10MinTriggerEvent
 from solaredge2mqtt.services.forecast.events import ForecastEvent
 from solaredge2mqtt.services.forecast.models import Forecast
 from solaredge2mqtt.services.forecast.settings import ForecastSettings
 from solaredge2mqtt.services.modbus.events import ModbusUnitsReadEvent
 from solaredge2mqtt.services.weather.events import WeatherUpdateEvent
-from solaredge2mqtt.services.weather.models import (
-    OpenWeatherMapBaseData,
-    OpenWeatherMapForecastData,
-)
+from solaredge2mqtt.services.weather.result import WeatherSnapshot
 
 if TYPE_CHECKING:
     from solaredge2mqtt.core.settings.models import LocationSettings
@@ -41,18 +45,59 @@ POWER_FIELD = "power"
 
 WH_PER_KWH = 1000
 
+TRAINING_MEASUREMENT = "forecast_training"
+
+FORECAST_MEASUREMENT = "forecast"
+
+TRAINING_START = datetime(2024, 1, 1, tzinfo=timezone.utc)
+
+FORECAST_DAYS = 2
+
+
+#: The columns pvlearn trains and predicts on, in the order of its schema.
+PVLEARN_COLUMNS: tuple[str, ...] = (
+    TIME_FEATURE,
+    TARGET_FEATURE,
+    *NUMERIC_FEATURES,
+    *CATEGORICAL_FEATURES,
+    *CYCLICAL_FEATURES,
+)
+
+
+def frame_from_records(records: list[dict[str, Any]]) -> DataFrame:
+    if not records:
+        return DataFrame()
+
+    data = DataFrame(records)
+    data["_time"] = to_datetime(data["_time"], utc=True)
+    data["time"] = data["_time"].dt.tz_convert(LOCAL_TZ)
+
+    return data
+
+
+def frame_for_pvlearn(data: DataFrame) -> DataFrame:
+    """Reduce a stored frame to the canonical columns pvlearn knows.
+
+    The storage holds the canonical schema, so nothing is renamed here. Columns
+    outside the schema are dropped, columns a row predates are left missing;
+    the forecaster tolerates both.
+    """
+    return cast(
+        "DataFrame", data[[column for column in PVLEARN_COLUMNS if column in data]]
+    )
+
 
 class ForecastService:
     def __init__(
         self,
         settings: ForecastSettings,
         location: LocationSettings,
-        influxdb: InfluxDBAsync,
+        storage: StorageService,
     ) -> None:
         self.settings = settings
         self.location = location
 
-        self.influxdb = influxdb
+        self.storage = storage
 
         forecaster_location = Location(
             latitude=location.latitude_value,
@@ -67,8 +112,8 @@ class ForecastService:
         )
         self.forecaster = Forecaster(forecaster_location, forecaster_config)
 
-        self.last_weather_forecast: list[OpenWeatherMapForecastData] | None = None
-        self.last_hour_forecast: dict[int, OpenWeatherMapForecastData] | None = None
+        self.last_weather_forecast: list[WeatherSnapshot] | None = None
+        self.last_hour_forecast: dict[int, WeatherSnapshot] | None = None
 
         self.last_battery_capacity_wh: float | None = None
         self.last_battery_stored_energy_wh: float | None = None
@@ -132,15 +177,15 @@ class ForecastService:
             await self.write_new_training_data(self.last_hour_forecast[last_hour.hour])
 
     async def write_new_training_data(
-        self, last_hour_weather_forecast: OpenWeatherMapForecastData
+        self, last_hour_weather_forecast: WeatherSnapshot
     ) -> None:
         now = datetime.now().astimezone()
         last_hour = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)
 
-        training_data = last_hour_weather_forecast.model_dump_estimation_data()
+        training_data = last_hour_weather_forecast.model_dump_canonical()
         training_data["time"] = last_hour
         training_data = await self.add_last_hour_pv_production(training_data)
-        await self.write_new_training_data_to_influxdb(training_data)
+        await self.store_training_data(training_data)
 
         if (now.minute // 10) * 10 == 20:
             await self.train()
@@ -148,12 +193,12 @@ class ForecastService:
     async def add_last_hour_pv_production(
         self, trainings_data
     ) -> dict[str, str | float | int | None]:
-        production_data = await self.influxdb.query_first("production")
+        production_data = await self.storage.query_production_last_hour()
 
         if production_data is None:
             raise InvalidDataException(
                 "Missing production data of last hour for forecast training."
-                + " Did the service write power information to InfluxDB?"
+                + " Did the service write power information to the storage?"
             )
 
         # Recorded but no longer a training target: the model predicts energy
@@ -162,33 +207,42 @@ class ForecastService:
         trainings_data[ENERGY_FIELD] = round(production_data[ENERGY_FIELD], 2)
         return trainings_data
 
-    async def write_new_training_data_to_influxdb(self, trainings_data):
-        point = Point("forecast_training")
+    async def store_training_data(self, trainings_data):
+        point = Point(TRAINING_MEASUREMENT)
         for key, value in trainings_data.items():
             if isinstance(value, (int, float, str, bool)):
                 point.field(key, value)
 
         point.time(trainings_data["time"].astimezone(timezone.utc))
 
-        logger.info("Write new forecast training data to influxdb")
+        logger.info("Write new forecast training data to storage")
         logger.debug(trainings_data)
-        await self.influxdb.write_point(point)
+        await self.storage.write_point(point)
+
+    async def read_training_data(self) -> DataFrame:
+        rows = await self.storage.query_pivot(
+            TRAINING_MEASUREMENT, int(TRAINING_START.timestamp())
+        )
+
+        return frame_from_records(rows)
 
     async def train(self) -> None:
-        data = await self.influxdb.query_dataframe("training_data")
-        data["time"] = data["_time"].dt.tz_convert(LOCAL_TZ)
+        data = await self.read_training_data()
+        if data.empty:
+            raise InvalidDataException("No forecast training data available")
+
         await to_thread(self.training, data)
 
     def training(self, data: DataFrame) -> None:
         try:
-            self.forecaster.train(OpenWeatherMapBaseData.to_canonical_frame(data))
+            self.forecaster.train(frame_for_pvlearn(data))
         except PVLearnError as error:
             raise InvalidDataException(str(error)) from error
 
     @EventBus.subscribe(Interval10MinTriggerEvent)
     async def forecast_loop(self, event: Interval10MinTriggerEvent) -> None:
         predictions = await self.predict()
-        await self._write_periods_to_influxdb(predictions)
+        await self._write_periods(predictions)
         await self.publish_forecast()
 
     async def predict(self) -> DataFrame:
@@ -217,11 +271,9 @@ class ForecastService:
         if not self.forecaster.is_trained:
             await self.train()
 
-        data = await self.influxdb.query_dataframe("training_data")
+        data = await self.read_training_data()
         if data.empty:
             return DataFrame()
-
-        data["time"] = data["_time"].dt.tz_convert(LOCAL_TZ)
 
         hour_start = (
             datetime.now().astimezone().replace(minute=0, second=0, microsecond=0)
@@ -248,15 +300,13 @@ class ForecastService:
         )
 
         try:
-            return await self.forecaster.predict(
-                OpenWeatherMapBaseData.to_canonical_frame(elapsed)
-            )
+            return await self.forecaster.predict(frame_for_pvlearn(elapsed))
         except PVLearnError as error:
             raise InvalidDataException(str(error)) from error
 
     @staticmethod
     def _prepare_estimation_data(
-        weather_forecast_list: list[OpenWeatherMapForecastData],
+        weather_forecast_list: list[WeatherSnapshot],
     ) -> DataFrame:
         estimation_data_list = [
             {
@@ -279,7 +329,7 @@ class ForecastService:
 
         return data
 
-    async def _write_periods_to_influxdb(self, periods: DataFrame) -> None:
+    async def _write_periods(self, periods: DataFrame) -> None:
         points = []
         for _, period in periods.iterrows():
             energy_wh = period[ENERGY_FIELD]
@@ -289,7 +339,7 @@ class ForecastService:
             if not isinstance(energy_wh, (int, float)):
                 raise InvalidDataException("Forecast energy value must be numeric")
 
-            point = Point("forecast")
+            point = Point(FORECAST_MEASUREMENT)
             # pvlearn publishes Wh, this measurement stores kWh.
             point.field(ENERGY_FIELD, energy_wh / WH_PER_KWH)
             # Deprecated, mirrors the energy: at 60 minutes the mean power in W
@@ -300,13 +350,13 @@ class ForecastService:
             point.time(period_time.astimezone(timezone.utc))
             points.append(point)
 
-        logger.info("Write forecast data to influxdb")
-        await self.influxdb.write_points(points)
+        logger.info("Write forecast data to storage")
+        await self.storage.write_points(points)
 
     async def publish_forecast(self) -> None:
-        forecast_data = await self.influxdb.query_dataframe("forecast")
+        rows = await self.storage.query_days(FORECAST_MEASUREMENT, FORECAST_DAYS)
+        forecast_data = frame_from_records(rows)
         if not forecast_data.empty:
-            forecast_data["time"] = forecast_data["_time"].dt.tz_convert(LOCAL_TZ)
             energy_hours: dict[datetime, int] = {}
             for _, row in forecast_data.iterrows():
                 row_time = row["time"]

@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 
 import pytest
-from pandas import DataFrame, concat, isna
+from pandas import DataFrame
 from pvlearn.schema import (
     CATEGORICAL_FEATURES,
     CYCLICAL_FEATURES,
@@ -386,7 +386,7 @@ class TestToWmoCode:
         assert OpenWeatherMapBaseData.to_wmo_code(None) is None
 
     def test_float_input_is_accepted(self):
-        """InfluxDB returns numeric fields as floats."""
+        """storage returns numeric fields as floats."""
         assert OpenWeatherMapBaseData.to_wmo_code(800.0) == 0
 
     def test_all_codes_are_valid_wmo_values(self):
@@ -450,61 +450,42 @@ class TestToCanonical:
         }
 
 
-class TestToCanonicalFrame:
-    """Tests for translating a stored `forecast_training` frame."""
+class TestToCanonicalField:
+    """Tests for translating a single stored provider field."""
 
-    def test_keeps_time_and_target_under_their_own_names(self):
-        canonical = OpenWeatherMapBaseData.to_canonical_frame(make_training_frame())
-
-        assert "time" in canonical.columns
-        assert canonical["energy"].iloc[0] == pytest.approx(1500.0)
-
-    def test_renames_weather_columns(self):
-        canonical = OpenWeatherMapBaseData.to_canonical_frame(make_training_frame())
-
-        assert canonical["cloud_cover"].iloc[0] == pytest.approx(20.0)
-        assert canonical["temperature"].iloc[0] == pytest.approx(25.0)
-        assert canonical["wind_direction"].iloc[0] == pytest.approx(180.0)
-
-    def test_translates_the_condition_to_wmo(self):
-        canonical = OpenWeatherMapBaseData.to_canonical_frame(make_training_frame())
-
-        assert canonical["condition_code"].iloc[0] == 0
-
-    def test_drops_columns_without_counterpart(self):
-        canonical = OpenWeatherMapBaseData.to_canonical_frame(make_training_frame())
-
-        assert "power" not in canonical.columns
-        assert "_time" not in canonical.columns
-        assert "weather_main" not in canonical.columns
-
-    def test_missing_columns_are_not_invented(self):
-        """History predating a field simply lacks it."""
-        data = make_training_frame().drop(columns=["temp", "weather_id"])
-
-        canonical = OpenWeatherMapBaseData.to_canonical_frame(data)
-
-        assert "temperature" not in canonical.columns
-        assert "condition_code" not in canonical.columns
-
-    def test_missing_condition_value_stays_missing(self):
-        canonical = OpenWeatherMapBaseData.to_canonical_frame(
-            make_training_frame(weather_id=None)
+    def test_renames_a_weather_field(self):
+        assert OpenWeatherMapBaseData.to_canonical_field("clouds", 20.0) == (
+            "cloud_cover",
+            20.0,
         )
 
-        assert isna(canonical["condition_code"].iloc[0])
+    def test_passes_the_value_through_unchanged(self):
+        """Only the condition is translated, every other value is verbatim."""
+        translated = OpenWeatherMapBaseData.to_canonical_field("temp", 25.0)
 
-    def test_stamps_the_provider_onto_every_row(self):
-        data = concat([make_training_frame(), make_training_frame()])
+        assert translated is not None
+        assert translated[1] == pytest.approx(25.0)
 
-        canonical = OpenWeatherMapBaseData.to_canonical_frame(data)
+    def test_translates_the_condition_to_wmo(self):
+        assert OpenWeatherMapBaseData.to_canonical_field("weather_id", 800.0) == (
+            "condition_code",
+            0,
+        )
 
-        assert list(canonical["weather_provider"]) == ["openweathermap"] * 2
+    def test_unknown_condition_becomes_overcast(self):
+        translated = OpenWeatherMapBaseData.to_canonical_field("weather_id", 999)
 
-    def test_input_frame_is_not_modified(self):
-        data = make_training_frame()
+        assert translated is not None
+        assert translated[1] == OpenWeatherMapBaseData.UNKNOWN_CONDITION_WMO_CODE
 
-        OpenWeatherMapBaseData.to_canonical_frame(data)
+    def test_missing_condition_value_stays_missing(self):
+        assert OpenWeatherMapBaseData.to_canonical_field("weather_id", None) == (
+            "condition_code",
+            None,
+        )
 
-        assert data["weather_id"].iloc[0] == pytest.approx(800.0)
-        assert "clouds" in data.columns
+    def test_returns_none_without_counterpart(self):
+        """A field the canonical schema does not know is dropped."""
+        assert (
+            OpenWeatherMapBaseData.to_canonical_field("weather_main", "Clear") is None
+        )

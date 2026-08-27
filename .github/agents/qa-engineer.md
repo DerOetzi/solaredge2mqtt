@@ -47,7 +47,7 @@ pytest tests/test_file.py::TestClass::test_method -v --tb=short
 
 - [ ] All tests pass locally
 - [ ] Tests are deterministic and order-independent
-- [ ] Mocks properly configured (MQTT, InfluxDB, Modbus, HTTP APIs)
+- [ ] Mocks properly configured (MQTT, Modbus, HTTP APIs)
 - [ ] Edge cases and error conditions covered
 - [ ] Test names describe the scenario
 

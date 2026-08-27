@@ -6,9 +6,9 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
-from solaredge2mqtt.core.influxdb import InfluxDBAsync
 from solaredge2mqtt.core.logging import initialize_logging, logger
 from solaredge2mqtt.core.settings import service_settings
+from solaredge2mqtt.core.storage import StorageService
 from solaredge2mqtt.services.forecast import FORECAST_AVAILABLE, ForecastService
 from solaredge2mqtt.services.forecast.models import Forecast
 from solaredge2mqtt.services.forecast.service import LOCAL_TZ
@@ -53,22 +53,22 @@ async def _run(
         logger.error("Forecast is not enabled/configured")
         return
 
-    if not settings.influxdb.is_configured:
-        logger.error("InfluxDB is not configured (required to read training data)")
+    if not settings.storage.is_configured:
+        logger.error("Storage is not enabled (required to read training data)")
         return
 
-    influxdb = InfluxDBAsync(settings.influxdb, settings.prices)
-    influxdb.init()
+    storage = StorageService(settings.storage, settings.prices, config_dir)
+    await storage.async_init()
 
     weather = WeatherClient(settings)
-    forecast = ForecastService(settings.forecast, settings.location, influxdb)
+    forecast = ForecastService(settings.forecast, settings.location, storage)
 
     try:
         logger.info("Reading current weather forecast from OpenWeatherMap")
         weather_data = await weather.get_weather()
         await forecast.weather_update(WeatherUpdateEvent(weather_data))
 
-        logger.info("Training forecast models from InfluxDB history")
+        logger.info("Training forecast models from stored history")
         await forecast.train()
 
         logger.info("Running prediction")
@@ -116,7 +116,7 @@ async def _run(
             )
     finally:
         await weather.close()
-        await influxdb.close()
+        await storage.close()
 
 
 def run(
@@ -138,7 +138,7 @@ def main():
     parser = argparse.ArgumentParser(
         description=(
             "Train and run the SolarEdge2MQTT forecast once, standalone from the "
-            "main service, without writing anything to MQTT or InfluxDB"
+            "main service, without writing anything to MQTT or the storage"
         )
     )
     parser.add_argument(

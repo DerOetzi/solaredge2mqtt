@@ -4,9 +4,9 @@ from typing import TYPE_CHECKING
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
-from solaredge2mqtt.core.influxdb import InfluxDBAsync
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.mqtt.events import MQTTPublishEvent
+from solaredge2mqtt.core.storage import StorageService
 from solaredge2mqtt.core.timer.events import IntervalBaseTriggerEvent
 from solaredge2mqtt.services.modbus import Modbus
 from solaredge2mqtt.services.modbus.models.battery import ModbusBattery
@@ -24,11 +24,11 @@ class PowerflowService:
     def __init__(
         self,
         settings: ServiceSettings,
-        influxdb: InfluxDBAsync | None = None,
+        storage: StorageService | None = None,
     ):
         self.settings = settings
 
-        self.influxdb = influxdb
+        self.storage = storage
 
         self.modbus = Modbus(self.settings)
         self.storedge_control = StorEdgeControl(self.settings)
@@ -74,7 +74,7 @@ class PowerflowService:
             logger.debug(powerflow)
             raise InvalidDataException("Value change not valid, skipping this loop")
 
-        await self.write_to_influxdb(powerflows, batteries)
+        await self.write_to_storage(powerflows, batteries)
 
         logger.debug(powerflow)
         logger.info(
@@ -184,12 +184,12 @@ class PowerflowService:
 
         await EventBus.emit(PowerflowGeneratedEvent(powerflows))
 
-    async def write_to_influxdb(
+    async def write_to_storage(
         self,
         powerflows: dict[str, Powerflow],
         batteries_data: dict[str, ModbusBattery],
     ):
-        if self.influxdb is not None:
+        if self.storage is not None:
             points = []
 
             for powerflow in powerflows.values():
@@ -198,7 +198,7 @@ class PowerflowService:
             for battery in batteries_data.values():
                 points.append(battery.prepare_point())
 
-            await self.influxdb.write_points(points)
+            await self.storage.write_points(points)
 
     async def close(self) -> None:
         if self.wallbox:

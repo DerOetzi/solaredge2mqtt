@@ -127,8 +127,8 @@ class TestServiceSettings:
             assert settings.location.latitude is None
             assert settings.location.longitude is None
 
-    def test_is_influxdb_configured_true(self):
-        """Test is_influxdb_configured returns True when influxdb is set."""
+    def test_storage_settings_from_configuration(self):
+        """Storage settings are read from the configuration file."""
         with tempfile.TemporaryDirectory() as tmpdir:
             config_file = Path(tmpdir) / "configuration.yml"
             secrets_file = Path(tmpdir) / "secrets.yml"
@@ -137,21 +137,21 @@ class TestServiceSettings:
                 "  host: 192.168.1.100\n"
                 "mqtt:\n"
                 "  broker: mqtt.example.com\n"
-                "influxdb:\n"
-                "  host: http://localhost\n"
-                "  port: 8086\n"
-                "  token: !secret influxdb_token\n"
-                "  org: test_org\n"
+                "storage:\n"
+                "  enable: true\n"
+                "  filename: history.db\n"
+                "  retention_raw: 12\n"
             )
-            secrets_file.write_text("influxdb_token: test_token\n")
+            secrets_file.write_text("mqtt_password: test_password\n")
 
             settings = ConfigurationLoader.load_configuration(tmpdir)
 
-            assert settings.influxdb.is_configured is True
-            assert settings.influxdb.host == "http://localhost"
+            assert settings.storage.is_configured is True
+            assert settings.storage.filename == "history.db"
+            assert settings.storage.retention_raw == 12
 
-    def test_is_influxdb_configured_false(self):
-        """Test is_influxdb_configured returns False when influxdb is not set."""
+    def test_storage_defaults_without_configuration(self):
+        """Storage is enabled with defaults when the section is missing."""
         with tempfile.TemporaryDirectory() as tmpdir:
             config_file = Path(tmpdir) / "configuration.yml"
             config_file.write_text(
@@ -160,11 +160,10 @@ class TestServiceSettings:
 
             settings = ConfigurationLoader.load_configuration(tmpdir)
 
-            assert settings.influxdb.is_configured is False
-            assert settings.influxdb.host is None
-            assert settings.influxdb.port == 8086
-            assert settings.influxdb.token is None
-            assert settings.influxdb.org is None
+            assert settings.storage.is_configured is True
+            assert settings.storage.filename == "solaredge2mqtt.db"
+            assert settings.storage.retention == 0
+            assert settings.storage.retention_raw == 25
 
     def test_is_weather_configured_requires_location(self):
         """Test is_weather_configured returns False when location is not set."""

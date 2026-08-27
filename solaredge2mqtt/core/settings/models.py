@@ -1,10 +1,10 @@
 from pydantic import BaseModel, Field
 
 from solaredge2mqtt.core.exceptions import ConfigurationException
-from solaredge2mqtt.core.influxdb.settings import InfluxDBSettings
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.logging.models import LoggingLevelEnum
 from solaredge2mqtt.core.mqtt.settings import MQTTSettings
+from solaredge2mqtt.core.storage.settings import StorageSettings
 from solaredge2mqtt.services.energy.settings import (
     EnergySettings,
     PriceSettings,
@@ -59,7 +59,7 @@ class ServiceSettings(BaseModel):
     monitoring: MonitoringSettings = Field(default_factory=MonitoringSettings)
     wallbox: WallboxSettings = Field(default_factory=WallboxSettings)
 
-    influxdb: InfluxDBSettings = Field(default_factory=InfluxDBSettings)
+    storage: StorageSettings = Field(default_factory=StorageSettings)
 
     weather: WeatherSettings = Field(default_factory=WeatherSettings)
 

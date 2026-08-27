@@ -1,6 +1,6 @@
 # 0003 — The weather provider is stamped onto every row
 
-**Status:** Accepted
+**Status:** Accepted — Decision 1 superseded by [ADR 0007](0007-storage-holds-the-canonical-schema.md)
 **Context:** pvlearn 0.4.0 removed `ForecasterConfig.weather_provider` and turned `weather_provider` into a categorical feature of `pvlearn.schema`. Which provider a row came from is a per-row fact of the training data, not a training-run setting, so the library expects the adapter to supply it with the data. The same release also dropped `feature_schema_version`, `pipeline_version` and `sklearn_version` from the model sidecar in favour of the pvlearn release segment ([pvlearn ADR 0003](https://github.com/LearningHouseService/pvlearn/blob/main/docs/adr/0003-one-version-decides-model-compatibility.md)).
 
 ## Decision 1: the adapter stamps its own name, InfluxDB stores nothing

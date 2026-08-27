@@ -10,7 +10,7 @@ class Component(Solaredge2MQTTBaseModel, ABC):
     AVAILABILITY_SERVICE: ClassVar[str | None] = None
 
     @property
-    def influxdb_tags(self) -> dict[str, str]:
+    def storage_tags(self) -> dict[str, str]:
         return {
             "component": self.COMPONENT,
             "source": self.SOURCE or "",

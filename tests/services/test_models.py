@@ -33,20 +33,20 @@ class ConcreteComponentNoSource(Component):
 class TestComponent:
     """Tests for Component base class."""
 
-    def test_influxdb_tags_with_source(self):
-        """Test influxdb_tags property with source."""
+    def test_storage_tags_with_source(self):
+        """Test storage_tags property with source."""
         component = ConcreteComponent()
 
-        tags = component.influxdb_tags
+        tags = component.storage_tags
 
         assert tags["component"] == "test_component"
         assert tags["source"] == "test_source"
 
-    def test_influxdb_tags_without_source(self):
-        """Test influxdb_tags property without source."""
+    def test_storage_tags_without_source(self):
+        """Test storage_tags property without source."""
         component = ConcreteComponentNoSource()
 
-        tags = component.influxdb_tags
+        tags = component.storage_tags
 
         assert tags["component"] == "no_source_component"
         assert tags["source"] == ""

@@ -270,7 +270,7 @@ class TestPowerflow:
 
         prices = PriceSettings(consumption=0.4, delivery=0.1)
         point = powerflow.prepare_point_energy(prices=prices)
-        field_keys = set(point._fields.keys())
+        field_keys = set(point.fields.keys())
 
         assert "money_saved" in field_keys
         assert "money_price_in" in field_keys
@@ -317,7 +317,7 @@ class TestPowerflow:
 
         point = powerflow.prepare_point()
 
-        assert point._name == "powerflow_raw"
+        assert point.measurement == "powerflow_raw"
 
     def test_powerflow_prepare_point_with_unit(self):
         """Test prepare_point with unit tag."""
@@ -346,7 +346,7 @@ class TestPowerflow:
         point = powerflow.prepare_point()
 
         # Check tag is set (accessing internal dict)
-        assert "unit" in dict(point._tags)
+        assert "unit" in point.tags
 
     def test_powerflow_cumulated(self):
         """Test cumulated_powerflow static method."""
@@ -1096,7 +1096,7 @@ class TestPowerflowPreparePointEnergy:
 
         point = powerflow.prepare_point_energy()
 
-        assert point._name == "energy"
+        assert point.measurement == "energy"
 
     def test_prepare_point_energy_with_prices(self):
         """Test prepare_point_energy with prices."""
@@ -1121,9 +1121,9 @@ class TestPowerflowPreparePointEnergy:
         point = powerflow.prepare_point_energy(prices=prices)
 
         # Check that the point has fields
-        assert point._name == "energy"
+        assert point.measurement == "energy"
         # The point should have field pairs added
-        assert len(point._fields) > 0
+        assert len(point.fields) > 0
 
     def test_prepare_point_energy_custom_measurement(self):
         """Test prepare_point_energy with custom measurement name."""
@@ -1144,7 +1144,7 @@ class TestPowerflowPreparePointEnergy:
 
         point = powerflow.prepare_point_energy(measurement="custom_energy")
 
-        assert point._name == "custom_energy"
+        assert point.measurement == "custom_energy"
 
 
 class TestInverterPowerflowFromModbus:

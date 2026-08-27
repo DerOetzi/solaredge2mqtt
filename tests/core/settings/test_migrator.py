@@ -368,7 +368,6 @@ class TestConfigurationMigrator:
                 "password": SecretStr("secret123"),
             },
             "weather": {"api_key": "api_key_123"},
-            "influxdb": {"host": "http://localhost", "token": "token_123"},
             "modbus": {"host": "192.168.1.100"},  # noqa: S1313
         }
 
@@ -379,8 +378,6 @@ class TestConfigurationMigrator:
         assert secrets_data["mqtt_password"] == "secret123"
         assert "weather_api_key" in secrets_data
         assert secrets_data["weather_api_key"] == "api_key_123"
-        assert "influxdb_token" in secrets_data
-        assert secrets_data["influxdb_token"] == "token_123"
 
         # Check that secrets were replaced with !secret references
         from solaredge2mqtt.core.settings.migrator import SecretReference
@@ -389,13 +386,10 @@ class TestConfigurationMigrator:
         assert config_data["mqtt"]["password"].secret_key == "mqtt_password"
         assert isinstance(config_data["weather"]["api_key"], SecretReference)
         assert config_data["weather"]["api_key"].secret_key == "weather_api_key"
-        assert isinstance(config_data["influxdb"]["token"], SecretReference)
-        assert config_data["influxdb"]["token"].secret_key == "influxdb_token"
 
         # Check that non-sensitive data remains
         assert config_data["mqtt"]["broker"] == "mqtt.example.com"
         assert config_data["mqtt"]["username"] == "user"
-        assert config_data["influxdb"]["host"] == "http://localhost"
         assert config_data["modbus"]["host"] == "192.168.1.100"  # noqa: S1313
 
     def test_extract_secrets_no_sensitive_data(self):

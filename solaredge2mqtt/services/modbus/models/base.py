@@ -102,8 +102,8 @@ class ModbusComponent(Component, MixinModbusSunSpecScaleValue, ABC):
 
     info: SkipJsonSchema[ModbusDeviceInfo]
 
-    def model_dump_influxdb(self, exclude: set[str] | None = None) -> dict[str, Any]:
-        return super().model_dump_influxdb({"info", *exclude} if exclude else {"info"})
+    def model_dump_storage(self, exclude: set[str] | None = None) -> dict[str, Any]:
+        return super().model_dump_storage({"info", *exclude} if exclude else {"info"})
 
     @classmethod
     def from_sunspec(cls, info: ModbusDeviceInfo, payload: SunSpecPayload) -> Self:
@@ -116,9 +116,9 @@ class ModbusComponent(Component, MixinModbusSunSpecScaleValue, ABC):
         pass
 
     @property
-    def influxdb_tags(self) -> dict[str, str]:
+    def storage_tags(self) -> dict[str, str]:
         tags = {
-            **super().influxdb_tags,
+            **super().storage_tags,
             "manufacturer": self.info.manufacturer,
             "model": self.info.model,
             "sunspec_type": self.info.sunspec_type,
