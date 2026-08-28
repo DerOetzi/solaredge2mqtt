@@ -2,17 +2,27 @@
 
 from datetime import datetime, timedelta, timezone
 from datetime import datetime as dt_class
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pandas import DataFrame
+from pvlearn.exceptions import (
+    InsufficientDataError,
+    ModelNotTrainedError,
+    SchemaMismatchError,
+)
 
 from solaredge2mqtt.core.exceptions import InvalidDataException
 from solaredge2mqtt.core.settings.models import LocationSettings
 from solaredge2mqtt.services.forecast.service import (
     ENERGY_FIELD,
+    FREQUENT_TRAINING_INTERVAL_HOURS,
     LOCAL_TZ,
+    MODEL_DIRECTORY,
     POWER_FIELD,
+    THROTTLE_TRAINING_ROWS,
+    THROTTLED_TRAINING_INTERVAL_HOURS,
     WH_PER_KWH,
     Forecaster,
     ForecastService,
@@ -33,6 +43,22 @@ def mock_memory():
         # Make Memory return None (disabled) instead of a MagicMock
         mock.return_value = None
         yield mock
+
+
+@pytest.fixture(autouse=True)
+def no_persisted_model():
+    """Keep the tests off the real cache directory of the running user.
+
+    Every service starts as if nothing had been persisted; the tests that
+    cover persistence patch these two again themselves.
+    """
+    with (
+        patch.object(
+            Forecaster, "load", side_effect=ModelNotTrainedError("nothing persisted")
+        ),
+        patch.object(Forecaster, "save"),
+    ):
+        yield
 
 
 class MockLocationSettings(LocationSettings):
@@ -415,10 +441,9 @@ class TestForecastServiceWriteTrainingData:
             }
         )
         storage.write_point = AsyncMock()
-        _mock_records(storage, [])
 
         service = ForecastService(settings, location, storage)
-        service.train = AsyncMock()
+        service.scheduled_training = AsyncMock()
 
         weather_forecast = make_snapshot(hour=11)
 
@@ -431,7 +456,7 @@ class TestForecastServiceWriteTrainingData:
 
             await service.write_new_training_data(weather_forecast)
 
-        service.train.assert_called_once()
+        service.scheduled_training.assert_awaited_once()
 
 
 class TestForecastServiceForecastLoop:
@@ -844,6 +869,311 @@ class TestForecastServiceTrain:
 
         with pytest.raises(InvalidDataException):
             service.training(DataFrame({"time": [], ENERGY_FIELD: []}))
+
+
+class TestForecastServiceTrainingSchedule:
+    """Tests for the throttled retraining schedule."""
+
+    @staticmethod
+    def _service(settings: ForecastSettings, rows: int = 1) -> ForecastService:
+        storage = AsyncMock()
+        _mock_records(
+            storage,
+            [
+                {
+                    "_time": datetime(2024, 6, 15, tzinfo=timezone.utc)
+                    + timedelta(hours=index),
+                    ENERGY_FIELD: 1000.0,
+                }
+                for index in range(rows)
+            ],
+        )
+
+        return ForecastService(settings, MockLocationSettings(), storage)
+
+    @staticmethod
+    def _forecaster_mock(hyperparameters_tuned_at: datetime | None = None) -> MagicMock:
+        """A forecaster that carries the tuning timestamp like the real one."""
+        forecaster = MagicMock()
+        forecaster.hyperparameters_tuned_at = hyperparameters_tuned_at
+        return forecaster
+
+    @staticmethod
+    def _frame() -> DataFrame:
+        return DataFrame(
+            {
+                "time": [datetime(2024, 6, 15, 12, 0, tzinfo=timezone.utc)],
+                ENERGY_FIELD: [1500.0],
+            }
+        )
+
+    def test_interval_is_hourly_while_training_data_is_sparse(self):
+        """Below the throttle threshold the model is rebuilt every hour."""
+        service = self._service(ForecastSettings(enable=True))
+
+        assert (
+            service.training_interval_hours(THROTTLE_TRAINING_ROWS - 1)
+            == FREQUENT_TRAINING_INTERVAL_HOURS
+        )
+
+    def test_interval_is_throttled_with_enough_training_data(self):
+        """From the threshold on the model is rebuilt once a day."""
+        service = self._service(ForecastSettings(enable=True))
+
+        assert (
+            service.training_interval_hours(THROTTLE_TRAINING_ROWS)
+            == THROTTLED_TRAINING_INTERVAL_HOURS
+        )
+
+    def test_configured_interval_overrides_the_adaptive_one(self):
+        """A configured interval wins over the amount of training data."""
+        service = self._service(
+            ForecastSettings(enable=True, training_interval_hours=6)
+        )
+
+        assert service.training_interval_hours(THROTTLE_TRAINING_ROWS) == 6
+        assert service.training_interval_hours(1) == 6
+
+    @pytest.mark.asyncio
+    async def test_scheduled_training_trains_on_first_run(self):
+        """Without a previous run the training always happens."""
+        service = self._service(ForecastSettings(enable=True))
+
+        with patch.object(service, "train") as train:
+            await service.scheduled_training()
+
+        train.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_scheduled_training_skips_within_the_interval(self):
+        """A recent training run suppresses the next hourly one."""
+        service = self._service(ForecastSettings(enable=True), rows=1000)
+        service.last_training = datetime.now().astimezone() - timedelta(hours=2)
+
+        with patch.object(service, "train") as train:
+            await service.scheduled_training()
+
+        train.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_scheduled_training_trains_after_the_interval(self):
+        """Once the interval has passed the model is rebuilt again."""
+        service = self._service(ForecastSettings(enable=True), rows=1000)
+        service.last_training = datetime.now().astimezone() - timedelta(hours=24)
+
+        with patch.object(service, "train") as train:
+            await service.scheduled_training()
+
+        train.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_scheduled_training_raises_without_training_data(self):
+        """An empty storage is still an error, as it was before."""
+        service = self._service(ForecastSettings(enable=True), rows=0)
+
+        with (
+            patch.object(service, "train") as train,
+            pytest.raises(InvalidDataException),
+        ):
+            await service.scheduled_training()
+
+        train.assert_not_awaited()
+
+    def test_hyperparametertuning_stays_off_when_disabled(self):
+        """Without the setting no training run ever tunes."""
+        service = self._service(ForecastSettings(enable=True))
+
+        assert service.hyperparametertuning_due() is False
+
+    def test_hyperparametertuning_due_on_first_run(self):
+        """The first training run after a start tunes."""
+        service = self._service(
+            ForecastSettings(enable=True, hyperparametertuning=True)
+        )
+
+        assert service.hyperparametertuning_due() is True
+
+    def test_hyperparametertuning_not_due_within_the_interval(self):
+        """A recent search suppresses the next one."""
+        service = self._service(
+            ForecastSettings(enable=True, hyperparametertuning=True)
+        )
+        service.forecaster.hyperparameters_tuned_at = (
+            datetime.now().astimezone() - timedelta(days=3)
+        )
+
+        assert service.hyperparametertuning_due() is False
+
+    def test_hyperparametertuning_due_after_the_interval(self):
+        """After the configured days the search runs again."""
+        service = self._service(
+            ForecastSettings(enable=True, hyperparametertuning=True)
+        )
+        service.forecaster.hyperparameters_tuned_at = (
+            datetime.now().astimezone() - timedelta(days=7)
+        )
+
+        assert service.hyperparametertuning_due() is True
+
+    def test_hyperparametertuning_on_every_run_with_zero_interval(self):
+        """A zero interval keeps the search on every training run."""
+        service = self._service(
+            ForecastSettings(
+                enable=True,
+                hyperparametertuning=True,
+                hyperparametertuning_interval_days=0,
+            )
+        )
+        service.forecaster.hyperparameters_tuned_at = datetime.now().astimezone()
+
+        assert service.hyperparametertuning_due() is True
+
+    @pytest.mark.asyncio
+    async def test_train_records_the_run_and_asks_for_tuning(self):
+        """A successful first run stores its timestamp and tunes."""
+        settings = ForecastSettings(enable=True, hyperparametertuning=True)
+        storage = AsyncMock()
+        service = ForecastService(settings, MockLocationSettings(), storage)
+        service.forecaster = self._forecaster_mock()
+
+        await service.train(self._frame())
+
+        assert service.last_training is not None
+        assert service.forecaster.train.call_args.kwargs["hyperparametertuning"] is True
+
+    @pytest.mark.asyncio
+    async def test_train_skips_tuning_within_the_interval(self):
+        """A recent search keeps the next run untuned."""
+        settings = ForecastSettings(enable=True, hyperparametertuning=True)
+        storage = AsyncMock()
+        service = ForecastService(settings, MockLocationSettings(), storage)
+        service.forecaster = self._forecaster_mock(
+            hyperparameters_tuned_at=datetime.now().astimezone() - timedelta(days=1)
+        )
+
+        await service.train(self._frame())
+
+        assert (
+            service.forecaster.train.call_args.kwargs["hyperparametertuning"] is False
+        )
+
+    @pytest.mark.asyncio
+    async def test_failed_training_stays_due(self):
+        """A failed run leaves the training due for the next hour."""
+        settings = ForecastSettings(enable=True)
+        storage = AsyncMock()
+        service = ForecastService(settings, MockLocationSettings(), storage)
+        service.forecaster = self._forecaster_mock()
+        service.forecaster.train.side_effect = InsufficientDataError("too little")
+
+        with pytest.raises(InvalidDataException):
+            await service.train(self._frame())
+
+        assert service.last_training is None
+
+
+class TestForecastServiceModelPersistence:
+    """Tests for restoring and persisting the trained model."""
+
+    @staticmethod
+    def _settings(cachingdir: Path, **kwargs) -> ForecastSettings:
+        return ForecastSettings(enable=True, cachingdir=str(cachingdir), **kwargs)
+
+    def test_restores_the_persisted_model(self, tmp_path):
+        """A persisted model is loaded instead of trained again."""
+        restored = MagicMock()
+        restored.metadata.trained_at = datetime(2026, 8, 6, 3, 20, tzinfo=timezone.utc)
+
+        with patch.object(Forecaster, "load", return_value=restored) as load:
+            service = ForecastService(
+                self._settings(tmp_path), MockLocationSettings(), MagicMock()
+            )
+
+        assert service.forecaster is restored
+        assert service.last_training == restored.metadata.trained_at
+        assert load.call_args[0][0] == tmp_path / MODEL_DIRECTORY
+
+    def test_restored_model_without_metadata_keeps_the_training_due(self, tmp_path):
+        """A model without a sidecar timestamp is trained on the next trigger."""
+        restored = MagicMock()
+        restored.metadata = None
+
+        with patch.object(Forecaster, "load", return_value=restored):
+            service = ForecastService(
+                self._settings(tmp_path), MockLocationSettings(), MagicMock()
+            )
+
+        assert service.forecaster is restored
+        assert service.last_training is None
+
+    def test_starts_fresh_without_a_persisted_model(self, tmp_path):
+        """Nothing persisted yet leaves an untrained forecaster behind."""
+        with patch.object(
+            Forecaster, "load", side_effect=ModelNotTrainedError("nothing")
+        ):
+            service = ForecastService(
+                self._settings(tmp_path), MockLocationSettings(), MagicMock()
+            )
+
+        assert isinstance(service.forecaster, Forecaster)
+        assert service.forecaster.is_trained is False
+        assert service.last_training is None
+
+    def test_starts_fresh_when_the_persisted_model_does_not_match(self, tmp_path):
+        """A model of another setup or release is discarded."""
+        with patch.object(
+            Forecaster, "load", side_effect=SchemaMismatchError("other release")
+        ):
+            service = ForecastService(
+                self._settings(tmp_path), MockLocationSettings(), MagicMock()
+            )
+
+        assert isinstance(service.forecaster, Forecaster)
+        assert service.last_training is None
+
+    def test_no_persistence_without_a_cache_directory(self):
+        """Without a cache directory nothing is loaded or saved."""
+        settings = ForecastSettings(enable=True, cachingdir=None)
+
+        with patch.object(Forecaster, "load") as load:
+            service = ForecastService(settings, MockLocationSettings(), MagicMock())
+
+        service.forecaster = MagicMock()
+        service.save_model()
+
+        load.assert_not_called()
+        service.forecaster.save.assert_not_called()
+        assert service.model_directory is None
+
+    def test_training_persists_the_model(self, tmp_path):
+        """A finished training run writes the model next to the cache."""
+        service = ForecastService(
+            self._settings(tmp_path), MockLocationSettings(), MagicMock()
+        )
+        service.forecaster = MagicMock()
+
+        service.training(
+            DataFrame(
+                {
+                    "time": [datetime(2024, 6, 15, 12, 0, tzinfo=timezone.utc)],
+                    ENERGY_FIELD: [1500.0],
+                }
+            )
+        )
+
+        service.forecaster.save.assert_called_once_with(tmp_path / MODEL_DIRECTORY)
+
+    def test_a_failed_save_keeps_the_trained_model(self, tmp_path):
+        """A model that cannot be written is still used."""
+        service = ForecastService(
+            self._settings(tmp_path), MockLocationSettings(), MagicMock()
+        )
+        service.forecaster = MagicMock()
+        service.forecaster.save.side_effect = OSError("read-only file system")
+
+        service.save_model()
+
+        service.forecaster.save.assert_called_once()
 
 
 class TestForecastServiceAddLastHourPvProduction:

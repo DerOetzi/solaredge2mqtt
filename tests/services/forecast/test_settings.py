@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from pydantic import ValidationError
 
 from solaredge2mqtt.services.forecast.settings import (
     ForecastSettings,
@@ -25,6 +26,8 @@ class TestForecastSettings:
 
         assert settings.enable is False
         assert settings.hyperparametertuning is False
+        assert settings.training_interval_hours == 0
+        assert settings.hyperparametertuning_interval_days == 7
         assert settings.cache_size_limit_mb == 512
         assert settings.retain is False
 
@@ -48,6 +51,23 @@ class TestForecastSettings:
 
         assert settings_false.hyperparametertuning is False
         assert settings_true.hyperparametertuning is True
+
+    def test_forecast_settings_training_intervals(self):
+        """Test the retraining and tuning intervals accept values."""
+        settings = ForecastSettings(
+            training_interval_hours=6, hyperparametertuning_interval_days=0
+        )
+
+        assert settings.training_interval_hours == 6
+        assert settings.hyperparametertuning_interval_days == 0
+
+    def test_forecast_settings_rejects_negative_intervals(self):
+        """Test negative intervals are rejected."""
+        with pytest.raises(ValidationError):
+            ForecastSettings(training_interval_hours=-1)
+
+        with pytest.raises(ValidationError):
+            ForecastSettings(hyperparametertuning_interval_days=-1)
 
     def test_forecast_settings_retain_flag(self):
         """Test retain flag."""

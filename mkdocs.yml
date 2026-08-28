@@ -129,3 +129,4 @@ nav:
       - decisions/0007-storage-holds-the-canonical-schema.md
       - decisions/0008-the-weather-service-speaks-canonically.md
       - decisions/0009-migration-consolidates-the-module-series.md
+      - decisions/0010-the-forecast-model-is-rebuilt-on-a-slower-cadence.md
