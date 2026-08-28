@@ -71,14 +71,14 @@ mqtt:
   username: mqtt_user           # Username for MQTT broker
   password: !secret mqtt_password  # Reference to secrets.yml
   topic_prefix: solaredge       # Prefix for MQTT topics
-  retain: false                 # Retain MQTT messages
-# use_tls: false                # MQTT over TLS
-# ca_certs: path_to_CA          # Path to trusted CA boundle - usefull for self sign certificates
-# certfile: path_to_client_cert # Client certificate, for brokers requiring mutual TLS
-# keyfile: path_to_client_key   # Private key matching certfile
-# keyfile_password: !secret mqtt_keyfile_password  # Only if the private key is encrypted
-# tls_verify: true              # Verify mqtt certificate. If set to false ignore certificate expiration, CN missmatch, etc.
-# logging_level: ERROR          # Minimum log level forwarded to MQTT logging topic (default: ERROR)
+  # logging_level: ERROR        # Minimum log level forwarded to the MQTT logging topic
+  # TLS, only used when use_tls is true
+  # use_tls: false
+  # ca_certs: path_to_CA          # Trusted CA bundle, for a privately signed broker certificate
+  # certfile: path_to_client_cert # Client certificate, for brokers requiring mutual TLS
+  # keyfile: path_to_client_key   # Private key matching certfile
+  # keyfile_password: !secret mqtt_keyfile_password  # Only if the private key is encrypted
+  # tls_verify: true              # Set to false to ignore expiry, CN mismatch and so on
 
 # Powerflow configuration
 powerflow:
@@ -89,10 +89,12 @@ powerflow:
 energy:
   retain: false  # Retain MQTT messages
 
-# Price settings for energy calculation
+# Price settings for energy calculation (requires storage)
+# A price only takes effect when currency is set as well.
 prices:
   consumption: 0.30  # Price per kWh for energy from grid
   delivery: 0.08     # Price per kWh for energy delivered to grid
+  currency: EUR      # Required; also used as the Home Assistant unit
 
 # SolarEdge Monitoring Platform (optional)
 # monitoring:
@@ -139,3 +141,6 @@ prices:
 #   # cachingdir: /app/cache  # For Docker (default)
 #   # cachingdir: ~/.cache/se2mqtt_forecast  # For non-Docker systems
 #   retain: false
+#   # Used for the optimal battery charge start time, only when a battery is detected
+#   battery_target_soc: 98.0        # Target state of charge in percent
+#   battery_charge_efficiency: 0.92 # Charge efficiency

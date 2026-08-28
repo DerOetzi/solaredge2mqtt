@@ -1,0 +1,131 @@
+site_name: SolarEdge2MQTT
+site_description: >-
+  Read power data from SolarEdge inverters over Modbus and publish it to an MQTT broker,
+  with a local SQLite history, Home Assistant discovery and PV production forecasting.
+site_url: https://deroetzi.github.io/solaredge2mqtt/
+site_author: Johannes Ott
+
+repo_url: https://github.com/DerOetzi/solaredge2mqtt
+repo_name: DerOetzi/solaredge2mqtt
+edit_uri: edit/main/docs/
+
+copyright: Licensed under the MIT License
+
+docs_dir: docs
+
+# Anchors are checked as well, so a link to a heading that was renamed fails the
+# build instead of silently landing at the top of the page.
+validation:
+  links:
+    absolute_links: relative_to_docs
+    unrecognized_links: warn
+    anchors: warn
+
+theme:
+  name: material
+  language: en
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.instant
+    - navigation.tracking
+    - navigation.indexes
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+    - content.tabs.link
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: amber
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: amber
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+plugins:
+  - search
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify {kwds: {case: lower}}
+  - pymdownx.snippets:
+      base_path:
+        - .
+      check_paths: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/DerOetzi/solaredge2mqtt
+      name: Source on GitHub
+    - icon: fontawesome/brands/discord
+      link: https://discord.gg/QXfghc93pY
+      name: Discord community
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/solaredge2mqtt/
+      name: Package on PyPI
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - getting-started/installation.md
+      - getting-started/configuration.md
+      - getting-started/running.md
+  - Configuration:
+      - configuration/index.md
+      - configuration/modbus.md
+      - configuration/storedge-control.md
+      - configuration/mqtt.md
+      - configuration/monitoring.md
+      - configuration/wallbox.md
+      - configuration/home-assistant.md
+      - configuration/storage.md
+      - configuration/prices.md
+      - configuration/weather.md
+      - configuration/forecast.md
+  - Deployment:
+      - deployment/docker.md
+      - deployment/docker-compose.md
+      - deployment/grafana.md
+  - Migration:
+      - migration/influxdb-to-sqlite.md
+      - migration/environment-variables.md
+  - Troubleshooting: troubleshooting.md
+  - Reference:
+      - decisions/index.md
+      - decisions/0001-pvlearn-extraction-wiring.md
+      - decisions/0002-canonical-weather-schema.md
+      - decisions/0003-weather-provider-as-a-feature.md
+      - decisions/0004-drop-armv7-support.md
+      - decisions/0005-install-wheel-in-docker.md
+      - decisions/0006-sqlite-storage-instead-of-influxdb.md
+      - decisions/0007-storage-holds-the-canonical-schema.md
+      - decisions/0008-the-weather-service-speaks-canonically.md
+      - decisions/0009-migration-consolidates-the-module-series.md

@@ -34,7 +34,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/DerOetzi/solaredge2mqtt"
-Documentation = "https://github.com/DerOetzi/solaredge2mqtt/README.md"
+Documentation = "https://deroetzi.github.io/solaredge2mqtt/"
 Repository = "https://github.com/DerOetzi/solaredge2mqtt"
 Issues = "https://github.com/DerOetzi/solaredge2mqtt/issues"
 
@@ -58,6 +58,10 @@ dev = [
 ]
 forecast = [
     "pvlearn==0.4.0",
+]
+docs = [
+    "mkdocs==1.6.1",
+    "mkdocs-material==9.7.7",
 ]
 
 [build-system]
