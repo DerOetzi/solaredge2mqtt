@@ -409,7 +409,6 @@ jobs:
         with:
           name: docs-site-${{ env.REF_NAME }}
           path: site
-          retention-days: 14
 
       - name: Save pages artifact
         if: ${{ github.event_name == 'release' }}
