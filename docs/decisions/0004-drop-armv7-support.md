@@ -244,7 +244,7 @@ docker build --build-arg TARGETARCH=arm -t solaredge2mqtt:armv7-self .
 
 ### 4. Run it
 
-Same as any other image — see [DOCKER.md](../../DOCKER.md):
+Same as any other image — see [Docker deployment](../deployment/docker.md):
 
 ```bash
 mkdir -p config

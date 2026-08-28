@@ -128,9 +128,16 @@ ENV/
 env.bak/
 venv.bak/
 
-# Configuration files (use .example templates)
-config/**/*.yml
-config
+# The runtime configuration directory, at the repository root only.
+# Anchored with a leading slash on purpose: a bare "config" matches every path
+# segment of that name at any depth, which also hid solaredge2mqtt/config/ with
+# the packaged .example templates in it.
+/config
+
+# A stray configuration or secrets file anywhere, so real credentials cannot be
+# committed by accident. The packaged templates end in .example and are kept.
+configuration.yml
+secrets.yml
 
 # Spyder project settings
 .spyderproject
