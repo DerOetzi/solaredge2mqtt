@@ -15,4 +15,4 @@ services:
 # The service will automatically create YAML files on first run if they don't exist
 #
 # Permissions are automatically handled by the container at startup
-# For more information, see DOCKER.md
+# For more information, see https://deroetzi.github.io/solaredge2mqtt/

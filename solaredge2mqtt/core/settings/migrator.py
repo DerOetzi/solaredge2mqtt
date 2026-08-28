@@ -15,14 +15,19 @@ LEGACY_INFLUXDB_STORAGE_KEYS = ("retention", "retention_raw", "debounce_cycles")
 class EnvironmentReader:
     PREFIX = "se2mqtt_"
 
+    #: Where the dotenv file is looked for when no other path is given. The
+    #: automatic migration on startup has no way to ask for one, so it stays
+    #: the default; the migration tool passes whatever --input names.
+    DEFAULT_DOTENV = ".env"
+
     @classmethod
-    def read_all(cls) -> dict[str, str]:
+    def read_all(cls, dotenv_path: str | None = None) -> dict[str, str]:
         config = {}
 
         for key, value in cls._read_environment():
             config[key] = value
 
-        for key, value in cls._read_dotenv():
+        for key, value in cls._read_dotenv(dotenv_path):
             if key not in config:
                 config[key] = value
 
@@ -51,10 +56,12 @@ class EnvironmentReader:
                         yield filename, f.read().strip()
 
     @classmethod
-    def _read_dotenv(cls):
+    def _read_dotenv(cls, dotenv_path: str | None = None):
+        dotenv_file = dotenv_path or cls.DEFAULT_DOTENV
+
         try:
-            if path.exists(".env"):
-                with open(".env", "r", encoding="utf-8") as f:
+            if path.exists(dotenv_file):
+                with open(dotenv_file, "r", encoding="utf-8") as f:
                     for line in f.readlines():
                         line = line.strip()
                         if cls._has_prefix(line) and "=" in line:
@@ -62,8 +69,8 @@ class EnvironmentReader:
                             yield key, value.strip()
         except FileNotFoundError:
             logger.debug(
-                "EnvironmentReader: '.env' file not found while attempting "
-                "to read environment-style settings."
+                f"EnvironmentReader: '{dotenv_file}' file not found while "
+                "attempting to read environment-style settings."
             )
 
     @staticmethod
@@ -104,7 +111,8 @@ ConfigDumper.add_representer(SecretReference, secret_representer)
 
 
 class ConfigurationMigrator:
-    def __init__(self):
+    def __init__(self, dotenv_path: str | None = None):
+        self.dotenv_path = dotenv_path
         self.secret_fields = self._identify_secret_fields(ServiceSettings)
 
     def _identify_secret_fields(
@@ -200,7 +208,7 @@ class ConfigurationMigrator:
             secret_fields[key].extend(fields)
 
     def migrate(self) -> ServiceSettings:
-        env_data = EnvironmentReader.read_all()
+        env_data = EnvironmentReader.read_all(self.dotenv_path)
 
         parsed_data = self._parse_environment_to_dict(env_data)
 
@@ -460,7 +468,7 @@ class ConfigurationMigrator:
     def extract_from_environment(
         self,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
-        env_data = EnvironmentReader.read_all()
+        env_data = EnvironmentReader.read_all(self.dotenv_path)
         parsed_data = self._parse_environment_to_dict(env_data)
 
         try:

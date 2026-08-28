@@ -8,7 +8,23 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from solaredge2mqtt.core.settings.migrator import ConfigurationMigrator
+from solaredge2mqtt.core.settings.migrator import ConfigDumper, ConfigurationMigrator
+
+
+def _dump(data: dict) -> str:
+    """Render a preview the same way the migration writes the file.
+
+    `yaml.safe_dump` cannot represent a `SecretReference`, and every migrated
+    configuration that has a password carries one, so the dry run has to use
+    the dumper that knows the `!secret` tag.
+    """
+    return yaml.dump(
+        data,
+        default_flow_style=False,
+        sort_keys=False,
+        allow_unicode=True,
+        Dumper=ConfigDumper,
+    )
 
 
 def main():
@@ -24,7 +40,7 @@ def main():
         "-i",
         type=str,
         default=".env",
-        help="Path to .env file (default: .env)",
+        help="Path to the .env file to read (default: .env)",
     )
     parser.add_argument(
         "--output-dir",
@@ -71,15 +87,21 @@ def main():
     print("Starting migration...")
     print(f"Reading configuration from environment variables and {args.input}")
 
-    migrator = ConfigurationMigrator()
+    if not Path(args.input).exists():
+        print(
+            f"NOTE: {args.input} does not exist, "
+            "reading environment variables and Docker secrets only."
+        )
+
+    migrator = ConfigurationMigrator(dotenv_path=args.input)
     config_data, secrets_data = migrator.extract_from_environment()
 
     if args.dry_run:
         print("\n=== DRY RUN MODE - No files will be written ===\n")
         print(f"\n--- Configuration ({config_file}) ---")
-        print(yaml.safe_dump(config_data, default_flow_style=False, sort_keys=False))
+        print(_dump(config_data))
         print(f"\n--- Secrets ({secrets_file}) ---")
-        print(yaml.safe_dump(secrets_data, default_flow_style=False, sort_keys=False))
+        print(_dump(secrets_data))
         print("\n=== END DRY RUN ===")
     else:
         migrator.write_yaml_files(

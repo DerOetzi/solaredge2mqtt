@@ -21,7 +21,9 @@ solaredge2mqtt/
 └── service.py      # Main service orchestration logic
 tests/              # Unit and integration tests mirroring solaredge2mqtt/ structure
 examples/           # Docker Compose, Grafana, and other example configs
-docs/decisions/     # Architecture decision records, numbered and append-only
+docs/               # MkDocs site sources, published to GitHub Pages
+└── decisions/      # Architecture decision records, numbered and append-only
+mkdocs.yml          # Site configuration and navigation
 ```
 
 ### Architecture & Data Flow
@@ -67,6 +69,11 @@ python -m solaredge2mqtt
 # Docker
 docker build -t solaredge2mqtt .
 docker compose up -d
+
+# Documentation site
+uv sync --extra docs
+uv run mkdocs serve          # local preview with live reload
+uv run mkdocs build --strict # fails on any dead internal link
 ```
 
 ---
@@ -82,6 +89,10 @@ Project-specific constraints:
 - Use Python >=3.12, <=3.13 syntax and language features.
 - All code comments and documentation must be in **English**.
 - For diagrams use Mermaid.
+- User documentation lives in `docs/` and is published with MkDocs Material. A new page must be
+  added to the `nav` block of `mkdocs.yml`, otherwise `mkdocs build --strict` fails.
+- `README.md` is the PyPI project page. Keep it a landing page and link into the site with
+  absolute URLs, never relative paths.
 
 ### Project Patterns
 

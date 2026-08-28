@@ -107,6 +107,82 @@ class TestConfigurationMigrator:
 
         assert result == {"se2mqtt_token": "abc"}
 
+    def test_environment_reader_read_dotenv_custom_path(self):
+        """A dotenv outside the working directory is read when named."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dotenv = Path(tmpdir, "prod.env")
+            dotenv.write_text(
+                "SE2MQTT_MODBUS__HOST=192.168.9.9\n"
+                "not_prefixed=ignored\n"
+                "SE2MQTT_MQTT__BROKER=broker.example.org\n",
+                encoding="utf-8",
+            )
+
+            result = dict(EnvironmentReader._read_dotenv(str(dotenv)))
+
+        assert result == {
+            "SE2MQTT_MODBUS__HOST": "192.168.9.9",
+            "SE2MQTT_MQTT__BROKER": "broker.example.org",
+        }
+
+    def test_environment_reader_read_dotenv_missing_custom_path(self):
+        """A named dotenv that does not exist yields nothing."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            missing = str(Path(tmpdir, "absent.env"))
+
+            assert list(EnvironmentReader._read_dotenv(missing)) == []
+
+    def test_environment_reader_read_all_passes_dotenv_path(self):
+        """read_all hands the dotenv path down to the dotenv reader."""
+        with (
+            patch.object(EnvironmentReader, "_read_environment", return_value=[]),
+            patch.object(EnvironmentReader, "_read_secrets", return_value=[]),
+            patch.object(
+                EnvironmentReader, "_read_dotenv", return_value=[]
+            ) as read_dotenv,
+        ):
+            EnvironmentReader.read_all("custom.env")
+
+        read_dotenv.assert_called_once_with("custom.env")
+
+    def test_migrator_uses_configured_dotenv_path(self):
+        """The migrator forwards the path it was constructed with."""
+        migrator = ConfigurationMigrator(dotenv_path="custom.env")
+        environment = {
+            "SE2MQTT_MODBUS__HOST": "192.168.9.9",
+            "SE2MQTT_MQTT__BROKER": "broker.example.org",
+        }
+
+        with patch.object(
+            EnvironmentReader, "read_all", return_value=environment
+        ) as read_all:
+            migrated = migrator.migrate()
+
+        read_all.assert_called_once_with("custom.env")
+        assert migrated.modbus.host == "192.168.9.9"
+
+    def test_extract_from_environment_uses_configured_dotenv_path(self):
+        """The export path forwards the same dotenv path."""
+        migrator = ConfigurationMigrator(dotenv_path="custom.env")
+        environment = {
+            "SE2MQTT_MODBUS__HOST": "192.168.9.9",
+            "SE2MQTT_MQTT__BROKER": "broker.example.org",
+        }
+
+        with patch.object(
+            EnvironmentReader, "read_all", return_value=environment
+        ) as read_all:
+            config_data, _ = migrator.extract_from_environment()
+
+        read_all.assert_called_once_with("custom.env")
+        assert config_data["modbus"]["host"] == "192.168.9.9"
+
+    def test_migrator_defaults_to_no_dotenv_path(self):
+        """Without a path the reader falls back to its own default."""
+        migrator = ConfigurationMigrator()
+
+        assert migrator.dotenv_path is None
+
     def test_environment_reader_read_dotenv_filenotfound(self):
         """Test dotenv reader handles file-not-found race condition."""
         with (
