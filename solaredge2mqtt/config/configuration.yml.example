@@ -126,7 +126,8 @@ prices:
 #   retention_months: 0      # Retention for all data in months, 0 keeps it forever
 #   retention_raw: 25        # Retention for raw data in hours
 #   daily_backups: true      # Write a backup next to the database once a day
-#   keep_backups: 7          # Backups to keep, 0 keeps every one
+#   backup_hour: 3           # Local hour the daily backup is written after
+#   keep_backups: 2          # Backups to keep, 0 keeps every one
 #   debounce_cycles: 2  # Optional: consecutive checks before switching online/offline
 
 # Weather configuration (optional, requires location)

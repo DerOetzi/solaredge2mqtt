@@ -5,16 +5,20 @@ from pathlib import Path
 from shutil import disk_usage
 from sqlite3 import Error as SQLiteError
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo
+
+from tzlocal import get_localzone_name
 
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.storage.connection import DATABASE_FILE_MODE
+from solaredge2mqtt.core.storage.periods import from_epoch
 
 if TYPE_CHECKING:
     from solaredge2mqtt.core.storage import StorageService
 
-LAST_BACKUP_KEY = "last_backup"
+LOCAL_TZ = ZoneInfo(get_localzone_name())
 
-BACKUP_INTERVAL_SECONDS = 86400
+LAST_BACKUP_KEY = "last_backup"
 
 BACKUP_INFIX = ".backup."
 
@@ -89,6 +93,24 @@ async def create_backup(storage: StorageService, moment: datetime) -> Path | Non
     return target
 
 
+def is_due(last_run: str | None, moment: datetime, backup_hour: int) -> bool:
+    """Decide whether the backup of the local calendar day is still missing.
+
+    The hour is local and fixed rather than an interval since the last run, so
+    the copy stays where the surrounding backup of the host expects it even
+    when the service was restarted in between.
+    """
+    local = moment.astimezone(LOCAL_TZ)
+
+    if local.hour < backup_hour:
+        return False
+
+    if last_run is None:
+        return True
+
+    return from_epoch(int(last_run)).astimezone(LOCAL_TZ).date() < local.date()
+
+
 async def maybe_create_backup(
     storage: StorageService, now: datetime | None = None
 ) -> Path | None:
@@ -100,7 +122,7 @@ async def maybe_create_backup(
     timestamp = int(moment.timestamp())
 
     last_run = await storage.read_meta(LAST_BACKUP_KEY)
-    if last_run is not None and timestamp - int(last_run) < BACKUP_INTERVAL_SECONDS:
+    if not is_due(last_run, moment, storage.settings.backup_hour):
         return None
 
     backup = await create_backup(storage, moment)

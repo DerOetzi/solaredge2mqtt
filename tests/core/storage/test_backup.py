@@ -7,6 +7,7 @@ import pytest
 
 from solaredge2mqtt.core.storage.backup import (
     LAST_BACKUP_KEY,
+    LOCAL_TZ,
     backup_path,
     create_backup,
     existing_backups,
@@ -15,6 +16,10 @@ from solaredge2mqtt.core.storage.backup import (
 )
 
 NOW = datetime(2026, 8, 19, 12, 30, tzinfo=timezone.utc)
+
+LOCAL_NOON = datetime(2026, 8, 19, 12, 0, tzinfo=LOCAL_TZ)
+
+LOCAL_NIGHT = datetime(2026, 8, 19, 1, 0, tzinfo=LOCAL_TZ)
 
 
 def count_points(path):
@@ -35,6 +40,16 @@ def touch_backups(db_path, moments):
         paths.append(path)
 
     return paths
+
+
+class TestDefaults:
+    """Tests for the settings a fresh installation runs with."""
+
+    def test_backs_up_early_and_keeps_two(self, storage_settings):
+        """The daily copy lands before the usual nightly backup of a host."""
+        assert storage_settings.daily_backups is True
+        assert storage_settings.backup_hour == 3
+        assert storage_settings.keep_backups == 2
 
 
 class TestCreateBackup:
@@ -124,42 +139,62 @@ class TestPruneBackups:
 
 
 class TestDailyBackup:
-    """Tests for the once a day scheduling."""
+    """Tests for the once a day scheduling on a fixed local hour."""
 
     @pytest.mark.asyncio
-    async def test_runs_on_the_first_pass(self, storage):
-        """Without a recorded run the backup is due immediately."""
-        backup = await maybe_create_backup(storage, now=NOW)
+    async def test_runs_on_the_first_pass_after_the_hour(self, storage):
+        """Without a recorded run the backup is due as soon as the hour is up."""
+        backup = await maybe_create_backup(storage, now=LOCAL_NOON)
 
         assert backup is not None
-        assert await storage.read_meta(LAST_BACKUP_KEY) == str(int(NOW.timestamp()))
+        assert await storage.read_meta(LAST_BACKUP_KEY) == str(
+            int(LOCAL_NOON.timestamp())
+        )
 
     @pytest.mark.asyncio
-    async def test_skips_within_the_interval(self, storage):
-        """Ten minute passes must not produce a backup every time."""
-        await maybe_create_backup(storage, now=NOW)
+    async def test_waits_for_the_configured_hour(self, storage):
+        """Before backup_hour the day's backup is not written yet."""
+        assert await maybe_create_backup(storage, now=LOCAL_NIGHT) is None
+        assert existing_backups(storage.db_path) == []
 
-        assert await maybe_create_backup(storage, now=NOW + timedelta(hours=23)) is None
+    @pytest.mark.asyncio
+    async def test_skips_the_rest_of_the_day(self, storage):
+        """Ten minute passes must not produce a backup every time."""
+        await maybe_create_backup(storage, now=LOCAL_NOON)
+
+        later = LOCAL_NOON + timedelta(hours=11)
+
+        assert await maybe_create_backup(storage, now=later) is None
         assert len(existing_backups(storage.db_path)) == 1
 
     @pytest.mark.asyncio
-    async def test_runs_again_after_a_day(self, storage):
-        """A day later the next backup is written."""
-        await maybe_create_backup(storage, now=NOW)
+    async def test_runs_again_on_the_next_day(self, storage):
+        """The next local day gets its own backup."""
+        await maybe_create_backup(storage, now=LOCAL_NOON)
 
-        assert await maybe_create_backup(storage, now=NOW + timedelta(days=1))
+        assert await maybe_create_backup(storage, now=LOCAL_NOON + timedelta(days=1))
         assert len(existing_backups(storage.db_path)) == 2
+
+    @pytest.mark.asyncio
+    async def test_runs_shortly_after_a_late_hour(self, storage):
+        """A backup late on one day does not block the next morning."""
+        storage.settings.backup_hour = 3
+        await maybe_create_backup(storage, now=LOCAL_NOON.replace(hour=23))
+
+        morning = LOCAL_NOON.replace(hour=4) + timedelta(days=1)
+
+        assert await maybe_create_backup(storage, now=morning)
 
     @pytest.mark.asyncio
     async def test_applies_the_backup_retention(self, storage):
         """The oldest backups go once the limit is reached."""
         storage.settings.keep_backups = 1
-        await maybe_create_backup(storage, now=NOW)
+        await maybe_create_backup(storage, now=LOCAL_NOON)
 
-        await maybe_create_backup(storage, now=NOW + timedelta(days=1))
+        await maybe_create_backup(storage, now=LOCAL_NOON + timedelta(days=1))
 
         assert existing_backups(storage.db_path) == [
-            backup_path(storage.db_path, NOW + timedelta(days=1))
+            backup_path(storage.db_path, LOCAL_NOON + timedelta(days=1))
         ]
 
     @pytest.mark.asyncio
@@ -167,7 +202,7 @@ class TestDailyBackup:
         """Nothing is written and nothing is recorded when it is switched off."""
         storage.settings.daily_backups = False
 
-        assert await maybe_create_backup(storage, now=NOW) is None
+        assert await maybe_create_backup(storage, now=LOCAL_NOON) is None
         assert existing_backups(storage.db_path) == []
         assert await storage.read_meta(LAST_BACKUP_KEY) is None
 
@@ -178,5 +213,5 @@ class TestDailyBackup:
             "solaredge2mqtt.core.storage.backup.has_room_for_backup", lambda _: False
         )
 
-        assert await maybe_create_backup(storage, now=NOW) is None
+        assert await maybe_create_backup(storage, now=LOCAL_NOON) is None
         assert await storage.read_meta(LAST_BACKUP_KEY) is None
