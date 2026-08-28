@@ -24,7 +24,7 @@ def main():
         "-i",
         type=str,
         default=".env",
-        help="Path to .env file (default: .env)",
+        help="Path to the .env file to read (default: .env)",
     )
     parser.add_argument(
         "--output-dir",
@@ -71,7 +71,13 @@ def main():
     print("Starting migration...")
     print(f"Reading configuration from environment variables and {args.input}")
 
-    migrator = ConfigurationMigrator()
+    if not Path(args.input).exists():
+        print(
+            f"NOTE: {args.input} does not exist, "
+            "reading environment variables and Docker secrets only."
+        )
+
+    migrator = ConfigurationMigrator(dotenv_path=args.input)
     config_data, secrets_data = migrator.extract_from_environment()
 
     if args.dry_run:
