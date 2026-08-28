@@ -9,9 +9,9 @@ on:
   # (used below to gate docker publish) -- GitHub Actions `on:` triggers can't
   # reference vars/expressions directly.
   push:
-    branches: [main, storedge]
+    branches: [main]
   pull_request:
-    branches: [main, storedge]
+    branches: [main]
   release:
     types: [published]
 
