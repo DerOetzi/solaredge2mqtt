@@ -13,7 +13,8 @@ class StorageSettings(BaseModel):
     retention_raw: int = Field(default=25, ge=1)
     debounce_cycles: int = Field(default=2, ge=1)
     daily_backups: bool = Field(default=True)
-    keep_backups: int = Field(default=7, ge=0)
+    backup_hour: int = Field(default=3, ge=0, le=23)
+    keep_backups: int = Field(default=2, ge=0)
 
     def resolve_path(self, config_dir: str) -> Path:
         if self.path is not None:

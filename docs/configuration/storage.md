@@ -15,7 +15,8 @@ entirely unless you want to change something.
 #   retention_raw: 25              # Hours to keep the raw samples
 #   retention_months: 0            # Months to keep everything, 0 keeps it forever
 #   daily_backups: true            # Set to false to run without automatic backups
-#   keep_backups: 7                # Backups to keep, 0 keeps every one
+#   backup_hour: 3                 # Local hour the daily backup is written after
+#   keep_backups: 2                # Backups to keep, 0 keeps every one
 #   debounce_cycles: 2             # Failed writes before storage is reported offline
 ```
 
@@ -41,13 +42,22 @@ day and reclaims the freed pages afterwards.
 
 The service backs its database up once a day on its own, so a corrupted file or a deleted
 container never costs more than a day of history. The backups land next to the database and are
-rotated after `keep_backups` of them, seven by default. Set `daily_backups: false` to switch
-the whole thing off, or `keep_backups: 0` to keep every backup forever.
+rotated after `keep_backups` of them, two by default. Set `daily_backups: false` to switch the
+whole thing off, or `keep_backups: 0` to keep every backup forever.
 
-Since the pass rides along with the ten minute aggregation, the first backup is written shortly
-after the service starts and the following ones roughly 24 hours apart. A backup that fails, for
-example because the filesystem is full, is logged and retried on the next pass. It never takes
-the storage offline.
+The pass rides along with the ten minute aggregation and writes the backup of the day on the
+first pass at or after `backup_hour`, local time. Put that hour in front of whatever backs the
+host up, the default of 3 sits before the usual nightly window. A restart does not move the
+backup to another time of day, since the schedule is a fixed hour and not an interval since the
+last run.
+
+A backup that fails, for example because the filesystem is full, is logged and retried on the
+next pass. It never takes the storage offline.
+
+Two backups next to the database are enough when the host is backed up as well: the copy is
+there to be picked up by that backup, and the history of it lives in the host's retention
+rather than in the configuration directory. Systems without a surrounding backup want a larger
+`keep_backups`.
 
 ### Taking one by hand
 
