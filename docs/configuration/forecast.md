@@ -9,6 +9,8 @@ forecast:
 
   # Optional, defaults shown
   # hyperparametertuning: false           # CPU intensive
+  # training_interval_hours: 0            # 0 picks the interval automatically
+  # hyperparametertuning_interval_days: 7 # Only with hyperparametertuning
   # cachingdir: ~/.cache/se2mqtt_forecast # /app/cache in the Docker image
   # cache_size_limit_mb: 512
   # retain: false                        # Keep the last forecast on the broker
@@ -41,6 +43,32 @@ On top of that:
   training data.
 
 A fresh installation therefore produces nothing for the first few days. That is expected.
+
+## How often the model is retrained
+
+Training data is written every hour, the model behind it is not rebuilt that often. Below 30 days
+of history every new hour still shifts the prediction, so the model is retrained hourly. From 30
+days on a single hour changes almost nothing and retraining drops to once a day.
+
+Set `training_interval_hours` to a fixed number of hours to override that, for example `6` to
+retrain four times a day regardless of the amount of history.
+
+The hyperparameter search dominates the runtime of a training run and its result is stable over
+weeks. With `hyperparametertuning` enabled it therefore runs on its own cadence, by default every
+7 days. The retrainings in between reuse the parameters the last search found, so only the search
+itself is skipped, not its result. `0` tunes on every training run again, the behaviour before
+this setting existed.
+
+## The model survives a restart
+
+After every training run the model is written to a `model` directory below `cachingdir`, and it is
+loaded again on the next start. A restart therefore keeps the schedule above instead of retraining
+and searching immediately. Setting `cachingdir` to nothing disables this together with the
+training cache, and every start trains from scratch.
+
+The model is discarded and rebuilt from scratch whenever it no longer fits the current setup, for
+example after an update that ships a new pvlearn release or after a change of `location`. That is
+logged, needs no action and costs one training run.
 
 ## Optimal battery charge start time
 

@@ -20,7 +20,9 @@ applyTo: '**/*.py'
 ## General Instructions
 
 - Always prioritize readability and clarity.
-- Source code must be self-explanatory; do not use inline or block comments in source files.
+- Source code must be self-explanatory; do not use inline or block comments, and no
+  docstrings, in source files. A decision that needs explaining goes into `docs/decisions/`
+  as a numbered record. Test files keep their docstrings, see the testing section.
 - Handle edge cases and write clear exception handling.
 - Always use the most specific exceptions; avoid `Exception` or `BaseException` when possible.
 - Make usage of libraries obvious from explicit naming and clear APIs.

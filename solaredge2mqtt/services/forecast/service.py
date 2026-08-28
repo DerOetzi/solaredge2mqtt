@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from asyncio import to_thread
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from pandas import DataFrame, to_datetime
 from pvlearn.config import ForecasterConfig
-from pvlearn.exceptions import PVLearnError
+from pvlearn.exceptions import ModelNotTrainedError, PVLearnError, SchemaMismatchError
 from pvlearn.forecaster import Forecaster
 from pvlearn.location import Location
 from pvlearn.schema import (
@@ -51,7 +52,19 @@ FORECAST_MEASUREMENT = "forecast"
 
 TRAINING_START = datetime(2024, 1, 1, tzinfo=timezone.utc)
 
+HOURS_PER_DAY = 24
+
+THROTTLE_TRAINING_DAYS = 30
+THROTTLE_TRAINING_ROWS = THROTTLE_TRAINING_DAYS * HOURS_PER_DAY * 60 // INTERVAL_MINUTES
+
+FREQUENT_TRAINING_INTERVAL_HOURS = 1
+THROTTLED_TRAINING_INTERVAL_HOURS = 24
+
+DUE_TOLERANCE = timedelta(minutes=5)
+
 FORECAST_DAYS = 2
+
+MODEL_DIRECTORY = "model"
 
 
 #: The columns pvlearn trains and predicts on, in the order of its schema.
@@ -110,7 +123,8 @@ class ForecastService:
             cachingdir=settings.cachingdir,
             cache_size_limit_mb=settings.cache_size_limit_mb,
         )
-        self.forecaster = Forecaster(forecaster_location, forecaster_config)
+        self.forecaster_location = forecaster_location
+        self.forecaster_config = forecaster_config
 
         self.last_weather_forecast: list[WeatherSnapshot] | None = None
         self.last_hour_forecast: dict[int, WeatherSnapshot] | None = None
@@ -118,7 +132,45 @@ class ForecastService:
         self.last_battery_capacity_wh: float | None = None
         self.last_battery_stored_energy_wh: float | None = None
 
+        self.last_training: datetime | None = None
+
+        self.forecaster = self._restore_forecaster()
+
         EventBus.register(self)
+
+    @property
+    def model_directory(self) -> Path | None:
+        if self.settings.cachingdir is None:
+            return None
+
+        return Path(self.settings.cachingdir) / MODEL_DIRECTORY
+
+    def _restore_forecaster(self) -> Forecaster:
+        directory = self.model_directory
+
+        if directory is not None:
+            try:
+                forecaster = Forecaster.load(
+                    directory, self.forecaster_location, self.forecaster_config
+                )
+            except ModelNotTrainedError:
+                logger.info(
+                    "No forecast model persisted in {directory}, training from scratch",
+                    directory=directory,
+                )
+            except SchemaMismatchError as error:
+                logger.warning(
+                    "Persisted forecast model cannot be used, "
+                    "training from scratch: {error}",
+                    error=error,
+                )
+            else:
+                if forecaster.metadata is not None:
+                    self.last_training = forecaster.metadata.trained_at
+
+                return forecaster
+
+        return Forecaster(self.forecaster_location, self.forecaster_config)
 
     @EventBus.subscribe(ModbusUnitsReadEvent)
     async def battery_update(self, event: ModbusUnitsReadEvent) -> None:
@@ -188,7 +240,7 @@ class ForecastService:
         await self.store_training_data(training_data)
 
         if (now.minute // 10) * 10 == 20:
-            await self.train()
+            await self.scheduled_training()
 
     async def add_last_hour_pv_production(
         self, trainings_data
@@ -226,18 +278,82 @@ class ForecastService:
 
         return frame_from_records(rows)
 
-    async def train(self) -> None:
+    async def scheduled_training(self) -> None:
         data = await self.read_training_data()
         if data.empty:
             raise InvalidDataException("No forecast training data available")
 
-        await to_thread(self.training, data)
+        interval_hours = self.training_interval_hours(len(data))
 
-    def training(self, data: DataFrame) -> None:
+        if not self._is_due(self.last_training, timedelta(hours=interval_hours)):
+            logger.info(
+                "Skipping forecast training, last trained at {last}, "
+                "retraining every {hours} hours",
+                last=self.last_training,
+                hours=interval_hours,
+            )
+            return
+
+        await self.train(data)
+
+    def training_interval_hours(self, rows: int) -> int:
+        if self.settings.training_interval_hours > 0:
+            return self.settings.training_interval_hours
+
+        if rows >= THROTTLE_TRAINING_ROWS:
+            return THROTTLED_TRAINING_INTERVAL_HOURS
+
+        return FREQUENT_TRAINING_INTERVAL_HOURS
+
+    def hyperparametertuning_due(self) -> bool:
+        if not self.settings.hyperparametertuning:
+            return False
+
+        interval_days = self.settings.hyperparametertuning_interval_days
+        if interval_days <= 0:
+            return True
+
+        return self._is_due(
+            self.forecaster.hyperparameters_tuned_at, timedelta(days=interval_days)
+        )
+
+    @staticmethod
+    def _is_due(last_run: datetime | None, interval: timedelta) -> bool:
+        if last_run is None:
+            return True
+
+        return datetime.now().astimezone() - last_run >= interval - DUE_TOLERANCE
+
+    async def train(self, data: DataFrame | None = None) -> None:
+        if data is None:
+            data = await self.read_training_data()
+
+        if data.empty:
+            raise InvalidDataException("No forecast training data available")
+
+        await to_thread(self.training, data, self.hyperparametertuning_due())
+
+        self.last_training = datetime.now().astimezone()
+
+    def training(self, data: DataFrame, hyperparametertuning: bool = False) -> None:
         try:
-            self.forecaster.train(frame_for_pvlearn(data))
+            self.forecaster.train(
+                frame_for_pvlearn(data), hyperparametertuning=hyperparametertuning
+            )
         except PVLearnError as error:
             raise InvalidDataException(str(error)) from error
+
+        self.save_model()
+
+    def save_model(self) -> None:
+        directory = self.model_directory
+        if directory is None:
+            return
+
+        try:
+            self.forecaster.save(directory)
+        except (PVLearnError, OSError) as error:
+            logger.warning("Could not persist the forecast model: {error}", error=error)
 
     @EventBus.subscribe(Interval10MinTriggerEvent)
     async def forecast_loop(self, event: Interval10MinTriggerEvent) -> None:

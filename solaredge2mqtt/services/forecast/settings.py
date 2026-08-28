@@ -28,6 +28,8 @@ def _get_default_cache_dir() -> str:
 class ForecastSettings(BaseModel):
     enable: bool = Field(default=False)
     hyperparametertuning: bool = Field(default=False)
+    training_interval_hours: int = Field(default=0, ge=0)
+    hyperparametertuning_interval_days: int = Field(default=7, ge=0)
     cachingdir: str | None = Field(default_factory=_get_default_cache_dir)
     cache_size_limit_mb: int = Field(default=512, ge=1)
     retain: bool = Field(default=False)

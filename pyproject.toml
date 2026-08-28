@@ -57,7 +57,7 @@ dev = [
     "pyarrow==25.0.0",
 ]
 forecast = [
-    "pvlearn==0.4.0",
+    "pvlearn==0.5.0",
 ]
 docs = [
     "mkdocs==1.6.1",

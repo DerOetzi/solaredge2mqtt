@@ -17,6 +17,7 @@ deleted, it is superseded by a later one that says so.
 | [0007](0007-storage-holds-the-canonical-schema.md) | The storage holds the canonical schema | Accepted | Training data is stored under the forecast model's own field names, translated once on write instead of on every read. |
 | [0008](0008-the-weather-service-speaks-canonically.md) | The weather service hands out canonical snapshots | Accepted | The weather event and the published topic carry provider-independent field names. |
 | [0009](0009-migration-consolidates-the-module-series.md) | The migration consolidates the module series | Accepted | The InfluxDB import merges duplicate module series, caused by a changed optimizer identifier, keyed by serial number. |
+| [0010](0010-the-forecast-model-is-rebuilt-on-a-slower-cadence.md) | The forecast model is rebuilt on a slower cadence | Accepted | Training data is still written hourly, while the model, the hyperparameter search and their state on disk each follow their own interval. |
 
 ## Writing a new one
 
