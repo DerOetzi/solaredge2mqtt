@@ -417,11 +417,14 @@ jobs:
           path: site
 
   # The published site tracks releases, not branches: a push to main can carry
-  # documentation for code that is not released yet. build-check is a
-  # prerequisite so a release whose tests fail never gets a site.
+  # documentation for code that is not released yet. This is the last job of a
+  # release, so it waits for every part of one that the documentation describes:
+  # build-check publishes the package to PyPI and the release assets,
+  # merge-manifest pushes the multi-arch images. A site that documents a
+  # version must not go live before that version is actually installable.
   deploy-docs:
     runs-on: ubuntu-latest
-    needs: [build-check, build-docs]
+    needs: [build-check, build-compat, build-docs, merge-manifest]
     if: ${{ github.event_name == 'release' }}
     # Pages allows one deployment at a time and a cancelled one leaves the site
     # on the previous version, so releases queue instead of cancelling.
