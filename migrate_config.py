@@ -8,7 +8,23 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from solaredge2mqtt.core.settings.migrator import ConfigurationMigrator
+from solaredge2mqtt.core.settings.migrator import ConfigDumper, ConfigurationMigrator
+
+
+def _dump(data: dict) -> str:
+    """Render a preview the same way the migration writes the file.
+
+    `yaml.safe_dump` cannot represent a `SecretReference`, and every migrated
+    configuration that has a password carries one, so the dry run has to use
+    the dumper that knows the `!secret` tag.
+    """
+    return yaml.dump(
+        data,
+        default_flow_style=False,
+        sort_keys=False,
+        allow_unicode=True,
+        Dumper=ConfigDumper,
+    )
 
 
 def main():
@@ -83,9 +99,9 @@ def main():
     if args.dry_run:
         print("\n=== DRY RUN MODE - No files will be written ===\n")
         print(f"\n--- Configuration ({config_file}) ---")
-        print(yaml.safe_dump(config_data, default_flow_style=False, sort_keys=False))
+        print(_dump(config_data))
         print(f"\n--- Secrets ({secrets_file}) ---")
-        print(yaml.safe_dump(secrets_data, default_flow_style=False, sort_keys=False))
+        print(_dump(secrets_data))
         print("\n=== END DRY RUN ===")
     else:
         migrator.write_yaml_files(
