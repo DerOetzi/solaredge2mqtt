@@ -70,6 +70,10 @@ The model is discarded and rebuilt from scratch whenever it no longer fits the c
 example after an update that ships a new pvlearn release or after a change of `location`. That is
 logged, needs no action and costs one training run.
 
+In a container the cache directory is `/app/cache`. Mount it, as the compose file and the
+[Docker deployment](../deployment/docker.md) do, or the model lives in the container's own layer
+and a `docker compose down` or `docker rm` throws it away.
+
 ## Optimal battery charge start time
 
 If a battery is detected over Modbus, the forecast also publishes

@@ -12,13 +12,18 @@ For a multi-container setup, see [Docker Compose](docker-compose.md).
 docker pull ghcr.io/deroetzi/solaredge2mqtt:latest
 ```
 
-## 2. Prepare the configuration directory
+## 2. Prepare the directories
 
 The container reads `/app/config`. Mount a host directory there. The SQLite history is written
 to the same place, so it has to survive container restarts.
 
+`/app/cache` holds the trained forecast model and the training cache. Mounting it is optional:
+without the mount both live in the container's own layer, which a `docker rm` or a
+`docker compose down` throws away, and the next start trains from scratch. Everything else keeps
+working.
+
 ```bash
-mkdir -p config
+mkdir -p config cache
 ```
 
 ## 3. Create the configuration
@@ -30,6 +35,7 @@ mkdir -p config
     ```bash
     docker run -d --name solaredge2mqtt \
         -v $(pwd)/config:/app/config \
+        -v $(pwd)/cache:/app/cache \
         -e "TZ=Europe/Berlin" \
         --restart unless-stopped \
         ghcr.io/deroetzi/solaredge2mqtt:latest
@@ -62,6 +68,7 @@ What goes in those files is covered in
 ```bash
 docker run -d --name solaredge2mqtt \
     -v $(pwd)/config:/app/config \
+    -v $(pwd)/cache:/app/cache \
     -e "TZ=Europe/Berlin" \
     --restart unless-stopped \
     ghcr.io/deroetzi/solaredge2mqtt:latest

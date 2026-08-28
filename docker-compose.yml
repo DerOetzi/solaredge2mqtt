@@ -4,6 +4,7 @@ services:
     image: ghcr.io/deroetzi/solaredge2mqtt:latest
     volumes:
       - ./config:/app/config
+      - ./cache:/app/cache
     environment:
       - TZ=Europe/Berlin
     restart: unless-stopped
