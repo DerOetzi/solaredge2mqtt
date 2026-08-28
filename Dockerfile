@@ -37,7 +37,7 @@ WORKDIR /app
 
 RUN set -eux && \
     apt-get update && \
-    apt-get install -y --no-install-recommends gosu && \
+    apt-get install -y --no-install-recommends gosu sqlite3 && \
     rm -rf /var/lib/apt/lists/* && \
     adduser --uid 1000 --disabled-password --gecos '' solaredge2mqtt && \
     mkdir -p /app/config /app/cache && \
@@ -47,6 +47,10 @@ RUN set -eux && \
 
 COPY --chown=root:solaredge2mqtt --chmod=755 --from=buildimage /venv /venv
 COPY --chown=root:root --chmod=755 docker-entrypoint.sh /usr/local/bin/
+
+# On PATH so a running container can back its database up with
+# docker exec solaredge2mqtt backup-database.sh
+COPY --chown=root:root --chmod=755 scripts/backup-database.sh /usr/local/bin/
 
 VOLUME ["/app/config"]
 
