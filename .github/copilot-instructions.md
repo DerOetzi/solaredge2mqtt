@@ -7,3 +7,10 @@ are in [AGENTS.md](../AGENTS.md). Read it before generating code or making sugge
 
 - Use the `copilot-agents.yml` to select the appropriate agent for a task.
 - The `python.instructions.md` applies Python conventions automatically to `*.py` files.
+
+<!-- mermaid-ai-skills:start -->
+## Mermaid Diagrams
+
+When the user asks to create, edit, or visualize a diagram, follow the
+instructions in `.github/instructions/mermaid.instructions.md`.
+<!-- mermaid-ai-skills:end -->
