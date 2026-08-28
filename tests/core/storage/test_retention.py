@@ -69,14 +69,38 @@ class TestLongRetention:
         """A configured retention drops everything older than its window."""
         from solaredge2mqtt.core.storage import Point, StorageService
 
-        settings = StorageSettings(retention=86400)
+        settings = StorageSettings(retention_months=6)
         service = StorageService(settings, prices, config_dir=str(tmp_path))
         await service.async_init()
 
         try:
-            old = Point("energy").time(NOW - timedelta(days=10)).field("pv", 1.0)
+            old = Point("energy").time(NOW - timedelta(days=400)).field("pv", 1.0)
             recent = Point("energy").time(NOW).field("pv", 2.0)
             await service.write_points([old, recent])
+
+            assert await maybe_apply_long_retention(service, now=NOW) == 1
+            assert await count_points(service) == 1
+        finally:
+            await service.close()
+
+    @pytest.mark.asyncio
+    async def test_cuts_at_the_start_of_the_month(self, tmp_path, prices):
+        """The window counts calendar months back from the current month."""
+        from solaredge2mqtt.core.storage import Point, StorageService
+
+        settings = StorageSettings(retention_months=3)
+        service = StorageService(settings, prices, config_dir=str(tmp_path))
+        await service.async_init()
+
+        try:
+            before = datetime(2026, 4, 30, 23, 0, tzinfo=timezone.utc)
+            after = datetime(2026, 5, 1, 1, 0, tzinfo=timezone.utc)
+            await service.write_points(
+                [
+                    Point("energy").time(before).field("pv", 1.0),
+                    Point("energy").time(after).field("pv", 2.0),
+                ]
+            )
 
             assert await maybe_apply_long_retention(service, now=NOW) == 1
             assert await count_points(service) == 1
@@ -88,7 +112,7 @@ class TestLongRetention:
         """The cycle fires every ten minutes, the retention pass must not."""
         from solaredge2mqtt.core.storage import StorageService
 
-        settings = StorageSettings(retention=86400)
+        settings = StorageSettings(retention_months=6)
         service = StorageService(settings, prices, config_dir=str(tmp_path))
         await service.async_init()
 
@@ -111,7 +135,7 @@ class TestLongRetention:
         """After a day the pass is due again."""
         from solaredge2mqtt.core.storage import Point, StorageService
 
-        settings = StorageSettings(retention=86400)
+        settings = StorageSettings(retention_months=6)
         service = StorageService(settings, prices, config_dir=str(tmp_path))
         await service.async_init()
 
@@ -119,7 +143,7 @@ class TestLongRetention:
             await maybe_apply_long_retention(service, now=NOW)
             later = NOW + timedelta(days=2)
             await service.write_points(
-                [Point("energy").time(NOW - timedelta(days=5)).field("pv", 1.0)]
+                [Point("energy").time(NOW - timedelta(days=400)).field("pv", 1.0)]
             )
 
             assert await maybe_apply_long_retention(service, now=later) == 1

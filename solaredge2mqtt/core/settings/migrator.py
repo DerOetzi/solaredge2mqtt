@@ -9,7 +9,7 @@ from solaredge2mqtt.core.settings.models import ServiceSettings
 
 DOCKER_SECRETS_DIR = "/run/secrets"
 
-LEGACY_INFLUXDB_STORAGE_KEYS = ("retention", "retention_raw", "debounce_cycles")
+LEGACY_INFLUXDB_STORAGE_KEYS = ("retention_raw", "debounce_cycles")
 
 
 class EnvironmentReader:

@@ -162,7 +162,7 @@ class TestServiceSettings:
 
             assert settings.storage.is_configured is True
             assert settings.storage.filename == "solaredge2mqtt.db"
-            assert settings.storage.retention == 0
+            assert settings.storage.retention_months == 0
             assert settings.storage.retention_raw == 25
 
     def test_is_weather_configured_requires_location(self):

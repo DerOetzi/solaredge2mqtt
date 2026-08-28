@@ -54,8 +54,8 @@ def _calendar_bounds(
         previous = _add_days(current, -7)
     elif unit == "1mo":
         current = day.replace(day=1)
-        following = _add_months(current, 1)
-        previous = _add_months(current, -1)
+        following = add_months(current, 1)
+        previous = add_months(current, -1)
     elif unit == "1y":
         current = day.replace(month=1, day=1)
         following = current.replace(year=current.year + 1)
@@ -74,7 +74,7 @@ def _add_days(moment: datetime, days: int) -> datetime:
     return datetime.combine(shifted, moment.time())
 
 
-def _add_months(moment: datetime, months: int) -> datetime:
+def add_months(moment: datetime, months: int) -> datetime:
     total = moment.year * 12 + (moment.month - 1) + months
     return moment.replace(year=total // 12, month=total % 12 + 1, day=1)
 
@@ -90,6 +90,12 @@ def hour_start(now: datetime) -> datetime:
     return now.astimezone(timezone.utc).replace(minute=0, second=0, microsecond=0)
 
 
+def month_start(now: datetime) -> datetime:
+    return now.astimezone(timezone.utc).replace(
+        day=1, hour=0, minute=0, second=0, microsecond=0
+    )
+
+
 def as_epoch(moment: datetime) -> int:
     return int(moment.timestamp())
 
@@ -103,10 +109,12 @@ def local_zone(name: str) -> ZoneInfo:
 
 
 __all__ = [
+    "add_months",
     "as_epoch",
     "day_bounds",
     "from_epoch",
     "hour_start",
     "local_zone",
+    "month_start",
     "period_bounds",
 ]

@@ -98,7 +98,7 @@ def sample_storage_settings():
     return {
         "enable": True,
         "filename": "test.db",
-        "retention": 0,
+        "retention_months": 0,
         "retention_raw": 25,
     }
 

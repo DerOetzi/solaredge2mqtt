@@ -159,5 +159,5 @@ A dashboard that pinned the numeric optimizer id has to be repointed at the seri
 - Point Grafana at the SQLite file, see [Grafana](../deployment/grafana.md). The old Flux
   dashboard does not work against SQLite and is kept only as a porting reference.
 - Review the [storage settings](../configuration/storage.md), in particular `retention_raw` and
-  `retention`.
+  `retention_months`.
 - Remove `influxdb_token` from `secrets.yml`. The service no longer reads it.
