@@ -486,6 +486,22 @@ class TestForecastServiceForecastLoop:
         service.train.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_train_raises_without_training_data(self):
+        """Training an empty frame would leave an unusable model behind."""
+        settings = ForecastSettings(enable=True)
+        location = MockLocationSettings()
+        storage = AsyncMock()
+        _mock_records(storage, [])
+
+        service = ForecastService(settings, location, storage)
+        service.training = MagicMock()
+
+        with pytest.raises(InvalidDataException):
+            await service.train()
+
+        service.training.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_predict_wraps_pvlearn_errors(self):
         """pvlearn errors should surface as InvalidDataException."""
         from pvlearn.exceptions import ModelNotTrainedError

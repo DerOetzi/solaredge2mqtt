@@ -194,6 +194,41 @@ class TestConfigurationMigrator:
         ):
             assert list(EnvironmentReader._read_dotenv()) == []
 
+    def test_legacy_influxdb_keys_that_survived_move_to_storage(self):
+        """The two settings the storage kept are read from the old names."""
+        migrator = ConfigurationMigrator()
+
+        config_data = migrator._parse_environment_to_dict(
+            {
+                "SE2MQTT_INFLUXDB__RETENTION_RAW": "12",
+                "SE2MQTT_INFLUXDB__DEBOUNCE_CYCLES": "7",
+            }
+        )
+
+        assert config_data == {
+            "storage": {"retention_raw": "12", "debounce_cycles": "7"}
+        }
+
+    def test_obsolete_influxdb_keys_are_dropped(self):
+        """The connection settings have no counterpart in the local storage."""
+        migrator = ConfigurationMigrator()
+
+        config_data = migrator._parse_environment_to_dict(
+            {
+                "SE2MQTT_INFLUXDB__HOST": "influx.local",
+                "SE2MQTT_INFLUXDB__TOKEN": "secret",
+                "SE2MQTT_MODBUS__HOST": "192.168.9.9",
+            }
+        )
+
+        assert config_data == {"modbus": {"host": "192.168.9.9"}}
+
+    def test_the_bare_influxdb_key_is_dropped(self):
+        """A prefix without a subkey must not index past the end of the list."""
+        migrator = ConfigurationMigrator()
+
+        assert migrator._parse_environment_to_dict({"SE2MQTT_INFLUXDB": "on"}) == {}
+
     def test_insert_nested_key_simple(self):
         """Test inserting a simple key-value pair."""
         migrator = ConfigurationMigrator()

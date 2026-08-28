@@ -104,6 +104,18 @@ class TestWritePath:
         assert rows[0][0] == 1
 
     @pytest.mark.asyncio
+    async def test_unresolvable_series_raises(self, storage, hour):
+        """A row that neither inserts nor selects must not write a null series."""
+        with patch(
+            "solaredge2mqtt.core.storage.SELECT_SERIES",
+            "SELECT series_id FROM series WHERE 0 = ? AND 0 = ? AND 0 = ?",
+        ):
+            with pytest.raises(RuntimeError, match="Could not resolve series"):
+                await storage.write_point(
+                    Point("energy").time(hour).field("pv_production", 1)
+                )
+
+    @pytest.mark.asyncio
     async def test_empty_batch_is_a_no_op(self, storage):
         """An empty read cycle must not open a transaction."""
         await storage.write_points([])
@@ -133,6 +145,16 @@ class TestStatusEvents:
         ):
             with pytest.raises(RuntimeError):
                 await seed("energy", "pv_production", {}, [(hour, 1.0)])
+
+        assert isinstance(mock_event_bus.emit.call_args[0][0], StorageOfflineEvent)
+
+    @pytest.mark.asyncio
+    async def test_failed_execute_write_emits_offline_and_reraises(
+        self, storage, mock_event_bus
+    ):
+        """Retention and consolidation write through execute_write."""
+        with pytest.raises(Exception):
+            await storage.execute_write("DELETE FROM does_not_exist")
 
         assert isinstance(mock_event_bus.emit.call_args[0][0], StorageOfflineEvent)
 
@@ -192,6 +214,15 @@ class TestUninitialized:
         with pytest.raises(RuntimeError):
             _ = service.read_connection
 
+    @pytest.mark.asyncio
+    async def test_close_without_connections_is_a_no_op(self, storage_settings, prices):
+        """A failed startup still runs the shutdown path of the service."""
+        from solaredge2mqtt.core.storage import StorageService
+
+        service = StorageService(storage_settings, prices, config_dir="config")
+
+        await service.close()
+
 
 class TestMeta:
     """Tests for the key value side table."""
@@ -246,6 +277,20 @@ class TestQueryTimeunit:
 
         assert records is not None
         assert "unit" not in records[0]
+
+    @pytest.mark.asyncio
+    async def test_all_fields_of_a_unit_share_one_record(self, storage, seed):
+        """The second field of a unit joins the record the first one opened."""
+        now = datetime.now(tz=timezone.utc)
+        await seed("energy", "pv_production", {"unit": "a"}, [(now, 1.0)])
+        await seed("energy", "grid_consumption", {"unit": "a"}, [(now, 2.0)])
+
+        records = await storage.query_timeunit(HistoricPeriod.TODAY, "energy")
+
+        assert records is not None
+        assert len(records) == 1
+        assert records[0]["pv_production"] == 1.0
+        assert records[0]["grid_consumption"] == 2.0
 
     @pytest.mark.asyncio
     async def test_tagged_records_carry_the_unit(self, storage, seed):

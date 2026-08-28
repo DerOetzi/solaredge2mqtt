@@ -118,14 +118,14 @@ def _collect_energy(
     price_in = storage.prices.price_in
     price_out = storage.prices.price_out
 
-    if field in MONEY_FROM_CONSUMPTION:
-        money_field, price_field = MONEY_FROM_CONSUMPTION[field]
-        collector.add("energy", tags, bucket, money_field, energy * price_in)
-        if price_field is not None:
-            collector.add("energy", tags, bucket, price_field, price_in)
+    for mapping, price in (
+        (MONEY_FROM_CONSUMPTION, price_in),
+        (MONEY_FROM_DELIVERY, price_out),
+    ):
+        if field not in mapping:
+            continue
 
-    if field in MONEY_FROM_DELIVERY:
-        money_field, price_field = MONEY_FROM_DELIVERY[field]
-        collector.add("energy", tags, bucket, money_field, energy * price_out)
+        money_field, price_field = mapping[field]
+        collector.add("energy", tags, bucket, money_field, energy * price)
         if price_field is not None:
-            collector.add("energy", tags, bucket, price_field, price_out)
+            collector.add("energy", tags, bucket, price_field, price)
