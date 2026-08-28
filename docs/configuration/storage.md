@@ -13,7 +13,7 @@ entirely unless you want to change something.
 #   filename: solaredge2mqtt.db    # File name inside the configuration directory
 #   path: /data/solaredge2mqtt.db  # Absolute path, overrides filename, no default
 #   retention_raw: 25              # Hours to keep the raw samples
-#   retention: 0                   # Seconds to keep everything, 0 keeps it forever
+#   retention_months: 0            # Months to keep everything, 0 keeps it forever
 #   debounce_cycles: 2             # Failed writes before storage is reported offline
 ```
 
@@ -29,7 +29,11 @@ Raw samples are written at the polling `interval`. Every ten minutes they are ag
 hourly minimum, maximum, mean and energy values.
 
 Only the raw samples expire, after `retention_raw` hours. The hourly history grows by roughly
-35 MB per year and is kept indefinitely unless you set `retention`.
+35 MB per year and is kept indefinitely unless you set `retention_months`.
+
+`retention_months` counts whole calendar months back from the start of the current month, so
+`24` keeps the last two years plus the months already elapsed this year. The pass runs once a
+day and reclaims the freed pages afterwards.
 
 ## Backups
 

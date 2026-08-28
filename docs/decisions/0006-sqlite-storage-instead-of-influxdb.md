@@ -31,7 +31,7 @@ SQLite is the only candidate without a separate process that still tolerates a f
 
 ## Decision 4: breaking changes are taken openly, with an upgrade path
 
-**Decision:** The configuration key becomes `storage:`, the MQTT status topic becomes `status/storage`, and `retention` now defaults to `0`, meaning "keep forever". A versioned configuration upgrade rewrites an existing `influxdb:` block, and `solaredge2mqtt-migrate-influxdb` copies the existing history into the new file.
+**Decision:** The configuration key becomes `storage:`, the MQTT status topic becomes `status/storage`, and the bucket retention becomes `retention_months`, defaulting to `0`, meaning "keep forever". A versioned configuration upgrade rewrites an existing `influxdb:` block, and `solaredge2mqtt-migrate-influxdb` copies the existing history into the new file.
 
 **Context:** Pydantic ignores unknown keys, so an untouched `influxdb:` block would be dropped silently and users would lose a tuned `retention_raw` without noticing. The two-year retention was a property of the InfluxDB bucket, not a wish: locally there is little reason to discard hourly history that grows by 35 MB per year, and discarding it makes the lifetime totals lie.
 

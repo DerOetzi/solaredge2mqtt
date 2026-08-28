@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 from solaredge2mqtt.core.logging import logger
-from solaredge2mqtt.core.storage.periods import hour_start
+from solaredge2mqtt.core.storage.periods import add_months, hour_start, month_start
 from solaredge2mqtt.core.storage.queries import DELETE_POINTS_BEFORE
 
 if TYPE_CHECKING:
@@ -45,7 +45,7 @@ async def apply_raw_retention(
 async def maybe_apply_long_retention(
     storage: StorageService, now: datetime | None = None
 ) -> int:
-    if storage.settings.retention == 0:
+    if storage.settings.retention_months == 0:
         return 0
 
     moment = now or datetime.now(tz=timezone.utc)
@@ -55,7 +55,8 @@ async def maybe_apply_long_retention(
     if last_run is not None and timestamp - int(last_run) < RETENTION_INTERVAL_SECONDS:
         return 0
 
-    cutoff = timestamp - storage.settings.retention
+    limit = add_months(month_start(moment), -storage.settings.retention_months)
+    cutoff = int(limit.timestamp())
 
     deleted = 0
     for series_id in await storage.all_series_ids():
@@ -66,7 +67,7 @@ async def maybe_apply_long_retention(
     await storage.write_meta(LAST_RETENTION_RUN_KEY, str(timestamp))
 
     if deleted:
-        logger.info(f"Applied retention, removed {deleted} points older than {cutoff}")
+        logger.info(f"Applied retention, removed {deleted} points older than {limit}")
 
     await run_maintenance(storage)
 
