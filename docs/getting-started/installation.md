@@ -26,10 +26,11 @@ directory holding `configuration.yml` and `secrets.yml`, which the
 === "Docker"
 
     ```bash
-    mkdir -p config
+    mkdir -p config cache
 
     docker run -d --name solaredge2mqtt \
         -v $(pwd)/config:/app/config \
+        -v $(pwd)/cache:/app/cache \
         -e "TZ=Europe/Berlin" \
         --restart unless-stopped \
         ghcr.io/deroetzi/solaredge2mqtt:latest
@@ -47,7 +48,7 @@ directory holding `configuration.yml` and `secrets.yml`, which the
     curl -o docker-compose.yml \
         https://raw.githubusercontent.com/DerOetzi/solaredge2mqtt/master/docker-compose.yml
 
-    mkdir -p config
+    mkdir -p config cache
     docker compose up -d
     ```
 
