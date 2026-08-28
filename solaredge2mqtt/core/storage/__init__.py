@@ -12,6 +12,7 @@ from tzlocal import get_localzone_name
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.logging import logger
 from solaredge2mqtt.core.storage.aggregation import aggregate
+from solaredge2mqtt.core.storage.backup import maybe_create_backup
 from solaredge2mqtt.core.storage.connection import (
     open_read_connection,
     open_write_connection,
@@ -68,6 +69,8 @@ UPSERT_POINT = """
 INSERT INTO point (series_id, ts, value) VALUES (?, ?, ?)
 ON CONFLICT (series_id, ts) DO UPDATE SET value = excluded.value
 """
+
+VACUUM_INTO = "VACUUM INTO :target"
 
 SELECT_META = "SELECT value FROM meta WHERE key = ?"
 
@@ -189,6 +192,8 @@ class StorageService:
         await apply_raw_retention(self)
         await maybe_apply_long_retention(self)
 
+        await maybe_create_backup(self)
+
         await EventBus.emit(StorageAggregatedEvent())
 
     async def query_timeunit(
@@ -283,6 +288,11 @@ class StorageService:
         except Exception:
             await EventBus.emit(StorageOfflineEvent())
             raise
+
+    async def vacuum_into(self, target: Path) -> None:
+        """Write a compacted copy of the database to another file."""
+        async with self._write_lock:
+            await self.write_connection.execute(VACUUM_INTO, {"target": str(target)})
 
     def forget_series_cache(self) -> None:
         """Drop the resolved series ids after series were merged or removed."""

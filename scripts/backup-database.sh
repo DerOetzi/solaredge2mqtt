@@ -12,7 +12,8 @@
 #   scripts/backup-database.sh                    # from the repository root
 #   docker exec solaredge2mqtt backup-database.sh # inside the container
 #
-# The result is <config>/solaredge2mqtt.db.backup.<YYYYmmddHHMMSS>.
+# The result is <config>/solaredge2mqtt.db.backup.<YYYYmmddHHMMSS>, stamped in UTC
+# so the name matches what the service itself writes.
 
 set -euo pipefail
 
@@ -83,7 +84,7 @@ fi
 
 [[ -f "$DATABASE" ]] || die "database not found: $DATABASE"
 
-BACKUP="$DATABASE.backup.$(date +%Y%m%d%H%M%S)"
+BACKUP="$DATABASE.backup.$(date -u +%Y%m%d%H%M%S)"
 [[ -e "$BACKUP" ]] && die "backup already exists: $BACKUP"
 
 if command -v sqlite3 >/dev/null 2>&1; then

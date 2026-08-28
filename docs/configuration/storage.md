@@ -14,6 +14,8 @@ entirely unless you want to change something.
 #   path: /data/solaredge2mqtt.db  # Absolute path, overrides filename, no default
 #   retention_raw: 25              # Hours to keep the raw samples
 #   retention_months: 0            # Months to keep everything, 0 keeps it forever
+#   daily_backups: true            # Set to false to run without automatic backups
+#   keep_backups: 7                # Backups to keep, 0 keeps every one
 #   debounce_cycles: 2             # Failed writes before storage is reported offline
 ```
 
@@ -37,6 +39,18 @@ day and reclaims the freed pages afterwards.
 
 ## Backups
 
+The service backs its database up once a day on its own, so a corrupted file or a deleted
+container never costs more than a day of history. The backups land next to the database and are
+rotated after `keep_backups` of them, seven by default. Set `daily_backups: false` to switch
+the whole thing off, or `keep_backups: 0` to keep every backup forever.
+
+Since the pass rides along with the ten minute aggregation, the first backup is written shortly
+after the service starts and the following ones roughly 24 hours apart. A backup that fails, for
+example because the filesystem is full, is logged and retried on the next pass. It never takes
+the storage offline.
+
+### Taking one by hand
+
 `backup-database.sh` writes a consistent copy while the service keeps running. The Docker image
 ships it on the `PATH`:
 
@@ -52,7 +66,8 @@ scripts/backup-database.sh
 
 Either way the copy lands next to the database as
 `solaredge2mqtt.db.backup.<YYYYmmddHHMMSS>`, owned by the same user and with the same `0600`
-mode as the original. Inside the container the timestamp follows the container's time zone.
+mode as the original. The timestamp is UTC, exactly like the one the service stamps on its own
+backups, so both end up in the same rotation.
 
 | Option | Effect |
 |---|---|
