@@ -37,15 +37,46 @@ day and reclaims the freed pages afterwards.
 
 ## Backups
 
-The database can be copied while the service is running:
+`backup-database.sh` writes a consistent copy while the service keeps running. The Docker image
+ships it on the `PATH`:
 
 ```bash
-sqlite3 config/solaredge2mqtt.db "VACUUM INTO 'solaredge2mqtt-backup.db'"
+docker exec solaredge2mqtt backup-database.sh
 ```
+
+From a source checkout it runs in the repository root:
+
+```bash
+scripts/backup-database.sh
+```
+
+Either way the copy lands next to the database as
+`solaredge2mqtt.db.backup.<YYYYmmddHHMMSS>`, owned by the same user and with the same `0600`
+mode as the original. Inside the container the timestamp follows the container's time zone.
+
+| Option | Effect |
+|---|---|
+| `-c`, `--config-dir PATH` | Configuration directory to look in. Defaults to `./config`, then `/app/config` |
+| `-d`, `--database PATH` | Database file, overrides `--config-dir` |
+| `-k`, `--keep N` | Delete all but the `N` newest backups afterwards. Keeps every backup by default |
 
 Do not copy the file with `cp` while the service holds it open. The database runs in
 write-ahead-log mode, so a plain copy can miss the `-wal` sidecar and produce an inconsistent
-snapshot.
+snapshot. The script goes through SQLite instead: `VACUUM INTO` writes a compacted single file
+without sidecars, and where the `sqlite3` command is missing it falls back to the backup API of
+the Python standard library.
+
+### Restoring one
+
+Stop the service first, then put the backup in place:
+
+```bash
+mv config/solaredge2mqtt.db.backup.20260828152729 config/solaredge2mqtt.db
+rm -f config/solaredge2mqtt.db-wal config/solaredge2mqtt.db-shm
+```
+
+The sidecars of the replaced database belong to a different file. Left behind, they would make
+SQLite replay a foreign write-ahead log.
 
 ## Reading it from Grafana
 
