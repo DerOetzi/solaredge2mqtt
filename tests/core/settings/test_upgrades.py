@@ -1,5 +1,6 @@
 """Tests for the versioned configuration upgrades."""
 
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -142,6 +143,15 @@ class TestMigrationCommand:
             f"--url https://influx.local:8086 --token {TOKEN_PLACEHOLDER}"
         )
 
+    def test_omits_the_url_of_a_section_without_a_host(self, tmp_path):
+        """A section that never named a host has no URL to spell out."""
+        command = migration_command({"org": "test_org"}, "config")
+
+        assert command == (
+            "solaredge2mqtt-migrate-influxdb --config-dir config "
+            f"--org test_org --token {TOKEN_PLACEHOLDER}"
+        )
+
     def test_is_logged_before_the_file_is_rewritten(self, tmp_path):
         """Reading the file at log time proves the section is still there."""
         config_file = write_configuration(tmp_path, INFLUXDB_CONFIGURATION)
@@ -252,3 +262,17 @@ class TestLoaderIntegration:
 
         with pytest.raises(ValueError):
             ConfigurationLoader.load_configuration(str(tmp_path))
+
+
+class TestBackup:
+    """Tests for the copy kept of the rewritten configuration."""
+
+    def test_keeps_an_existing_backup_of_the_same_second(self, tmp_path):
+        """Two upgrades within a second must not overwrite the original."""
+        config_file = write_configuration(tmp_path, INFLUXDB_CONFIGURATION)
+        stamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        backup_file = Path(f"{config_file}.backup.{stamp}")
+        backup_file.write_text("original: true\n")
+
+        assert upgrade_configuration(config_file) is True
+        assert backup_file.read_text() == "original: true\n"

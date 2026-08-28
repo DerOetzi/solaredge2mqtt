@@ -108,6 +108,37 @@ class TestAnnotatedCsv:
         assert points[3].timestamp == datetime(2024, 1, 1, 12, 0, tzinfo=timezone.utc)
         assert points[3].tags == {"unit": "cumulated"}
 
+    def test_casts_boolean_values(self):
+        """A boolean column of the query API is not a string.
+
+        Keeping it a string would store "false" as a truthy value.
+        """
+        payload = (
+            "#datatype,string,long,dateTime:RFC3339,boolean,string,string\n"
+            ",result,table,_time,_value,_field,_measurement\n"
+            ",,0,2024-01-01T10:00:00Z,true,charging,wallbox\n"
+            ",,0,2024-01-01T11:00:00Z,FALSE,charging,wallbox\n"
+        )
+
+        points = list(parse_annotated_csv(payload))
+
+        assert [point.fields for point in points] == [
+            {"charging": True},
+            {"charging": False},
+        ]
+
+    def test_parses_a_timestamp_left_as_a_string(self):
+        """An export without the dateTime annotation still carries RFC3339."""
+        payload = (
+            "#datatype,string,long,string,double,string,string\n"
+            ",result,table,_time,_value,_field,_measurement\n"
+            ",,0,2024-01-01T10:00:00Z,3.5,pv_production,energy\n"
+        )
+
+        points = list(parse_annotated_csv(payload))
+
+        assert points[0].timestamp == datetime(2024, 1, 1, 10, 0, tzinfo=timezone.utc)
+
     def test_ignores_rows_without_a_value(self):
         """A row without measurement, field or value carries nothing."""
         payload = (
@@ -169,6 +200,12 @@ class TestLineProtocol:
         points = list(parse_line_protocol("m flag=t 1704106800000000000"))
 
         assert points[0].fields == {"flag": True}
+
+    def test_reads_false_boolean_fields(self):
+        """The false spellings must not fall through to the float branch."""
+        points = list(parse_line_protocol("m flag=f 1704106800000000000"))
+
+        assert points[0].fields == {"flag": False}
 
     def test_handles_escaped_separators(self):
         """A tag value may contain an escaped comma or space."""
@@ -375,6 +412,18 @@ class TestImportFromInfluxdb:
             )
 
         assert imported == 0
+
+    @pytest.mark.asyncio
+    async def test_resume_without_a_cursor_starts_at_the_beginning(self, storage):
+        """The first run of a resumable import has nothing to resume from."""
+        payload = (FIXTURES / "influx_export.csv").read_text()
+
+        with patch("aiohttp.ClientSession", return_value=csv_session([payload])):
+            imported = await import_from_influxdb(
+                storage, CREDENTIALS, START, STOP, ["energy"], resume=True
+            )
+
+        assert imported == 5
 
     @pytest.mark.asyncio
     async def test_requires_credentials(self, storage):

@@ -2,6 +2,7 @@
 
 import aiosqlite
 import pytest
+from loguru import logger as loguru_logger
 
 from solaredge2mqtt.core.exceptions import ConfigurationException
 from solaredge2mqtt.core.storage import StorageService
@@ -10,6 +11,7 @@ from solaredge2mqtt.core.storage.connection import (
     supports_incremental_vacuum,
 )
 from solaredge2mqtt.core.storage.schema import (
+    CREATE_SCHEMA_VERSION,
     SCHEMA_VERSION,
     migrate,
     read_schema_version,
@@ -80,6 +82,17 @@ class TestSchemaMigration:
             await connection.close()
 
     @pytest.mark.asyncio
+    async def test_reports_version_zero_with_an_empty_table(self, tmp_path):
+        """A run interrupted between the create and the insert leaves no row."""
+        connection = await aiosqlite.connect(tmp_path / "halfway.db")
+        try:
+            await connection.execute(CREATE_SCHEMA_VERSION)
+
+            assert await read_schema_version(connection) == 0
+        finally:
+            await connection.close()
+
+    @pytest.mark.asyncio
     async def test_refuses_newer_schema(self, tmp_path):
         """A database written by a newer release must not be downgraded."""
         connection = await open_write_connection(tmp_path / "newer.db")
@@ -94,6 +107,33 @@ class TestSchemaMigration:
                 await migrate(connection)
         finally:
             await connection.close()
+
+
+class TestIncrementalVacuum:
+    """Tests for the auto vacuum mode a database is opened with."""
+
+    @pytest.mark.asyncio
+    async def test_warns_about_a_database_without_incremental_vacuum(self, tmp_path):
+        """A file from before the pragma keeps its pages, and says so on open."""
+        db_path = tmp_path / "legacy.db"
+        legacy = await aiosqlite.connect(db_path)
+        await legacy.execute("PRAGMA auto_vacuum=NONE")
+        await legacy.execute("CREATE TABLE marker (id INTEGER)")
+        await legacy.close()
+
+        messages = []
+        sink_id = loguru_logger.add(lambda message: messages.append(str(message)))
+        try:
+            connection = await open_write_connection(db_path)
+        finally:
+            loguru_logger.remove(sink_id)
+
+        try:
+            assert await supports_incremental_vacuum(connection) is False
+        finally:
+            await connection.close()
+
+        assert any("free pages are not returned" in message for message in messages)
 
 
 class TestSettingsPath:

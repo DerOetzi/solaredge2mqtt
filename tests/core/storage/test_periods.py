@@ -203,3 +203,13 @@ class TestHelpers:
 
         with pytest.raises(ValueError):
             period_bounds(period, NOW, BERLIN)
+
+    def test_actual_hour_is_the_running_hour(self):
+        """An hourly period asking for the actual query covers the running hour."""
+        period = MagicMock()
+        period.unit = "1h"
+        period.query = HistoricPeriod.TODAY.query
+
+        start, stop = bounds(period)
+
+        assert (start.hour, stop.hour) == (16, 17)
