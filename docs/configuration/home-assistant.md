@@ -41,22 +41,3 @@ Entities follow whatever else is enabled:
 - The wallbox, when [that section](wallbox.md) is configured.
 
 The `weather/current` topic is deliberately not covered by discovery.
-
-## After upgrading: the EV charger session energy statistic
-
-The EV charger's session energy is now published as `state_class: total_increasing` instead of
-`measurement`, because it counts up during a session and resets to zero at the start of the next
-one. Home Assistant stores a sum statistic for it from now on, where it used to store a
-mean/min/max one.
-
-For an existing installation that means one manual step, once the new discovery message has been
-picked up:
-
-1. Home Assistant raises a repair issue about the changed statistics for that entity.
-2. Open Developer Tools → Statistics, find the entity, and delete its old statistics through the
-   issue.
-
-The sum statistic starts from the next update. The three battery capacity entities changed too,
-from `device_class: energy` to `energy_storage`, but their statistic stays mean-based and their
-history is untouched. [ADR 0011](../decisions/0011-energy-classes-follow-home-assistant.md) has
-the reasoning for both.
