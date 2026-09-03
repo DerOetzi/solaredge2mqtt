@@ -6,7 +6,7 @@ import asyncio
 from datetime import datetime, timezone
 from os import environ, path
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
@@ -161,10 +161,10 @@ async def _run(arguments: argparse.Namespace) -> None:
                 arguments.dry_run,
                 training_point_to_canonical,
             )
-        elif credentials is not None:
+        else:
             imported = await import_from_influxdb(
                 storage,
-                credentials,
+                cast(InfluxCredentials, credentials),
                 _parse_time(arguments.start, DEFAULT_START),
                 _parse_time(arguments.stop, datetime.now(tz=timezone.utc)),
                 measurements_to_import(arguments.measurements, arguments.include_raw),

@@ -402,6 +402,39 @@ class TestMigrateConfigUnit:
         printed = "\n".join(str(call.args[0]) for call in mock_print.call_args_list)
         assert "Created backup:" not in printed
 
+    def test_main_skips_missing_input_note_when_input_exists(self, tmp_path: Path):
+        """main() does not print the missing-.env note when --input exists."""
+        dotenv = tmp_path / "custom.env"
+        dotenv.write_text("", encoding="utf-8")
+
+        mock_migrator = MagicMock()
+        mock_migrator.extract_from_environment.return_value = (
+            {"modbus": {}},
+            {},
+        )
+
+        with (
+            patch("migrate_config.ConfigurationMigrator", return_value=mock_migrator),
+            patch(
+                "sys.argv",
+                [
+                    "migrate_config.py",
+                    "--input",
+                    str(dotenv),
+                    "--output-dir",
+                    str(tmp_path),
+                    "--dry-run",
+                ],
+            ),
+            patch("builtins.print") as mock_print,
+        ):
+            from migrate_config import main
+
+            main()
+
+        printed = "\n".join(str(call.args[0]) for call in mock_print.call_args_list)
+        assert "NOTE:" not in printed
+
     def test_main_guard_executes_main(self, tmp_path: Path):
         """Executing script as __main__ should invoke main() guard path."""
         with (

@@ -1,7 +1,11 @@
 """Tests for the InfluxDB migration command line tool."""
 
 import argparse
+import runpy
+import sys
 from datetime import datetime, timezone
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -14,6 +18,8 @@ from migrate_influxdb import (
 )
 from solaredge2mqtt.core.exceptions import ConfigurationException
 from solaredge2mqtt.core.storage import Point
+
+WORKSPACE_ROOT = Path(__file__).parent.parent
 
 LEGACY_CONFIGURATION = """
 modbus:
@@ -238,3 +244,216 @@ class TestTrainingPointToCanonical:
         point = Point("energy").field("pv_production", 3.5)
 
         assert training_point_to_canonical(point) is point
+
+
+def run_arguments(**overrides) -> argparse.Namespace:
+    """Build the full `_run` argument namespace, matching main()'s parser."""
+    values = {
+        "config_dir": "config",
+        "url": None,
+        "token": None,
+        "org": None,
+        "bucket": None,
+        "from_lp": None,
+        "start": None,
+        "stop": None,
+        "measurements": None,
+        "include_raw": False,
+        "slice_days": 1,
+        "dry_run": False,
+        "resume": False,
+    }
+    values.update(overrides)
+    return argparse.Namespace(**values)
+
+
+@pytest.fixture
+def mock_settings():
+    settings = MagicMock()
+    settings.logging_level.level = "INFO"
+    return settings
+
+
+@pytest.fixture
+def mock_storage():
+    storage = MagicMock()
+    storage.async_init = AsyncMock()
+    storage.close = AsyncMock()
+    return storage
+
+
+class TestRunInternal:
+    """Tests for migrate_influxdb._run() orchestration logic."""
+
+    @pytest.mark.asyncio
+    async def test_imports_from_line_protocol(self, mock_settings, mock_storage):
+        import migrate_influxdb
+
+        with (
+            patch("migrate_influxdb.service_settings", return_value=mock_settings),
+            patch("migrate_influxdb.initialize_logging"),
+            patch("migrate_influxdb.StorageService", return_value=mock_storage),
+            patch(
+                "migrate_influxdb.import_from_line_protocol",
+                new=AsyncMock(return_value=5),
+            ) as mock_import_lp,
+            patch(
+                "migrate_influxdb.consolidate_modules", new=AsyncMock()
+            ) as mock_consolidate,
+            patch("migrate_influxdb.logger") as mock_logger,
+        ):
+            await migrate_influxdb._run(run_arguments(from_lp="dump.lp"))
+
+        mock_import_lp.assert_called_once()
+        mock_consolidate.assert_called_once_with(mock_storage)
+        mock_storage.close.assert_called_once()
+        mock_logger.info.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_imports_from_influxdb(self, mock_settings, mock_storage):
+        import migrate_influxdb
+
+        credentials = migrate_influxdb.InfluxCredentials(
+            "https://influx.local:8086", "token", "org", "bucket"
+        )
+
+        with (
+            patch("migrate_influxdb.service_settings", return_value=mock_settings),
+            patch("migrate_influxdb.initialize_logging"),
+            patch("migrate_influxdb.StorageService", return_value=mock_storage),
+            patch(
+                "migrate_influxdb.build_credentials", return_value=credentials
+            ) as mock_build,
+            patch(
+                "migrate_influxdb.import_from_influxdb", new=AsyncMock(return_value=42)
+            ) as mock_import_influx,
+            patch(
+                "migrate_influxdb.consolidate_modules", new=AsyncMock()
+            ) as mock_consolidate,
+            patch("migrate_influxdb.logger"),
+        ):
+            await migrate_influxdb._run(run_arguments())
+
+        mock_build.assert_called_once()
+        mock_import_influx.assert_called_once()
+        mock_consolidate.assert_called_once_with(mock_storage)
+        mock_storage.close.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_dry_run_skips_consolidation(self, mock_settings, mock_storage):
+        import migrate_influxdb
+
+        with (
+            patch("migrate_influxdb.service_settings", return_value=mock_settings),
+            patch("migrate_influxdb.initialize_logging"),
+            patch("migrate_influxdb.StorageService", return_value=mock_storage),
+            patch(
+                "migrate_influxdb.import_from_line_protocol",
+                new=AsyncMock(return_value=0),
+            ),
+            patch(
+                "migrate_influxdb.consolidate_modules", new=AsyncMock()
+            ) as mock_consolidate,
+            patch("migrate_influxdb.logger"),
+        ):
+            await migrate_influxdb._run(run_arguments(from_lp="dump.lp", dry_run=True))
+
+        mock_consolidate.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_closes_storage_even_when_import_raises(
+        self, mock_settings, mock_storage
+    ):
+        import migrate_influxdb
+
+        with (
+            patch("migrate_influxdb.service_settings", return_value=mock_settings),
+            patch("migrate_influxdb.initialize_logging"),
+            patch("migrate_influxdb.StorageService", return_value=mock_storage),
+            patch(
+                "migrate_influxdb.import_from_line_protocol",
+                new=AsyncMock(side_effect=RuntimeError("boom")),
+            ),
+            pytest.raises(RuntimeError),
+        ):
+            await migrate_influxdb._run(run_arguments(from_lp="dump.lp"))
+
+        mock_storage.close.assert_called_once()
+
+
+class TestMain:
+    """Tests for migrate_influxdb.main() argument parsing and error handling."""
+
+    def test_main_parses_arguments_and_runs(self):
+        import migrate_influxdb
+
+        with (
+            patch("migrate_influxdb._run", new=AsyncMock()) as mock_run_coro,
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "migrate_influxdb.py",
+                    "--config-dir",
+                    "/custom/config",
+                    "--from-lp",
+                    "dump.lp",
+                    "--dry-run",
+                ],
+            ),
+        ):
+            migrate_influxdb.main()
+
+        called_args = mock_run_coro.call_args.args[0]
+        assert called_args.config_dir == "/custom/config"
+        assert called_args.from_lp == "dump.lp"
+        assert called_args.dry_run is True
+
+    def test_main_swallows_configuration_exception(self):
+        import migrate_influxdb
+
+        with (
+            patch(
+                "migrate_influxdb._run",
+                new=AsyncMock(side_effect=ConfigurationException("x", "y")),
+            ),
+            patch("migrate_influxdb.logger") as mock_logger,
+            patch.object(sys, "argv", ["migrate_influxdb.py"]),
+        ):
+            migrate_influxdb.main()
+
+        mock_logger.error.assert_called_once()
+
+    def test_main_swallows_keyboard_interrupt(self):
+        import migrate_influxdb
+
+        with (
+            patch(
+                "migrate_influxdb._run", new=AsyncMock(side_effect=KeyboardInterrupt())
+            ),
+            patch("migrate_influxdb.logger") as mock_logger,
+            patch.object(sys, "argv", ["migrate_influxdb.py"]),
+        ):
+            migrate_influxdb.main()
+
+        mock_logger.info.assert_called_once()
+
+    def test_main_guard_executes_module(self, monkeypatch, tmp_path):
+        """Executing the script as __main__ should invoke main() guard path.
+
+        runpy re-executes the file in a fresh namespace, so patches must
+        target the source modules migrate_influxdb.py imports from (not the
+        already-imported `migrate_influxdb` module) to actually take effect.
+        No credentials are given, so `build_credentials` raises a
+        `ConfigurationException` on its own, exercising main()'s handler.
+        """
+        monkeypatch.delenv("SE2MQTT_INFLUXDB__HOST", raising=False)
+
+        with patch.object(
+            sys,
+            "argv",
+            ["migrate_influxdb.py", "--config-dir", str(tmp_path)],
+        ):
+            runpy.run_path(
+                str(WORKSPACE_ROOT / "migrate_influxdb.py"), run_name="__main__"
+            )
