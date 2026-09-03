@@ -18,6 +18,7 @@ deleted, it is superseded by a later one that says so.
 | [0008](0008-the-weather-service-speaks-canonically.md) | The weather service hands out canonical snapshots | Accepted | The weather event and the published topic carry provider-independent field names. |
 | [0009](0009-migration-consolidates-the-module-series.md) | The migration consolidates the module series | Accepted | The InfluxDB import merges duplicate module series, caused by a changed optimizer identifier, keyed by serial number. |
 | [0010](0010-the-forecast-model-is-rebuilt-on-a-slower-cadence.md) | The forecast model is rebuilt on a slower cadence | Accepted | Training data is still written hourly, while the model, the hyperparameter search and their state on disk each follow their own interval. |
+| [0011](0011-energy-classes-follow-home-assistant.md) | Stored energy and session energy get their own Home Assistant classes | Accepted | Battery capacities became `energy_storage` measurements, the EV charger session became a `total_increasing` energy counter, which costs a one-time statistics repair. |
 
 ## Writing a new one
 

@@ -228,6 +228,24 @@ class TestHomeAssistantSensorType:
         assert sensor.state_class == "total_increasing"
         assert sensor.unit_of_measurement == "kWh"
 
+    def test_energy_wh_type(self):
+        """Test ENERGY_WH sensor type."""
+        sensor = HomeAssistantSensorType.ENERGY_WH
+
+        assert sensor.typed == HomeAssistantType.SENSOR
+        assert sensor.device_class == "energy"
+        assert sensor.state_class == "total_increasing"
+        assert sensor.unit_of_measurement == "Wh"
+
+    def test_energy_storage_wh_type(self):
+        """Test ENERGY_STORAGE_WH sensor type."""
+        sensor = HomeAssistantSensorType.ENERGY_STORAGE_WH
+
+        assert sensor.typed == HomeAssistantType.SENSOR
+        assert sensor.device_class == "energy_storage"
+        assert sensor.state_class == "measurement"
+        assert sensor.unit_of_measurement == "Wh"
+
     def test_battery_type(self):
         """Test BATTERY sensor type."""
         sensor = HomeAssistantSensorType.BATTERY

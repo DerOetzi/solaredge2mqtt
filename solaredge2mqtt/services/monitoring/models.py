@@ -143,9 +143,7 @@ class EVCharger(Component):
     )
     charger_status: str = Field(**HASensor.STATUS.field("Charger status"))
     connected: bool = Field(**HABinarySensor.PLUG.field("Vehicle connected"))
-    session_energy: int = Field(
-        **HASensor.ENERGY_MEASUREMENT_WH.field("Session energy")
-    )
+    session_energy: int = Field(**HASensor.ENERGY_WH.field("Session energy"))
     rated_power: float = Field(**HASensor.POWER_W.field("Rated power"))
 
     @classmethod
