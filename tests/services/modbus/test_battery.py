@@ -1,7 +1,10 @@
 """Tests for modbus battery model module."""
 
+from typing import cast
+
 import pytest
 
+from solaredge2mqtt.services.homeassistant.models import HomeAssistantSensorType
 from solaredge2mqtt.services.modbus.models.base import (
     ModbusDeviceInfo,
     ModbusUnitInfo,
@@ -59,6 +62,18 @@ def make_battery_data(
 
 class TestModbusBattery:
     """Tests for ModbusBattery class."""
+
+    @pytest.mark.parametrize(
+        "field_name", ["maximum_energy", "available_energy", "rated_energy"]
+    )
+    def test_battery_capacity_fields_are_energy_storage(self, field_name: str):
+        extra = ModbusBattery.model_fields[field_name].json_schema_extra
+        assert isinstance(extra, dict)
+        ha_type = cast(HomeAssistantSensorType, extra["ha_type"])
+
+        assert ha_type.device_class == "energy_storage"
+        assert ha_type.state_class == "measurement"
+        assert ha_type.unit_of_measurement == "Wh"
 
     def test_battery_creation_with_valid_status(self):
         """Test battery creation with valid status."""

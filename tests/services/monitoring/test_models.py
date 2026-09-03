@@ -1,10 +1,12 @@
 """Tests for monitoring models module."""
 
 from datetime import datetime, timezone
+from typing import cast
 
 import pytest
 
 from solaredge2mqtt.core.exceptions import InvalidDataException
+from solaredge2mqtt.services.homeassistant.models import HomeAssistantSensorType
 from solaredge2mqtt.services.monitoring.models import (
     EVCharger,
     EVChargerInfo,
@@ -106,6 +108,15 @@ class TestEVChargerInfo:
 
 class TestEVCharger:
     """Tests for EVCharger component model."""
+
+    def test_session_energy_is_total_increasing_energy(self):
+        extra = EVCharger.model_fields["session_energy"].json_schema_extra
+        assert isinstance(extra, dict)
+        ha_type = cast(HomeAssistantSensorType, extra["ha_type"])
+
+        assert ha_type.device_class == "energy"
+        assert ha_type.state_class == "total_increasing"
+        assert ha_type.unit_of_measurement == "Wh"
 
     def test_from_device_action_op_off_gives_charge_level_100(self):
         device = make_charger_device(

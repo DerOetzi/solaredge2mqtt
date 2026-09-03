@@ -280,7 +280,7 @@ class HomeAssistantSensorType(HomeAssistantEntityBaseType):
         "total_increasing",
         "Wh",
     )
-    ENERGY_MEASUREMENT_WH = "energy_measurement_wh", "energy", "measurement", "Wh"
+    ENERGY_STORAGE_WH = "energy_storage_wh", "energy_storage", "measurement", "Wh"
     FREQUENCY_HZ = "frequency_hz", "frequency", "measurement", "Hz"
     MONETARY = "monetary", "monetary", "total", None
     MONETARY_BALANCE = "monetary_balance", "monetary", None, None

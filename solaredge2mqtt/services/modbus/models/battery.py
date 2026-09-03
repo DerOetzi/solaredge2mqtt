@@ -24,13 +24,11 @@ class ModbusBattery(ModbusComponent):
     power: float = Field(**HASensor.POWER_W.field("power"))
     state_of_charge: float = Field(**HASensor.BATTERY.field("state of charge"))
     state_of_health: float = Field(**HASensor.BATTERY.field("state of health"))
-    maximum_energy: int = Field(
-        **HASensor.ENERGY_MEASUREMENT_WH.field("maximum_energy")
-    )
+    maximum_energy: int = Field(**HASensor.ENERGY_STORAGE_WH.field("maximum_energy"))
     available_energy: float = Field(
-        **HASensor.ENERGY_MEASUREMENT_WH.field("available_energy")
+        **HASensor.ENERGY_STORAGE_WH.field("available_energy")
     )
-    rated_energy: float = Field(**HASensor.ENERGY_MEASUREMENT_WH.field("rated_energy"))
+    rated_energy: float = Field(**HASensor.ENERGY_STORAGE_WH.field("rated_energy"))
     maximum_charge_power: float = Field(
         **HASensor.POWER_W.field("maximum_charge_power")
     )
