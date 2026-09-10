@@ -86,15 +86,15 @@ strongest.
 |---|---|
 | `battery_charge_optimal_start_time` | Start of the first hour of the charge window |
 | `battery_charge_duration` | Width of the window in hours, every started hour counted |
-| `battery_charge_target_reachable` | Whether the window actually covers `battery_target_soc` |
+| `battery_charge_target_covered_today` | Whether today could cover `battery_target_soc` at all |
 
 ### How the window is found
 
-Only slots of the current day from the current hour onwards are considered, and only those above
-`production_threshold_wh`. A slot below it is a wall: the window never grows past it, even if
-production picks up again behind it.
+All slots of the current day above `production_threshold_wh` are considered, including hours that
+have already passed. A slot below the threshold is a wall: the window never grows past it, even
+if production picks up again behind it.
 
-The window starts as the single strongest remaining slot and grows one slot at a time until the
+The window starts as the single strongest slot of the day and grows one slot at a time until the
 need is covered. In each step the neighbour before and the neighbour after the window are
 compared by their forecasted production, and the larger one joins the window. A tie goes to the
 later slot. Growing forwards is skipped whenever the added slot would fill the battery before the
@@ -119,17 +119,27 @@ production is really available for charging. A SolarEdge battery also throttles 
 90 percent state of charge, so the last stretch up to the target takes longer than the window
 suggests.
 
-### When the target cannot be reached
+### A start time in the past
+
+The window describes the day, not the hours that happen to be left, so its start time can lie in
+the past once the strongest hours have gone by. Read that the same way as an unreachable target:
+charge from now on and take what the day still gives.
+
+The start time moves later as the battery fills, because the need shrinks with it. A consumer
+that is already charging can therefore also see a start time in the future. That means it is
+running ahead of schedule, not that the value is wrong.
+
+### When the day cannot cover the target
 
 On a short winter day the window can end up too narrow for the need, since it has to be at least
 need divided by charge power wide. The start time is then the beginning of the current hour,
-because every remaining watt-hour is needed, and `battery_charge_target_reachable` is `false`.
-Nothing is published at all when no slot above the threshold remains today, and neither is
-anything published without a battery.
+because every remaining watt-hour is needed, and `battery_charge_target_covered_today` is `false`.
+Nothing is published at all when no slot above the threshold lies on the current day, and neither
+is anything published without a battery.
 
-The start time moves later as the battery fills, because the need shrinks with it. A consumer
-that is already charging can therefore see a start time in the future. That means it is running
-ahead of schedule, not that the value is wrong.
+The flag is named after what it answers: whether the day as a whole could have covered the need.
+It says nothing about the target still being within reach once the window has started, which is
+what a start time in the past tells you.
 
 ## The shape of today's production
 
@@ -138,19 +148,20 @@ worth shifting at all:
 
 | Value | Meaning |
 |---|---|
-| `energy_peak_today` | Output of the strongest slot of the day, in Wh |
-| `energy_peak_time_today` | When that slot starts, the earliest one if several tie |
+| `energy_peak_today` | Output of the strongest production hour of the day, in Wh |
+| `energy_peak_time_today` | When that hour starts, the earliest one if several tie |
 | `energy_average_today` | Mean over the day's production hours, in Wh |
 | `energy_median_today` | Median over the same hours, in Wh |
 
-Unlike the charge window these cover the whole day, including hours that have already passed, so
-they stay stable while the day runs. The peak of the whole day is also not what the charge window
-anchors on once it has passed, that one is the strongest slot still ahead.
+These cover the whole day just like the charge window, so they stay stable while the day runs.
+The peak is also what the window anchors on.
 
 A production hour is a slot above `production_threshold_wh`, 500 Wh by default. The weak hours
 around sunrise and sunset would otherwise pull the average and the median down and make a good
-day look like a mediocre one. The same threshold decides which slots the charge window may use,
-so on a small plant it is worth lowering. `0` counts every slot with any production.
+day look like a mediocre one. The same threshold decides which slots the charge window may use
+and which hour counts as the peak, so on a small plant it is worth lowering. A day that stays
+below it everywhere reports `0` for all four values and gets no charge window. `0` counts every
+slot with any production.
 
 ## Using the forecast in Home Assistant
 

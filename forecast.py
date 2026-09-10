@@ -133,8 +133,8 @@ async def _run(
                 "Battery charge duration: {v} h", v=result.battery_charge_duration
             )
             logger.info(
-                "Battery charge target reachable: {v}",
-                v=result.battery_charge_target_reachable,
+                "Battery charge target covered today: {v}",
+                v=result.battery_charge_target_covered_today,
             )
     finally:
         await weather.close()
