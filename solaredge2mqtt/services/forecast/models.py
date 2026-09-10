@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from statistics import mean, median
 from typing import Any
@@ -16,10 +17,16 @@ from solaredge2mqtt.services.homeassistant.models import (
 )
 from solaredge2mqtt.services.models import Component
 
-__all__ = ["Forecast"]
+__all__ = ["Forecast", "Period"]
 
 #: The interval the published forecast covers per period.
 INTERVAL_MINUTES = 60
+
+
+@dataclass(frozen=True)
+class Period:
+    time: datetime
+    value: int
 
 
 class Forecast(Component, ForecastResult):
@@ -81,25 +88,25 @@ class Forecast(Component, ForecastResult):
     @computed_field(**HASensor.TIMESTAMP.field("Energy production peak time today"))
     @property
     def energy_peak_time_today(self) -> datetime | None:
-        peak = self._peak_slot_today()
-        return peak[0] if peak else None
+        peak = self._peak_period_today()
+        return peak.time if peak else None
 
     @computed_field(**HASensor.ENERGY_WH.field("Energy production peak today"))
     @property
     def energy_peak_today(self) -> int:
-        peak = self._peak_slot_today()
-        return peak[1] if peak else 0
+        peak = self._peak_period_today()
+        return peak.value if peak else 0
 
     @computed_field(**HASensor.ENERGY_WH.field("Energy production average today"))
     @property
     def energy_average_today(self) -> int:
-        production = self._production_slots_today()
+        production = self._production_periods_today()
         return int(round(mean(production))) if production else 0
 
     @computed_field(**HASensor.ENERGY_WH.field("Energy production median today"))
     @property
     def energy_median_today(self) -> int:
-        production = self._production_slots_today()
+        production = self._production_periods_today()
         return int(round(median(production))) if production else 0
 
     @computed_field(**HASensor.TIMESTAMP.field("Battery charge optimal start time"))
@@ -109,11 +116,11 @@ class Forecast(Component, ForecastResult):
         if window is None:
             return None
 
-        slots, reachable = window
+        periods, reachable = window
         if not reachable:
             return self._instant(self._hour_start(self._now_local()))
 
-        return slots[0][0]
+        return periods[0].time
 
     @computed_field(**HASensor.DURATION_H.field("Battery charge duration"))
     @property
@@ -130,92 +137,92 @@ class Forecast(Component, ForecastResult):
         window = self._charge_window()
         return window[1] if window else None
 
-    def _charge_window(self) -> tuple[list[tuple[datetime, int]], bool] | None:
+    def _charge_window(self) -> tuple[list[Period], bool] | None:
         if not self.battery_charge_needed_wh or self.battery_charge_needed_wh <= 0:
             return None
 
-        slots = [
-            slot
-            for slot in self._remaining_slots_today()
-            if slot[1] > self.production_threshold_wh
+        periods = [
+            period
+            for period in self._remaining_periods_today()
+            if period.value > self.production_threshold_wh
         ]
 
-        if not slots:
+        if not periods:
             return None
 
-        anchor = slots.index(max(slots, key=lambda slot: slot[1]))
+        anchor = max(range(len(periods)), key=lambda index: periods[index].value)
         first, last = anchor, anchor
-        charged = self._charged(slots[anchor][1])
+        charged = self._charged(periods[anchor])
 
         while charged < self.battery_charge_needed_wh:
-            before = slots[first - 1] if first > 0 else None
-            after = slots[last + 1] if last + 1 < len(slots) else None
+            before = periods[first - 1] if first > 0 else None
+            after = periods[last + 1] if last + 1 < len(periods) else None
 
-            if before is not None and self._is_wall(slots, first - 1, first):
+            if before is not None and self._is_wall(before, periods[first]):
                 before = None
-            if after is not None and self._is_wall(slots, last, last + 1):
+            if after is not None and self._is_wall(periods[last], after):
                 after = None
 
             if before is None and after is None:
-                return slots[first : last + 1], False
+                return periods[first : last + 1], False
 
             if before is None:
                 take_before = False
             elif after is None:
                 take_before = True
-            elif before[1] <= after[1]:
+            elif before.value <= after.value:
                 take_before = False
             else:
                 take_before = (
-                    charged + self._charged(before[1]) <= self.battery_charge_needed_wh
+                    charged + self._charged(before) <= self.battery_charge_needed_wh
                 )
 
             if take_before:
                 first -= 1
-                charged += self._charged(slots[first][1])
+                charged += self._charged(periods[first])
             else:
                 last += 1
-                charged += self._charged(slots[last][1])
+                charged += self._charged(periods[last])
 
-        return slots[first : last + 1], True
+        return periods[first : last + 1], True
 
-    def _is_wall(
-        self, slots: list[tuple[datetime, int]], left: int, right: int
-    ) -> bool:
-        gap = slots[right][0] - slots[left][0]
+    def _is_wall(self, left: Period, right: Period) -> bool:
+        gap = right.time - left.time
         return gap.total_seconds() > self.interval_minutes * 60
 
-    def _charged(self, energy: int) -> float:
+    def _charged(self, period: Period) -> float:
         if self.battery_charge_slot_cap_wh is None:
-            return float(energy)
+            return float(period.value)
 
-        return min(float(energy), self.battery_charge_slot_cap_wh)
+        return min(float(period.value), self.battery_charge_slot_cap_wh)
 
-    def _remaining_slots_today(self) -> list[tuple[datetime, int]]:
-        now = self._now_local()
-        hour_start = self._instant(self._hour_start(now))
-        return [slot for slot in self._slots_today() if slot[0] >= hour_start]
+    def _remaining_periods_today(self) -> list[Period]:
+        hour_start = self._instant(self._hour_start(self._now_local()))
+        return [period for period in self._periods_today() if period.time >= hour_start]
 
-    def _slots_today(self) -> list[tuple[datetime, int]]:
+    def _periods_today(self) -> list[Period]:
         today = self._now_local().date()
         return sorted(
-            (period.instant, energy)
-            for period, energy in self._periods()
-            if period.local.date() == today
+            (
+                Period(period.instant, energy)
+                for period, energy in self._periods()
+                if period.local.date() == today
+            ),
+            key=lambda period: period.time,
         )
 
-    def _peak_slot_today(self) -> tuple[datetime, int] | None:
-        producing = [slot for slot in self._slots_today() if slot[1] > 0]
+    def _peak_period_today(self) -> Period | None:
+        producing = [period for period in self._periods_today() if period.value > 0]
         if not producing:
             return None
 
-        return max(producing, key=lambda slot: slot[1])
+        return max(producing, key=lambda period: period.value)
 
-    def _production_slots_today(self) -> list[int]:
+    def _production_periods_today(self) -> list[int]:
         return [
-            energy
-            for _, energy in self._slots_today()
-            if energy > self.production_threshold_wh
+            period.value
+            for period in self._periods_today()
+            if period.value > self.production_threshold_wh
         ]
 
     def homeassistant_device_info(self) -> dict[str, Any]:
