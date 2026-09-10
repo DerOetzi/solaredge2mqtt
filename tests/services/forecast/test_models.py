@@ -6,6 +6,7 @@ from unittest.mock import patch
 from solaredge2mqtt.services.forecast.models import INTERVAL_MINUTES, Forecast
 
 FORECAST_TIMEZONE = "Europe/Berlin"
+PRODUCTION_THRESHOLD_WH = 500.0
 LOCAL_MIDNIGHT_UTC = datetime(2024, 6, 14, 22, 0, tzinfo=timezone.utc)
 
 
@@ -28,6 +29,7 @@ class TestForecast:
         return energy_period
 
     def make_forecast(self, **kwargs) -> Forecast:
+        kwargs.setdefault("production_threshold_wh", PRODUCTION_THRESHOLD_WH)
         return Forecast.from_energy_period(
             self.make_energy_period(), timezone=FORECAST_TIMEZONE, **kwargs
         )
@@ -181,9 +183,193 @@ class TestForecast:
         assert forecast.battery_charge_optimal_start_time is None
 
     @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
-    def test_battery_charge_optimal_start_time_none_when_unreachable(self, mock_now):
-        """Test optimal start time is None if forecast can't cover the need."""
+    def test_battery_charge_optimal_start_time_now_when_unreachable(self, mock_now):
+        """An unreachable target starts as early as possible, right now."""
         mock_now.return_value = self.at_local_hour(10)
         forecast = self.make_forecast(battery_charge_needed_wh=10_000_000)
 
-        assert forecast.battery_charge_optimal_start_time is None
+        assert forecast.battery_charge_optimal_start_time == self.at_local_hour(10)
+        assert forecast.battery_charge_target_reachable is False
+
+    @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
+    def test_energy_peak_today_finds_strongest_slot(self, mock_now):
+        """The peak covers the whole day, not only what is still ahead."""
+        mock_now.return_value = self.at_local_hour(18)
+        forecast = self.make_forecast()
+
+        assert forecast.energy_peak_today == 1000
+        assert forecast.energy_peak_time_today == self.at_local_hour(12)
+
+    @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
+    def test_energy_peak_today_prefers_the_earlier_of_equal_slots(self, mock_now):
+        """A flat-topped day reports the first of its equal maxima."""
+        mock_now.return_value = self.at_local_hour(12)
+        energy_period = self.make_energy_period()
+        energy_period[self.at_local_hour(14)] = 1000
+        forecast = Forecast.from_energy_period(
+            energy_period,
+            timezone=FORECAST_TIMEZONE,
+            production_threshold_wh=PRODUCTION_THRESHOLD_WH,
+        )
+
+        assert forecast.energy_peak_time_today == self.at_local_hour(12)
+
+    @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
+    def test_energy_peak_today_none_without_production(self, mock_now):
+        """A day the forecast does not cover has no peak."""
+        mock_now.return_value = self.at_local_hour(72)
+        forecast = self.make_forecast()
+
+        assert forecast.energy_peak_today == 0
+        assert forecast.energy_peak_time_today is None
+
+    @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
+    def test_energy_average_and_median_today(self, mock_now):
+        """Every producing hour counts once the threshold is out of the way."""
+        mock_now.return_value = self.at_local_hour(12)
+        forecast = self.make_forecast(production_threshold_wh=0)
+
+        assert forecast.energy_average_today == 742
+        assert forecast.energy_median_today == 760
+
+    @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
+    def test_energy_average_and_median_today_respect_threshold(self, mock_now):
+        """The weak hours around sunrise and sunset drop out."""
+        mock_now.return_value = self.at_local_hour(12)
+        forecast = self.make_forecast(production_threshold_wh=700)
+
+        assert forecast.energy_average_today == 863
+        assert forecast.energy_median_today == 840
+
+    @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
+    def test_energy_average_and_median_today_without_production(self, mock_now):
+        """No hour clears a threshold above the peak."""
+        mock_now.return_value = self.at_local_hour(12)
+        forecast = self.make_forecast(production_threshold_wh=2000)
+
+        assert forecast.energy_average_today == 0
+        assert forecast.energy_median_today == 0
+
+    @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
+    def test_battery_charge_duration_counts_selected_slots(self, mock_now):
+        """The peak slot alone covers the need, so one hour of charging."""
+        mock_now.return_value = self.at_local_hour(10)
+        forecast = self.make_forecast(battery_charge_needed_wh=1000)
+
+        assert forecast.battery_charge_duration == 1.0
+
+    @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
+    def test_battery_charge_duration_spans_several_slots(self, mock_now):
+        """After the peak has passed two slots are needed for the same energy."""
+        mock_now.return_value = self.at_local_hour(13)
+        forecast = self.make_forecast(battery_charge_needed_wh=1000)
+
+        assert forecast.battery_charge_duration == 2.0
+
+    @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
+    def test_battery_charge_duration_none_without_need(self, mock_now):
+        """Without a battery there is no window and no duration."""
+        mock_now.return_value = self.at_local_hour(10)
+        forecast = self.make_forecast()
+
+        assert forecast.battery_charge_duration is None
+        assert forecast.battery_charge_target_reachable is None
+
+    def make_example_day(self, overrides: dict[int, int] | None = None):
+        shape = {
+            8: 3000,
+            9: 5000,
+            10: 5400,
+            11: 5300,
+            12: 5350,
+            13: 6000,
+            14: 7000,
+            15: 6100,
+            16: 5300,
+        }
+        shape.update(overrides or {})
+
+        return {self.at_local_hour(hour): shape.get(hour, 0) for hour in range(24)}
+
+    def make_example_forecast(self, overrides=None, **kwargs) -> Forecast:
+        kwargs.setdefault("production_threshold_wh", PRODUCTION_THRESHOLD_WH)
+        return Forecast.from_energy_period(
+            self.make_example_day(overrides), timezone=FORECAST_TIMEZONE, **kwargs
+        )
+
+    @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
+    def test_charge_window_grows_around_the_peak(self, mock_now):
+        mock_now.return_value = self.at_local_hour(8)
+        forecast = self.make_example_forecast(battery_charge_needed_wh=20_000)
+
+        assert forecast.battery_charge_optimal_start_time == self.at_local_hour(13)
+        assert forecast.battery_charge_duration == 4.0
+        assert forecast.battery_charge_target_reachable is True
+
+    @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
+    def test_charge_window_respects_the_charge_power_cap(self, mock_now):
+        mock_now.return_value = self.at_local_hour(8)
+        forecast = self.make_example_forecast(
+            battery_charge_needed_wh=20_000,
+            battery_charge_slot_cap_wh=5435,
+        )
+
+        assert forecast.battery_charge_optimal_start_time == self.at_local_hour(13)
+        assert forecast.battery_charge_duration == 4.0
+
+    @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
+    def test_charge_window_cap_widens_the_window(self, mock_now):
+        mock_now.return_value = self.at_local_hour(8)
+        uncapped = self.make_example_forecast(battery_charge_needed_wh=13_000)
+        capped = self.make_example_forecast(
+            battery_charge_needed_wh=13_000,
+            battery_charge_slot_cap_wh=5435,
+        )
+
+        assert uncapped.battery_charge_duration == 2.0
+        assert capped.battery_charge_duration == 3.0
+
+    @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
+    def test_charge_window_starts_at_the_peak_when_it_suffices(self, mock_now):
+        mock_now.return_value = self.at_local_hour(8)
+        forecast = self.make_example_forecast(battery_charge_needed_wh=7000)
+
+        assert forecast.battery_charge_optimal_start_time == self.at_local_hour(14)
+        assert forecast.battery_charge_duration == 1.0
+
+    @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
+    def test_charge_window_prefers_the_later_slot_on_overflow(self, mock_now):
+        mock_now.return_value = self.at_local_hour(8)
+        forecast = self.make_example_forecast(battery_charge_needed_wh=14_000)
+
+        assert forecast.battery_charge_optimal_start_time == self.at_local_hour(14)
+        assert forecast.battery_charge_duration == 3.0
+
+    @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
+    def test_charge_window_prefers_the_later_slot_on_a_tie(self, mock_now):
+        mock_now.return_value = self.at_local_hour(8)
+        forecast = self.make_example_forecast(
+            {13: 6100}, battery_charge_needed_wh=13_100
+        )
+
+        assert forecast.battery_charge_optimal_start_time == self.at_local_hour(14)
+        assert forecast.battery_charge_duration == 2.0
+
+    @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
+    def test_charge_window_stops_at_a_slot_below_the_threshold(self, mock_now):
+        mock_now.return_value = self.at_local_hour(8)
+        forecast = self.make_example_forecast(
+            {15: 400}, battery_charge_needed_wh=20_000
+        )
+
+        assert forecast.battery_charge_optimal_start_time == self.at_local_hour(11)
+        assert forecast.battery_charge_duration == 4.0
+
+    @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
+    def test_charge_window_anchors_on_the_strongest_remaining_slot(self, mock_now):
+        mock_now.return_value = self.at_local_hour(15)
+        forecast = self.make_example_forecast(battery_charge_needed_wh=6000)
+
+        assert forecast.energy_peak_time_today == self.at_local_hour(14)
+        assert forecast.battery_charge_optimal_start_time == self.at_local_hour(15)
+        assert forecast.battery_charge_duration == 1.0

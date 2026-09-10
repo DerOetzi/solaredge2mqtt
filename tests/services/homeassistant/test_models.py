@@ -276,6 +276,14 @@ class TestHomeAssistantSensorType:
         assert sensor.device_class == "current"
         assert sensor.unit_of_measurement == "A"
 
+    def test_duration_type(self):
+        """Test DURATION_H sensor type."""
+        sensor = HomeAssistantSensorType.DURATION_H
+
+        assert sensor.device_class == "duration"
+        assert sensor.state_class == "measurement"
+        assert sensor.unit_of_measurement == "h"
+
     def test_monetary_type(self):
         """Test MONETARY sensor type."""
         sensor = HomeAssistantSensorType.MONETARY

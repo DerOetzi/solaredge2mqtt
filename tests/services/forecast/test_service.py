@@ -165,10 +165,16 @@ class TestForecastServiceBattery:
         storage = MagicMock()
         return ForecastService(settings, location, storage)
 
-    def make_battery(self, rated_energy: float, state_of_charge: float) -> MagicMock:
+    def make_battery(
+        self,
+        rated_energy: float,
+        state_of_charge: float,
+        maximum_charge_power: float = 5000.0,
+    ) -> MagicMock:
         battery = MagicMock()
         battery.rated_energy = rated_energy
         battery.state_of_charge = state_of_charge
+        battery.maximum_charge_power = maximum_charge_power
         return battery
 
     @pytest.mark.asyncio
@@ -196,6 +202,7 @@ class TestForecastServiceBattery:
 
         assert service.last_battery_capacity_wh == 13800
         assert service.last_battery_stored_energy_wh == pytest.approx(5750)
+        assert service.last_battery_max_charge_power_w == 10000
 
     @pytest.mark.asyncio
     async def test_battery_update_resets_when_no_battery_present(self):
@@ -214,6 +221,7 @@ class TestForecastServiceBattery:
 
         assert service.last_battery_capacity_wh is None
         assert service.last_battery_stored_energy_wh is None
+        assert service.last_battery_max_charge_power_w is None
 
     def test_battery_charge_needed_wh_none_without_battery(self):
         """battery_charge_needed_wh should be None without known battery capacity."""
@@ -233,6 +241,23 @@ class TestForecastServiceBattery:
         expected = (target_energy_wh - 4600) / 0.92
 
         assert service.battery_charge_needed_wh() == pytest.approx(expected)
+
+    def test_battery_charge_slot_cap_wh_none_without_power(self):
+        """No cap is applied when the battery reports no charge power."""
+        service = self.make_service()
+
+        assert service.battery_charge_slot_cap_wh() is None
+
+        service.last_battery_max_charge_power_w = 0.0
+
+        assert service.battery_charge_slot_cap_wh() is None
+
+    def test_battery_charge_slot_cap_wh_scales_to_the_pv_side(self):
+        """The cap is raised by the charge efficiency to match the need."""
+        service = self.make_service(battery_charge_efficiency=0.92)
+        service.last_battery_max_charge_power_w = 5000.0
+
+        assert service.battery_charge_slot_cap_wh() == pytest.approx(5000 / 0.92)
 
     def test_battery_charge_needed_wh_zero_when_target_already_met(self):
         """battery_charge_needed_wh returns 0 if battery is already at/above target."""
