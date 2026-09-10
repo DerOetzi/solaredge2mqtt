@@ -35,6 +35,7 @@ class ForecastSettings(BaseModel):
     retain: bool = Field(default=False)
     battery_target_soc: float = Field(default=98.0, ge=0, le=100)
     battery_charge_efficiency: float = Field(default=0.92, gt=0, le=1)
+    production_threshold_wh: float = Field(default=500.0, ge=0)
 
     @property
     def is_configured(self) -> bool:

@@ -149,6 +149,7 @@ class HomeAssistantEntityBaseType(BaseField):
 class HomeAssistantBinarySensorType(HomeAssistantEntityBaseType):
     GRID_STATUS = "grid_status", "power", None
     PLUG = "plug", "plug", None
+    STATUS = "status", None, None
 
     def __init__(
         self,
@@ -273,6 +274,7 @@ class HomeAssistantSensorType(HomeAssistantEntityBaseType):
     APPARENT_POWER = "apparent_power", "apparent_power", "measurement", "VA"
     BATTERY = "battery", "battery", "measurement", "%"
     CURRENT_A = "current_a", "current", "measurement", "A"
+    DURATION_H = "duration_h", "duration", "measurement", "h"
     ENERGY_KWH = "energy_kwh", "energy", "total_increasing", "kWh"
     ENERGY_WH = (
         "energy_wh",

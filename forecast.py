@@ -38,6 +38,7 @@ async def _run(
     config_dir: str,
     battery_capacity_wh: float | None,
     battery_soc: float | None,
+    battery_max_charge_power_w: float | None,
 ) -> None:
     settings = service_settings(config_dir)
     initialize_logging(settings.logging_level)
@@ -94,17 +95,31 @@ async def _run(
             forecast.last_battery_stored_energy_wh = (
                 battery_capacity_wh * battery_soc / 100
             )
+            forecast.last_battery_max_charge_power_w = battery_max_charge_power_w
             battery_charge_needed_wh = forecast.battery_charge_needed_wh()
 
         result = Forecast.from_energy_period(
             energy_period,
             timezone=str(LOCAL_TZ),
             battery_charge_needed_wh=battery_charge_needed_wh,
+            battery_charge_slot_cap_wh=forecast.battery_charge_slot_cap_wh(),
+            production_threshold_wh=settings.forecast.production_threshold_wh,
         )
 
         logger.info("Energy today: {v} Wh", v=result.energy_today)
         logger.info("Energy remaining today: {v} Wh", v=result.energy_today_remaining)
         logger.info("Energy tomorrow: {v} Wh", v=result.energy_tomorrow)
+        logger.info(
+            "Peak today: {v} Wh at {t}",
+            v=result.energy_peak_today,
+            t=result.energy_peak_time_today,
+        )
+        logger.info(
+            "Average production hour today: {v} Wh", v=result.energy_average_today
+        )
+        logger.info(
+            "Median production hour today: {v} Wh", v=result.energy_median_today
+        )
 
         if battery_charge_needed_wh is not None:
             logger.info(
@@ -113,6 +128,13 @@ async def _run(
             logger.info(
                 "Optimal battery charge start time: {v}",
                 v=result.battery_charge_optimal_start_time,
+            )
+            logger.info(
+                "Battery charge duration: {v} h", v=result.battery_charge_duration
+            )
+            logger.info(
+                "Battery charge target covered today: {v}",
+                v=result.battery_charge_target_covered_today,
             )
     finally:
         await weather.close()
@@ -123,9 +145,17 @@ def run(
     config_dir: str = "config",
     battery_capacity_wh: float | None = None,
     battery_soc: float | None = None,
+    battery_max_charge_power_w: float | None = None,
 ) -> None:
     try:
-        asyncio.run(_run(config_dir, battery_capacity_wh, battery_soc))
+        asyncio.run(
+            _run(
+                config_dir,
+                battery_capacity_wh,
+                battery_soc,
+                battery_max_charge_power_w,
+            )
+        )
     except ConfigurationException:
         logger.error("Configuration error")
     except InvalidDataException as error:
@@ -160,12 +190,20 @@ def main():
         help="Currently battery state of charge in %%, to preview the optimal "
         "charge start time",
     )
+    parser.add_argument(
+        "--battery-max-charge-power-w",
+        type=float,
+        default=None,
+        help="Maximum battery charge power in W, caps how much of a forecasted "
+        "hour can end up in the battery",
+    )
     args = parser.parse_args()
 
     run(
         config_dir=args.config_dir,
         battery_capacity_wh=args.battery_capacity_wh,
         battery_soc=args.battery_soc,
+        battery_max_charge_power_w=args.battery_max_charge_power_w,
     )
 
 

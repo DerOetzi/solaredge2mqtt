@@ -131,6 +131,7 @@ class ForecastService:
 
         self.last_battery_capacity_wh: float | None = None
         self.last_battery_stored_energy_wh: float | None = None
+        self.last_battery_max_charge_power_w: float | None = None
 
         self.last_training: datetime | None = None
 
@@ -176,20 +177,24 @@ class ForecastService:
     async def battery_update(self, event: ModbusUnitsReadEvent) -> None:
         capacity_wh = 0.0
         stored_energy_wh = 0.0
+        max_charge_power_w = 0.0
         battery_found = False
 
         for unit in event.units.values():
             for battery in unit.batteries.values():
                 capacity_wh += battery.rated_energy
                 stored_energy_wh += battery.rated_energy * battery.state_of_charge / 100
+                max_charge_power_w += battery.maximum_charge_power
                 battery_found = True
 
         if battery_found:
             self.last_battery_capacity_wh = capacity_wh
             self.last_battery_stored_energy_wh = stored_energy_wh
+            self.last_battery_max_charge_power_w = max_charge_power_w or None
         else:
             self.last_battery_capacity_wh = None
             self.last_battery_stored_energy_wh = None
+            self.last_battery_max_charge_power_w = None
 
     def battery_charge_needed_wh(self) -> float | None:
         if not self.last_battery_capacity_wh:
@@ -204,6 +209,17 @@ class ForecastService:
             return 0.0
 
         return deficit_wh / self.settings.battery_charge_efficiency
+
+    def battery_charge_slot_cap_wh(self) -> float | None:
+        if not self.last_battery_max_charge_power_w:
+            return None
+
+        return (
+            self.last_battery_max_charge_power_w
+            * INTERVAL_MINUTES
+            / 60
+            / self.settings.battery_charge_efficiency
+        )
 
     @EventBus.subscribe(WeatherUpdateEvent)
     async def weather_update(self, event: WeatherUpdateEvent) -> None:
@@ -493,6 +509,8 @@ class ForecastService:
                 energy_hours,
                 timezone=str(LOCAL_TZ),
                 battery_charge_needed_wh=self.battery_charge_needed_wh(),
+                battery_charge_slot_cap_wh=self.battery_charge_slot_cap_wh(),
+                production_threshold_wh=self.settings.production_threshold_wh,
             )
             logger.debug(forecast)
 

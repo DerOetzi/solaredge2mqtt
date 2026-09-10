@@ -112,7 +112,7 @@ class TestForecastRun:
                 config_dir="custom", battery_capacity_wh=9200.0, battery_soc=50.0
             )
 
-        mock_run_coro.assert_called_once_with("custom", 9200.0, 50.0)
+        mock_run_coro.assert_called_once_with("custom", 9200.0, 50.0, None)
 
     def test_run_swallows_configuration_exception(self):
         import forecast
@@ -165,7 +165,10 @@ class TestForecastMain:
                 forecast.main()
 
             mock_run.assert_called_once_with(
-                config_dir="config", battery_capacity_wh=None, battery_soc=None
+                config_dir="config",
+                battery_capacity_wh=None,
+                battery_soc=None,
+                battery_max_charge_power_w=None,
             )
 
     def test_main_with_custom_args(self):
@@ -183,6 +186,8 @@ class TestForecastMain:
                     "9200",
                     "--battery-soc",
                     "60",
+                    "--battery-max-charge-power-w",
+                    "5000",
                 ],
             ):
                 forecast.main()
@@ -191,6 +196,7 @@ class TestForecastMain:
                 config_dir="/custom/config",
                 battery_capacity_wh=9200.0,
                 battery_soc=60.0,
+                battery_max_charge_power_w=5000.0,
             )
 
     def test_main_guard_executes_module(self):
@@ -229,7 +235,7 @@ class TestForecastRunInternal:
             patch("forecast.logger") as mock_logger,
             patch("forecast.StorageService") as mock_storage_cls,
         ):
-            await forecast._run("config", None, None)
+            await forecast._run("config", None, None, None)
 
         mock_logger.error.assert_called_once()
         mock_storage_cls.assert_not_called()
@@ -246,7 +252,7 @@ class TestForecastRunInternal:
             patch("forecast.logger") as mock_logger,
             patch("forecast.StorageService") as mock_storage_cls,
         ):
-            await forecast._run("config", None, None)
+            await forecast._run("config", None, None, None)
 
         mock_logger.error.assert_called_once()
         mock_storage_cls.assert_not_called()
@@ -263,7 +269,7 @@ class TestForecastRunInternal:
             patch("forecast.logger") as mock_logger,
             patch("forecast.StorageService") as mock_storage_cls,
         ):
-            await forecast._run("config", None, None)
+            await forecast._run("config", None, None, None)
 
         mock_logger.error.assert_called_once()
         mock_storage_cls.assert_not_called()
@@ -283,7 +289,7 @@ class TestForecastRunInternal:
                 "forecast.ForecastService", return_value=mock_forecast_service
             ) as mock_service_cls,
         ):
-            await forecast._run("config", None, None)
+            await forecast._run("config", None, None, None)
 
         mock_service_cls.assert_called_once_with(
             mock_settings.forecast, mock_settings.location, mock_storage
@@ -307,7 +313,7 @@ class TestForecastRunInternal:
             patch("forecast.WeatherClient", return_value=mock_weather),
             patch("forecast.ForecastService", return_value=mock_forecast_service),
         ):
-            await forecast._run("config", 9200.0, 50.0)
+            await forecast._run("config", 9200.0, 50.0, 5000.0)
 
         assert mock_forecast_service.last_battery_capacity_wh == 9200.0
         assert mock_forecast_service.last_battery_stored_energy_wh == 4600.0
@@ -331,7 +337,7 @@ class TestForecastRunInternal:
             patch("forecast.ForecastService", return_value=mock_forecast_service),
             pytest.raises(RuntimeError),
         ):
-            await forecast._run("config", None, None)
+            await forecast._run("config", None, None, None)
 
         mock_weather.close.assert_called_once()
         mock_storage.close.assert_called_once()
