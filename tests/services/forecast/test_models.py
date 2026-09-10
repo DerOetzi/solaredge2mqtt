@@ -373,3 +373,14 @@ class TestForecast:
         assert forecast.energy_peak_time_today == self.at_local_hour(14)
         assert forecast.battery_charge_optimal_start_time == self.at_local_hour(15)
         assert forecast.battery_charge_duration == 1.0
+
+    @patch("solaredge2mqtt.services.forecast.models.Forecast._now")
+    def test_charge_window_stops_at_a_wall_in_front(self, mock_now):
+        mock_now.return_value = self.at_local_hour(8)
+        forecast = self.make_example_forecast(
+            {10: 400}, battery_charge_needed_wh=40_000
+        )
+
+        assert forecast.battery_charge_optimal_start_time == self.at_local_hour(8)
+        assert forecast.battery_charge_duration == 6.0
+        assert forecast.battery_charge_target_reachable is False
