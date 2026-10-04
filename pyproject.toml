@@ -26,7 +26,6 @@ dependencies = [
     "loguru==0.7.3",
     "platformdirs==4.11.3",
     "pydantic==2.13.4",
-    "pyjwt==2.13.0",
     "pymodbus==3.15.0",
     "pyyaml==6.0.3",
     "tzlocal==5.4.4",

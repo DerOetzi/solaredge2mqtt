@@ -1,7 +1,8 @@
 import asyncio
+import base64
+import json
 import time
 
-import jwt
 from aiohttp.client_exceptions import ClientResponseError
 from pydantic import BaseModel, Field
 
@@ -47,9 +48,11 @@ class AuthorizationTokens(BaseModel):
     @staticmethod
     def get_exp_claim(token: str) -> int:
         try:
-            payload = jwt.decode(token, options={"verify_signature": False})  # noqa: S5659
-            return payload["exp"]
-        except Exception as e:
+            payload_segment = token.split(".")[1]
+            padding = "=" * (-len(payload_segment) % 4)
+            payload = json.loads(base64.urlsafe_b64decode(payload_segment + padding))
+            return int(payload["exp"])
+        except (IndexError, KeyError, TypeError, ValueError) as e:
             logger.warning("Failed to decode JWT for exp claim: {error}", error=e)
             raise InvalidDataException("Cannot read token expiration") from e
 
