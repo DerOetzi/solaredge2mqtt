@@ -13,6 +13,7 @@ from solaredge2mqtt.core.timer.events import (
     BetweenIntervalTriggerEvent,
 )
 from solaredge2mqtt.services.energy.events import EnergyReadEvent
+from solaredge2mqtt.services.forecast import FORECAST_AVAILABLE
 from solaredge2mqtt.services.forecast.events import ForecastEvent
 from solaredge2mqtt.services.homeassistant.events import (
     HomeAssistantStatusEvent,
@@ -38,6 +39,18 @@ from solaredge2mqtt.services.wallbox.events import WallboxReadEvent
 if TYPE_CHECKING:
     from solaredge2mqtt.core.settings import ServiceSettings
 
+ComponentDiscoveryEvent = (
+    ForecastEvent | EnergyReadEvent | WallboxReadEvent | EVChargerReadEvent
+)
+
+COMPONENT_DISCOVERY_EVENTS: list[type[ComponentDiscoveryEvent]] = [
+    EnergyReadEvent,
+    WallboxReadEvent,
+    EVChargerReadEvent,
+]
+if FORECAST_AVAILABLE:
+    COMPONENT_DISCOVERY_EVENTS.insert(0, ForecastEvent)
+
 
 class HomeAssistantDiscovery:
     def __init__(self, service_settings: ServiceSettings) -> None:
@@ -58,18 +71,8 @@ class HomeAssistantDiscovery:
             )
         )
 
-    @EventBus.subscribe(
-        [
-            ForecastEvent,
-            EnergyReadEvent,
-            WallboxReadEvent,
-            EVChargerReadEvent,
-        ]
-    )
-    async def component_discovery(
-        self,
-        event: ForecastEvent | EnergyReadEvent | WallboxReadEvent | EVChargerReadEvent,
-    ) -> None:
+    @EventBus.subscribe(COMPONENT_DISCOVERY_EVENTS)
+    async def component_discovery(self, event: ComponentDiscoveryEvent) -> None:
         publish = True
         if isinstance(event, (EnergyReadEvent, EVChargerReadEvent)):
             topic = event.component.mqtt_topic()

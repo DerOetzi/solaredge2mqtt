@@ -1,5 +1,14 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from solaredge2mqtt.services.events import ComponentEvent
-from solaredge2mqtt.services.forecast.models import Forecast
+
+if TYPE_CHECKING:
+    from solaredge2mqtt.services.forecast.models import Forecast
 
 
-class ForecastEvent(ComponentEvent[Forecast]): ...  # pragma: no cover
+class ForecastEvent(ComponentEvent["Forecast"]):
+    @property
+    def component(self) -> Forecast:
+        return self._component
