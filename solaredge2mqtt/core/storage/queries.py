@@ -2,6 +2,8 @@ EXCLUDED_POWER_FIELDS = ("inverter_power", "grid_power", "battery_power")
 
 _EXCLUDED_POWER_FIELDS_SQL = ", ".join(f"'{field}'" for field in EXCLUDED_POWER_FIELDS)
 
+PRICE_SLOT_SECONDS = 900
+
 AGGREGATE_MINMAXMEAN_POWERFLOW = f"""
 SELECT s.field AS field,
        t.tag_value AS unit,
@@ -64,11 +66,13 @@ paired AS (
 SELECT field,
        unit,
        bucket,
+       (ts / {PRICE_SLOT_SECONDS}) * {PRICE_SLOT_SECONDS} AS slot,
        SUM((next_ts - ts) * (value + next_value) / 2.0) / 3600.0 / 1000.0
            AS energy_kwh
 FROM paired
 WHERE next_ts IS NOT NULL
-GROUP BY field, unit, bucket
+GROUP BY field, unit, bucket, slot
+ORDER BY field, unit, bucket, slot
 """
 
 PRODUCTION_LAST_HOUR = """

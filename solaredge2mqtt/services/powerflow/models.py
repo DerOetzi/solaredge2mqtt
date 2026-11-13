@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import Any, ClassVar
 
 from pydantic import Field, computed_field
 from pydantic.json_schema import SkipJsonSchema
@@ -20,9 +20,6 @@ from solaredge2mqtt.services.modbus.models.inverter import ModbusInverter
 from solaredge2mqtt.services.modbus.models.meter import ModbusMeter
 from solaredge2mqtt.services.modbus.models.unit import ModbusUnit
 from solaredge2mqtt.services.models import Component
-
-if TYPE_CHECKING:
-    from solaredge2mqtt.services.energy.settings import PriceSettings
 
 
 class Powerflow(Component):
@@ -156,25 +153,6 @@ class Powerflow(Component):
 
         if self.unit:
             point.tag("unit", self.unit.key)
-
-        return point
-
-    def prepare_point_energy(
-        self, measurement: str = "energy", prices: PriceSettings | None = None
-    ) -> Point:
-        point = Point(measurement)
-        for key, value in self.model_dump_storage().items():
-            energy = value / 1000
-            point.field(key, energy)
-            if prices is not None:
-                if key == "consumer_used_production":
-                    point.field("money_saved", energy * prices.price_in)
-                    point.field("money_price_in", prices.price_in)
-                elif key == "grid_delivery":
-                    point.field("money_delivered", energy * prices.price_out)
-                    point.field("money_price_out", prices.price_out)
-                elif key == "grid_consumption":
-                    point.field("money_consumed", energy * prices.price_in)
 
         return point
 

@@ -23,6 +23,7 @@ from solaredge2mqtt.core.storage.influx_import import (
     import_from_line_protocol,
     measurements_to_import,
 )
+from solaredge2mqtt.services.energy.prices import PriceResolver
 from solaredge2mqtt.services.weather.models import OpenWeatherMapBaseData
 
 TRAINING_MEASUREMENT = "forecast_training"
@@ -148,7 +149,9 @@ async def _run(arguments: argparse.Namespace) -> None:
     settings = service_settings(arguments.config_dir)
     initialize_logging(settings.logging_level)
 
-    storage = StorageService(settings.storage, settings.prices, arguments.config_dir)
+    storage = StorageService(
+        settings.storage, PriceResolver(settings.prices), arguments.config_dir
+    )
     await storage.async_init()
 
     imported = 0

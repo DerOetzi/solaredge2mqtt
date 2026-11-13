@@ -20,6 +20,7 @@ from solaredge2mqtt.core.status import ServiceStatusController
 from solaredge2mqtt.core.storage import StorageService
 from solaredge2mqtt.core.timer import Timer
 from solaredge2mqtt.services.energy import EnergyService
+from solaredge2mqtt.services.energy.prices import PriceResolver
 from solaredge2mqtt.services.forecast import FORECAST_AVAILABLE, ForecastService
 from solaredge2mqtt.services.homeassistant.service import (
     HomeAssistantDiscovery,
@@ -63,11 +64,19 @@ class Service:
         self.loops: set[asyncio.Task] = set()
         self._run_task: asyncio.Task | None = None
 
+        self.prices = PriceResolver(self.settings.prices)
+
         self.storage: StorageService | None = (
-            StorageService(self.settings.storage, self.settings.prices, config_dir)
+            StorageService(self.settings.storage, self.prices, config_dir)
             if self.settings.storage.is_configured
             else None
         )
+
+        if self.settings.prices.is_configured and self.storage is None:
+            logger.warning(
+                "Prices are configured but storage is not enabled. "
+                "Money values will not be calculated."
+            )
 
         self.energy: EnergyService | None = (
             EnergyService(self.settings.energy, self.storage) if self.storage else None

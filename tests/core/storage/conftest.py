@@ -6,6 +6,7 @@ import pytest
 
 from solaredge2mqtt.core.storage import Point, StorageService
 from solaredge2mqtt.core.storage.settings import StorageSettings
+from solaredge2mqtt.services.energy.prices import PriceResolver
 from solaredge2mqtt.services.energy.settings import PriceSettings
 
 HOUR = datetime(2026, 8, 19, 11, 0, tzinfo=timezone.utc)
@@ -20,7 +21,7 @@ def storage_settings():
 @pytest.fixture
 def prices():
     """Provide configured prices so the money fields are derived."""
-    return PriceSettings(consumption=0.30, delivery=0.08, currency="EUR")
+    return PriceResolver(PriceSettings(consumption=0.30, delivery=0.08, currency="EUR"))
 
 
 @pytest.fixture

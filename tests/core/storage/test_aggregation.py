@@ -6,6 +6,8 @@ import pytest
 
 from solaredge2mqtt.core.storage.aggregation import aggregate
 from solaredge2mqtt.core.storage.queries import EXCLUDED_POWER_FIELDS
+from solaredge2mqtt.services.energy.prices import PriceResolver
+from solaredge2mqtt.services.energy.settings import PriceSettings
 
 NOW = datetime(2026, 8, 19, 12, 30, tzinfo=timezone.utc)
 HOUR = datetime(2026, 8, 19, 11, 0, tzinfo=timezone.utc)
@@ -197,6 +199,44 @@ class TestMoneyFields:
         assert consumed[0][1] == pytest.approx(3.595 * 0.30)
 
 
+class TestWithoutPrices:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "settings",
+        [
+            PriceSettings(),
+            PriceSettings(consumption=0.30, delivery=0.08),
+        ],
+    )
+    async def test_writes_no_money_fields(self, storage, seed, settings):
+        storage.prices = PriceResolver(settings)
+        for field in ("consumer_used_production", "grid_consumption", "grid_delivery"):
+            await seed_constant_hour(seed, field=field)
+
+        await aggregate(storage, now=NOW)
+
+        rows = await storage.fetch_all(
+            "SELECT COUNT(*) FROM series WHERE field LIKE 'money_%'"
+        )
+        energy = await read(storage, "energy", "grid_delivery", "unit=cumulated")
+
+        assert rows[0][0] == 0
+        assert energy[0][1] == pytest.approx(3.595)
+
+    @pytest.mark.asyncio
+    async def test_one_configured_direction_keeps_the_other_at_zero(
+        self, storage, seed
+    ):
+        storage.prices = PriceResolver(PriceSettings(consumption=0.30, currency="EUR"))
+        await seed_constant_hour(seed, field="grid_delivery")
+
+        await aggregate(storage, now=NOW)
+
+        delivered = await read(storage, "energy", "money_delivered", "unit=cumulated")
+
+        assert delivered[0][1] == pytest.approx(0.0)
+
+
 class TestIdempotency:
     """Tests for repeatedly aggregating the same window."""
 
@@ -247,3 +287,86 @@ class TestIdempotency:
         )
 
         assert await aggregate(storage, now=NOW) == []
+
+
+class SteppedPrices:
+    def __init__(self, switch, before, after):
+        self.switch = int(switch.timestamp())
+        self.before = before
+        self.after = after
+        self.is_configured = True
+
+    def consumption_at(self, timestamp):
+        return self.before if timestamp < self.switch else self.after
+
+    def delivery_at(self, timestamp):
+        return self.consumption_at(timestamp) / 4
+
+
+class TestPricePerSlot:
+    @pytest.mark.asyncio
+    async def test_price_change_inside_the_hour_splits_the_money(self, storage, seed):
+        storage.prices = SteppedPrices(HOUR + timedelta(minutes=30), 0.20, 0.40)
+        await seed_constant_hour(seed, field="grid_consumption")
+
+        await aggregate(storage, now=NOW)
+
+        consumed = await read(storage, "energy", "money_consumed", "unit=cumulated")
+        energy = await read(storage, "energy", "grid_consumption", "unit=cumulated")
+
+        assert energy[0][1] == pytest.approx(3.595)
+        assert consumed[0][1] == pytest.approx(1.8 * 0.20 + 1.795 * 0.40)
+
+    @pytest.mark.asyncio
+    async def test_hour_price_is_the_energy_weighted_mean(self, storage, seed):
+        storage.prices = SteppedPrices(HOUR + timedelta(minutes=45), 0.20, 0.40)
+        samples = [
+            (HOUR + timedelta(seconds=offset), 1000.0 if offset < 2700 else 3000.0)
+            for offset in range(0, 3600, 5)
+        ]
+        await seed("powerflow_raw", "consumer_used_production", {}, samples)
+
+        await aggregate(storage, now=NOW)
+
+        saved = (await read(storage, "energy", "money_saved"))[0][1]
+        energy = (await read(storage, "energy", "consumer_used_production"))[0][1]
+        price = (await read(storage, "energy", "money_price_in"))[0][1]
+
+        assert price == pytest.approx(saved / energy)
+        assert 0.20 < price < 0.40
+
+    @pytest.mark.asyncio
+    async def test_delivery_uses_the_delivery_price_of_each_slot(self, storage, seed):
+        storage.prices = SteppedPrices(HOUR + timedelta(minutes=15), 0.20, 0.40)
+        await seed_constant_hour(seed, field="grid_delivery")
+
+        await aggregate(storage, now=NOW)
+
+        delivered = await read(storage, "energy", "money_delivered", "unit=cumulated")
+
+        assert delivered[0][1] == pytest.approx(0.9 * 0.05 + 2.695 * 0.10)
+
+    @pytest.mark.asyncio
+    async def test_hour_without_energy_records_the_price_at_its_start(
+        self, storage, seed
+    ):
+        storage.prices = SteppedPrices(HOUR + timedelta(minutes=30), 0.20, 0.40)
+        await seed_constant_hour(seed, value=0.0, field="grid_delivery")
+
+        await aggregate(storage, now=NOW)
+
+        price = await read(storage, "energy", "money_price_out", "unit=cumulated")
+
+        assert price[0][1] == pytest.approx(0.05)
+
+    @pytest.mark.asyncio
+    async def test_rerun_after_the_switch_keeps_past_slot_prices(self, storage, seed):
+        storage.prices = SteppedPrices(HOUR + timedelta(minutes=30), 0.20, 0.40)
+        await seed_constant_hour(seed, field="grid_consumption")
+
+        await aggregate(storage, now=NOW)
+        first = await read(storage, "energy", "money_consumed", "unit=cumulated")
+        await aggregate(storage, now=NOW + timedelta(minutes=10))
+        second = await read(storage, "energy", "money_consumed", "unit=cumulated")
+
+        assert first == second

@@ -35,13 +35,14 @@ def _build_settings(
     weather_enabled: bool,
     forecast_enabled: bool,
     homeassistant_enabled: bool,
+    prices_configured: bool = False,
 ) -> SimpleNamespace:
     """Create lightweight settings object for Service initialization tests."""
     return SimpleNamespace(
         logging_level="INFO",
         interval=5,
         storage=SimpleNamespace(is_configured=storage_configured, debounce_cycles=0),
-        prices=SimpleNamespace(),
+        prices=SimpleNamespace(is_configured=prices_configured),
         energy=SimpleNamespace(),
         monitoring=SimpleNamespace(is_configured=monitoring_configured),
         is_weather_enabled=weather_enabled,
@@ -165,7 +166,8 @@ class TestServiceInitialization:
 
         init_logging.assert_called_once_with("INFO")
         timer_cls.assert_called_once_with(settings.interval)
-        storage_cls.assert_called_once_with(settings.storage, settings.prices, "config")
+        storage_cls.assert_called_once_with(settings.storage, service.prices, "config")
+        assert service.prices.settings is settings.prices
         energy_cls.assert_called_once_with(settings.energy, storage_mock)
         powerflow_cls.assert_called_once_with(settings, storage_mock)
         monitoring_cls.assert_called_once_with(
@@ -208,6 +210,53 @@ class TestServiceInitialization:
         assert service.weather is None
         assert service.forecast is None
         assert service.homeassistant is None
+
+    def test_init_warns_when_prices_configured_without_storage(self):
+        settings = _build_settings(
+            storage_configured=False,
+            monitoring_configured=False,
+            weather_enabled=False,
+            forecast_enabled=False,
+            homeassistant_enabled=False,
+            prices_configured=True,
+        )
+
+        with (
+            patch("solaredge2mqtt.service.service_settings", return_value=settings),
+            patch("solaredge2mqtt.service.initialize_logging"),
+            patch("solaredge2mqtt.service.Timer"),
+            patch("solaredge2mqtt.service.PowerflowService"),
+            patch("solaredge2mqtt.service.logger") as mock_logger,
+        ):
+            Service("config")
+
+        mock_logger.warning.assert_called_once_with(
+            "Prices are configured but storage is not enabled. "
+            "Money values will not be calculated."
+        )
+
+    def test_init_skips_prices_warning_when_storage_enabled(self):
+        settings = _build_settings(
+            storage_configured=True,
+            monitoring_configured=False,
+            weather_enabled=False,
+            forecast_enabled=False,
+            homeassistant_enabled=False,
+            prices_configured=True,
+        )
+
+        with (
+            patch("solaredge2mqtt.service.service_settings", return_value=settings),
+            patch("solaredge2mqtt.service.initialize_logging"),
+            patch("solaredge2mqtt.service.Timer"),
+            patch("solaredge2mqtt.service.StorageService"),
+            patch("solaredge2mqtt.service.EnergyService"),
+            patch("solaredge2mqtt.service.PowerflowService"),
+            patch("solaredge2mqtt.service.logger") as mock_logger,
+        ):
+            Service("config")
+
+        mock_logger.warning.assert_not_called()
 
     def test_init_skips_warning_when_forecast_unavailable_and_disabled(self):
         """Initialization should not warn when forecast is unavailable and disabled."""
