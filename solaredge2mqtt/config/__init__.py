@@ -1,11 +1,12 @@
 """Configuration example files for SolarEdge2MQTT."""
+
 from os import path
 
 
 def get_example_files() -> tuple[str, str]:
     """
     Get paths to example configuration files from the package.
-    
+
     Returns:
         tuple[str, str]: Paths to configuration.yml.example and
         secrets.yml.example files
