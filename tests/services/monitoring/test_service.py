@@ -6,7 +6,7 @@ from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from aiohttp import ClientResponseError, RequestInfo
+from aiohttp import ClientConnectionError, ClientResponseError, RequestInfo
 
 from solaredge2mqtt.core.exceptions import (
     ConfigurationException,
@@ -65,82 +65,96 @@ class TestMonitoringSiteInit:
 
 
 class TestMonitoringSiteLogin:
-    """Tests for MonitoringSite login."""
-
     @pytest.mark.asyncio
-    async def test_login_success(
+    async def test_login_returns_access_token(
         self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
-        """Test successful login returns (csrf_token, remember_me_cookie) tuple."""
         site = MonitoringSite(mock_monitoring_settings, mock_storage)
-        site._post = AsyncMock(return_value="success")
-        site.get_cookie = MagicMock(
-            side_effect=[None, None, "csrf-token", "remember-me-val"]
+        site.auth.access_token = AsyncMock(return_value="access")
+
+        token = await site.login()
+
+        assert token == "access"
+        site.auth.access_token.assert_awaited_once_with(site.session)
+        await site.close()
+
+    @pytest.mark.asyncio
+    async def test_add_login_headers_sets_bearer(
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
+    ):
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
+        site.login = AsyncMock(return_value="access")
+
+        headers = await site._add_login_headers({"Content-Type": "text/plain"})
+
+        assert headers == {
+            "Content-Type": "text/plain",
+            "Authorization": "Bearer access",
+        }
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "error",
+        [
+            ClientResponseError(
+                request_info=MagicMock(spec=RequestInfo), history=(), status=500
+            ),
+            ClientConnectionError("down"),
+            asyncio.TimeoutError(),
+        ],
+    )
+    async def test_login_errors_raise_configuration_exception(
+        self, mock_monitoring_settings, mock_event_bus, mock_storage, error
+    ):
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
+        site.auth.access_token = AsyncMock(side_effect=error)
+
+        with pytest.raises(ConfigurationException):
+            await site.login()
+        await site.close()
+
+    @pytest.mark.asyncio
+    async def test_login_without_session_raises(
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
+    ):
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
+        site.init = MagicMock()
+
+        with pytest.raises(ConfigurationException):
+            await site.login()
+
+    @pytest.mark.asyncio
+    async def test_unauthorized_response_invalidates_token(
+        self, mock_monitoring_settings, mock_event_bus, mock_storage
+    ):
+        site = MonitoringSite(mock_monitoring_settings, mock_storage)
+        site.auth.invalidate = MagicMock()
+        response = MagicMock()
+        response.status = 401
+        response.raise_for_status = MagicMock(
+            side_effect=ClientResponseError(
+                request_info=MagicMock(spec=RequestInfo), history=(), status=401
+            )
         )
 
-        token, remember_me = await site.login()
+        with pytest.raises(ClientResponseError):
+            await site._handle_response(response)
 
-        site._post.assert_called()
-        assert token == "csrf-token"
-        assert remember_me == "remember-me-val"
-
-    @pytest.mark.asyncio
-    async def test_login_returns_existing_token_without_post(
-        self, mock_monitoring_settings, mock_event_bus, mock_storage
-    ):
-        """Test login returns existing tokens as tuple without HTTP request."""
-        site = MonitoringSite(mock_monitoring_settings, mock_storage)
-        site._post = AsyncMock()
-        site.get_cookie = MagicMock(return_value="existing-csrf-token")
-
-        token, remember_me = await site.login()
-
-        site._post.assert_not_called()
-        assert token == "existing-csrf-token"
-        assert remember_me == "existing-csrf-token"
+        site.auth.invalidate.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_login_missing_csrf_token_after_post(
+    async def test_successful_response_keeps_token(
         self, mock_monitoring_settings, mock_event_bus, mock_storage
     ):
-        """Test login raises when CSRF token is missing after POST."""
         site = MonitoringSite(mock_monitoring_settings, mock_storage)
-        site._post = AsyncMock(return_value="success")
-        site.get_cookie = MagicMock(side_effect=[None, None, None, None])
+        site.auth.invalidate = MagicMock()
+        response = MagicMock()
+        response.status = 200
+        response.raise_for_status = MagicMock()
+        response.json = AsyncMock(return_value={"ok": True})
 
-        with pytest.raises(ConfigurationException):
-            await site.login()
-
-    @pytest.mark.asyncio
-    async def test_login_failure(
-        self, mock_monitoring_settings, mock_event_bus, mock_storage
-    ):
-        """Test login failure raises ConfigurationException."""
-        site = MonitoringSite(mock_monitoring_settings, mock_storage)
-
-        mock_request_info = MagicMock(spec=RequestInfo)
-        mock_request_info.real_url = "https://test.com"
-
-        error = ClientResponseError(
-            request_info=mock_request_info,
-            history=(),
-            status=401,
-        )
-        site._post = AsyncMock(side_effect=error)
-
-        with pytest.raises(ConfigurationException):
-            await site.login()
-
-    @pytest.mark.asyncio
-    async def test_login_timeout(
-        self, mock_monitoring_settings, mock_event_bus, mock_storage
-    ):
-        """Test login timeout raises ConfigurationException."""
-        site = MonitoringSite(mock_monitoring_settings, mock_storage)
-        site._post = AsyncMock(side_effect=asyncio.TimeoutError())
-
-        with pytest.raises(ConfigurationException):
-            await site.login()
+        assert await site._handle_response(response) == {"ok": True}
+        site.auth.invalidate.assert_not_called()
 
 
 class TestMonitoringSiteGetModules:
@@ -301,7 +315,9 @@ class TestMonitoringSiteGetLogical:
     ):
         """Test _get_logical calls login via _add_login_headers."""
         site = MonitoringSite(mock_monitoring_settings, mock_storage)
-        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "test_token"})
+        site._add_login_headers = AsyncMock(
+            return_value={"Authorization": "Bearer token"}
+        )
         site._get = AsyncMock(return_value={"result": "data"})
 
         result = await site._get_logical()
@@ -315,8 +331,9 @@ class TestMonitoringSiteGetLogical:
     ):
         """Test _get_logical raises on error."""
         site = MonitoringSite(mock_monitoring_settings, mock_storage)
-        site.cookie_exists = MagicMock(return_value=True)
-        site.get_cookie = MagicMock(return_value="test_token")
+        site._add_login_headers = AsyncMock(
+            return_value={"Authorization": "Bearer token"}
+        )
 
         mock_request_info = MagicMock(spec=RequestInfo)
         mock_request_info.real_url = "https://test.com"
@@ -337,7 +354,9 @@ class TestMonitoringSiteGetLogical:
     ):
         """Test _get_logical raises on non-dict response payload."""
         site = MonitoringSite(mock_monitoring_settings, mock_storage)
-        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "test_token"})
+        site._add_login_headers = AsyncMock(
+            return_value={"Authorization": "Bearer token"}
+        )
         site._get = AsyncMock(return_value=["unexpected", "list"])
 
         with pytest.raises(InvalidDataException) as exc_info:
@@ -369,7 +388,9 @@ class TestMonitoringSiteGetEnergyByInverter:
     ):
         """Test _get_energy_by_inverter parses and indexes a valid response."""
         site = MonitoringSite(mock_monitoring_settings, mock_storage)
-        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+        site._add_login_headers = AsyncMock(
+            return_value={"Authorization": "Bearer token"}
+        )
         site._get = AsyncMock(
             return_value={
                 "inverters": [
@@ -405,7 +426,9 @@ class TestMonitoringSiteGetEnergyByInverter:
     ):
         """Test _get_energy_by_inverter raises InvalidDataException on HTTP error."""
         site = MonitoringSite(mock_monitoring_settings, mock_storage)
-        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+        site._add_login_headers = AsyncMock(
+            return_value={"Authorization": "Bearer token"}
+        )
 
         mock_request_info = MagicMock(spec=RequestInfo)
         mock_request_info.real_url = "https://test.com"
@@ -424,7 +447,9 @@ class TestMonitoringSiteGetEnergyByInverter:
     ):
         """Test _get_energy_by_inverter raises on non-dict response payload."""
         site = MonitoringSite(mock_monitoring_settings, mock_storage)
-        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+        site._add_login_headers = AsyncMock(
+            return_value={"Authorization": "Bearer token"}
+        )
         site._get = AsyncMock(return_value=["unexpected", "list"])
 
         with pytest.raises(InvalidDataException):
@@ -980,7 +1005,9 @@ class TestMonitoringSiteGetModulesPowerFull:
     ):
         """Test get_modules_power decodes optimizers-compact into per-module power."""
         site = MonitoringSite(mock_monitoring_settings, mock_storage)
-        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+        site._add_login_headers = AsyncMock(
+            return_value={"Authorization": "Bearer token"}
+        )
         site._get = AsyncMock(
             return_value={
                 "timeSlotsCount": 2,
@@ -1002,7 +1029,9 @@ class TestMonitoringSiteGetModulesPowerFull:
     ):
         """Test get_modules_power raises InvalidDataException on HTTP error."""
         site = MonitoringSite(mock_monitoring_settings, mock_storage)
-        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+        site._add_login_headers = AsyncMock(
+            return_value={"Authorization": "Bearer token"}
+        )
 
         mock_request_info = MagicMock(spec=RequestInfo)
         mock_request_info.real_url = "https://test.com"
@@ -1021,7 +1050,9 @@ class TestMonitoringSiteGetModulesPowerFull:
     ):
         """Test get_modules_power raises InvalidDataException on non-dict response."""
         site = MonitoringSite(mock_monitoring_settings, mock_storage)
-        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+        site._add_login_headers = AsyncMock(
+            return_value={"Authorization": "Bearer token"}
+        )
         site._get = AsyncMock(return_value=["unexpected", "list"])
 
         with pytest.raises(InvalidDataException):
@@ -1033,7 +1064,9 @@ class TestMonitoringSiteGetModulesPowerFull:
     ):
         """Test get_modules_power raises InvalidDataException on timeout."""
         site = MonitoringSite(mock_monitoring_settings, mock_storage)
-        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+        site._add_login_headers = AsyncMock(
+            return_value={"Authorization": "Bearer token"}
+        )
         site._get = AsyncMock(side_effect=asyncio.TimeoutError())
 
         with pytest.raises(InvalidDataException):
@@ -1209,7 +1242,9 @@ class TestMonitoringSiteDiscoverEVChargers:
         )
 
         site = MonitoringSite(mock_monitoring_settings, None)
-        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+        site._add_login_headers = AsyncMock(
+            return_value={"Authorization": "Bearer token"}
+        )
         site._get = AsyncMock(return_value=SAMPLE_DEVICES_RESPONSE)
 
         await site._discover_evchargers()
@@ -1226,7 +1261,9 @@ class TestMonitoringSiteDiscoverEVChargers:
         self, mock_monitoring_settings, mock_event_bus
     ):
         site = MonitoringSite(mock_monitoring_settings, None)
-        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+        site._add_login_headers = AsyncMock(
+            return_value={"Authorization": "Bearer token"}
+        )
         site._get = AsyncMock(return_value={"devicesByType": {"EV_CHARGER": []}})
 
         await site._discover_evchargers()
@@ -1252,7 +1289,9 @@ class TestMonitoringSiteDiscoverEVChargers:
         self, mock_monitoring_settings, mock_event_bus
     ):
         site = MonitoringSite(mock_monitoring_settings, None)
-        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+        site._add_login_headers = AsyncMock(
+            return_value={"Authorization": "Bearer token"}
+        )
         site._get = AsyncMock(side_effect=asyncio.TimeoutError())
 
         await site._discover_evchargers()
@@ -1289,7 +1328,9 @@ class TestMonitoringSiteRefreshEVChargers:
 
         site = MonitoringSite(mock_monitoring_settings, None)
         site.found_evchargers = True
-        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+        site._add_login_headers = AsyncMock(
+            return_value={"Authorization": "Bearer token"}
+        )
         site._get = AsyncMock(return_value=SAMPLE_DEVICES_RESPONSE)
 
         await site.refresh_evchargers(Interval5MinTriggerEvent())
@@ -1331,7 +1372,9 @@ class TestMonitoringSiteRefreshEVChargers:
 
         site = MonitoringSite(mock_monitoring_settings, None)
         site.found_evchargers = True
-        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+        site._add_login_headers = AsyncMock(
+            return_value={"Authorization": "Bearer token"}
+        )
 
         mock_request_info = MagicMock(spec=RequestInfo)
         mock_request_info.real_url = "https://test.com"
@@ -1511,7 +1554,9 @@ class TestMonitoringSiteExecuteChargeControl:
     ):
         mock_monitoring_settings.is_configured = True
         site = MonitoringSite(mock_monitoring_settings, None)
-        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+        site._add_login_headers = AsyncMock(
+            return_value={"Authorization": "Bearer token"}
+        )
         site._put = AsyncMock(return_value={"status": "PASSED"})
 
         await site._execute_charge_control(12345, 50)
@@ -1524,7 +1569,9 @@ class TestMonitoringSiteExecuteChargeControl:
     ):
         mock_monitoring_settings.is_configured = True
         site = MonitoringSite(mock_monitoring_settings, None)
-        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+        site._add_login_headers = AsyncMock(
+            return_value={"Authorization": "Bearer token"}
+        )
         site._put = AsyncMock(return_value={"status": "FAILED"})
 
         await site._execute_charge_control(12345, 50)
@@ -1537,7 +1584,9 @@ class TestMonitoringSiteExecuteChargeControl:
     ):
         mock_monitoring_settings.is_configured = True
         site = MonitoringSite(mock_monitoring_settings, None)
-        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+        site._add_login_headers = AsyncMock(
+            return_value={"Authorization": "Bearer token"}
+        )
         site._put = AsyncMock(return_value=None)
 
         await site._execute_charge_control(12345, 50)
@@ -1552,7 +1601,9 @@ class TestMonitoringSiteExecuteChargeControl:
 
         mock_monitoring_settings.is_configured = True
         site = MonitoringSite(mock_monitoring_settings, None)
-        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+        site._add_login_headers = AsyncMock(
+            return_value={"Authorization": "Bearer token"}
+        )
 
         mock_request_info = MagicMock(spec=RequestInfo)
         mock_request_info.real_url = "https://test.com"
@@ -1570,7 +1621,9 @@ class TestMonitoringSiteExecuteChargeControl:
     ):
         mock_monitoring_settings.is_configured = True
         site = MonitoringSite(mock_monitoring_settings, None)
-        site._add_login_headers = AsyncMock(return_value={"X-CSRF-TOKEN": "token"})
+        site._add_login_headers = AsyncMock(
+            return_value={"Authorization": "Bearer token"}
+        )
         site._put = AsyncMock(side_effect=asyncio.TimeoutError())
 
         await site._execute_charge_control(12345, 50)

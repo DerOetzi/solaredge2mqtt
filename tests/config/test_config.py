@@ -1,4 +1,5 @@
 """Tests for the config module."""
+
 from os import path
 
 from solaredge2mqtt.config import get_example_files
@@ -51,12 +52,12 @@ class TestGetExampleFiles:
     def test_get_example_files_are_readable(self):
         """Test that the example files can be opened and read."""
         config_path, secrets_path = get_example_files()
-        
+
         # Test configuration example is readable
         with open(config_path, "r", encoding="utf-8") as f:
             config_content = f.read()
             assert len(config_content) > 0
-            
+
         # Test secrets example is readable
         with open(secrets_path, "r", encoding="utf-8") as f:
             secrets_content = f.read()

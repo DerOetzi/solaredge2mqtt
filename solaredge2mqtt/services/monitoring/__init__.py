@@ -1,7 +1,7 @@
 import asyncio
 from datetime import date, datetime, time, timezone
 
-from aiohttp import ClientResponseError
+from aiohttp import ClientConnectionError, ClientResponse, ClientResponseError
 
 from solaredge2mqtt.core.events import EventBus
 from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataException
@@ -13,6 +13,8 @@ from solaredge2mqtt.core.timer.events import (
     Interval15MinTriggerEvent,
 )
 from solaredge2mqtt.services.http_async import HTTPClientAsync
+from solaredge2mqtt.services.models import HTTPResponsePayload
+from solaredge2mqtt.services.monitoring.auth import MonitoringAuth
 from solaredge2mqtt.services.monitoring.events import (
     EVChargerChargeLevelEvent,
     EVChargerChargeLevelSubscribeEvent,
@@ -29,7 +31,6 @@ from solaredge2mqtt.services.monitoring.models import (
 )
 from solaredge2mqtt.services.monitoring.settings import MonitoringSettings
 
-LOGIN_URL = "https://monitoring.solaredge.com/solaredge-apigw/api/login"
 LOGICAL_URL = "https://monitoring.solaredge.com/services/layout/logical/generic/v2/site/{site_id}?include-optimizers=true"
 ENERGY_BY_INVERTER_URL = (
     "https://monitoring.solaredge.com/services/layout/energy/site/{site_id}/by-inverter"
@@ -48,6 +49,7 @@ class MonitoringSite(HTTPClientAsync):
     ) -> None:
         super().__init__("Monitoring Site")
         self.settings = settings
+        self.auth = MonitoringAuth(settings)
 
         self.storage: StorageService | None = storage
 
@@ -571,49 +573,39 @@ class MonitoringSite(HTTPClientAsync):
             )
         )
 
+    async def _handle_response(
+        self, response: ClientResponse, expect_json: bool = True
+    ) -> HTTPResponsePayload:
+        if response.status == 401:
+            self.auth.invalidate()
+
+        return await super()._handle_response(response, expect_json)
+
     async def _add_login_headers(
         self, headers: dict[str, str] | None = None
     ) -> dict[str, str]:
-        token, remember_me_cookie = await self.login()
+        access_token = await self.login()
 
         merged_headers = dict(headers) if headers else {}
-        merged_headers["X-CSRF-TOKEN"] = token
-        merged_headers["Cookie"] = (
-            f"SPRING_SECURITY_REMEMBER_ME_COOKIE={remember_me_cookie}"
-        )
+        merged_headers["Authorization"] = f"Bearer {access_token}"
         return merged_headers
 
-    async def login(self) -> tuple[str, str]:
+    async def login(self) -> str:
+        self.init()
+
+        if self.session is None:
+            raise ConfigurationException(
+                "Monitoring", "Unable to login to monitoring account"
+            )
+
         try:
-            token = self.get_cookie("CSRF-TOKEN")
-            remember_me_cookie = self.get_cookie("SPRING_SECURITY_REMEMBER_ME_COOKIE")
-
-            if token and remember_me_cookie:
-                return token, remember_me_cookie
-
-            async with asyncio.timeout(10):
-                await self._post(
-                    LOGIN_URL,
-                    headers={"Content-Type": CONTENT_TYPE_FORM_URLENCODED},
-                    data={
-                        "j_username": self.settings.username_value,
-                        "j_password": self.settings.password_secret,
-                    },
-                    expect_json=False,
-                )
-
-            token = self.get_cookie("CSRF-TOKEN")
-            remember_me_cookie = self.get_cookie("SPRING_SECURITY_REMEMBER_ME_COOKIE")
-
-            if not (token and remember_me_cookie):
-                raise ConfigurationException(
-                    "Monitoring",
-                    "Login to monitoring account failed.",
-                )
-
-            logger.info("Login to monitoring site successful")
-            return token, remember_me_cookie
-        except (ClientResponseError, asyncio.TimeoutError) as error:
+            async with asyncio.timeout(30):
+                return await self.auth.access_token(self.session)
+        except (
+            ClientResponseError,
+            ClientConnectionError,
+            asyncio.TimeoutError,
+        ) as error:
             raise ConfigurationException(
                 "Monitoring", "Unable to login to monitoring account"
             ) from error
