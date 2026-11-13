@@ -16,6 +16,9 @@ monitoring:
 
 All three credentials are needed. With any of them missing the service stays switched off.
 
+The service signs in through the same login page as the web portal. Accounts with
+multi-factor authentication enabled cannot sign in this way.
+
 `debounce_cycles` guards against a single failed poll of the SolarEdge site marking the
 service offline. The monitoring platform is reached over the internet, so a raised value
 is worth having on a shaky connection.
