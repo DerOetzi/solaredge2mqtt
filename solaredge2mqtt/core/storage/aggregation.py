@@ -14,6 +14,7 @@ from solaredge2mqtt.core.storage.queries import (
 
 if TYPE_CHECKING:
     from solaredge2mqtt.core.storage import StorageService
+    from solaredge2mqtt.services.energy.prices import PriceResolver
 
 AGGREGATION_LOOKBACK_HOURS = 2
 
@@ -96,8 +97,8 @@ async def aggregate(
     energy_rows = await storage.fetch_all(AGGREGATE_ENERGY, {"start": start})
     logger.debug(f"Aggregating {len(energy_rows)} energy buckets")
 
-    for row in energy_rows:
-        _collect_energy(collector, storage, row)
+    for (field, unit, bucket), slots in _group_slots(energy_rows).items():
+        _collect_energy(collector, storage.prices, field, unit, bucket, slots)
 
     points = collector.points
     await storage.write_points(points)
@@ -105,27 +106,44 @@ async def aggregate(
     return points
 
 
+def _group_slots(
+    rows: list[Any],
+) -> dict[tuple[str, Any, int], list[tuple[int, float]]]:
+    groups: dict[tuple[str, Any, int], list[tuple[int, float]]] = {}
+
+    for row in rows:
+        key = (str(row["field"]), row["unit"], int(row["bucket"]))
+        groups.setdefault(key, []).append((int(row["slot"]), float(row["energy_kwh"])))
+
+    return groups
+
+
 def _collect_energy(
-    collector: PointCollector, storage: StorageService, row: Any
+    collector: PointCollector,
+    prices: PriceResolver,
+    field: str,
+    unit: Any,
+    bucket: int,
+    slots: list[tuple[int, float]],
 ) -> None:
-    field = str(row["field"])
-    energy = float(row["energy_kwh"])
-    tags = _tags(row["unit"])
-    bucket = int(row["bucket"])
+    tags = _tags(unit)
+    energy = sum(slot_energy for _, slot_energy in slots)
 
     collector.add("energy", tags, bucket, field, energy)
 
-    price_in = storage.prices.price_in
-    price_out = storage.prices.price_out
+    if not prices.is_configured:
+        return
 
-    for mapping, price in (
-        (MONEY_FROM_CONSUMPTION, price_in),
-        (MONEY_FROM_DELIVERY, price_out),
+    for mapping, price_at in (
+        (MONEY_FROM_CONSUMPTION, prices.consumption_at),
+        (MONEY_FROM_DELIVERY, prices.delivery_at),
     ):
         if field not in mapping:
             continue
 
         money_field, price_field = mapping[field]
-        collector.add("energy", tags, bucket, money_field, energy * price)
+        money = sum(slot_energy * price_at(slot) for slot, slot_energy in slots)
+        collector.add("energy", tags, bucket, money_field, money)
         if price_field is not None:
+            price = money / energy if energy else price_at(bucket)
             collector.add("energy", tags, bucket, price_field, price)

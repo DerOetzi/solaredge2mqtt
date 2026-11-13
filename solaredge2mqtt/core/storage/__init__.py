@@ -45,7 +45,7 @@ from solaredge2mqtt.core.timer.events import Interval10MinTriggerEvent
 
 if TYPE_CHECKING:
     from solaredge2mqtt.services.energy.models import HistoricPeriod
-    from solaredge2mqtt.services.energy.settings import PriceSettings
+    from solaredge2mqtt.services.energy.prices import PriceResolver
 
 LOCAL_TZ = ZoneInfo(get_localzone_name())
 
@@ -84,11 +84,11 @@ class StorageService:
     def __init__(
         self,
         settings: StorageSettings,
-        prices: PriceSettings,
+        prices: PriceResolver,
         config_dir: str = "config",
     ) -> None:
         self.settings: StorageSettings = settings
-        self.prices: PriceSettings = prices
+        self.prices: PriceResolver = prices
         self.db_path: Path = settings.resolve_path(config_dir)
 
         self._write: aiosqlite.Connection | None = None

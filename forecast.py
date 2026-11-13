@@ -9,6 +9,7 @@ from solaredge2mqtt.core.exceptions import ConfigurationException, InvalidDataEx
 from solaredge2mqtt.core.logging import initialize_logging, logger
 from solaredge2mqtt.core.settings import service_settings
 from solaredge2mqtt.core.storage import StorageService
+from solaredge2mqtt.services.energy.prices import PriceResolver
 from solaredge2mqtt.services.forecast import FORECAST_AVAILABLE, ForecastService
 from solaredge2mqtt.services.forecast.models import Forecast
 from solaredge2mqtt.services.forecast.service import LOCAL_TZ
@@ -58,7 +59,9 @@ async def _run(
         logger.error("Storage is not enabled (required to read training data)")
         return
 
-    storage = StorageService(settings.storage, settings.prices, config_dir)
+    storage = StorageService(
+        settings.storage, PriceResolver(settings.prices), config_dir
+    )
     await storage.async_init()
 
     weather = WeatherClient(settings)

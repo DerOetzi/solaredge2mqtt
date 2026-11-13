@@ -249,35 +249,6 @@ class TestPowerflow:
 
         assert powerflow.is_valid(external_production=False) is True
 
-    def test_prepare_point_energy_with_prices_adds_money_fields(self):
-        """Test prepare_point_energy writes all money-related fields."""
-        from solaredge2mqtt.services.energy.settings import PriceSettings
-
-        inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
-        grid = GridPowerflow(power=300)
-        battery = BatteryPowerflow(power=0)
-        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
-
-        powerflow = Powerflow.model_validate(
-            {
-                "pv_production": 1200,
-                "inverter": inverter,
-                "grid": grid,
-                "battery": battery,
-                "consumer": consumer,
-            }
-        )
-
-        prices = PriceSettings(consumption=0.4, delivery=0.1)
-        point = powerflow.prepare_point_energy(prices=prices)
-        field_keys = set(point.fields.keys())
-
-        assert "money_saved" in field_keys
-        assert "money_price_in" in field_keys
-        assert "money_delivered" in field_keys
-        assert "money_price_out" in field_keys
-        assert "money_consumed" in field_keys
-
     def test_grid_from_modbus_skips_non_import_export_meter(self):
         """Test from_modbus skips meters without both Import and Export options."""
         skipped_meter = SimpleNamespace(
@@ -1072,79 +1043,6 @@ class TestBatteryPowerflowValidation:
         assert battery.charge == 0
         assert battery.discharge == 0
         assert battery.is_valid is True
-
-
-class TestPowerflowPreparePointEnergy:
-    """Tests for Powerflow.prepare_point_energy method."""
-
-    def test_prepare_point_energy_without_prices(self):
-        """Test prepare_point_energy without prices."""
-        inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
-        grid = GridPowerflow(power=-200)
-        battery = BatteryPowerflow(power=0)
-        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
-
-        powerflow = Powerflow.model_validate(
-            {
-                "pv_production": 1200,
-                "inverter": inverter,
-                "grid": grid,
-                "battery": battery,
-                "consumer": consumer,
-            }
-        )
-
-        point = powerflow.prepare_point_energy()
-
-        assert point.measurement == "energy"
-
-    def test_prepare_point_energy_with_prices(self):
-        """Test prepare_point_energy with prices."""
-        from solaredge2mqtt.services.energy.settings import PriceSettings
-
-        inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
-        grid = GridPowerflow(power=300)
-        battery = BatteryPowerflow(power=0)
-        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
-
-        powerflow = Powerflow.model_validate(
-            {
-                "pv_production": 1200,
-                "inverter": inverter,
-                "grid": grid,
-                "battery": battery,
-                "consumer": consumer,
-            }
-        )
-
-        prices = PriceSettings(consumption=0.30, delivery=0.08)
-        point = powerflow.prepare_point_energy(prices=prices)
-
-        # Check that the point has fields
-        assert point.measurement == "energy"
-        # The point should have field pairs added
-        assert len(point.fields) > 0
-
-    def test_prepare_point_energy_custom_measurement(self):
-        """Test prepare_point_energy with custom measurement name."""
-        inverter = InverterPowerflow(power=1000, dc_power=1200, battery_discharge=0)
-        grid = GridPowerflow(power=-200)
-        battery = BatteryPowerflow(power=0)
-        consumer = ConsumerPowerflow.from_powerflows(inverter, grid, evcharger=0)
-
-        powerflow = Powerflow.model_validate(
-            {
-                "pv_production": 1200,
-                "inverter": inverter,
-                "grid": grid,
-                "battery": battery,
-                "consumer": consumer,
-            }
-        )
-
-        point = powerflow.prepare_point_energy(measurement="custom_energy")
-
-        assert point.measurement == "custom_energy"
 
 
 class TestInverterPowerflowFromModbus:

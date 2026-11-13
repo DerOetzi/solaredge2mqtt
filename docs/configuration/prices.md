@@ -30,7 +30,8 @@ or `delivery` alone to only track what you earned.
 !!! note "Requires storage"
 
     Savings are computed from the accumulated history, so [storage](storage.md) has to be
-    enabled. With `storage.enable: false` this section does nothing.
+    enabled. With `storage.enable: false` this section does nothing and a warning is logged at
+    startup.
 
 A single flat rate per direction is all this supports. Time-of-use tariffs with a different price
 per hour are not modelled.
