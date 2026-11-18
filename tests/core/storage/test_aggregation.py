@@ -157,6 +157,28 @@ class TestEnergyAggregate:
         assert values[0][0] == int(HOUR.timestamp())
         assert values[0][1] == pytest.approx(0.5)
 
+    @pytest.mark.asyncio
+    async def test_negative_power_counts_as_no_energy(self, storage, seed):
+        """The idle inverter draws DC power at night, that is no production."""
+        await seed(
+            "powerflow_raw",
+            "inverter_dc_power",
+            {},
+            [
+                (HOUR, -100.0),
+                (HOUR + timedelta(minutes=30), -100.0),
+                (HOUR + timedelta(minutes=45), 2000.0),
+            ],
+        )
+
+        await aggregate(storage, now=NOW)
+
+        energy = await read(storage, "energy", "inverter_dc_power")
+        mean = await read(storage, "powerflow", "inverter_dc_power", "agg_type=mean")
+
+        assert energy[0][1] == pytest.approx(0.25)
+        assert mean[0][1] == pytest.approx(600.0)
+
 
 class TestMoneyFields:
     """Tests for the price derived fields."""

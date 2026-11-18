@@ -673,6 +673,44 @@ class TestHomeAssistantDiscoveryPublishComponent:
         # Should emit with currency set
         assert mock_event_bus.emit.call_count >= 1
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "ha_type",
+        [HomeAssistantSensorType.MONETARY, HomeAssistantSensorType.MONETARY_BALANCE],
+    )
+    async def test_publish_component_sets_currency_as_unit(
+        self, mock_service_settings, mock_event_bus, ha_type
+    ):
+        mock_service_settings.prices.is_configured = True
+        mock_service_settings.prices.currency = "EUR"
+
+        discovery = HomeAssistantDiscovery(mock_service_settings)
+
+        mock_component = MagicMock()
+        mock_component.mqtt_topic.return_value = "energy"
+        mock_component.parse_schema.return_value = [
+            {
+                "name": "Balance",
+                "path": ["balance"],
+                "ha_type": ha_type,
+            },
+        ]
+
+        await discovery.publish_component(
+            mock_component, {"name": "Energy"}, "solaredge/energy"
+        )
+
+        payloads = [
+            call.args[0].payload
+            for call in mock_event_bus.emit.call_args_list
+            if call.args and hasattr(call.args[0], "payload")
+        ]
+        assert any(
+            getattr(payload, "name", None) == "Balance"
+            and payload.unit_of_measurement == "EUR"
+            for payload in payloads
+        )
+
 
 class TestHomeAssistantPropertyParserAdditionalFields:
     """Tests for HomeAssistantDiscovery property_parser additional_fields."""
