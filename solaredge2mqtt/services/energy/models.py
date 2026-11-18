@@ -232,7 +232,7 @@ class HistoricPeriod(EnumModel):
 class InverterEnergy(Solaredge2MQTTBaseModel):
     production: float = Field(**HASensor.ENERGY_KWH.field("Production"))
     consumption: float = Field(**HASensor.ENERGY_KWH.field("Consumption"))
-    dc_power: float = Field(**HASensor.POWER_W.field("DC production"))
+    dc_power: float = Field(**HASensor.ENERGY_KWH.field("DC production"))
     pv_production: float = Field(**HASensor.ENERGY_KWH.field("PV production"))
     battery_production: float = Field(**HASensor.ENERGY_KWH.field("Battery production"))
 

@@ -157,9 +157,9 @@ class HomeAssistantDiscovery:
                 ):
                     continue
 
-            if (
-                self.settings.prices.is_configured
-                and entity_info["ha_type"] == HomeAssistantSensorType.MONETARY
+            if self.settings.prices.is_configured and entity_info["ha_type"] in (
+                HomeAssistantSensorType.MONETARY,
+                HomeAssistantSensorType.MONETARY_BALANCE,
             ):
                 entity_info["unit"] = self.settings.prices.currency
 

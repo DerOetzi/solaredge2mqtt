@@ -42,7 +42,7 @@ WITH src AS (
     SELECT s.field AS field,
            t.tag_value AS unit,
            p.ts AS ts,
-           p.value AS value,
+           MAX(p.value, 0) AS value,
            (p.ts / 3600) * 3600 AS bucket
     FROM point AS p
     JOIN series AS s ON s.series_id = p.series_id
