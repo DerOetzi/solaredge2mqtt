@@ -1,13 +1,17 @@
 """Tests for the ten minute aggregation job."""
 
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import pytest
 
 from solaredge2mqtt.core.storage.aggregation import aggregate
 from solaredge2mqtt.core.storage.queries import EXCLUDED_POWER_FIELDS
 from solaredge2mqtt.services.energy.prices import PriceResolver
-from solaredge2mqtt.services.energy.settings import PriceSettings
+from solaredge2mqtt.services.energy.settings import (
+    PriceScheduleEntry,
+    PriceSettings,
+)
 
 NOW = datetime(2026, 8, 19, 12, 30, tzinfo=timezone.utc)
 HOUR = datetime(2026, 8, 19, 11, 0, tzinfo=timezone.utc)
@@ -326,6 +330,26 @@ class SteppedPrices:
 
 
 class TestPricePerSlot:
+    @pytest.mark.asyncio
+    async def test_schedule_window_inside_the_hour(self, storage, seed):
+        storage.prices = PriceResolver(
+            PriceSettings(
+                consumption=0.30,
+                currency="EUR",
+                schedule=[
+                    PriceScheduleEntry(start="13:30", end="14:00", consumption=0.50)
+                ],
+            ),
+            tz=ZoneInfo("Europe/Berlin"),
+        )
+        await seed_constant_hour(seed, field="grid_consumption")
+
+        await aggregate(storage, now=NOW)
+
+        consumed = await read(storage, "energy", "money_consumed", "unit=cumulated")
+
+        assert consumed[0][1] == pytest.approx(1.8 * 0.30 + 1.795 * 0.50)
+
     @pytest.mark.asyncio
     async def test_price_change_inside_the_hour_splits_the_money(self, storage, seed):
         storage.prices = SteppedPrices(HOUR + timedelta(minutes=30), 0.20, 0.40)
