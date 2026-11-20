@@ -48,7 +48,7 @@ solaredge2mqtt-migrate-influxdb = "migrate_influxdb:main"
 dev = [
     "setuptools-scm[toml]>=8",
     "ruff",
-    "pyright==1.1.411",
+    "pyright==1.1.414",
     "pytest==9.2.0",
     "pytest-asyncio==1.5.0",
     "pytest-cov==7.1.0",
